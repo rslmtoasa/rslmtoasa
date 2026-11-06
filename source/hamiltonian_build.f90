@@ -228,11 +228,8 @@ contains
       if (allocated(this%v_b)) call g_safe_alloc%deallocate('hamiltonian.v_b', this%v_b)
       if (allocated(this%vo_a)) call g_safe_alloc%deallocate('hamiltonian.vo_a', this%vo_a)
       if (allocated(this%vo_b)) call g_safe_alloc%deallocate('hamiltonian.vo_b', this%vo_b)
-      if (allocated(this%jso_a)) call g_safe_alloc%deallocate('hamiltonian.jso_a', this%jso_a)
-      if (allocated(this%jlo_a)) call g_safe_alloc%deallocate('hamiltonian.jlo_a', this%jlo_a)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
       if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
-      if (allocated(this%hxc)) call g_safe_alloc%deallocate('hamiltonian.hxc', this%hxc)
       if (allocated(this%texture_moments)) deallocate(this%texture_moments)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
@@ -257,11 +254,8 @@ contains
       if (allocated(this%v_b)) deallocate(this%v_b)
       if (allocated(this%vo_a)) deallocate(this%vo_a)
       if (allocated(this%vo_b)) deallocate(this%vo_b)
-      if (allocated(this%jso_a)) deallocate(this%jso_a)
-      if (allocated(this%jlo_a)) deallocate(this%jlo_a)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
-      if (allocated(this%hxc)) deallocate(this%hxc)
       if (allocated(this%texture_moments)) deallocate(this%texture_moments)
       if (allocated(this%hubbard_u_pot)) deallocate(this%hubbard_u_pot)
       if (allocated(this%hubbard_u_impurity)) deallocate(this%hubbard_u_impurity)
@@ -845,12 +839,7 @@ contains
       call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.vo_a', this%vo_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.vo_b', this%vo_b, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.js_a', this%js_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jl_a', this%jl_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_u_pot', this%hubbard_u_pot, (/nb, nb, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_u_impurity', this%hubbard_u_impurity, (/max(1, this%charge%lattice%nrec), 4/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_j_impurity', this%hubbard_j_impurity, (/max(1, this%charge%lattice%nrec), 4/))
@@ -866,7 +855,6 @@ contains
       allocate (this%eecc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hall(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%hallcc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      allocate (this%hxc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%eeo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%eeoee(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
@@ -884,10 +872,6 @@ contains
       allocate (this%v_b(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%vo_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%vo_b(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%js_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%jl_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%jso_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%jlo_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%velocity_scale(this%charge%lattice%ntype))
       allocate (this%hubbard_u_pot(nb, nb, this%charge%lattice%ntype))
       allocate (this%hubbard_u_impurity(max(1, this%charge%lattice%nrec), 4))
@@ -904,7 +888,6 @@ contains
       this%hmag(:, :, :, :) = 0.0d0
       this%hall(:, :, :, :) = 0.0d0
       this%hallcc(:, :, :, :) = 0.0d0
-      this%hxc(:, :, :, :) = 0.0d0
       this%ee(:, :, :, :) = 0.0d0
       this%eecc(:, :, :, :) = 0.0d0
       this%hallo(:, :, :, :) = 0.0d0
@@ -923,10 +906,6 @@ contains
       this%v_b(:, :, :, :) = 0.0d0
       this%vo_a(:, :, :, :) = 0.0d0
       this%vo_b(:, :, :, :) = 0.0d0
-      this%js_a(:, :, :, :) = 0.0d0
-      this%jl_a(:, :, :, :) = 0.0d0
-      this%jso_a(:, :, :, :) = 0.0d0
-      this%jlo_a(:, :, :, :) = 0.0d0
       this%velocity_scale(:) = 1.0d0
       this%hubbard_u_pot(:, :, :) = 0.0d0
       this%bounds%algorithm = 'none'
@@ -981,358 +960,6 @@ contains
       this%hubbard_v_check = .false.
       this%export = 'none'
    end subroutine restore_to_default
-
-   !> @brief Build real-space orbital-current operator blocks.
-   !> @details Forms orbital velocity operators from angular-momentum matrices and
-   !>          real-space hopping geometry for orbital transport and orbital torque
-   !>          workflows.
-   !> @param[inout] this Hamiltonian object; fills jl_a/jl_b-style operator arrays.
-   !> @note Uses the same site/neighbor layout as ee/hall velocity blocks.
-   module subroutine build_realspace_orbital_velocity_operators(this)
-      class(hamiltonian), intent(inout) :: this
-   
-      integer :: ntype, ia, nr, m
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:,:), tmp2(:,:), L_op(:,:)  ! Temp matrices
-      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
-
-      hblocksize = size(this%v_a, 1)
-   
-      ! Allocate local matrices for partial products
-      allocate(tmp1(hblocksize,hblocksize), tmp2(hblocksize,hblocksize), L_op(hblocksize,hblocksize))
-      L_op = (0.0_rp, 0.0_rp)
-   
-      ! Initialize the orbital–velocity array
-      this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp) 
-
-      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-      mLx(:, :) = L_x(:, :)
-      mLy(:, :) = L_y(:, :)
-      mLz(:, :) = L_z(:, :)
-      
-      ! Transforming them into the spherical harmonics coordinates
-      call hcpx(mLx, 'cart2sph')
-      call hcpx(mLy, 'cart2sph')
-      call hcpx(mLz, 'cart2sph')
-   
-      ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      select case (this%pol_alpha)
-      case ('x')
-         L_op(1:norb, 1:norb) = mLx(:, :)
-         L_op(norb+1:nb, norb+1:nb) = mLx(:, :)
-      case ('y')
-         L_op(1:norb, 1:norb) = mLy(:, :)
-         L_op(norb+1:nb, norb+1:nb) = mLy(:, :)
-      case ('z')
-         L_op(1:norb, 1:norb) = mLz(:, :)
-         L_op(norb+1:nb, norb+1:nb) = mLz(:, :)
-      end select
-   
-      ! Loop over each atom type
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype)
-         nr = this%charge%lattice%nn(ia, 1)
-   
-         ! For each neighbor block
-         do m = 2, nr
-            ! tmp1 = L_op * v_a(:,:,m,ntype)
-            tmp1 = matmul(L_op, this%v_a(:,:,m,ntype))
-   
-            ! tmp2 = v_a(:,:,m,ntype) * L_op
-            tmp2 = matmul(this%v_a(:,:,m,ntype), L_op)
-   
-            ! jl_a(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-            this%jl_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-   
-            if (this%hoh) then
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = js_a * v_a(:,:,m,ntype)
-               tmp1 = matmul(L_op, this%vo_a(:, :, m, ntype))
-
-               ! tmp2 = v_a(:,:,m,ntype) * js_a
-               tmp2 = matmul(this%vo_a(:, :, m, ntype), L_op)
-
-               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jlo_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-            end if
-
-            ! Optional debugging output:
-            ! write(*,*) ’m=’, m
-            ! write(*,’(18f10.6)’) real(this%jo_a(:,:,m,ntype))
-            ! write(*,*)
-            ! write(*,’(18f10.6)’) aimag(this%jo_a(:,:,m,ntype))
-         end do
-      end do
-   
-      deallocate(tmp1, tmp2, L_op)
-   end subroutine build_realspace_orbital_velocity_operators
-
-   !> @brief Build real-space spin-current operator blocks.
-   !> @details Combines spin matrices with the velocity-operator layout so
-   !>          stochastic conductivity can evaluate spin-current correlations.
-   !> @param[inout] this Hamiltonian object; fills js_a and related spin-current arrays.
-   module subroutine build_realspace_spin_operators(this)
-      class(hamiltonian), intent(inout) :: this
-   
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
-   
-      ! Derive dimension from your velocity array:
-      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
-   
-      ! Allocate temporary matrices for local block multiplication
-      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
-   
-      ! Initialize the spin–velocity array to zero
-      this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      
-      select case(this%pol_alpha)
-      
-      case('z')
-         S_op = S_z
-      case('x')
-         S_op = S_x
-      case('y')
-         S_op = S_y
-      end select
-
-      !write(*,’(18f10.6)’) real(S_op)
-      ! Loop over each atom type
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype)
-         nr = this%charge%lattice%nn(ia, 1)
-   
-         ! For each neighbor block 
-         do m = 2, nr
-
-            tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * v_a(:,:,m,ntype)
-            tmp1 = matmul(S_op, this%v_a(:, :, m, ntype))
-   
-            ! tmp2 = v_a(:,:,m,ntype) * js_a
-            tmp2 = matmul(this%v_a(:, :, m, ntype), S_op)
-
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-            this%js_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-            !write(*,*) ’m=’, m
-            !write(*,’(18f10.6)’) real(this%js_a(:,:,m,ntype))
-            !write(*,*)
-            !write(*,’(18f10.6)’) aimag(this%js_a(:,:,m,ntype))
-            if (this%hoh) then
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = js_a * v_a(:,:,m,ntype)
-               tmp1 = matmul(S_op, this%vo_a(:, :, m, ntype))
-   
-               ! tmp2 = v_a(:,:,m,ntype) * js_a
-               tmp2 = matmul(this%vo_a(:, :, m, ntype), S_op)
-   
-               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jso_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-            end if
-
-         end do  ! m
-      end do  ! ntype
-   
-      deallocate(tmp1, tmp2)
-   end subroutine build_realspace_spin_operators
-
-   !> @brief Build real-space spin-torque operator blocks.
-   !> @details Forms torque-current operators from spin operators and local
-   !>          Hamiltonian/SOC blocks for spin-torque response calculations.
-   !> @param[inout] this Hamiltonian object; fills js_a/jso_a torque arrays.
-   module subroutine build_realspace_spin_torque_operators(this)
-      class(hamiltonian), intent(inout) :: this
-
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(nb, nb) :: locham
-
-      ! this%hxc is only populated by build_bulkham’s ordinary periodic_nc/
-      ! explicit_texture branch (hamiltonian_build.f90, build_bulkham); GBT’s
-      ! own builder never fills it and returns before that code is reached.
-      ! Under gbt_single_q the commutator below would therefore be built from
-      ! an identically-zero array and silently report a zero spin-torque
-      ! current rather than a covariant, gauged one. Fail before the caller
-      ! spends any recursion/conductivity work on it.
-      if (trim(this%magnetic_representation) == gbt_single_q) then
-         call g_logger%fatal('gbt_single_q with linear_out=spin_torque is unsupported: '// &
-                              'the exchange-splitting bond array hxc is not built under GBT.', &
-                              __FILE__, __LINE__)
-      end if
-
-      ! Derive dimension from your velocity array:
-      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
-
-      ! Allocate temporary matrices for local block multiplication
-      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
-
-      ! Initialize the spin–velocity array to zero
-      this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-
-      select case(this%pol_alpha)
-
-      case('z')
-         S_op = S_z
-      case('x')
-         S_op = S_x
-      case('y')
-         S_op = S_y
-      end select
-
-      !write(*,’(18f10.6)’) real(S_op)
-      ! Loop over each atom type
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype)
-         nr = this%charge%lattice%nn(ia, 1)
-          
-         ! For each neighbor block 
-         do m = 1, nr
-
-            !if (m==1) then
-            !  locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
-            !else
-            !  locham(:,:) = this%ee(:, :, m, ntype)
-            !end if
-
-            locham(:,:) = this%hxc(:, :, m, ntype)
-
-            tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * hxc(:,:,m,ntype)
-            tmp1 = matmul(S_op, locham(:, :))
-
-            ! tmp2 = hxc(:,:,m,ntype) * js_a
-            tmp2 = matmul(locham(:, :), S_op)
-
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
-            this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            !write(*,*) ’m=’, m
-            !write(*,’(18f10.6)’) real(this%js_a(:,:,m,ntype))
-            !write(*,*)
-            !write(*,’(18f10.6)’) aimag(this%js_a(:,:,m,ntype))
-            if (this%hoh) then
-
-               if (m==1) then
-                 locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
-               else
-                 locham(:,:) = this%eeo(:, :, m, ntype)
-               end if
-
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = js_a * eeo(:,:,m,ntype)
-               tmp1 = matmul(S_op, locham(:, :))
-
-               ! tmp2 = ee(:,:,m,ntype) * js_a
-               tmp2 = matmul(locham(:, :), S_op)
-
-               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jso_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            end if
-
-         end do  ! m
-      end do  ! ntype
-
-      deallocate(tmp1, tmp2)
-   end subroutine build_realspace_spin_torque_operators
-
-   !> @brief Build real-space orbital-torque operator blocks.
-   !> @details Forms orbital torque-current operators from angular-momentum
-   !>          matrices and local Hamiltonian/SOC blocks for orbital response.
-   !> @param[inout] this Hamiltonian object; fills jl_a/jlo_a torque arrays.
-   module subroutine build_realspace_orbital_torque_operators(this)
-      class(hamiltonian), intent(inout) :: this
-
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
-      complex(rp), dimension(nb, nb) :: locham
-
-      ! Derive dimension from your velocity array:
-      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
-
-      ! Allocate temporary matrices for local block multiplication
-      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
-      L_op = (0.0_rp, 0.0_rp)
-
-      ! Initialize the spin–velocity array to zero
-      this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-
-      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-      mLx(:, :) = L_x(:, :)
-      mLy(:, :) = L_y(:, :)
-      mLz(:, :) = L_z(:, :)
-
-      ! Transforming them into the spherical harmonics coordinates
-      call hcpx(mLx, 'cart2sph')
-      call hcpx(mLy, 'cart2sph')
-      call hcpx(mLz, 'cart2sph')
-
-      ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      select case (this%pol_alpha)
-      case ('x')
-         L_op(1:norb, 1:norb) = mLx(:, :)
-         L_op(norb+1:nb, norb+1:nb) = mLx(:, :)
-      case ('y')
-         L_op(1:norb, 1:norb) = mLy(:, :)
-         L_op(norb+1:nb, norb+1:nb) = mLy(:, :)
-      case ('z')
-         L_op(1:norb, 1:norb) = mLz(:, :)
-         L_op(norb+1:nb, norb+1:nb) = mLz(:, :)
-      end select
-
-      ! Loop over each atom type
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype)
-         nr = this%charge%lattice%nn(ia, 1)
-
-         ! For each neighbor block 
-         do m = 1, nr
-
-            if (m==1) then
-              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype)
-            else
-              locham(:,:) = this%ee(:, :, m, ntype)
-            end if
-
-            tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = jl_a * ee(:,:,m,ntype)
-            tmp1 = matmul(L_op, locham(:, :))
-
-            ! tmp2 = ee(:,:,m,ntype) * jl_a
-            tmp2 = matmul(locham(:, :), L_op)
-
-            ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-            this%jl_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            if (this%hoh) then
-
-               if (m==1) then
-                 locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
-               else
-                 locham(:,:) = this%eeo(:, :, m, ntype)
-               end if
-
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = jl_a * eeo(:,:,m,ntype)
-               tmp1 = matmul(L_op, locham(:, :))
-
-               ! tmp2 = ee(:,:,m,ntype) * jl_a
-               tmp2 = matmul(locham(:, :), L_op)
-
-               ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jlo_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            end if
-
-         end do  ! m
-      end do  ! ntype
-
-      deallocate(tmp1, tmp2)
-   end subroutine build_realspace_orbital_torque_operators
 
    !> @brief Build charge velocity operators in real-space hopping layout.
    !> @details Projects bond displacement vectors onto v_alpha/v_beta directions
@@ -1675,11 +1302,6 @@ contains
                   this%ee(j +spin_off, i +spin_off, m, ntype) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3)        ! H0-Hz
                   this%ee(j, i +spin_off, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
                   this%ee(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
-                  ! Builds the magnetic part of the Hamiltonian only
-                  this%hxc(j, i, m, ntype) = this%hmag(j, i, m, 3)        ! Hz
-                  this%hxc(j +spin_off, i +spin_off, m, ntype) = - this%hmag(j, i, m, 3)        ! - Hz
-                  this%hxc(j, i +spin_off, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
-                  this%hxc(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
             ! write(131,*) ’m=’, m
@@ -1809,7 +1431,6 @@ contains
       if (this%hubbard_u_general_check) call this%calculate_hubbard_u_potential_general()
       call this%add_hubbard_test_operator()
       this%ee = cmplx(0.0_rp, 0.0_rp, rp)
-      this%hxc = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%ccor_2c) this%eecc = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%hoh) then
          this%eeo = cmplx(0.0_rp, 0.0_rp, rp)

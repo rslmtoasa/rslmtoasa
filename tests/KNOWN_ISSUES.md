@@ -82,6 +82,14 @@ are not tracked here; see `docs/DECISIONS.md`.
   1e-8`, and sin^2(theta) spread 10.39% against 5%). A later cone-angle remeasurement gives a 1.49% spread, so the Val17 status is not reconciled.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
 
+### `S_y` in `math_mod` has the opposite sign to sigma_y/2 — 2026-11-06
+- **Verified:** with `init_math_operators` (`source/math.f90`), `[S_x, S_y] = -i S_z` (the standard algebra gives `+i S_z`); `S_y(up,dn) = +i/2` while the
+  comment above it says sigma_y = [[0,-i],[i,0]]. Found by the check in `UnitKpmTransport` (`test_spin_operator`), which therefore pins only
+  `|[S_x, S_y]| = |S_z|`.
+- **Not checked:** whether `main`'s `S_y` parameter array has the same sign (it is a flat reshaped constant), and which outputs
+  (`pol_alpha = 'y'` spin currents, torques) depend on the sign. The comment in the code says it matches the original parameter definition.
+- **Proposal, not done:** decide whether the sign is the intended convention; size: one line plus reference review.
+
 ## Fixed-potential and frozen-magnon (GBT) findings
 
 ### Small-q GBT stiffness is mesh sensitive; multi-sublattice k-space not re-tested — 2026-08-16

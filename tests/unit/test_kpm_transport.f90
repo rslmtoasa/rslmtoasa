@@ -1,8 +1,10 @@
 ! TEST-15: lean production contracts for charge, spin, and orbital transport.
 !
 ! The fixture is deliberately tiny: two sites, an sp basis, and reverse bonds.
-! Current operators are built by the production Hamiltonian routines.  The
-! moment check compares the production eigenpair moment kernel with a direct
+! The charge velocity is built by the production Hamiltonian routine and the
+! spin/orbital polarization operators by the production selectors; the current
+! operators are the anticommutators 1/2 {q, v} of the Kubo transport (kind
+! 'current'), formed here with plain matmul.  The moment check compares the production eigenpair moment kernel with a direct
 ! matrix Chebyshev recurrence for the same finite Hamiltonian; it does not
 ! implement a second Kubo-Bastin or conductivity solver.
 program test_kpm_transport
@@ -11,10 +13,10 @@ program test_kpm_transport
    use basis_mod, only: basis_init, nb, spin_off
    use control_mod, only: control
    use charge_mod, only: charge
-   use hamiltonian_mod, only: hamiltonian
+   use hamiltonian_mod, only: hamiltonian, select_spin_operator, select_orbital_operator
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
-   use math_mod, only: L_z, S_z, hcpx, init_math_operators, i_unit
+   use math_mod, only: init_math_operators, i_unit
    use moment_kernel_mod, only: moment_onsite_block
    use conductivity_mod, only: gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, pack_gamma_mu_diagonal
    implicit none
@@ -38,8 +40,8 @@ program test_kpm_transport
    call setup_fixture()
 
    call test_charge_current()
-   call test_spin_current()
-   call test_orbital_current()
+   call test_spin_operator()
+   call test_orbital_operator()
    call test_transport_moments()
    call test_s_only_orbital_symmetry()
    call test_gamma_mu_layout()
@@ -88,8 +90,6 @@ contains
       ham%v_beta = ham%v_alpha
 
       allocate(ham%ee(nb, nb, 3, 1), ham%v_a(nb, nb, 3, 1), ham%v_b(nb, nb, 3, 1))
-      allocate(ham%js_a(nb, nb, 3, 1), ham%jl_a(nb, nb, 3, 1))
-      allocate(ham%jso_a(nb, nb, 3, 1), ham%jlo_a(nb, nb, 3, 1))
       allocate(ham%velocity_scale(1))
       ham%velocity_scale = 1.0_rp
       ham%ee = (0.0_rp, 0.0_rp)
@@ -114,42 +114,68 @@ contains
          'charge current finite model is Hermitian')
    end subroutine test_charge_current
 
-   subroutine test_spin_current()
-      complex(rp) :: expected(nb, nb), v_forward(nb, nb)
+   ! Would catch: a wrong polarization mapping (x/y/z swapped or sign-flipped), a non-Hermitian or
+   ! spin-mixing selector. Expected values are the closed forms S_z = diag(+1/2, -1/2) and
+   ! |[S_x, S_y]| = |S_z| written here (hbar = 1).
+   subroutine test_spin_operator()
+      complex(rp), dimension(nb, nb) :: sx, sy, sz, sz_exact
+      integer :: i
 
-      call ham%build_realspace_spin_operators()
-      v_forward = ham%v_a(:, :, 2, 1)
-      expected = 0.5_rp*(matmul(S_z, v_forward) + matmul(v_forward, S_z))
-      call require(maxval(abs(ham%js_a(:, :, 2, 1) - expected)) < tolerance, &
-         'spin current uses the production symmetrized spin-velocity product')
-      call require(maxval(abs(ham%js_a(:, :, 3, 1) - conjg(transpose(ham%js_a(:, :, 2, 1))))) < tolerance, &
+      call select_spin_operator('x', sx)
+      call select_spin_operator('y', sy)
+      call select_spin_operator('z', sz)
+      sz_exact = (0.0_rp, 0.0_rp)
+      do i = 1, spin_off
+         sz_exact(i, i) = cmplx(0.5_rp, 0.0_rp, rp)
+         sz_exact(i + spin_off, i + spin_off) = cmplx(-0.5_rp, 0.0_rp, rp)
+      end do
+      call require(maxval(abs(sz - sz_exact)) < tolerance, 'spin operator z is diag(+1/2, -1/2)')
+      ! The sign of S_y in math_mod is opposite to sigma_y/2 ([S_x, S_y] = -i S_z, tests/KNOWN_ISSUES.md), so
+      ! only |[S_x, S_y]| = |S_z| is pinned here.
+      call require(min(maxval(abs(matmul(sx, sy) - matmul(sy, sx) - i_unit*sz)), &
+                       maxval(abs(matmul(sx, sy) - matmul(sy, sx) + i_unit*sz))) < tolerance, &
+         'spin operators satisfy [S_x, S_y] = +-i S_z')
+      call require(hermiticity_error(sx) < tolerance .and. hermiticity_error(sy) < tolerance, &
+         'spin operators are Hermitian')
+      call require(maxval(abs(current_block(sz, ham%v_a(:, :, 3, 1)) - &
+                              conjg(transpose(current_block(sz, ham%v_a(:, :, 2, 1)))))) < tolerance, &
          'spin current reverse bond is Hermitian conjugate')
-      call require(hermiticity_error(make_full_operator(ham%js_a(:, :, 2, 1))) < tolerance, &
+      call require(hermiticity_error(make_full_operator(current_block(sz, ham%v_a(:, :, 2, 1)))) < tolerance, &
          'spin current finite model is Hermitian')
-   end subroutine test_spin_current
+   end subroutine test_spin_operator
 
-   subroutine test_orbital_current()
-      complex(rp) :: expected(nb, nb), v_forward(nb, nb), l_operator(nb, nb)
-      complex(rp) :: l_orbital(size(L_z, 1), size(L_z, 2))
+   ! Would catch: a wrong orbital polarization mapping or basis transformation. Expected values are the
+   ! angular-momentum algebra [L_x, L_y] = i L_z and L^2 = l(l+1) (0 on s, 2 on p), hbar = 1.
+   subroutine test_orbital_operator()
+      complex(rp), dimension(nb, nb) :: lx, ly, lz, l2
+      real(rp) :: s_block, p_block
 
-      l_orbital = L_z
-      call hcpx(l_orbital, 'cart2sph')
-      l_operator = (0.0_rp, 0.0_rp)
-      l_operator(1:norb_local(), 1:norb_local()) = l_orbital
-      l_operator(norb_local() + 1:nb, norb_local() + 1:nb) = l_orbital
-
-      call ham%build_realspace_orbital_velocity_operators()
-      v_forward = ham%v_a(:, :, 2, 1)
-      expected = 0.5_rp*(matmul(l_operator, v_forward) + matmul(v_forward, l_operator))
-      call require(maxval(abs(ham%jl_a(:, :, 2, 1) - expected)) < tolerance, &
-         'orbital current uses the production symmetrized orbital-velocity product')
-      call require(maxval(abs(ham%jl_a(:, :, 3, 1) - conjg(transpose(ham%jl_a(:, :, 2, 1))))) < tolerance, &
+      call select_orbital_operator('x', lx)
+      call select_orbital_operator('y', ly)
+      call select_orbital_operator('z', lz)
+      call require(maxval(abs(matmul(lx, ly) - matmul(ly, lx) - i_unit*lz)) < tolerance, &
+         'orbital operators satisfy [L_x, L_y] = i L_z')
+      l2 = matmul(lx, lx) + matmul(ly, ly) + matmul(lz, lz)
+      s_block = maxval(abs(l2(1:1, 1:1)))
+      p_block = maxval(abs(l2(2:4, 2:4) - 2.0_rp*reshape([1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])))
+      call require(s_block < tolerance .and. p_block < tolerance, 'orbital operators give L^2 = 0 on s and 2 on p')
+      call require(hermiticity_error(lx) < tolerance .and. hermiticity_error(ly) < tolerance, &
+         'orbital operators are Hermitian')
+      call require(maxval(abs(current_block(lz, ham%v_a(:, :, 3, 1)) - &
+                              conjg(transpose(current_block(lz, ham%v_a(:, :, 2, 1)))))) < tolerance, &
          'orbital current reverse bond is Hermitian conjugate')
-      call require(hermiticity_error(make_full_operator(ham%jl_a(:, :, 2, 1))) < tolerance, &
+      call require(hermiticity_error(make_full_operator(current_block(lz, ham%v_a(:, :, 2, 1)))) < tolerance, &
          'orbital current finite model is Hermitian')
-      call require(maxval(abs(ham%jl_a(:, :, 2, 1))) > tolerance, &
+      call require(maxval(abs(current_block(lz, ham%v_a(:, :, 2, 1)))) > tolerance, &
          'orbital current is nonzero when p-orbital hopping is present')
-   end subroutine test_orbital_current
+   end subroutine test_orbital_operator
+
+   ! The Kubo current operator 1/2 {q, v} for the forward bond of the fixture.
+   function current_block(q, v) result(j)
+      complex(rp), intent(in) :: q(nb, nb), v(nb, nb)
+      complex(rp) :: j(nb, nb)
+      j = 0.5_rp*(matmul(q, v) + matmul(v, q))
+   end function current_block
 
    subroutine test_transport_moments()
       integer :: nmat
@@ -160,7 +186,10 @@ contains
       complex(rp), allocatable :: va(:, :), vb(:, :)
       character(len=*), parameter :: route_names(3) = ['charge  ', 'spin    ', 'orbital ']
       integer :: route
+      complex(rp), dimension(nb, nb) :: q_spin, q_orbital
 
+      call select_spin_operator('z', q_spin)
+      call select_orbital_operator('z', q_orbital)
       nmat = nsite*nb
       allocate(eigenvalues(nmat, 1), eigenvectors(nmat, nmat, 1), hk(nmat, nmat))
       allocate(va_k(nmat, nmat, 1), vb_k(nmat, nmat, 1), va(nmat, nmat), vb(nmat, nmat))
@@ -173,9 +202,9 @@ contains
          case(1)
             va = make_full_operator(ham%v_a(:, :, 2, 1))
          case(2)
-            va = make_full_operator(ham%js_a(:, :, 2, 1))
+            va = make_full_operator(current_block(q_spin, ham%v_a(:, :, 2, 1)))
          case(3)
-            va = make_full_operator(ham%jl_a(:, :, 2, 1))
+            va = make_full_operator(current_block(q_orbital, ham%v_a(:, :, 2, 1)))
          end select
          va_k(:, :, 1) = va
          vb_k(:, :, 1) = vb
@@ -209,14 +238,17 @@ contains
    end subroutine compare_direct_chebyshev
 
    subroutine test_s_only_orbital_symmetry()
+      complex(rp), dimension(nb, nb) :: q_orbital
+
       ham%ee = (0.0_rp, 0.0_rp)
       ham%ee(1, 1, 2, 1) = cmplx(0.08_rp, 0.0_rp, rp)
       ham%ee(1, 1, 3, 1) = cmplx(0.08_rp, 0.0_rp, rp)
       ham%ee(spin_off + 1, spin_off + 1, 2, 1) = cmplx(0.08_rp, 0.0_rp, rp)
       ham%ee(spin_off + 1, spin_off + 1, 3, 1) = cmplx(0.08_rp, 0.0_rp, rp)
       call ham%build_realspace_velocity_operators()
-      call ham%build_realspace_orbital_velocity_operators()
-      call require(maxval(abs(ham%jl_a(:, :, 2:3, 1))) < tolerance, &
+      call select_orbital_operator('z', q_orbital)
+      call require(maxval(abs(current_block(q_orbital, ham%v_a(:, :, 2, 1)))) < tolerance .and. &
+                   maxval(abs(current_block(q_orbital, ham%v_a(:, :, 3, 1)))) < tolerance, &
          'orbital current vanishes for s-only hopping by angular-momentum symmetry')
    end subroutine test_s_only_orbital_symmetry
 
@@ -412,10 +444,6 @@ contains
 
       hermiticity_error = maxval(abs(matrix - conjg(transpose(matrix))))
    end function hermiticity_error
-
-   integer function norb_local()
-      norb_local = size(L_z, 1)
-   end function norb_local
 
    subroutine require(condition, description)
       logical, intent(in) :: condition

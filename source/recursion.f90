@@ -90,6 +90,13 @@ module recursion_mod
       !> Variable to save T(H)
       complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
       type(rsrec_cuda_backend), pointer :: gpu_backend => null()
+      !> Kubo response operators: kind and local operator of the output (a) and input (b) slots
+      character(len=16) :: transport_kind_a, transport_kind_b
+      complex(rp), allocatable :: transport_q_a(:, :), transport_q_b(:, :)
+      !> Unit velocity directions of the output (a) and input (b) slots
+      real(rp) :: transport_dir_a(3), transport_dir_b(3)
+      !> Physical bond vectors d_ij (3, neighbor slot, site), periodic images included
+      real(rp), allocatable :: transport_bond(:, :, :)
    contains
       procedure :: hop
       procedure :: crecal
@@ -119,6 +126,13 @@ module recursion_mod
       procedure :: ham_hoh_vec_matmul
       procedure :: velo_vec_matmul
       procedure :: velo_hoh_vec_matmul
+      procedure :: onsite_vec_matmul
+      procedure :: kubo_ham_vec_matmul
+      procedure :: kubo_operator_vec_matmul
+      procedure :: apply_kubo_operator
+      procedure :: setup_kubo_bonds
+      procedure :: setup_kubo_operators
+      procedure :: set_kubo_operator_slot
       procedure :: gpu_precision_code
       procedure :: restore_to_default
       final :: destructor
@@ -316,47 +330,35 @@ module recursion_mod
       type(recursion) :: this
    end subroutine destructor
 
-   !> @brief Apply a real-space velocity-like operator to a Chebyshev block state.
-   !> @details Multiplies psi_in by the supplied operator blocks v_op over the
-   !>          current light cone. Conductivity and spin/orbital response moments
-   !>          use this for v_a and v_b insertions when HOH is inactive.
+   !> @brief Apply the matrix-free velocity -i direction.d_ij H_ij to a block state.
+   !> @details Bond vectors come from transport_bond; weighted applies velocity_scale.
    !> @param[inout] this Recursion object; updates idum to the propagated support.
-   !> @param[in] c_or_n BLAS transpose selector for the operator blocks.
-   !> @param[in] v_op Operator blocks in the real-space hopping layout.
-   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[in] psi_in Input block state, site-major as (nb,nrhs,nsite).
    !> @param[out] psi_out Output block state in the same layout.
-   !> @note The local-Hamiltonian velocity path is intentionally not implemented.
-   module subroutine velo_vec_matmul(this, c_or_n, v_op, psi_in, psi_out)
+   !> @param[in] direction Cartesian velocity direction.
+   !> @param[in] weighted Apply the bond weights.
+   module subroutine velo_vec_matmul(this, psi_in, psi_out, direction, weighted)
       class(recursion), intent(inout) :: this
-      complex(rp), dimension(:, :, :, :), intent(in) :: v_op
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
-      character :: c_or_n 
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
    end subroutine velo_vec_matmul
 
-   !> @brief Apply a velocity-like operator with the HOH two-sweep correction.
-   !> @details Computes the response-operator action used by stochastic
-   !>          conductivity moments when the orthogonalized Hamiltonian correction
-   !>          is active, including the companion vo_op sweep through H psi.
-   !> @param[inout] this Recursion object; uses psi1/psi2/hohpsi scratch arrays.
-   !> @param[in] v_op Primary velocity or torque operator blocks.
-   !> @param[in] vo_op Orthogonalization partner blocks for the HOH correction.
-   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
-   !> @param[out] psi_out Output block state in the same layout.
-   !> @note Mutates izero/idum while propagating the active light cone.
-   module subroutine velo_hoh_vec_matmul(this, v_op, vo_op, psi_in, psi_out)
+   !> @brief Apply the matrix-free velocity with the HOH corrections v - v O h - h O v.
+   !> @param[inout] this Recursion object; mutates izero/idum while propagating the active light cone.
+   !> @param[in] psi_in Input block state.
+   !> @param[out] psi_out Output block state.
+   !> @param[inout] work Scratch planes 1:3 (psi1, psi2, hohpsi).
+   !> @param[in] direction Cartesian velocity direction.
+   !> @param[in] weighted Apply the bond weights.
+   module subroutine velo_hoh_vec_matmul(this, psi_in, psi_out, work, direction, weighted)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      complex(rp), dimension(:, :, :, :), intent(in) :: v_op
-      complex(rp), dimension(:, :, :, :), intent(in) :: vo_op
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
-
+      complex(rp), target, contiguous, intent(inout) :: work(:, :, :, :)
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
    end subroutine velo_hoh_vec_matmul
 
    !> @brief Apply the scaled Hamiltonian with HOH correction to a block state.
@@ -364,20 +366,20 @@ module recursion_mod
    !>          representation. Chebyshev stochastic transport uses this as the
    !>          recurrence operator when hamiltonian%hoh is enabled.
    !> @param[inout] this Recursion object; uses HOH scratch arrays and light-cone maps.
-   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[in] psi_in Input block state, site-major as (nb,nrhs,nsite).
    !> @param[out] psi_out Scaled Hamiltonian action in the same layout.
    !> @param[in] a Hamiltonian scaling half-width.
    !> @param[in] b Hamiltonian scaling center.
+   !> @param[inout] work Optional scratch planes 1:2 (psi2, hohpsi); defaults to the recursion members.
+   !> @param[in] include_soc Optional; false omits H_SOC (default true).
    !> @note Mutates izero/idum to the support reached by the Hamiltonian action.
-   module subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
-      class(recursion), intent(inout) :: this
+   module subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b, work, include_soc)
+      class(recursion), target, intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       real(rp), intent(in) :: a, b
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
-
+      complex(rp), target, contiguous, optional, intent(inout) :: work(:, :, :, :)
+      logical, optional, intent(in) :: include_soc
    end subroutine ham_hoh_vec_matmul
 
    !> @brief Apply the scaled no-HOH Hamiltonian to a block state.
@@ -385,20 +387,73 @@ module recursion_mod
    !>          blocks. This is the legacy Chebyshev recurrence operator for
    !>          stochastic conductivity and related response moments.
    !> @param[inout] this Recursion object; updates idum to the propagated support.
-   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[in] psi_in Input block state, site-major as (nb,nrhs,nsite).
    !> @param[out] psi_out Scaled Hamiltonian action in the same layout.
    !> @param[in] a Hamiltonian scaling half-width.
    !> @param[in] b Hamiltonian scaling center.
+   !> @param[in] include_soc Optional; false omits H_SOC (default true).
    !> @note Includes ccor_2c blocks when hamiltonian%ccor_2c is set.
-   module subroutine ham_vec_matmul(this, psi_in, psi_out, a, b)
+   module subroutine ham_vec_matmul(this, psi_in, psi_out, a, b, include_soc)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       real(rp), intent(in) :: a, b
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
+      logical, intent(in), optional :: include_soc
    end subroutine ham_vec_matmul
+
+   !> @brief Apply the on-site matrix of each atom type to a block state.
+   module subroutine onsite_vec_matmul(this, matrix, psi, out)
+      class(recursion), intent(in) :: this
+      complex(rp), contiguous, intent(in) :: matrix(:, :, :), psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+   end subroutine onsite_vec_matmul
+
+   !> @brief Apply the unscaled Hamiltonian (HOH-aware) to a block state for the Kubo operators.
+   module subroutine kubo_ham_vec_matmul(this, psi, out, work, include_soc, a, b)
+      class(recursion), intent(inout) :: this
+      complex(rp), contiguous, intent(in) :: psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+      logical, intent(in), optional :: include_soc
+      real(rp), intent(in), optional :: a, b
+   end subroutine kubo_ham_vec_matmul
+
+   !> @brief Apply one Kubo response operator (charge or current, local, torque) to a block state.
+   module subroutine kubo_operator_vec_matmul(this, kind, q, direction, weighted, psi, out, work)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: kind
+      complex(rp), contiguous, intent(in) :: q(:, :), psi(:, :, :)
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+   end subroutine kubo_operator_vec_matmul
+
+   !> @brief Apply the operator of slot a (linear_out) or b (linear_in) to a block state.
+   module subroutine apply_kubo_operator(this, slot, psi, out, work)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: slot
+      complex(rp), contiguous, intent(in) :: psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+   end subroutine apply_kubo_operator
+
+   !> @brief Cache the physical bond vectors d_ij of every site and neighbor slot in transport_bond.
+   module subroutine setup_kubo_bonds(this)
+      class(recursion), intent(inout) :: this
+   end subroutine setup_kubo_bonds
+
+   !> @brief Select the operators and directions of the output (slot a) and input (slot b) of the linear response.
+   module subroutine setup_kubo_operators(this, linear_out, linear_in)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: linear_out, linear_in
+   end subroutine setup_kubo_operators
+
+   !> @brief Configure the kind and local operator of one slot from the operator type and the polarization.
+   module subroutine set_kubo_operator_slot(this, op_type, slot)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: op_type, slot
+   end subroutine set_kubo_operator_slot
 
    !> @brief Compute two-index stochastic Chebyshev moments for transport.
    !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
@@ -406,8 +461,7 @@ module recursion_mod
    !>          starting states are either representative atom types or random
    !>          vectors, selected by control%cond_calctype.
    !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
-   !> @note Builds the required real-space velocity/torque operators and may
-   !>       dispatch to GPU or fast CPU stochastic kernels.
+   !> @note The operators are applied matrix-free (setup_kubo_operators); GPU requests are fatal until the kernels return.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables

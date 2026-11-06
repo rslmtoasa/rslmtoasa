@@ -72,7 +72,7 @@ module hamiltonian_mod
       !> Local Hamiltonian
       complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo, hallcc
       !> Hamiltonian built in chbar_nc (description to be improved)
-      complex(rp), dimension(:, :, :, :), allocatable :: hmag, hxc
+      complex(rp), dimension(:, :, :, :), allocatable :: hmag
       !> Hamiltonian built in ham0m_nc (description to be improved
       complex(rp), dimension(:, :, :), allocatable :: hhmag
       !> Overlap Hamiltonian
@@ -114,7 +114,7 @@ module hamiltonian_mod
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
       !> Velocity operators
-      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, js_a, jl_a, vo_a, vo_b, jso_a, jlo_a
+      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, vo_a, vo_b
       !> Spin/orbital/multipole polarization of the output (pol_alpha) and input (pol_beta) transport operators
       character(len=10) :: pol_alpha, pol_beta
       real(rp), dimension(3) :: v_alpha, v_beta, q_ss
@@ -191,10 +191,6 @@ module hamiltonian_mod
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
       procedure :: build_realspace_velocity_operators
-      procedure :: build_realspace_spin_operators
-      procedure :: build_realspace_spin_torque_operators
-      procedure :: build_realspace_orbital_velocity_operators
-      procedure :: build_realspace_orbital_torque_operators
       procedure :: torque_operator_collinear
       procedure :: rs2pao
       procedure :: export_rs_tb_all
@@ -280,67 +276,6 @@ module hamiltonian_mod
       class(hamiltonian) :: this
 
    end subroutine restore_to_default
-
-   !> @brief Build real-space orbital-current operator blocks.
-   !> @details Forms orbital velocity operators from angular-momentum matrices and
-   !>          real-space hopping geometry for orbital transport and orbital torque
-   !>          workflows.
-   !> @param[inout] this Hamiltonian object; fills jl_a/jl_b-style operator arrays.
-   !> @note Uses the same site/neighbor layout as ee/hall velocity blocks.
-   module subroutine build_realspace_orbital_velocity_operators(this)
-      class(hamiltonian), intent(inout) :: this
-   
-      integer :: ntype, ia, nr, m
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:,:), tmp2(:,:), L_op(:,:)  ! Temp matrices
-      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
-
-   end subroutine build_realspace_orbital_velocity_operators
-
-   !> @brief Build real-space spin-current operator blocks.
-   !> @details Combines spin matrices with the velocity-operator layout so
-   !>          stochastic conductivity can evaluate spin-current correlations.
-   !> @param[inout] this Hamiltonian object; fills js_a and related spin-current arrays.
-   module subroutine build_realspace_spin_operators(this)
-      class(hamiltonian), intent(inout) :: this
-   
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
-   
-      ! Derive dimension from your velocity array:
-   end subroutine build_realspace_spin_operators
-
-   !> @brief Build real-space spin-torque operator blocks.
-   !> @details Forms torque-current operators from spin operators and local
-   !>          Hamiltonian/SOC blocks for spin-torque response calculations.
-   !> @param[inout] this Hamiltonian object; fills js_a/jso_a torque arrays.
-   module subroutine build_realspace_spin_torque_operators(this)
-      class(hamiltonian), intent(inout) :: this
-
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(nb, nb) :: locham
-
-      ! Derive dimension from your velocity array:
-   end subroutine build_realspace_spin_torque_operators
-
-   !> @brief Build real-space orbital-torque operator blocks.
-   !> @details Forms orbital torque-current operators from angular-momentum
-   !>          matrices and local Hamiltonian/SOC blocks for orbital response.
-   !> @param[inout] this Hamiltonian object; fills jl_a/jlo_a torque arrays.
-   module subroutine build_realspace_orbital_torque_operators(this)
-      class(hamiltonian), intent(inout) :: this
-
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
-      complex(rp), dimension(nb, nb) :: locham
-
-      ! Derive dimension from your velocity array:
-   end subroutine build_realspace_orbital_torque_operators
 
    !> @brief Build charge velocity operators in real-space hopping layout.
    !> @details Projects bond displacement vectors onto v_alpha/v_beta directions

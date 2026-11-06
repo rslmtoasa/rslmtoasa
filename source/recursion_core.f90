@@ -357,6 +357,7 @@ contains
       if (allocated(this%hpsi)) deallocate (this%hpsi)
       if (allocated(this%hohpsi)) deallocate (this%hohpsi)
       if (allocated(this%enupsi)) deallocate (this%enupsi)
+      if (allocated(this%transport_bond)) deallocate (this%transport_bond)
       if (allocated(this%socpsi)) deallocate (this%socpsi)
       if (allocated(this%atemp_b)) deallocate (this%atemp_b)
       if (allocated(this%b2temp_b)) deallocate (this%b2temp_b)
