@@ -36,7 +36,7 @@ module potential_mod
    private
 
    ! public functions
-   public :: array_of_potentials
+   public :: array_of_potentials, average_spin_channels
 
    type, public :: potential
       !> Orbital index. Determines the size of the Hamiltonian
@@ -98,6 +98,7 @@ module potential_mod
       ! Hyperfine fields
       real(rp), dimension(2) :: hyper_field(2)
    contains
+
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: print_state
@@ -113,6 +114,9 @@ module potential_mod
       procedure :: expand_potential_lite
       procedure :: expand_potential_full
       procedure :: print_hyperfine
+      procedure :: symmetrize_band_moments
+      procedure :: symmetrize_parameters
+      procedure :: clear_spin_moment
       procedure :: copy_mom_to_scal
       final :: destructor
    end type potential
@@ -122,6 +126,40 @@ module potential_mod
    end interface potential
 
 contains
+
+   !> Project two spin channels onto their charge-preserving average.
+   subroutine average_spin_channels(x)
+      real(rp), intent(inout) :: x(:, :)
+      x(:, 1) = 0.5_rp*(x(:, 1) + x(:, 2))
+      x(:, 2) = x(:, 1)
+   end subroutine average_spin_channels
+
+   subroutine symmetrize_band_moments(this)
+      class(potential), intent(inout) :: this
+      this%ql(:, :, 1) = 0.5_rp*(this%ql(:, :, 1) + this%ql(:, :, 2))
+      this%ql(:, :, 2) = this%ql(:, :, 1)
+      call average_spin_channels(this%pl)
+   end subroutine symmetrize_band_moments
+
+   subroutine symmetrize_parameters(this)
+      class(potential), intent(inout) :: this
+      call average_spin_channels(this%center_band)
+      call average_spin_channels(this%width_band)
+      call average_spin_channels(this%shifted_band)
+      call average_spin_channels(this%obar)
+   end subroutine symmetrize_parameters
+
+   subroutine clear_spin_moment(this)
+      class(potential), intent(inout) :: this
+      ! mom is a reference axis, not the magnitude of the constrained moment.
+      this%mom = [0.0_rp, 0.0_rp, 1.0_rp]
+      this%mom0 = 0.0_rp
+      this%mom1 = 0.0_rp
+      this%mtot = 0.0_rp
+      this%mx = 0.0_rp
+      this%my = 0.0_rp
+      this%mz = 0.0_rp
+   end subroutine clear_spin_moment
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

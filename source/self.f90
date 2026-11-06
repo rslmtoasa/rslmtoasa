@@ -22,6 +22,7 @@
 module self_mod
 
    use mpi_mod
+   use potential_mod, only: average_spin_channels
    use symbolic_atom_mod, only: symbolic_atom, save_state_scf
    use logger_mod, only: g_logger
 #ifdef USE_SAFE_ALLOC
@@ -82,6 +83,8 @@ module self_mod
       !>
       !> Default: true for all kind of calculations. If false, the user may provide the final lines of old format self file in a different file.
       logical :: all_inequivalent
+      !> One charge-preserving nonmagnetic constraint per SCF atom.
+      logical, allocatable :: force_nonmagnetic(:)
 
       ! Calculation type dependents
       !TODO: lack description
@@ -285,6 +288,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine destructor(this)
       type(self) :: this
+      if (allocated(this%force_nonmagnetic)) deallocate(this%force_nonmagnetic)
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%ws)) call g_safe_alloc%deallocate('self.ws', this%ws)
       if (allocated(this%mixmag)) call g_safe_alloc%deallocate('self.mixmag', this%mixmag)
@@ -330,7 +334,7 @@ contains
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
       cold = this%cold
-
+      force_nonmagnetic = this%force_nonmagnetic
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
       call move_alloc(this%rb, rb)
@@ -370,6 +374,17 @@ contains
          call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+
+      ! Every rank reads the same flags; potential MPI buffers stay numeric.
+      call move_alloc(force_nonmagnetic, this%force_nonmagnetic)
+      do i = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + i)%force_nonmagnetic = this%force_nonmagnetic(i)
+         call this%symbolic_atom(this%lattice%nbulk + i)%enforce_nonmagnetic()
+         if (rank == 0 .and. this%force_nonmagnetic(i)) then
+            call g_logger%info('Forced nonmagnetic SCF atom '//int2str(i)//' ('// &
+               trim(this%symbolic_atom(this%lattice%nbulk + i)%element%symbol)//')', __FILE__, __LINE__)
+         end if
+      end do
 
       ! Setting user values
 
@@ -453,6 +468,9 @@ contains
       ! Control variables
       ! if false force to read the original self file
       this%all_inequivalent = .true.
+      if (allocated(this%force_nonmagnetic)) deallocate(this%force_nonmagnetic)
+      allocate(this%force_nonmagnetic(this%lattice%nrec))
+      this%force_nonmagnetic = .false.
 
       ! Wigner Seitz Radius
       this%ws_all = .true.
@@ -589,6 +607,7 @@ contains
       nstep = this%nstep
       init = this%init
       cold = this%cold
+      force_nonmagnetic = this%force_nonmagnetic
 
       ! 1d allocatable
 
@@ -641,6 +660,7 @@ contains
       nstep = this%nstep
       init = this%init
       cold = this%cold
+      force_nonmagnetic = this%force_nonmagnetic
       ! 1d allocatable
 
       if (allocated(this%ws)) then
@@ -897,6 +917,7 @@ contains
       do ia = 1, this%lattice%nrec
          if (rank == 0) call g_logger%info('From orthogonal to TB basis for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
          call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au)
+         if (this%force_nonmagnetic(ia)) call this%symbolic_atom(this%lattice%nbulk + ia)%build_pot()
       end do
    
       call g_timer%stop('atomic-scf')
@@ -916,10 +937,13 @@ contains
       integer :: ia, ia_loc
       real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
+      real(rp) :: spin_axis(3), orbital_axis(3)
       ! Open report.out file
-      open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
-      open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
-      open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
+      if (rank == 0) then
+         open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
+         open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
+         open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
+      end if
 
       ! Calculate outputs that are not calculated during the SFC run
       call this%bands%calculate_magnetic_torques()
@@ -990,6 +1014,13 @@ contains
             write (newunit, '(a,i4,a,3f10.6)') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:3)
             write (newunit, '(a,i4,a,3f10.6)') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, 4:6)
             write (newunit, '(a,i4,a,f10.6)') 'Charge transfer at atom', ia, ':', this%charge%dq(ia)
+            if (this%force_nonmagnetic(ia)) then
+               associate(p => this%symbolic_atom(this%lattice%nbulk + ia)%potential)
+                  write(newunit, '(a,i4,a,6es24.15)') 'Nonmagnetic check atom', ia, ':', &
+                     sum(p%ql(1, :, 1) - p%ql(1, :, 2)), maxval(abs(p%cx1)), maxval(abs(p%wx1)), &
+                     maxval(abs(p%cex1)), maxval(abs(p%obx1)), norm2(p%mom0)
+               end associate
+            end if
          end do
          !===========================================================================
          !                           Fermi Energy
@@ -1000,8 +1031,12 @@ contains
          write (newunit, '(a,f10.6)') 'Fermi energy: ', this%en%fermi
          
          do ia = 1, this%lattice%nrec
-            write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', (magmom(ia, :))/norm2(magmom(ia, :))
-            write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', (lmom(ia, :))/norm2(lmom(ia, :))
+            spin_axis = 0.0_rp
+            orbital_axis = 0.0_rp
+            if (norm2(magmom(ia, :)) > 0.0_rp) spin_axis = magmom(ia, :)/norm2(magmom(ia, :))
+            if (norm2(lmom(ia, :)) > 0.0_rp) orbital_axis = lmom(ia, :)/norm2(lmom(ia, :))
+            write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', spin_axis
+            write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', orbital_axis
          end do
          !===========================================================================
          !                           Log info     
@@ -1016,7 +1051,7 @@ contains
       end if
 
       ! Print angle betweens magnetic and orbital moments
-      call this%bands%calculate_angles(magmom, lmom)
+      if (rank == 0) call this%bands%calculate_angles(magmom, lmom)
 
       ! Print hyperfine structure
       if (this%control%hyperfine) then
@@ -1025,9 +1060,11 @@ contains
          end do
       end if
       
-      close(newunit)
-      close(10)
-      close(20)
+      if (rank == 0) then
+         close(newunit)
+         close(10)
+         close(20)
+      end if
     
    end subroutine report
 
@@ -1209,14 +1246,17 @@ contains
       ipr = 0
       nsp = 2
       lmax = atom%potential%lmax
+      call atom%enforce_nonmagnetic()
       rho_in = atom%rho0(nsp)
+      if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
 
       allocate (v, mold=rho_in)
       allocate (rho, mold=rho_in)
       allocate (rofi(size(rho_in(:, 1))))
 
       nr = size(rofi)
-      B_fsm = merge(-atom%mag_cfield(3), real(0.0, rp), this%lattice%control%do_comom)
+      B_fsm = 0.0_rp
+      if (this%lattice%control%do_comom .and. .not. atom%force_nonmagnetic) B_fsm = -atom%mag_cfield(3)
       xc_obj = xc(this%lattice%control)
       b = atom%B()
 
@@ -1340,11 +1380,13 @@ contains
          if (LAST) then
             IPR1 = IPR
          end if
+         if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
          call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, NSP)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
          call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP, B_fsm)
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, NSP, IPR1)
+         if (atom%force_nonmagnetic) call average_spin_channels(rho)
          DRHO = 0.d0
          SUM = 0.d0
          RHO0T = 0.d0
@@ -1361,6 +1403,7 @@ contains
                SUM = SUM + WGT*DRDI*RHO(IR, ISP)
             end do
          end do
+         if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
          if (LAST) exit
          if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
             write (6, 10004) ITER, SUM, DRHO, VNUCL, RHO0T, VSUM, BETA1
