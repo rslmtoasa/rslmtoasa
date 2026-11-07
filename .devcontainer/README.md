@@ -1,9 +1,11 @@
-# Run RS-LMTO-ASA main_rc in Codespaces
+# Run the alternative RS-LMTO-ASA tutorial in Codespaces
 
-[Open the tutorial in Codespaces](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/codespaces-main-rc)
+See the [alternative two-hour tutorial](../docs/tutorial-alternative-workflows.md) for Fe, Si, MnTe pair selection, and UppASD export.
+
+[Open the tutorial in Codespaces](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows)
 
 Sign in with your own GitHub account. Check that the branch is
-`tutorial/codespaces-main-rc`, choose the 2-core machine, and create your codespace.
+`tutorial/alternative-workflows`, choose the 2-core machine, and create your codespace.
 Each student gets an independent environment and uses their own available
 personal Codespaces allowance. Check the billing owner before creating it.
 Initial setup downloads the environment and compiles the code; allow several

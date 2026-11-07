@@ -1,5 +1,5 @@
 {
-  "name": "RS-LMTO-ASA main_rc tutorial",
+  "name": "RS-LMTO-ASA alternative tutorial",
   "build": { "dockerfile": "Dockerfile" },
   "remoteUser": "vscode",
   "hostRequirements": { "cpus": 2, "memory": "8gb" },
