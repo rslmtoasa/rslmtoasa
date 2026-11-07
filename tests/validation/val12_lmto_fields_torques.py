@@ -164,12 +164,18 @@ def main() -> int:
     cases["soc_global_rotation_x"] = run_case(
         args.binary.resolve(), root, base, scratch / "soc_global_rotation_x",
         nsp=4, soc_scale=1.0, moment=x)
+    # Along [100] the SOC torque vanishes by cubic symmetry (it prints as zero), so the SOC case that must show a
+    # nonzero torque uses a direction off every symmetry axis.
+    cases["soc_generic_direction"] = run_case(
+        args.binary.resolve(), root, base, scratch / "soc_generic_direction",
+        nsp=4, soc_scale=1.0, moment=[0.6, 0.0, 0.8])
     evidence = {
         "collinear_soc_off": check_production_route(cases["collinear_soc_off"], "collinear SOC-off"),
         "global_rotation_z": check_production_route(cases["global_rotation_z"], "global rotation z"),
         "global_rotation_x": check_production_route(cases["global_rotation_x"], "global rotation x"),
         "soc_global_rotation_z": check_production_route(cases["soc_global_rotation_z"], "SOC rotation z"),
         "soc_global_rotation_x": check_production_route(cases["soc_global_rotation_x"], "SOC rotation x"),
+        "soc_generic_direction": check_production_route(cases["soc_generic_direction"], "SOC generic direction"),
     }
 
     collinear = cases["collinear_soc_off"]["log"]["torque"]
@@ -187,7 +193,7 @@ def main() -> int:
     require(rotation_torque_error < 5.0e-3 / T_PER_MRY_MUB,
             f"SOC-free global rotation changed the torque invariant by {rotation_torque_error:.3e} mRy")
 
-    soc_torque = cases["soc_global_rotation_x"]["log"]["torque"]
+    soc_torque = cases["soc_generic_direction"]["log"]["torque"]
     require(norm(soc_torque) > 1.0e-4 / T_PER_MRY_MUB,
             "SOC case was incorrectly treated as a zero-torque state")
 

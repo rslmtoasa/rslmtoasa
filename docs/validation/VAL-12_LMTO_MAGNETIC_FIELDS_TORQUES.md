@@ -41,8 +41,8 @@ The code stores
 This is the active Antropov-style local electronic-field/torque formulation
 in this code. It is a local LMTO force expression, not the LKAG intersite
 `J/D/A` exchange tensor and not the SOC torque-correlation operator used for
-damping. The output array is named `bands%mag_for` and is logged as “Magnetic
-field”; the same routine logs the derived “Magnetic torque”.
+damping. The output array is named `bands%mag_for` and is logged as “Effective magnetic
+field (mRy/mu_B)”; the same routine logs the derived “Magnetic torque (mRy)”.
 
 The internal `I_i` is an energy coefficient in Ry. `mag_for` and the logged
 torque are converted with `ry2tesla = 2.35051754997e5 T/Ry`. The moment in the
@@ -139,13 +139,16 @@ reported field/torque records.
 
 | case | result |
 |---|---:|
-| collinear SOC-off transverse torque | `0.0 T` |
-| SOC-free global-rotation energy difference | `7.614e-7 Ry` |
-| largest production `m x B` reconstruction error | `9.08e-7 T` |
-| SOC-on rotated torque norm | `3.548e-3 T` |
-| SOC-off rotated torque norm | `3.562e-4 T` |
+| collinear SOC-off transverse torque | `0.0 mRy` |
+| SOC-free global-rotation energy difference | `7.53e-7 Ry` |
+| SOC-free global-rotation torque difference | `0.0 mRy` |
+| largest production torque vs `-\|m\| m x B` error | `5.1e-7 mRy` (print resolution) |
+| SOC-on torque, moment along [100] and [001] | `0.0 mRy` (zero by cubic symmetry) |
+| SOC-on torque, moment along (0.6, 0, 0.8) | `1.96e-2 mRy` |
 
-The SOC-on finite torque is evidence that SOC is treated separately; it is not
+Earlier versions of this table listed a nonzero SOC torque along [100] (and `3.6e-4 T` for the SOC-free
+rotation, which must be zero); those values were single-precision noise. The nonzero-torque check now
+uses a direction off every symmetry axis. The SOC-on finite torque is evidence that SOC is treated separately; it is not
 an assertion that this one-site fixture supplies a converged magnetic
 anisotropy benchmark. The small SOC-free residual is within the one-step,
 printed-output envelope and does not alter the zero-torque invariant for the
