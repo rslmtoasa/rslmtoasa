@@ -1,6 +1,9 @@
 # Build artifacts
 /build/
 /build_*/
+/build-codespaces/
+/runs/
+/*-results.tar.gz
 /CMakeFiles/
 /CMakeCache.txt
 /cmake_install.cmake
