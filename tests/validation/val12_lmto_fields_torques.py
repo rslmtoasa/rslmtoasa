@@ -21,6 +21,9 @@ import f90nml
 
 
 FLOAT = r"[-+0-9.EeDd]+"
+# 1 mRy per mu_B in Tesla: ry2tesla = 2.35051754997e5 (source/math.f90) / 1000. The thresholds below were written in Tesla
+# for the former Ry*ry2tesla outputs; they are kept as the same physical values, expressed in the units now printed.
+T_PER_MRY_MUB = 2.35051754997e2
 
 
 def number(value: str) -> float:
@@ -74,7 +77,7 @@ def parse_report(path: Path, atom_path: Path) -> dict[str, list[float] | float]:
         r"Spin moment projections of atom\s*1\s*:\s*(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), text
     )
     field_match = re.search(
-        r"Magnetic force on atom\s*1\s*:\s*(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), text
+        r"Effective magnetic field \(mRy/mu_B\) on atom\s*1\s*:\s*(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), text
     )
     if not (energy_match and moment_match and field_match):
         raise RuntimeError(f"VAL-12: incomplete production report {path}")
@@ -90,7 +93,7 @@ def parse_report(path: Path, atom_path: Path) -> dict[str, list[float] | float]:
 
 def parse_log(text: str) -> dict[str, list[float]]:
     torque_matches = re.findall(
-        r"Magnetic torque on atom\s*1 is\s*(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), text
+        r"Magnetic torque \(mRy\) on atom\s*1 is\s*(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), text
     )
     if not torque_matches:
         raise RuntimeError("VAL-12: production torque diagnostic was not emitted")
@@ -123,12 +126,13 @@ def check_production_route(case: dict, label: str) -> dict[str, float]:
     require(all(math.isfinite(value) for value in moment + field + torque),
             f"{label}: non-finite field/torque observable")
     require(norm(moment) > 0.5, f"{label}: magnetic moment was not established")
-    expected_torque = cross(moment, field)
+    # Printed field B = -1000 I/|m| (mRy/mu_B) and torque = 1000 m_hat x I (mRy), so torque = -|m| m_hat x B.
+    expected_torque = [-norm(report["moment"]) * value for value in cross(moment, field)]
     relation_error = norm([a - b for a, b in zip(torque, expected_torque)])
-    require(relation_error < 5.0e-3,
-            f"{label}: production torque is inconsistent with m x B ({relation_error:.3e})")
-    return {"field_norm_T": norm(field), "torque_norm_T": norm(torque),
-            "m_cross_B_error_T": relation_error}
+    require(relation_error < 5.0e-3 / T_PER_MRY_MUB,
+            f"{label}: production torque is inconsistent with -|m| m_hat x B ({relation_error:.3e} mRy)")
+    return {"field_norm_mRy_per_muB": norm(field), "torque_norm_mRy": norm(torque),
+            "torque_vs_m_cross_B_error_mRy": relation_error}
 
 
 def main() -> int:
@@ -169,7 +173,7 @@ def main() -> int:
     }
 
     collinear = cases["collinear_soc_off"]["log"]["torque"]
-    require(norm(collinear[:2]) < 5.0e-3,
+    require(norm(collinear[:2]) < 5.0e-3 / T_PER_MRY_MUB,
             "collinear SOC-off transverse torque is not zero within the printed precision")
 
     rotation_energy_error = abs(cases["global_rotation_z"]["report"]["energy"] -
@@ -180,19 +184,19 @@ def main() -> int:
         a - b for a, b in zip(cases["global_rotation_z"]["log"]["torque"],
                               cases["global_rotation_x"]["log"]["torque"])
     ])
-    require(rotation_torque_error < 5.0e-3,
-            f"SOC-free global rotation changed the torque invariant by {rotation_torque_error:.3e} T")
+    require(rotation_torque_error < 5.0e-3 / T_PER_MRY_MUB,
+            f"SOC-free global rotation changed the torque invariant by {rotation_torque_error:.3e} mRy")
 
     soc_torque = cases["soc_global_rotation_x"]["log"]["torque"]
-    require(norm(soc_torque) > 1.0e-4,
+    require(norm(soc_torque) > 1.0e-4 / T_PER_MRY_MUB,
             "SOC case was incorrectly treated as a zero-torque state")
 
     result = {
         "scope": "bcc-Fe one-site production SCF/report cases; no trajectory integration",
-        "route": "bands%calculate_magnetic_torques -> mag_for (Ry*ry2tesla) and m x I",
+        "route": "bands%calculate_magnetic_torques -> mag_for (-1000 I/|m|, mRy/mu_B) and torque (1000 m x I, mRy)",
         "evidence": evidence,
         "soc_free_global_rotation_energy_error_Ry": rotation_energy_error,
-        "soc_free_global_rotation_torque_difference_T": rotation_torque_error,
+        "soc_free_global_rotation_torque_difference_mRy": rotation_torque_error,
         "controlled_canting_oracle": "UnitConstrainingField (VAL-10): canted restoring field and penalty finite difference",
         "interpretation": (
             "LMTO field/torque feedback and SOC separation pass in the scoped fixture. "
