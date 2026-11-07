@@ -15,7 +15,7 @@ ground state.
 The supported fixed-U/J input scope remains deliberately narrow: collinear
 scalar-relativistic `nsp=1`, an onsite d channel, exact `control%lmax=2`
 (`spd` basis), and the validated orthogonal Hamiltonian path. Fixed-U/J with
-`nsp=3/4` noncollinear modes or `lmax=3` (`spdf`) is rejected by the input guard.
+`lmax=3` (`spdf`) is rejected by the input guard. `nsp=3/4` with U is accepted (spinor U, tested for collinear +z/-z setups).
 With `hoh=.true.` fixed U/J is accepted for `nsp=1` and for `nsp=2` with SOC (V_U is added to `enim`,
 outside the `h - h o h` product, like E_nu and L.S); `hoh` with `gbt_single_q`, k-space
 `kspace_ham_order='first'`, or `hubbard_radial_moments='local'` is rejected. The `hoh`

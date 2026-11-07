@@ -392,7 +392,7 @@ Every test has exactly one tier label (`quick`, `standard`, `validation`); see `
 | Unit oracles (core, Green function, electrostatics, structure constants, K-point workset, ...) | `quick` (`unit`) | `tests/unit/test_*.f90` |
 | XC: three executables (`UnitXcKernels`, `UnitXcGuards`, `UnitXcLibxc`) with sub-cases | `quick` (`xc`) | `tests/unit/test_xc_*.f90` |
 | LDA+U: tensor, spinor functional, local-moment kernels, projector frozen-H oracles | `quick` (`lda_u`) | `tests/unit/test_lda_u_tensor.f90`, `test_hubbard_spinor.f90`, `test_ldau_*.f90`; data and oracle generators in `tests/ldau/` |
-| LDA+U guards: nsp=3/4 with U, nsp=1 host, U-less host, tilted axis with block recursion, mixed axes, host-axis mismatch | `standard` (`LdaUGuards`) | `tests/ldau/test_guards.py` |
+| LDA+U guards: nsp=1 host, U-less host, tilted axis with block recursion, mixed axes, host-axis mismatch | `standard` (`LdaUGuards`) | `tests/ldau/test_guards.py` |
 | LDA+U stored-reference rows (five) | `standard`; one `validation` | `tests/ldau/reference_rows.py`, `tests/ldau/references/*.json` |
 | Spin response: kernel oracles A1-A5, R1 | `quick` (`UnitSpinResponseKernels`) | oracle `.nml` files are regenerated at test time (`tests/spin_response/with_oracles.py`) |
 | Spin response: bcc Fe and AF drivers, component checks, SOC = 0 identity, odd part, 24^3 baseline | `standard` | `tests/spin_response/` |

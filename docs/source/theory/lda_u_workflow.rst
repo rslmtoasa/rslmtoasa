@@ -188,9 +188,19 @@ energies come from the spinor functional, and the radial moments use the spinor 
 ``local``). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` (candidate b). The former
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
-Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, ``nsp=3`` or ``4`` with U, HOH, self-consistent U,
-intersite V, correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear: use nsp=3/4, not
-yet supported with U"), and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
+Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, self-consistent U, intersite V, HOH with
+``gbt_single_q`` or with k-space ``kspace_ham_order='first'``, ``hubbard_radial_moments='local'`` with HOH or at ``nsp=3``/``4``,
+at ``nsp=2`` correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear axes: use nsp=3 or 4"),
+and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
+
+``nsp=3`` and ``4`` with U are accepted (spinor U as at ``nsp=2``; with HOH the V is added to ``enim``). They are tested
+for collinear setups only: bcc Fe ferromagnet, a two-atom Fe antiferromagnet and NiO AFM-II, where results agree with the
+``nsp=1`` (``nsp=3``) and ``nsp=2`` (``nsp=4``) routes. Truly noncollinear states, ``local_axis``, ``gbt_single_q``, constraints
+and impurity/surface runs with U at ``nsp>=3`` are untested. To set up a collinear antiferromagnet use the noncollinear
+convention: the same potential file (majority along the site axis) for both sublattices with ``mom = 0, 0, 1`` and
+``0, 0, -1``. Potential files in the ``nsp=1`` convention (the second sublattice with up and down swapped, ``mom = +z``) run at
+``nsp>=3`` with the default ``density_policy='relaxed_reference'`` silently turn ferromagnet-like after the first step
+(measured, also at U=0); with ``density_policy='constrained_spiral'`` they reproduce ``nsp=1``.
 Explicit ``hubbard_radial_moments='spectral'`` is accepted and its energy is not routed (as at nsp=1).
 
 Spin axis (nsp=2)

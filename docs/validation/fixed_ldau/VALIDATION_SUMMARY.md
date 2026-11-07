@@ -122,7 +122,7 @@ RS floors (bcc Fe, U=0, RS block, Broyden)
 
 ## Status and limits
 
-- Excluded from the energy route and not tested: SC-U, intersite V, nsp=3/4 noncollinear spinors with U (fatal guard), impurity U, impurity/surface hosts for energy, nonzero test fields, constrained SCF.
+- Excluded from the energy route and not tested: SC-U, intersite V, truly noncollinear nsp=3/4 spinors with U (untested), impurity U, impurity/surface hosts for energy, nonzero test fields, constrained SCF.
 - Energy routing is off for surfaces and impurities (RD4 not measured).
 - No energy-anisotropy E(x)-E(z); no converged SOC-on surface; no converged nsp=2 surface vs converged nsp=1 surface.
 - R06 (converged scalar Fe U/J sweep), R07 (noncubic J), R09 SOC ladder, R10, R11, R12, R13, R15: NOT_RUN in REMEDIATION_GATES.md; R02 aggregate NOT_RUN; R14 aggregate NOT_RUN.
