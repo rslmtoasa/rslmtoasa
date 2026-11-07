@@ -640,7 +640,7 @@ conductivity (``linear_out``/``linear_in`` transport). Independent of ``cheb_bac
   Runs every ``linear_in``/``linear_out`` operator, with or without ``hoh``, except ``spin_torque`` and
   ``orbital_torque`` with ``hoh``. The other cases (``ccor_2c``, impurity sites, bond vectors that differ
   between sites of one atom type) run ``'legacy'`` and write one warning to the log.
-- ``'fast_dp'``, ``'gpu'``: reserved; fatal at run time.
+- ``'gpu'``: reserved; fatal at run time.
 
 **Default:** ``'legacy'``
 

@@ -928,7 +928,7 @@ contains
    !>          vectors, selected by control%cond_calctype.
    !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
    !> @note control%transport_backend selects the matrix-free loops ('legacy') or the single-precision kernel ('fast_sp'); the
-   !>       kernel falls back to the loops, with a warning, for setups it does not cover. 'fast_dp' and 'gpu' are fatal.
+   !>       kernel falls back to the loops, with a warning, for setups it does not cover. 'gpu' is fatal.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -957,11 +957,8 @@ contains
 
       if (gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)) &
          call g_logger%fatal('GPU transport moments are not available with the Kubo operators yet', __FILE__, __LINE__)
-      select case (trim(this%control%transport_backend))
-      case ('fast_dp', 'gpu')
-         call g_logger%fatal('control%transport_backend = '//trim(this%control%transport_backend)// &
-                             ' is not available yet', __FILE__, __LINE__)
-      end select
+      if (trim(this%control%transport_backend) == 'gpu') &
+         call g_logger%fatal('control%transport_backend = gpu is not available yet', __FILE__, __LINE__)
 
       select case(this%control%cond_calctype)
       case('per_type')

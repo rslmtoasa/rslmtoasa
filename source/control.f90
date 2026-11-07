@@ -197,7 +197,7 @@ module control_mod
       !> KPM-G2 block path. This control is ignored for per_type transport.
       integer :: gpu_stochastic_block
       character(len=16) :: cheb_backend
-      !> Chebyshev engine for the transport moments: 'legacy' (matrix-free loops), 'fast_sp', 'fast_dp' or 'gpu'.
+      !> Chebyshev engine for the transport moments: 'legacy' (matrix-free loops), 'fast_sp' or 'gpu'.
       character(len=16) :: transport_backend
       !> CPU transport reconstruction precision. The default preserves the
       !> historical FP32-moment/FP64-reconstruction mixed route.
@@ -805,9 +805,8 @@ contains
       end if
       if (this%transport_backend /= 'legacy' &
           .and. this%transport_backend /= 'fast_sp' &
-          .and. this%transport_backend /= 'fast_dp' &
           .and. this%transport_backend /= 'gpu') then
-         call g_logger%fatal('control%transport_backend must be one of: ''legacy'', ''fast_sp'', ''fast_dp'' or ''gpu''.', __FILE__, __LINE__)
+         call g_logger%fatal('control%transport_backend must be one of: ''legacy'', ''fast_sp'' or ''gpu''.', __FILE__, __LINE__)
       end if
       if (this%density_policy /= sd_constrained_spiral &
           .and. this%density_policy /= sd_relaxed_reference) then
