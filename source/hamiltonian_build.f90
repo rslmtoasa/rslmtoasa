@@ -9,21 +9,123 @@ submodule(hamiltonian_mod) hamiltonian_build
 
 contains
 
+   !> @brief Stop on fixed-U/J input outside the supported scope.
+   !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2, collinear scalar-spin (nsp=1) or
+   !>          bulk SOC+U (nsp=2). With hoh only nsp=1 and not gbt_single_q: V_U is then added to enim
+   !>          (build_bulkham, build_locham). hubbard_radial_moments='local' also needs a first-order
+   !>          Hamiltonian (no hoh). One condition per statement; the message names the feature.
+   subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
+      class(hamiltonian), intent(inout) :: this
+      logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
+      integer :: i, l
+      logical :: spinor_bulk
+
+      spinor_bulk = this%hubbard_soc_experimental .and. this%control%nsp == 2
+
+      if (this%hubbard_radial_moments == 'local') then
+         if (.not. has_general .and. .not. has_legacy .and. .not. has_impurity .and. &
+             .not. this%hubbard_test_operator_check) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
+               'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
+         end if
+         if (this%control%nsp /= 1 .and. .not. spinor_bulk) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only for bulk fixed U/J).", __FILE__, __LINE__)
+         end if
+         if ((this%control%has_soc() .and. .not. spinor_bulk) .or. this%control%is_noncollinear()) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
+         end if
+         if (this%hoh .and. .not. this%fixed_u_test_allow_hoh_w1_u0) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
+         end if
+         if (this%control%lmax /= 2) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)
+         end if
+         if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
+            call g_logger%fatal("hubbard_radial_moments='local' requires fixed Liechtenstein U/J.", __FILE__, __LINE__)
+         end if
+         if (this%hubbard_u_sc_check) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support self-consistent U.", __FILE__, __LINE__)
+         end if
+         if (this%hubbard_v_check) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support intersite Hubbard V.", __FILE__, __LINE__)
+         end if
+      end if
+
+      ! Test-only bypass of the hoh guard of the local route: U=J=0 local W1 runs only.
+      if (this%fixed_u_test_allow_hoh_w1_u0) then
+         if (.not. this%hoh .or. .not. this%hubbard_test_operator_check .or. &
+             trim(this%hubbard_test_operator) /= 'w1' .or. trim(this%hubbard_radial_moments) /= 'local' .or. &
+             .not. has_general .or. has_legacy .or. has_impurity .or. &
+             this%hubbard_u_sc_check .or. this%hubbard_v_check .or. &
+             (abs(this%hubbard_test_lambda) > 1.0e-15_rp .and. &
+              abs(abs(this%hubbard_test_lambda) - 0.005_rp) > 1.0e-15_rp)) then
+            call g_logger%fatal('A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.', &
+                                __FILE__, __LINE__)
+         end if
+         do i = 1, this%lattice%ntype
+            if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) > 0.0_rp .or. &
+                maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) > 0.0_rp) then
+               call g_logger%fatal('A5 HOH bypass requires exactly U=J=0 on every atom and shell.', __FILE__, __LINE__)
+            end if
+         end do
+         if (rank == 0) call g_logger%info('A5 test-only HOH guard bypass active for U=J=0 local W1 path.', &
+                                           __FILE__, __LINE__)
+      end if
+
+      ! Fixed Liechtenstein U/J, any radial-moment route.
+      if (.not. this%hubbard_u_general_check .or. trim(this%hubbard_u_potential_form) /= 'liechtenstein') return
+      do i = 1, this%lattice%ntype
+         do l = 1, size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)
+            if (abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u(l)) <= 1.0e-10_rp .and. &
+                abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j(l)) <= 1.0e-10_rp) cycle
+            if (l /= 3) then
+               call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+            end if
+            if (this%control%lmax /= 2) then
+               call g_logger%fatal('Fixed d-shell LDA+U currently requires control lmax=2 (spd basis); '// &
+                                   'the spdf d-shell basis transform is unsupported.', __FILE__, __LINE__)
+            end if
+            if (this%lattice%symbolic_atoms(i)%potential%lmax < 2) then
+               call g_logger%fatal('Fixed d-shell LDA+U requires d-channel potential data.', __FILE__, __LINE__)
+            end if
+         end do
+      end do
+      if (.not. spinor_bulk .and. (this%control%has_soc() .or. this%control%is_noncollinear())) then
+         call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%hoh .and. this%control%nsp /= 1) then
+         call g_logger%fatal('Fixed-U LDA+U with hoh=.true. requires nsp=1.', __FILE__, __LINE__)
+      end if
+      if (this%hoh .and. trim(this%magnetic_representation) == gbt_single_q) then
+         call g_logger%fatal('Fixed-U LDA+U with hoh=.true. is unsupported for gbt_single_q.', __FILE__, __LINE__)
+      end if
+   end subroutine validate_fixed_u_scope
+
+   !> @brief Local-impurity RD1 V_in capture is wanted for this run.
+   !> @details True for fixed Liechtenstein U/J on impurity or surface clusters (calctype I or S) with
+   !>          hubbard_radial_moments='local': scalar-spin, lmax=2, first-order Hamiltonian (no hoh),
+   !>          no constraints, no SC-U, no Hubbard-V, no test operator.
    module function rd1_local_impurity_eligible(this) result(eligible)
       class(hamiltonian), intent(in) :: this
       logical :: eligible
 
       eligible = .false.
       if (.not. associated(this%control) .or. .not. associated(this%lattice)) return
-      eligible = (trim(this%control%calctype) == 'I' .or. trim(this%control%calctype) == 'S') .and. &
-         (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check) .and. &
-         trim(this%hubbard_radial_moments) == 'local' .and. this%control%nsp == 1 .and. &
-         this%control%lmax == 2 .and. trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. &
-         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
-         .not. this%control%constraints_enable .and. .not. this%hoh .and. &
-         .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check .and. &
-         .not. this%hubbard_test_operator_check .and. &
-         .not. this%fixed_u_test_allow_hoh_w1_u0
+      ! where: impurity or surface cluster
+      if (trim(this%control%calctype) /= 'I' .and. trim(this%control%calctype) /= 'S') return
+      ! what: fixed Liechtenstein U/J on the d shell, local radial moments
+      if (.not. (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check)) return
+      if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') return
+      if (trim(this%hubbard_radial_moments) /= 'local') return
+      if (this%control%lmax /= 2) return
+      ! spin: collinear scalar-relativistic
+      if (this%control%nsp /= 1 .or. this%control%has_soc() .or. this%control%is_noncollinear()) return
+      ! Hamiltonian: first order, no constraints, no SC-U / V, no test operator or hoh bypass
+      if (this%hoh .or. this%control%constraints_enable) return
+      if (this%hubbard_u_sc_check .or. this%hubbard_v_check) return
+      if (this%hubbard_test_operator_check .or. this%fixed_u_test_allow_hoh_w1_u0) return
+      eligible = .true.
    end function rd1_local_impurity_eligible
 
    module subroutine begin_rd1_vin_capture(this, iteration, enable_rs_capture)
@@ -694,90 +796,7 @@ contains
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
       end if
 
-      if (this%hubbard_radial_moments == 'local') then
-         if (.not. has_hubbard_general .and. .not. has_legacy_uj .and. .not. has_impurity_uj .and. &
-             .not. this%hubbard_test_operator_check) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
-               'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
-         end if
-         if (this%control%nsp /= 1 .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only for bulk fixed U/J).", __FILE__, __LINE__)
-         end if
-         if ((this%control%has_soc() .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) .or. &
-             this%control%is_noncollinear()) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
-         end if
-         if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
-         end if
-         if (this%control%lmax /= 2) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)
-         end if
-         if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
-            call g_logger%fatal("hubbard_radial_moments='local' requires fixed Liechtenstein U/J.", __FILE__, __LINE__)
-         end if
-         if (this%hubbard_u_sc_check) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support self-consistent U.", __FILE__, __LINE__)
-         end if
-         if (this%hubbard_v_check) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support intersite Hubbard V.", __FILE__, __LINE__)
-         end if
-      end if
-
-      if (fixed_u_test_allow_hoh_w1_u0) then
-         if (.not. this%hoh .or. .not. this%hubbard_test_operator_check .or. &
-             trim(this%hubbard_test_operator) /= 'w1' .or. trim(this%hubbard_radial_moments) /= 'local' .or. &
-             .not. has_hubbard_general .or. has_legacy_uj .or. has_impurity_uj .or. &
-             this%hubbard_u_sc_check .or. this%hubbard_v_check .or. &
-             (abs(this%hubbard_test_lambda) > 1.0e-15_rp .and. &
-              abs(abs(this%hubbard_test_lambda) - 0.005_rp) > 1.0e-15_rp)) then
-            call g_logger%fatal('A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.', &
-                                __FILE__, __LINE__)
-         end if
-         do i = 1, this%lattice%ntype
-            if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) > 0.0_rp .or. &
-                maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) > 0.0_rp) then
-               call g_logger%fatal('A5 HOH bypass requires exactly U=J=0 on every atom and shell.', __FILE__, __LINE__)
-            end if
-         end do
-         if (rank == 0) call g_logger%info('A5 test-only HOH guard bypass active for U=J=0 local W1 path.', &
-                                           __FILE__, __LINE__)
-      end if
-
-      ! The validated fixed-U implementation is collinear and orthogonal. The
-      ! occupation/potential contract does not cover spinor/SOC blocks or the
-      ! generalized-overlap (HOH) Hamiltonian, so reject those combinations
-      ! before any Hamiltonian can be assembled with an incomplete correction.
-      if (this%hubbard_u_general_check .and. trim(this%hubbard_u_potential_form) == 'liechtenstein') then
-         do i = 1, this%lattice%ntype
-            do l = 1, size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)
-               if (abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u(l)) <= 1.0e-10_rp .and. &
-                   abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j(l)) <= 1.0e-10_rp) cycle
-               if (l /= 3) then
-                  call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
-               end if
-               if (this%control%lmax /= 2) then
-                  call g_logger%fatal('Fixed d-shell LDA+U currently requires control lmax=2 (spd basis); '// &
-                                      'the spdf d-shell basis transform is unsupported.', __FILE__, __LINE__)
-               end if
-               if (this%lattice%symbolic_atoms(i)%potential%lmax < 2) then
-                  call g_logger%fatal('Fixed d-shell LDA+U requires d-channel potential data.', __FILE__, __LINE__)
-               end if
-            end do
-         end do
-         if (.not. (this%hubbard_soc_experimental .and. this%control%nsp == 2) .and. &
-             (this%control%has_soc() .or. this%control%is_noncollinear())) then
-            call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
-                                __FILE__, __LINE__)
-         end if
-         ! With hoh the on-site V_U is added to enim (applied outside the h-o-h product), see build_bulkham.
-         if (this%hoh .and. this%control%nsp /= 1) then
-            call g_logger%fatal('Fixed-U LDA+U with hoh=.true. requires nsp=1.', __FILE__, __LINE__)
-         end if
-         if (this%hoh .and. trim(this%magnetic_representation) == gbt_single_q) then
-            call g_logger%fatal('Fixed-U LDA+U with hoh=.true. is unsupported for gbt_single_q.', __FILE__, __LINE__)
-         end if
-      end if
+      call validate_fixed_u_scope(this, has_hubbard_general, has_legacy_uj, has_impurity_uj)
 
       if (rank == 0) then
          if (this%hubbard_test_operator_check) then
