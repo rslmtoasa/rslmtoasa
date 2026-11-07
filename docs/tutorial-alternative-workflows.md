@@ -90,6 +90,18 @@ Keep the starting inputs as well as the final ones: SCF updates the Fermi
 energy in `input.nml`. Commands assume the new `runs/alternative-*` directories
 do not exist. Choose fresh names when repeating the lesson.
 
+### Editing inputs in the browser
+
+Click a file in the Codespaces explorer to open its text editor. Change the
+entries **inside their existing namelist sections**, then save with **Ctrl+S**
+(**Cmd+S** on macOS). Add missing entries before that section's terminating
+`/`. Do not append a second `&self`, `&control`, or `&lattice` section.
+
+The lesson uses the editor for all input changes. Terminal commands copy
+working files, run the solver, and invoke plotting or pair-selection tools.
+After saving an edited input, preserve a copy before starting SCF:
+`cp input.nml input.initial.nml`. Use `input.used.nml` for an exchange run. Commands that create working directories are intended to be run once.
+
 ## 1. bcc Fe SCF (10–30 min)
 
 Use the familiar bulk example, Broyden mixing, and a bounded SCF run. In this
@@ -99,16 +111,27 @@ bulk checkpoint, so do not assume the old main-branch iteration count.
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 cp -r example/bulk/bccFe runs/alternative-fe-scf
+```
+
+Open **`runs/alternative-fe-scf/input.nml`** in the editor. Replace its
+existing `&self` and `&mix` sections with:
+
+```fortran
+&self
+nstep = 20
+conv_thr = 5.0d-8
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+```
+
+Save, then run in the terminal:
+
+```bash
 cd runs/alternative-fe-scf
-python3 - <<'PYTHON'
-from pathlib import Path
-import f90nml
-p = Path('input.nml')
-f90nml.patch(p, {'self': {'nstep': 20, 'conv_thr': 5e-8},
-                'mix': {'beta': 0.1, 'mixtype': 'broyden'}}, 'input.lesson.nml')
-Path('input.lesson.nml').replace(p)
-Path('input.initial.nml').write_text(p.read_text())
-PYTHON
+cp input.nml input.initial.nml
 timeout 180 rslmto.x input.nml > run.log 2>&1
 ```
 
@@ -155,22 +178,75 @@ energy-dependent resolution; a Gaussian is not the same kernel. The starting
 sigma `0.02 Ry ≈ 0.272 eV` gives a readable classroom comparison without
 claiming an exact kernel match. It must not be tuned solely to hide a difference.
 
-### Prepare and run independent SCF calculations
+### Prepare and edit independent SCF inputs
+
+Copy the same starting fixture into two separate working directories:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-python3 tools/tutorial/prepare_si.py
+mkdir -p runs/alternative-si
+cp -r tests/scf/cases/bulk/diamondSi runs/alternative-si/rs
+cp -r tests/scf/cases/bulk/diamondSi runs/alternative-si/ks
+```
+
+Open **`runs/alternative-si/rs/input.nml`**. Set the following entries in the
+existing sections; retain the atom labels, geometry, starting Fermi energy,
+and any entries not mentioned here.
+
+| Existing section | Entries to set or add |
+| --- | --- |
+| `&lattice` | `pbc = .true.`, `morton_sfc = .false.`, `n1 = 12`, `n2 = 12`, `n3 = 12`, `strux_backend = 'strux_lib'` |
+| `&self` | `nstep = 25`, `conv_thr = 5.0d-8`, `cold = .true.`, `use_kspace = .false.`, `force_nonmagnetic(:) = 2*.true.` |
+| `&control` | `nsp = 1`, `lmax = 1`, `lld = 150`, `recur = 'chebyshev'`, `cheb_backend = 'legacy'` |
+| `&energy` | `energy_min = -1.5`, `energy_max = 1.0`, `channels_ldos = 1000` |
+| `&mix` | `beta = 0.1`, `mixtype = 'broyden'` |
+| `&hamiltonian` | `hoh = .false.` |
+
+Each comma-separated item in the table is a separate namelist assignment;
+placing one assignment per line is easiest to read. Keep the existing
+periodic-direction flags `b1`, `b2`, and `b3` set to `.true.`. Save the file.
+
+In the editor, select and copy the entire edited RS input, then open
+**`runs/alternative-si/ks/input.nml`**, select its entire contents, and paste.
+This copies the same starting settings before either run changes its input.
+In the KS file, change **only** `use_kspace` to `.true.` inside `&self`, and
+add this new section after the other namelists:
+
+```fortran
+&reciprocal
+nk1 = 8
+nk2 = 8
+nk3 = 8
+use_symmetry_reduction = .false.
+use_time_reversal = .true.
+use_shift = .false.
+n_energy_points = 1000
+dos_method = 'gaussian'
+gaussian_sigma = 0.02
+kspace_ham_order = 'first'
+/
+```
+
+Save both files. If a `&reciprocal` section already exists in a reused input,
+edit it instead of adding a duplicate. Both routes use the same starting
+atom inputs with `cold = .true.` and are solved independently.
+
+Run from the repository root:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
 cd runs/alternative-si/rs
+cp input.nml input.initial.nml
 timeout 180 rslmto.x input.nml > run.log 2>&1
 cd ../ks
+cp input.nml input.initial.nml
 timeout 180 rslmto.x input.nml > run.log 2>&1
 ```
 
-`prepare_si.py` copies the checked two-site fixture into **independent**
-folders and refuses to overwrite existing results. Both start from the same
-atom inputs with `cold = .true.`; both electronic states are then solved
-independently. Read the last residual, final energy, and moments for **each**
-route. Confirm the forced-nonmagnetic Si moments remain negligible.
+Read the last residual, final energy, and moments for **each** route. Confirm
+the forced-nonmagnetic Si moments remain negligible. The preparation helper
+`prepare_si.py` remains available for instructors, but students do not need
+it for this editor-based workflow.
 
 If a cap is reached, compare the saved state with the instructor reference.
 Do not label the result converged because a DOS file exists. To continue a
@@ -243,20 +319,24 @@ exchange is post-processing of the saved electronic state, not a new SCF.
 cd "$(git rev-parse --show-toplevel)"
 cp -r tests/postproc/cases/exchange/bccFe runs/alternative-fe-jij
 cp runs/alternative-fe-scf/Fe_scf.nml runs/alternative-fe-jij/Fe_out.nml
+```
+
+Open **`runs/alternative-fe-jij/input.nml`** alongside the **final**
+`runs/alternative-fe-scf/input.nml` from task 1. In the exchange input:
+
+- In `&energy`, copy the final SCF values of `fermi`, `energy_min`,
+  `energy_max`, and `channels_ldos`. Copy the actual final Fermi value rather
+  than a number printed in this handout.
+- In `&control`, match the SCF values of `nsp`, `recur`, and `lld`.
+- In `&self`, set `nstep = 1`.
+- Retain `post_processing = 'exchange'`, the complete supplied exchange
+  geometry, and its two `ijpair` entries.
+
+Save the exchange input, then run:
+
+```bash
 cd runs/alternative-fe-jij
-python3 - <<'PYTHON'
-from pathlib import Path
-import f90nml
-scf = f90nml.read('../alternative-fe-scf/input.nml')
-p = Path('input.nml')
-f90nml.patch(p, {
-    'energy': {k: scf['energy'][k] for k in
-               ('fermi', 'energy_min', 'energy_max', 'channels_ldos')},
-    'control': {k: scf['control'][k] for k in ('nsp', 'recur', 'lld')},
-    'self': {'nstep': 1},
-}, 'input.lesson.nml')
-Path('input.lesson.nml').replace(p)
-PYTHON
+cp input.nml input.used.nml
 timeout 180 rslmto.x input.nml > run.log 2>&1
 cat jij.out
 ```
@@ -312,17 +392,26 @@ unused count into an exchange calculation.
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 cp -r tutorials/mnte runs/alternative-mnte-scf
+```
+
+Open **`runs/alternative-mnte-scf/input.nml`**. In its existing `&lattice`
+section, change or add:
+
+```fortran
+njij = 0
+morton_sfc = .false.
+n1 = 11
+n2 = 11
+n3 = 7
+```
+
+In its existing `&self` section, change `nstep = 100` to **`nstep = 1`**.
+Retain all other settings, including `nsp = 4`, `lld = 200`, and the energy
+and atom sections. Save, then run:
+
+```bash
 cd runs/alternative-mnte-scf
-python3 - <<'PYTHON'
-from pathlib import Path
-import f90nml
-p = Path('input.nml')
-f90nml.patch(p, {'self': {'nstep': 1},
-                'lattice': {'njij': 0, 'morton_sfc': False,
-                            'n1': 11, 'n2': 11, 'n3': 7}}, 'input.lesson.nml')
-Path('input.lesson.nml').replace(p)
-Path('input.initial.nml').write_text(p.read_text())
-PYTHON
+cp input.nml input.initial.nml
 timeout 180 rslmto.x input.nml > run.log 2>&1
 ```
 
@@ -378,21 +467,41 @@ settings; it does not drop Te or revert to the original 15x15x15 geometry.
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 cp -r runs/alternative-mnte-scf runs/alternative-mnte-jij
+```
+
+Open **`runs/alternative-mnte-jij/input.nml`**. Replace the existing
+`&calculation` section with:
+
+```fortran
+&calculation
+pre_processing = 'none'
+post_processing = 'exchange'
+verbose = T
+/
+```
+
+Open **`runs/alternative-mnte-scf/mn-pairs.nml.inc`** in another editor tab.
+Copy its `njij` and `ijpair` assignments into the exchange input's **existing
+`&lattice` section**, replacing its old `njij` assignment and any old
+`ijpair` assignments. Do not replace the whole lattice section: keep all its
+geometry settings. For the reduced teaching profile, the assignments are:
+
+```fortran
+njij = 4
+ijpair(1, :) = 1, 2
+ijpair(2, :) = 1, 1273
+ijpair(3, :) = 2, 1
+ijpair(4, :) = 2, 428
+```
+
+Use the helper's newly generated indices if the geometry has changed.
+Retain `morton_sfc = .false.`, the `11x11x7` replication, `nstep = 1`, all
+four atom labels, and the energy/Fermi settings copied with the working
+state. Save, then run:
+
+```bash
 cd runs/alternative-mnte-jij
-python3 - <<'PYTHON'
-from pathlib import Path
-import f90nml
-snippet = Path('../alternative-mnte-scf/mn-pairs.nml.inc').read_text()
-pairs = f90nml.reads('&lattice\n' + snippet + '\n/\n')['lattice']
-p = Path('input.nml')
-f90nml.patch(p, {
-    'calculation': {'pre_processing': 'none', 'post_processing': 'exchange'},
-    'lattice': {**pairs, 'morton_sfc': False},
-    'self': {'nstep': 1},
-}, 'input.lesson.nml')
-Path('input.lesson.nml').replace(p)
-Path('input.used.nml').write_text(p.read_text())
-PYTHON
+cp input.nml input.used.nml
 timeout 180 rslmto.x input.nml > run.log 2>&1
 ```
 
@@ -442,7 +551,13 @@ a 5984-site real-space cluster or a conventional two-site cubic cell.
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 mkdir runs/alternative-fe-export
-cat > runs/alternative-fe-export/lattice.nml <<'NML'
+```
+
+In the file explorer, right-click `runs/alternative-fe-export`, select
+**New File**, and name it **`lattice.nml`**. Paste the following into the editor
+and save:
+
+```fortran
 &lattice
 nbulk_bulk = 1
 ntot = 1
@@ -453,7 +568,11 @@ a(:, 2) = 0.5, -0.5, 0.5
 a(:, 3) = 0.5, 0.5, -0.5
 crd(:, 1) = 0.0, 0.0, 0.0
 /
-NML
+```
+
+Then run the exporter from the repository root:
+
+```bash
 rsutil --export --data runs/alternative-fe-export \
     --jij "$(pwd)/runs/alternative-fe-jij/jij.out" \
     --report "$(pwd)/runs/alternative-fe-scf/report.out" \
