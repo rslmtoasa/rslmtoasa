@@ -33,7 +33,6 @@ module potential_mod
    use namelist_generator_mod, only: namelist_generator
    use basis_mod, only: lmax_basis
    use math_mod, only: ry2ev
-   use sha256_mod, only: sha256_file
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -115,7 +114,6 @@ module potential_mod
       !> Radial-moment convention and backend that produced a U-carrying potential.
       character(len=16) :: hubbard_radial_moments, hubbard_backend
       character(len=256) :: dm_file = ''
-      character(len=64) :: dm_sha256 = ''
       !> Frozen host of an embedded run (calctype I/S): its dm file is never written.
       logical :: frozen_host = .false.
       !> nsp of the run that wrote a U-carrying potential; 0 = not recorded.
@@ -324,7 +322,6 @@ contains
       hubbard_radial_moments = ''
       hubbard_backend = ''
       dm_file = ''
-      dm_sha256 = ''
       hubbard_nsp = 0
       hubbard_axis = 0.0_rp
 
@@ -541,7 +538,6 @@ contains
       call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_j, this%hubbard_j)
       this%dm_file = trim(dm_file)
-      this%dm_sha256 = trim(dm_sha256)
       this%hubbard_nsp = hubbard_nsp
       this%hubbard_axis = hubbard_axis
       ! call move_alloc(ldm, this%ldm)
@@ -928,7 +924,6 @@ contains
       this%hubbard_backend = ''
       this%hubbard_file_has_uj = .false.
       this%dm_file = ''
-      this%dm_sha256 = ''
       this%frozen_host = .false.
       this%hubbard_nsp = 0
       this%hubbard_axis = 0.0_rp
@@ -992,7 +987,6 @@ contains
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_backend = this%hubbard_backend
       dm_file = this%dm_file
-      dm_sha256 = this%dm_sha256
       hubbard_nsp = this%hubbard_nsp
       hubbard_axis = this%hubbard_axis
 
@@ -1058,7 +1052,6 @@ contains
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_backend = this%hubbard_backend
       dm_file = this%dm_file
-      dm_sha256 = this%dm_sha256
       hubbard_nsp = this%hubbard_nsp
       hubbard_axis = this%hubbard_axis
 
@@ -1137,7 +1130,6 @@ contains
          call nml%add('hubbard_radial_moments', trim(this%hubbard_radial_moments))
          call nml%add('hubbard_backend', trim(this%hubbard_backend))
          call nml%add('dm_file', trim(this%dm_file))
-         call nml%add('dm_sha256', trim(this%dm_sha256))
          call nml%add('hubbard_nsp', this%hubbard_nsp)
          if (any(this%hubbard_axis /= 0.0_rp)) call nml%add('hubbard_axis', this%hubbard_axis)
       end if
@@ -1796,15 +1788,12 @@ contains
       end if
       write(unit, '(a)') '/'
       close(unit)
-      this%dm_sha256 = sha256_file(trim(filename))
-      if (len_trim(this%dm_sha256) /= 64) call g_logger%fatal('Could not hash density-matrix file '//trim(filename), __FILE__, __LINE__)
    end subroutine write_density_matrix_file
 
    subroutine read_density_matrix_file(this, potential_file)
       class(potential), intent(inout) :: this
       character(len=*), intent(in) :: potential_file
       character(len=256) :: dm_file
-      character(len=64) :: dm_sha256
       character(len=128) :: label, radial_mode, backend, run_id
       character(len=pl) :: dm_path
       real(rp), allocatable :: dm_re(:, :, :, :, :), dm_im(:, :, :, :, :)
@@ -1817,7 +1806,6 @@ contains
       namelist /density_matrix/ label, radial_mode, backend, hubbard_u_ev, hubbard_j_ev, run_id, iteration, dm_re, dm_im, spinor_d
 
       dm_file = trim(this%dm_file)
-      dm_sha256 = trim(this%dm_sha256)
       spinor_d = 0
       slash = index(trim(potential_file), '/', back=.true.)
       dm_path = trim(dm_file)
@@ -1825,8 +1813,6 @@ contains
       if (rank == 0) then
          if (.not. exists(trim(dm_path))) &
             call g_logger%fatal('Referenced density-matrix file is missing: '//trim(dm_path), __FILE__, __LINE__)
-         if (sha256_file(trim(dm_path)) /= trim(dm_sha256)) &
-            call g_logger%fatal('Density-matrix SHA-256 mismatch for '//trim(dm_path), __FILE__, __LINE__)
          allocate(dm_re(this%lmax + 1, 2, 2, 2*this%lmax + 1, 2*this%lmax + 1))
          allocate(dm_im(this%lmax + 1, 2, 2, 2*this%lmax + 1, 2*this%lmax + 1))
          dm_re = 0.0_rp

@@ -191,8 +191,7 @@ def surface_deck(dest: Path, host: str, nsp: int, soc0: bool) -> Path:
         dm = dest / "Ni_dm.nml"
         dm.write_text(dm.read_text().replace(" spinor_d = 1\n", ""))
         pot = dest / "Ni.nml"
-        pot.write_text(re.sub(r"dm_sha256 = '[0-9a-f]+'", f"dm_sha256 = '{sha256(dm)}'",
-                              pot.read_text().replace("hubbard_nsp = 2", "hubbard_nsp = 1")))
+        pot.write_text(pot.read_text().replace("hubbard_nsp = 2", "hubbard_nsp = 1"))
     return dest
 
 
@@ -215,7 +214,7 @@ def potential_numbers(work: Path) -> dict[str, list[float]]:
     for pot in sorted(work.glob("*_out.nml")):
         if pot.name.endswith("_dm.nml"):
             continue
-        text = "\n".join(l.split("!")[0] for l in pot.read_text().splitlines() if "=" in l and "dm_sha256" not in l and "dm_file" not in l)
+        text = "\n".join(l.split("!")[0] for l in pot.read_text().splitlines() if "=" in l and "dm_file" not in l)
         vals = re.findall(r"[-+]?\d+\.\d*(?:[eEdD][-+]?\d+)?|[-+]?\d+[eEdD][-+]?\d+", text.split("=", 1)[-1] if False else text)
         out["pot:" + pot.name] = [float(v.replace("d", "e").replace("D", "e")) for v in vals]
     return out

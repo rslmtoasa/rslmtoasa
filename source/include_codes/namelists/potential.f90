@@ -20,7 +20,7 @@ character(len=16) :: hubbard_radial_moments, hubbard_backend
 real(rp), dimension(:,:,:), allocatable :: ldm_flatten
 real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
 character(len=256) :: dm_file
-character(len=64) :: dm_sha256
+character(len=64) :: dm_sha256 ! written by versions that hashed the density-matrix file; read and ignored
 integer :: hubbard_nsp
 real(rp), dimension(3) :: hubbard_axis
 namelist /par/ &

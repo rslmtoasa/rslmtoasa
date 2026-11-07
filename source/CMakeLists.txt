@@ -61,7 +61,6 @@ add_library(${PROJECT_NAME} STATIC
     namelist_generator.f90
     os.f90
     potential.f90
-    sha256.f90
     radial_ground_state.f90
     precision.f90
     scf_guard.f90

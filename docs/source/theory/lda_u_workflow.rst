@@ -505,8 +505,11 @@ For each atom type carrying U or J, the solver writes ``<label>_dm.nml`` beside
 ``<label>_out.nml``. The density file records the label, radial mode, backend,
 per-channel U/J in eV, run id, iteration, and square real/imaginary blocks
 indexed by angular momentum and row/column spin. Collinear output contains only
-spin-diagonal blocks. The potential restart stores ``dm_file`` and
-``dm_sha256``; legacy inline ``ldm_flatten`` fields remain readable.
+spin-diagonal blocks. The potential restart stores ``dm_file``, the name of that file next to the
+potential file, and the density matrix is read from it only through that field. The
+file is not checked against the potential file: keep the two from the same run. A
+``dm_sha256`` field written by older versions is read and ignored; legacy inline
+``ldm_flatten`` fields remain readable.
 
 Hubbard screen output
 =====================
