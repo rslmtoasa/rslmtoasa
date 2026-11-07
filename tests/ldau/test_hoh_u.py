@@ -61,19 +61,25 @@ def bulk_deck(scratch: Path, name: str, *, hoh: bool, u_ev: float, nsp: int = 1,
     return work
 
 
+def shift(binary: Path, scratch: Path, tag: str, *, hoh: bool, **deck) -> float | str:
+    """E_F(U=2) - E_F(U=0) in Ry for one hoh setting, or the failure text."""
+    ef = {}
+    for u_ev in (0.0, 2.0):
+        work = bulk_deck(scratch, f"{tag}_hoh{int(hoh)}_u{int(u_ev)}", hoh=hoh, u_ev=u_ev, **deck)
+        status, log = gh.run_binary(binary, work)
+        if status != 0:
+            return f"run failed (hoh={hoh}, U={u_ev})\n{log[-1500:]}"
+        ef[u_ev] = fermi_of(log)
+    return ef[2.0] - ef[0.0]
+
+
 def shifts(binary: Path, scratch: Path, tag: str, **deck) -> tuple[float, float] | str:
-    """E_F(U=2) - E_F(U=0) in Ry with hoh and without, or the failure text."""
-    out = {}
-    for hoh in (True, False):
-        ef = {}
-        for u_ev in (0.0, 2.0):
-            work = bulk_deck(scratch, f"{tag}_hoh{int(hoh)}_u{int(u_ev)}", hoh=hoh, u_ev=u_ev, **deck)
-            status, log = gh.run_binary(binary, work)
-            if status != 0:
-                return f"run failed (hoh={hoh}, U={u_ev})\n{log[-1500:]}"
-            ef[u_ev] = fermi_of(log)
-        out[hoh] = ef[2.0] - ef[0.0]
-    return out[True], out[False]
+    """The shift with hoh and without, or the failure text."""
+    out = [shift(binary, scratch, tag, hoh=hoh, **deck) for hoh in (True, False)]
+    for r in out:
+        if isinstance(r, str):
+            return r
+    return out[0], out[1]
 
 
 def check_shifts(result: tuple[float, float] | str) -> tuple[bool, str]:

@@ -2,7 +2,6 @@
 """LDA+U guard scenarios in one test: each must stop the run with its message.
 
 Scenarios (each prints PASS/FAIL by name; the test fails if any fails):
-  nsp3_u, nsp4_u                 noncollinear nsp = 3, 4 with U
   surface_nsp1_host              nsp = 2 surface with a frozen U host written at nsp = 1
   surface_u_less_host            U requested on a type whose host was converged without U
   tilted_axis_block              tilted spin axis with block recursion
@@ -32,8 +31,6 @@ CASES_JSON = gh.ROOT / "tests/scf/cases.json"
 RUN_TEST = gh.ROOT / "tests/run_test.py"
 # scenario name -> case name in tests/scf/cases.json (the case carries the expected fatal message)
 CASE_GUARDS = {
-    "nsp3_u": "Example_bulk_bccFe_nsp3_u_guard",
-    "nsp4_u": "Example_bulk_bccFe_nsp4_u_guard",
     "surface_nsp1_host": "Example_surface_soc_u_nsp1_host_guard",
     "surface_u_less_host": "Example_surface_fccNi001_uhost_guard",
     "tilted_axis_block": "Example_bulk_bccFe_soc_u_tilted_block_guard",

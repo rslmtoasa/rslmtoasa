@@ -186,8 +186,8 @@ Example_surface_soc_u_nsp1_host_guard,consolidate-into-LdaUGuards,standard,guard
 Example_surface_fccNi001_uhost_guard,consolidate-into-LdaUGuards,standard,guard scenario
 Example_bulk_Pt2MnGa_soc_u_mixed_axes_guard,consolidate-into-LdaUGuards,standard,guard scenario
 Example_bulk_bccFe_soc_u_tilted_block_guard,consolidate-into-LdaUGuards,standard,guard scenario
-Example_bulk_bccFe_nsp3_u_guard,consolidate-into-LdaUGuards,standard,guard scenario
-Example_bulk_bccFe_nsp4_u_guard,consolidate-into-LdaUGuards,standard,guard scenario
+Example_bulk_bccFe_nsp3_u_guard,consolidate-into-LdaUNsp34,standard,guard removed: nsp=3/4 with U is accepted; checked by LdaUNsp34
+Example_bulk_bccFe_nsp4_u_guard,consolidate-into-LdaUNsp34,standard,guard removed: nsp=3/4 with U is accepted; checked by LdaUNsp34
 Example_bulk_bccFe_nsp3_block_hoh,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
 Example_bulk_bccFe_nsp3_block,keep,quick,bulk bcc Fe nsp=3
 Example_bulk_bccFe_nsp3_chebyshev_hoh,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)

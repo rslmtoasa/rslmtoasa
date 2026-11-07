@@ -234,16 +234,16 @@ contains
          this%hubbard_u_pot(:, :, :) = 0.0_rp
       end if
 
-      ! Experimental spinor fixed U (nsp=2, bulk): the full 10x10 d-shell V, including the up-down
-      ! blocks, from the spinor P; the build routines add hubbard_u_pot to the on-site block once.
-      if (this%hubbard_soc_experimental .and. this%control%nsp == 2 .and. .not. present(potential_out)) then
+      ! Spinor fixed U (nsp>=2, bulk): the full 10x10 d-shell V, including the up-down blocks, from the
+      ! spinor P in the global spin frame; the build routines add hubbard_u_pot to the on-site block once.
+      if (this%hubbard_soc_experimental .and. .not. present(potential_out)) then
          have_axis = .false.
          do na = 1, this%lattice%ntype
             u_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_u(3)
             j_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_j(3)
             if (abs(u_spinor) <= 1.0e-10_rp .and. abs(j_spinor) <= 1.0e-10_rp) cycle
             ! nsp=2 is collinear: every correlated site's reference axis (constraint_target, else mom)
-            ! must lie on one line; n and -n are the same axis.
+            ! must lie on one line; n and -n are the same axis. At nsp>=3 the axes are the user's choice.
             if (sqrt(sum(this%lattice%symbolic_atoms(na)%constraint_target(:)**2)) > 1.0e-12_rp) then
                axis_ref = this%lattice%symbolic_atoms(na)%constraint_target(:)
             else
@@ -258,9 +258,9 @@ contains
             if (.not. have_axis) then
                axis_first = axis_ref
                have_axis = .true.
-            else if (norm2(cross_product(axis_ref, axis_first)) > 1.0e-8_rp) then
+            else if (this%control%nsp == 2 .and. norm2(cross_product(axis_ref, axis_first)) > 1.0e-8_rp) then
                call g_logger%fatal('SOC+U at nsp=2: the axis of site '//fmt('i0', na)//' differs from that of the other '// &
-                  'correlated sites. noncollinear: use nsp=3/4, not yet supported with U.', __FILE__, __LINE__)
+                  'correlated sites. noncollinear axes: use nsp=3 or 4.', __FILE__, __LINE__)
             end if
             if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix)) then
                p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix

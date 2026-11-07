@@ -250,7 +250,7 @@
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
       "_note": "nsp=2 SOC+U with U on Mn and Pt1, Mn moment patched along x and Pt1 along z, stops: noncollinear U needs nsp=3/4",
-      "expect_fatal": "noncollinear: use nsp=3/4, not yet supported with U.",
+      "expect_fatal": "noncollinear axes: use nsp=3 or 4.",
       "namelists": {
         "lattice": {
           "strux_backend": "legacy"
@@ -357,66 +357,6 @@
               0.0
             ]
           }
-        }
-      },
-      "group": "ldau_guards"
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp3_u_guard",
-      "labels": [
-        "functional",
-        "rs",
-        "metallic",
-        "magnetic",
-        "basis_spd",
-        "block",
-        "hubbard"
-      ],
-      "case": "bulk/bccFe_hubbard",
-      "timeout": 300,
-      "_note": "nsp=3 (noncollinear) with fixed U stops: S7 scope",
-      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
-      "namelists": {
-        "control": {
-          "nsp": 3,
-          "recur": "block",
-          "lld": 21
-        },
-        "self": {
-          "nstep": 1
-        },
-        "hamiltonian": {
-          "hoh": false
-        }
-      },
-      "group": "ldau_guards"
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp4_u_guard",
-      "labels": [
-        "functional",
-        "rs",
-        "metallic",
-        "magnetic",
-        "basis_spd",
-        "block",
-        "hubbard"
-      ],
-      "case": "bulk/bccFe_hubbard",
-      "timeout": 300,
-      "_note": "nsp=4 (noncollinear with SOC) with fixed U stops: S7 scope",
-      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
-      "namelists": {
-        "control": {
-          "nsp": 4,
-          "recur": "block",
-          "lld": 21
-        },
-        "self": {
-          "nstep": 1
-        },
-        "hamiltonian": {
-          "hoh": false
         }
       },
       "group": "ldau_guards"

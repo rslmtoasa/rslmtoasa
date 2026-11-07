@@ -10,10 +10,11 @@ submodule(hamiltonian_mod) hamiltonian_build
 contains
 
    !> @brief Stop on fixed-U/J input outside the supported scope.
-   !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2, collinear scalar-spin (nsp=1) or
-   !>          bulk SOC+U (nsp=2). With hoh (not gbt_single_q) V_U is added to enim (build_bulkham,
-   !>          build_locham), for both. hubbard_radial_moments='local' also needs a first-order
-   !>          Hamiltonian (no hoh). One condition per statement; the message names the feature.
+   !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
+   !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
+   !>          antiferromagnet with mom = +z and -z). With hoh (not gbt_single_q) V_U is added to enim
+   !>          (build_bulkham, build_locham). hubbard_radial_moments='local' also needs a first-order
+   !>          Hamiltonian (no hoh) and nsp <= 2. One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
       logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
@@ -90,10 +91,6 @@ contains
             end if
          end do
       end do
-      if (.not. spinor_bulk .and. (this%control%has_soc() .or. this%control%is_noncollinear())) then
-         call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
-                             __FILE__, __LINE__)
-      end if
       if (this%hoh .and. trim(this%magnetic_representation) == gbt_single_q) then
          call g_logger%fatal('Fixed-U LDA+U with hoh=.true. is unsupported for gbt_single_q.', __FILE__, __LINE__)
       end if
@@ -791,11 +788,11 @@ contains
          end if
       end do
 
-      ! SOC+U bulk is the default at nsp=2; the former opt-in flag is accepted and ignored. The internal field
+      ! Spinor U is the default at nsp>=2; the former opt-in flag is accepted and ignored. The internal field
       ! marks "spinor U active" for the code below and the solvers.
       if (hubbard_soc_experimental .and. rank == 0) &
          call g_logger%info('hubbard_soc_experimental is a no-op: SOC+U bulk is now default.', __FILE__, __LINE__)
-      this%hubbard_soc_experimental = this%control%nsp == 2 .and. &
+      this%hubbard_soc_experimental = this%control%nsp >= 2 .and. &
          (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)
 
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.

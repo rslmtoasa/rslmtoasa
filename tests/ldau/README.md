@@ -2,7 +2,7 @@
 
 | Path | Content |
 |---|---|
-| `test_guards.py` | `LdaUGuards`: every LDA+U guard scenario in one test (nsp=3/4 with U, nsp=1 host at nsp=2, U-less host, tilted axis with block recursion, mixed axes, host-axis mismatch); prints PASS/FAIL per scenario |
+| `test_guards.py` | `LdaUGuards`: every LDA+U guard scenario in one test (nsp=1 host at nsp=2, U-less host, tilted axis with block recursion, mixed axes, host-axis mismatch); prints PASS/FAIL per scenario |
 | `reference_rows.py` | stored-reference rows: `reference_rows.py --list`, `reference_rows.py ROW --binary rslmto.x` |
 | `references/` | JSON scalars of every row; five rows are registered with ctest, the others are archived data |
 | `data/` | fixtures read by the Fortran oracles (`UnitHubbardSpinor`, `UnitLdaULocalMoments`) |
