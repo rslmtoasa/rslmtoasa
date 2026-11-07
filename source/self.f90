@@ -3004,6 +3004,8 @@ contains
       real(rp) :: q0_spin(2), c_spin(2), q2_spin(2), c_local_spin(2), q2_local_spin(2), t_local_spin(2)
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       integer :: moment_status, site_type
+      ! Moments below this (in mu_B) carry no direction: the sign of their numerical noise must not flip mom.
+      real(rp), parameter :: moment_direction_floor = 1.0e-6_rp
       logical :: use_shifted_kmesh
 
       iteration_value = 0
@@ -3200,13 +3202,17 @@ contains
                mtot = abs(mz)
             end if
             this%symbolic_atom(this%lattice%nbulk + ia)%potential%mtot = mtot
-            if (mtot > tiny(1.0_rp)) then
+            ! Update the reference direction only from a moment large enough to define one. Below moment_direction_floor
+            ! (a non-magnetic site such as Si, whose spin-polarized run ends at zero moment) the sign of mz is numerical
+            ! noise; following it flips mom between +z and -z, which under density_policy = relaxed_reference swaps the
+            ! up and down channels from one iteration to the next and stalls the SCF (VAL-03). The site then keeps the
+            ! direction it had, so a small seeded moment is not relabelled, while a moment that grows in either sign
+            ! passes the floor within one iteration and sets mom as before.
+            if (mtot > moment_direction_floor) then
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = &
                   [this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx, &
                    this%symbolic_atom(this%lattice%nbulk + ia)%potential%my, &
                    this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz]/mtot
-            else
-               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
             end if
             if (this%control%constraints_enable) then
                this%symbolic_atom(this%lattice%nbulk + ia)%constraint_actual(:) = &
