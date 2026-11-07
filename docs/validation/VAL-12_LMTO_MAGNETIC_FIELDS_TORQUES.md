@@ -30,13 +30,17 @@ site, constructs the LMTO local vector
 
 where `p_0` and `p_1` are formed from the spin-resolved LMTO `c` and `srdel`
 parameters for the active `d` channel (or the highest available channel).
-The code stores
+The code stores the effective field and the torque
 
 \[
- B_i^{\rm LMTO} = I_i\,(\mathrm{Ry}\rightarrow\mathrm{T}),
+ B_i^{\rm eff} = -\frac{1000\,I_i}{|m_i|}\;(\mathrm{mRy}/\mu_B),
  \qquad
- \tau_i = \hat m_i\times I_i\,(\mathrm{Ry}\rightarrow\mathrm{T}).
+ \tau_i = 1000\,\hat m_i\times I_i\;(\mathrm{mRy}),
 \]
+
+so that \(\tau_i=-|m_i|\,\hat m_i\times B_i^{\rm eff}\). The effective field is the negative of the
+constraining field: with an applied \(\mathbf B_{\rm con}\) (section 3) the printed field is antiparallel to it
+(\(B_{\rm con}=+10^{-3}\) Ry along x gave \(-1.047\) mRy/\(\mu_B\) along x, and the response is linear).
 
 This is the active Antropov-style local electronic-field/torque formulation
 in this code. It is a local LMTO force expression, not the LKAG intersite
@@ -44,8 +48,8 @@ in this code. It is a local LMTO force expression, not the LKAG intersite
 damping. The output array is named `bands%mag_for` and is logged as “Effective magnetic
 field (mRy/mu_B)”; the same routine logs the derived “Magnetic torque (mRy)”.
 
-The internal `I_i` is an energy coefficient in Ry. `mag_for` and the logged
-torque are converted with `ry2tesla = 2.35051754997e5 T/Ry`. The moment in the
+The internal `I_i` is an energy coefficient in Ry. `mag_for` is in mRy/\(\mu_B\) and the logged
+torque in mRy (1 mRy/\(\mu_B\) = `ry2tesla`/1000 = 235.05 T). The moment in the
 cross product is the unit site direction `potential%mom`; the report's raw
 spin-moment projections are not substituted for this direction.
 
@@ -54,16 +58,14 @@ spin-moment projections are not substituted for this direction.
 `processing='sd'` performs the following exact sign hand-off:
 
 ```text
-bands%mag_for = B_LMTO
-field_in     = -bands%mag_for
-spin_dynamics%beff = -field_in = B_LMTO
+bands%mag_for = B_eff = -B_con        (mRy/mu_B)
+field_in     = +bands%mag_for
+spin_dynamics%beff = -field_in         (Depondt wrapper)
 ```
 
-The Depondt library receives `beff` in Tesla. The explicit Euler helper uses
-`-gamma * m x field_in`, which is therefore `+gamma * m x B_LMTO` under the
-current wrapper convention. The Depondt rotation has the same effective
-sign for this seam. This records the implementation convention; it does not
-reinterpret `mag_for` as a separate energy-gradient definition.
+The explicit Euler helper uses `-gamma * m x field_in`, i.e. `-gamma * m x B_eff`. The wrapper
+negates `field_in` for abspinlib as before, so both integrators keep the same relative sign.
+The unit passed on is still mRy/\(\mu_B\) where the integrators use Tesla (open).
 
 The lower-level Depondt API also has `btorque` and `she_btorque` arguments, but
 the current LMTO `processing='sd'` path passes zero arrays. `asd_jij` is read
