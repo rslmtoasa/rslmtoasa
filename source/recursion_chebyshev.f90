@@ -26,8 +26,9 @@ contains
       backend = trim(this%control%cheb_backend)
 
       ! 'fast_dp' is the fp64 selector for the block (Haydock) fast kernels; the
-      ! Chebyshev fast kernel is single precision only, so treat it as 'fast'.
-      if (backend == 'fast_dp') backend = 'fast'
+      ! Chebyshev fast kernel is single precision only, so 'fast_dp' runs the
+      ! double-precision loops of 'legacy'.
+      if (backend == 'fast_dp') backend = 'legacy'
 
       ! The orthogonalisation (hoh) term is now supported natively by the 'fast'
       ! kernel via a genuine two-sweep apply (h*x then eeo*(h*x)), mirroring the
@@ -283,7 +284,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   this%idum(k) = 1
@@ -368,7 +370,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1
@@ -511,7 +514,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   if (this%hamiltonian%ccor_2c) then
                      call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih) + this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
                   else
@@ -635,7 +639,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
                   if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1

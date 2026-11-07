@@ -190,6 +190,7 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Measured (one SCF step):** |etot(GPU fp64) - etot(CPU legacy)| is 9.5e-10 (diamond Si), 5.8e-9 (`bccFe_chebyshev_fast_hoh`) but 2.6e-8
   (`bccFe_chebyshev_legacy_hoh`) and 2.3e-8 (`_fast_hoh_ccor_2c`). That the 2e-8 to 5e-8 comes from the CPU reconstruction was not verified. The fp64
   rows of `tests/regression/run_gpu_matrix.py` therefore use two loose criteria and cannot detect an fp64 kernel error below about 1e-7.
+- **Update:** `cheb_backend` is consulted since the default became `fast_dp`: `fast_dp` and `legacy` reconstruct with `cheb_green_dp` (double precision, 4e-16 against a literal sum in `UnitChebyshevGreenPrecision`); `fast` and the other fast backends keep `cheb_green_fast` (single precision, 2e-7). The 2e-8 to 5e-8 attribution to the reconstruction above was not re-measured.
 
 ### `SpinResponseOmpIdentity` fails in the CUDA/MKL build — 2026-10-21
 - **Measured:** `tests/spin_response/omp_identity.py` on `fe_bcc` reports differing `spin_response_q*.dat` files between 1 and 4 threads in the

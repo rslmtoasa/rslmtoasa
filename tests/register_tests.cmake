@@ -183,6 +183,21 @@ if(RUN_REG_TESTS)
         "--workdir" "${CMAKE_BINARY_DIR}/Testing/nonmagnetic/mpi" "--nsp" "4"
         "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
   endif()
+
+  # --- Kubo transport operators and backends (pytest) -----------------------------------------
+  # The compile-based suites build Debug dense-reference drivers themselves (about 75 s for both);
+  # test_transport_backend.py runs the executable of this build (RSLMTO_EXE).
+  set(_pytest_env "${CMAKE_COMMAND}" -E env "FC=${CMAKE_Fortran_COMPILER}" "OPENBLAS_NUM_THREADS=1"
+      "RS_LMTO_TEST_CMAKE_ARGS=-DENABLE_MARCH_NATIVE=OFF")
+  rslmto_add_test(NAME TransportOperatorSource TIER quick LABELS transport regression
+    COMMAND ${_pytest_env} "${PY}" -m pytest -q -p no:cacheprovider
+      "${TestDIR}/regression/test_octupole_operators.py" "${TestDIR}/regression/test_quadrupole_operators.py")
+  rslmto_add_test(NAME TransportRegression TIER standard TIMEOUT 900 LABELS transport regression
+    COMMAND ${_pytest_env} "${PY}" -m pytest -q -p no:cacheprovider
+      "${TestDIR}/regression/test_hoh_transport.py" "${TestDIR}/regression/test_response_units.py")
+  rslmto_add_test(NAME TransportBackend TIER standard TIMEOUT 900 LABELS transport regression
+    COMMAND ${_pytest_env} "RSLMTO_EXE=${TestBinary}" "${PY}" -m pytest -q -p no:cacheprovider
+      "${TestDIR}/regression/test_transport_backend.py")
 endif()
 
 ##############################################################################################
@@ -251,6 +266,7 @@ if(RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitKspaceGFValidation quick SOURCES ${TestDIR}/unit/test_kspace_gf_validation.f90 LABELS green kspace)
   add_fortran_unit_test(UnitFermiDiracEntropy quick SOURCES ${TestDIR}/unit/test_fermi_dirac_entropy.f90 LABELS thermodynamics)
   add_fortran_unit_test(UnitChebyshevGFOracle quick SOURCES ${TestDIR}/unit/test_chebyshev_gf_oracle.f90 LABELS green chebyshev)
+  add_fortran_unit_test(UnitChebyshevGreenPrecision quick SOURCES ${TestDIR}/unit/test_chebyshev_green_precision.f90 LABELS green chebyshev)
   add_fortran_unit_test(UnitChebyshevSpectralPositivity quick SOURCES ${TestDIR}/unit/test_chebyshev_spectral_positivity.f90 LABELS green chebyshev)
   add_fortran_unit_test(UnitDysonEquivalence quick SOURCES ${TestDIR}/unit/test_dyson_equivalence.f90 LABELS green)
   add_fortran_unit_test(UnitGammaSupercell quick SOURCES ${TestDIR}/unit/test_gamma_supercell.f90)

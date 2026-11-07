@@ -805,6 +805,12 @@ contains
          if (sqrt(sum(reference(:)**2)) <= 1.0e-12_rp) reference(:) = [0.0_rp, 0.0_rp, 1.0_rp]
 
          call sd%resolve_site_axis(ia, reference, axis, site_charge, m_long, m_transverse, torque)
+         ! relaxed_reference as in main: the density is projected on the magbeta-mixed direction in potential%mom.
+         if (trim(sd%policy) == sd_relaxed_reference) then
+            axis(:) = symbolic_atoms(plusbulk)%potential%mom(:)
+            if (sqrt(sum(axis(:)**2)) <= 1.0e-12_rp) axis(:) = reference(:)
+            axis(:) = axis(:)/sqrt(sum(axis(:)**2))
+         end if
          call sd%set_axis(ia, axis)
 
          select case (trim(sd%policy))
@@ -819,9 +825,7 @@ contains
                                   __FILE__, __LINE__)
             end if
          case (sd_relaxed_reference)
-            ! The reference axis follows the full rotating-frame Cartesian
-            ! moment; the single-q ansatz is untouched.
-            symbolic_atoms(plusbulk)%potential%mom(:) = axis(:)
+            ! potential%mom keeps the magbeta-mixed direction; it is not replaced by the measured axis.
             if (rank == 0) then
                call g_logger%info('DENSITY_POLICY relaxed_reference atom'//fmt('i4', ia)// &
                                   ' |m|='//fmt('f10.6', m_long)// &

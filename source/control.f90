@@ -197,6 +197,8 @@ module control_mod
       !> KPM-G2 block path. This control is ignored for per_type transport.
       integer :: gpu_stochastic_block
       character(len=16) :: cheb_backend
+      !> Chebyshev engine for the transport moments: 'legacy' (matrix-free loops), 'fast_sp' or 'gpu'.
+      character(len=16) :: transport_backend
       !> CPU transport reconstruction precision. The default preserves the
       !> historical FP32-moment/FP64-reconstruction mixed route.
       character(len=16) :: cpu_reconstruction_precision
@@ -407,6 +409,7 @@ contains
       gpu_moment_download = this%gpu_moment_download
       gpu_stochastic_block = this%gpu_stochastic_block
       cheb_backend = this%cheb_backend
+      transport_backend = this%transport_backend
       cpu_reconstruction_precision = this%cpu_reconstruction_precision
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
@@ -465,6 +468,7 @@ contains
       this%gpu_moment_download = gpu_moment_download
       this%gpu_stochastic_block = gpu_stochastic_block
       this%cheb_backend = cheb_backend(:len(this%cheb_backend))
+      this%transport_backend = transport_backend(:len(this%transport_backend))
       this%cpu_reconstruction_precision = cpu_reconstruction_precision(:len(this%cpu_reconstruction_precision))
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
@@ -589,7 +593,8 @@ contains
       this%gpu_precision = 'fp32'
       this%gpu_moment_download = .false.
       this%gpu_stochastic_block = 1
-      this%cheb_backend = 'fast'
+      this%cheb_backend = 'fast_dp'
+      this%transport_backend = 'legacy'
       this%cpu_reconstruction_precision = 'fp64'
       this%fname = ''
       this%hyperfine = .false.
@@ -599,7 +604,7 @@ contains
       this%linear_in = 'charge'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
-      this%density_policy = 'constrained_spiral'
+      this%density_policy = 'relaxed_reference'
       this%gbt_scf_diagnostics = .false.
       this%fresh_start = .false.
       ! default constraints settings
@@ -665,6 +670,7 @@ contains
       gpu_moment_download = this%gpu_moment_download
       gpu_stochastic_block = this%gpu_stochastic_block
       cheb_backend = this%cheb_backend
+      transport_backend = this%transport_backend
       cpu_reconstruction_precision = this%cpu_reconstruction_precision
 
       if (present(unit) .and. present(file)) then
@@ -732,6 +738,7 @@ contains
       call nml%add('gpu_moment_download', this%gpu_moment_download)
       call nml%add('gpu_stochastic_block', this%gpu_stochastic_block)
       call nml%add('cheb_backend', this%cheb_backend)
+      call nml%add('transport_backend', this%transport_backend)
       call nml%add('cpu_reconstruction_precision', this%cpu_reconstruction_precision)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
@@ -795,6 +802,11 @@ contains
           .and. this%cheb_backend /= 'mkl_sparse' &
           .and. this%cheb_backend /= 'legacy') then
          call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''fast_dp'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
+      end if
+      if (this%transport_backend /= 'legacy' &
+          .and. this%transport_backend /= 'fast_sp' &
+          .and. this%transport_backend /= 'gpu') then
+         call g_logger%fatal('control%transport_backend must be one of: ''legacy'', ''fast_sp'' or ''gpu''.', __FILE__, __LINE__)
       end if
       if (this%density_policy /= sd_constrained_spiral &
           .and. this%density_policy /= sd_relaxed_reference) then

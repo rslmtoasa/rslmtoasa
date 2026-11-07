@@ -605,6 +605,47 @@ linear_out
 
 **See also:** :ref:`reference/conductivity_module`
 
+cheb_backend
+------------
+
+**Type:** Character string
+
+**Purpose:** CPU engine of the Chebyshev DOS moments and, with the Haydock block recursion, of the fast kernels.
+
+**Allowed values:** ``'fast_dp'``, ``'fast'``, ``'legacy'``, ``'batched'``, ``'mkl_batch'``, ``'mkl_sparse'``
+
+**Default:** ``'fast_dp'``
+
+**Notes:**
+
+- ``'fast_dp'`` and ``'legacy'``: double-precision Chebyshev moments (the matrix-free loops) and double-precision
+  DOS reconstruction. ``'fast_dp'`` also selects the fp64 block-Lanczos kernel.
+- ``'fast'`` and the other fast backends: single-precision moments and reconstruction (about 1e-7 relative);
+  the single-precision rounding breaks exact symmetries such as zero transverse moments.
+- The transport moments use ``transport_backend`` instead.
+
+transport_backend
+-----------------
+
+**Type:** Character string
+
+**Purpose:** Engine that computes the stochastic Chebyshev moments of the
+conductivity (``linear_out``/``linear_in`` transport). Independent of ``cheb_backend``.
+
+**Allowed values:**
+
+- ``'legacy'``: matrix-free double-precision loops (all operators, ``hoh``,
+  ``ccor_2c``, impurity sites).
+- ``'fast_sp'``: single-precision CPU kernel with bond and operator blocks indexed by atom type.
+  Runs every ``linear_in``/``linear_out`` operator, with or without ``hoh``, except ``spin_torque`` and
+  ``orbital_torque`` with ``hoh``. The other cases (``ccor_2c``, impurity sites, bond vectors that differ
+  between sites of one atom type) run ``'legacy'`` and write one warning to the log.
+- ``'gpu'``: reserved; fatal at run time.
+
+**Default:** ``'legacy'``
+
+**Related code:** ``source/recursion_transport.f90``, ``source/chebyshev_fast.f90``
+
 cond_calctype
 -------------
 
@@ -783,7 +824,7 @@ density_policy (WP7)
 
 **Type:** String
 
-**Default:** ``'constrained_spiral'``
+**Default:** ``'relaxed_reference'``
 
 **Allowed values:** ``'constrained_spiral'``, ``'relaxed_reference'``
 
@@ -799,9 +840,12 @@ afterwards, against the axis this policy resolves.
   ``m . ref`` are mixed; the transverse density ``m - (m . ref) ref`` and the
   torque ``ref x m`` are reported per site as the constraint residual
   (``DENSITY_POLICY`` log lines) rather than absorbed.
-- ``'relaxed_reference'`` -- the full rotating-frame Cartesian moment is mixed
-  and the per-sublattice reference axis follows it, while the single-q ansatz
-  is retained. The transverse residual and torque vanish identically.
+- ``'relaxed_reference'`` -- the moment direction is mixed with ``&mix`` ``magbeta``,
+  ``mom = (1 - magbeta) mom_old + magbeta mom_measured``, as in the main branch;
+  ``magbeta = 0`` keeps the axes fixed. The real-space density is projected on
+  that mixed ``mom``, which is not replaced by the measured axis.
+  ``magbeta`` is ignored by ``'constrained_spiral'``. ``gbt_single_q`` needs a
+  fixed axis and switches to ``'constrained_spiral'`` with a warning.
 
 **Example:**
 

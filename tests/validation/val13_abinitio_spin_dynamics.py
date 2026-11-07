@@ -25,6 +25,9 @@ import f90nml
 
 
 FLOAT = r"[-+0-9.EeDd]+"
+# 1 mRy per mu_B in Tesla: ry2tesla = 2.35051754997e5 (source/math.f90) / 1000. The field thresholds below were written in Tesla
+# for the former Ry*ry2tesla output; they are kept as the same physical values, expressed in the unit now printed (mRy/mu_B).
+T_PER_MRY_MUB = 2.35051754997e2
 
 
 def number(value: str) -> float:
@@ -85,7 +88,7 @@ def run_case(binary: Path, root: Path, base: Path, workdir: Path,
         raise RuntimeError("VAL-13: production trajectory is empty")
 
     field_matches = re.findall(
-        r"Magnetic field on atom\s+1 is\s+(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), log
+        r"Effective magnetic field \(mRy/mu_B\) on atom\s+1 is\s+(%s)\s+(%s)\s+(%s)" % (FLOAT, FLOAT, FLOAT), log
     )
     energy_match = re.findall(r"Total energy of system:\s*(%s)" % FLOAT,
                               (workdir / "report.out").read_text(errors="replace"))
@@ -97,8 +100,8 @@ def run_case(binary: Path, root: Path, base: Path, workdir: Path,
         "dt_ps": dt,
         "steps": steps,
         "trajectory": trajectory,
-        "field_trace_T": fields,
-        "final_field_T": fields[-1],
+        "field_trace_mRy_per_muB": fields,
+        "final_field_mRy_per_muB": fields[-1],
         "energy_Ry": number(energy_match[-1]),
     }
 
@@ -148,9 +151,9 @@ def main() -> int:
         "fine": check_trajectory(fine, "dt=0.0025 ps"),
     }
 
-    refreshed_field = reference["final_field_T"]
+    refreshed_field = reference["final_field_mRy_per_muB"]
     reference_final = reference["trajectory"][-1]
-    require(abs(refreshed_field[2]) > 1.0e3 and norm(refreshed_field[:2]) < 1.0e-2,
+    require(abs(refreshed_field[2]) > 1.0e3 / T_PER_MRY_MUB and norm(refreshed_field[:2]) < 1.0e-2 / T_PER_MRY_MUB,
             f"refreshed LMTO equilibrium field is not longitudinal: B={refreshed_field}")
     require(reference_final[2] > 0.999999999 and norm(reference_final[:2]) < 1.0e-8,
             f"zero-torque direction was not preserved: m={reference_final}")
@@ -168,7 +171,7 @@ def main() -> int:
             f"zero-damping electronic energy feedback drift is too large: {energy_drift:.3e} Ry")
 
     evidence.update({
-        "refreshed_field_T": refreshed_field,
+        "refreshed_field_mRy_per_muB": refreshed_field,
         "coarse_fine_distance": coarse_fine_distance,
         "reference_fine_distance": reference_fine_distance,
         "timestep_envelope": timestep_envelope,

@@ -3,15 +3,15 @@
  "description": "+U RS bulk bcc Fe nsp=1",
  "kind": "abs",
  "tolerance": 1e-10,
- "reason": "stored from the reference build 90f57c3 built with -DENABLE_MARCH_NATIVE=OFF (the CI configuration; reference binary of the former tools/ldau_regression.py)",
- "binary_sha256": "bd44e48fa1428bcd29452d32d2bdbf16691e2b5f9d7de4d550949c579bf7e513",
- "date": "2026-11-05",
+ "reason": "regenerated at e68327bf with -DENABLE_MARCH_NATIVE=OFF: cheb_backend default fast_dp (double-precision Chebyshev moments and DOS reconstruction); the single-precision reference differed by 1.0e-6",
+ "binary_sha256": "d9d5cbb941fc33e998214c9affca2310216a5f1b595297405208520e318b3c93",
+ "date": "2026-11-07",
  "reference": {
   "diff": [
-   0.0172568909,
-   0.0203304856,
-   0.02442917,
-   0.025143988
+   0.017256892,
+   0.0203304672,
+   0.0244291007,
+   0.0251439629
   ],
   "fermi": [
    -0.00369,
@@ -20,9 +20,9 @@
    -0.103581
   ],
   "spin_moment": [
-   2.101203,
+   2.101202,
    2.307835,
-   2.354314,
+   2.354313,
    2.365375
   ]
  }

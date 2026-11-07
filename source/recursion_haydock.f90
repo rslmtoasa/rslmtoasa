@@ -952,7 +952,8 @@ contains
                if (nr >= 2) then
                   do j = 2, nr
                      nnmap = this%lattice%nn(i, j)
-                     if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                     if (nnmap == 0) cycle
+                     if (this%izero(nnmap) /= 0) then
                         if (this%hamiltonian%hoh) then
                            this%hpsi(:, 1, i) = this%hpsi(:, 1, i) + &
                               matmul(this%hamiltonian%hall(:, :, j, i), this%psi(:, nnmap))
@@ -994,7 +995,8 @@ contains
             if (nr >= 2) then
                do j = 2, nr
                   nnmap = this%lattice%nn(i, j)
-                  if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                  if (nnmap == 0) cycle
+                  if (this%izero(nnmap) /= 0) then
                      if (this%hamiltonian%hoh) then
                         this%hpsi(:, 1, i) = this%hpsi(:, 1, i) + &
                            matmul(this%hamiltonian%ee(:, :, j, ih), this%psi(:, nnmap))
@@ -1027,7 +1029,8 @@ contains
                   if (nr >= 2) then
                      do j = 2, nr
                         nnmap = this%lattice%nn(i, j)
-                        if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                        if (nnmap == 0) cycle
+                        if (this%izero(nnmap) /= 0) then
                            this%hohpsi(:, 1, i) = this%hohpsi(:, 1, i) + &
                               matmul(this%hamiltonian%hallo(:, :, j, i), this%hpsi(:, 1, nnmap))
                            idum(i) = 1
@@ -1049,7 +1052,8 @@ contains
                if (nr >= 2) then
                   do j = 2, nr
                      nnmap = this%lattice%nn(i, j)
-                     if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                     if (nnmap == 0) cycle
+                     if (this%izero(nnmap) /= 0) then
                         this%hohpsi(:, 1, i) = this%hohpsi(:, 1, i) + &
                            matmul(this%hamiltonian%eeo(:, :, j, ih), this%hpsi(:, 1, nnmap))
                         idum(i) = 1

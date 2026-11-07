@@ -28,7 +28,7 @@ module chebyshev_fast_mod
    private
    public :: cheb_moments_fast, cheb_moments_fast_batched
    public :: cheb_moments_fast_mkl_batch, cheb_moments_fast_mkl_sparse
-   public :: cheb_green_fast, cheb_green_complex, cheb_fast_reset_cache
+   public :: cheb_green_fast, cheb_green_dp, cheb_green_complex, cheb_fast_reset_cache
    public :: cheb_moments_stochastic_fast, cheb_moments_orbital_fast
    integer, parameter :: sp = selected_real_kind(6, 37)
    integer, parameter :: rp = selected_real_kind(15, 307)
@@ -82,10 +82,11 @@ module chebyshev_fast_mod
       complex(sp), pointer :: hons_cache(:, :, :) => null()
       ! Raw fp32 mirrors for the conductivity/orbital fast kernels: velocity
       ! operators (fva/fvb), their hoh ortho (fvoa/fvob, on-site shell zeroed) and
-      ! raw ee/hall (fvee/fvha) used by the velocity hoh two-sweep.
+      ! raw ee/hall (fvee/fvha) and raw ee*obarm/hall*obarm (fveeo/fvhao) used by the velocity hoh sweeps.
       complex(sp), pointer :: fva_cache(:, :, :, :) => null(), fvb_cache(:, :, :, :) => null()
       complex(sp), pointer :: fvoa_cache(:, :, :, :) => null(), fvob_cache(:, :, :, :) => null()
       complex(sp), pointer :: fvee_cache(:, :, :, :) => null(), fvha_cache(:, :, :, :) => null()
+      complex(sp), pointer :: fveeo_cache(:, :, :, :) => null(), fvhao_cache(:, :, :, :) => null()
       complex(sp), pointer :: hval_cache(:, :, :) => null()
       complex(sp), pointer :: work0_cache(:, :) => null(), work1_cache(:, :) => null(), work2_cache(:, :) => null()
       complex(sp), pointer :: workt_cache(:, :) => null()
@@ -137,6 +138,8 @@ contains
       if (associated(this%fvob_cache)) deallocate (this%fvob_cache)
       if (associated(this%fvee_cache)) deallocate (this%fvee_cache)
       if (associated(this%fvha_cache)) deallocate (this%fvha_cache)
+      if (associated(this%fveeo_cache)) deallocate (this%fveeo_cache)
+      if (associated(this%fvhao_cache)) deallocate (this%fvhao_cache)
       if (associated(this%hval_cache)) deallocate (this%hval_cache)
       if (associated(this%work0_cache)) deallocate (this%work0_cache)
       if (associated(this%work1_cache)) deallocate (this%work1_cache)
@@ -514,9 +517,9 @@ contains
    !> the on-site shell-1 block zeroed (velo_hoh_vec_matmul applies vo off-site
    !> only) and raw ee/hall are mirrored (the velocity hoh sweep uses the BARE,
    !> unscaled h). All raw (no 1/a, no -b*I, no lsham/enim fold).
-   subroutine cheb_cache_ensure_scaled_velocity_sp(this, v_a, v_b, vo_a, vo_b, ee, hall, &
+   subroutine cheb_cache_ensure_scaled_velocity_sp(this, v_a, v_b, vo_a, vo_b, ee, hall, eeo, hallo, &
                                                    kk_in, nb_in, nnmax_in, ntype_in, nmax_in, hoh, &
-                                                   fva, fvb, fvoa, fvob, fvee, fvha)
+                                                   fva, fvb, fvoa, fvob, fvee, fvha, fveeo, fvhao)
       class(cheb_cache_t), intent(inout) :: this
       integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
       complex(rp), intent(in) :: v_a(nb_in, nb_in, nnmax_in, ntype_in)
@@ -525,10 +528,13 @@ contains
       complex(rp), intent(in) :: vo_b(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in) :: ee(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in) :: hall(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: eeo(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hallo(nb_in, nb_in, nnmax_in, *)
       logical, intent(in) :: hoh
       complex(sp), pointer, intent(out) :: fva(:, :, :, :), fvb(:, :, :, :)
       complex(sp), pointer, intent(out) :: fvoa(:, :, :, :), fvob(:, :, :, :)
       complex(sp), pointer, intent(out) :: fvee(:, :, :, :), fvha(:, :, :, :)
+      complex(sp), pointer, intent(out) :: fveeo(:, :, :, :), fvhao(:, :, :, :)
       logical :: valid
       integer :: t_in
 
@@ -547,6 +553,8 @@ contains
          if (associated(this%fvob_cache)) deallocate (this%fvob_cache)
          if (associated(this%fvee_cache)) deallocate (this%fvee_cache)
          if (associated(this%fvha_cache)) deallocate (this%fvha_cache)
+         if (associated(this%fveeo_cache)) deallocate (this%fveeo_cache)
+         if (associated(this%fvhao_cache)) deallocate (this%fvhao_cache)
 
          allocate (this%fva_cache(nb_in, nb_in, nnmax_in, ntype_in))
          allocate (this%fvb_cache(nb_in, nb_in, nnmax_in, ntype_in))
@@ -562,9 +570,13 @@ contains
             this%fvob_cache(:, :, 1, :) = (0.0_sp, 0.0_sp)
             allocate (this%fvee_cache(nb_in, nb_in, nnmax_in, ntype_in))
             this%fvee_cache = cmplx(real(ee, sp), aimag(ee), sp)
+            allocate (this%fveeo_cache(nb_in, nb_in, nnmax_in, ntype_in))
+            this%fveeo_cache = cmplx(real(eeo, sp), aimag(eeo), sp)
             if (nmax_in > 0) then
                allocate (this%fvha_cache(nb_in, nb_in, nnmax_in, nmax_in))
                this%fvha_cache = cmplx(real(hall(:, :, :, 1:nmax_in), sp), aimag(hall(:, :, :, 1:nmax_in)), sp)
+               allocate (this%fvhao_cache(nb_in, nb_in, nnmax_in, nmax_in))
+               this%fvhao_cache = cmplx(real(hallo(:, :, :, 1:nmax_in), sp), aimag(hallo(:, :, :, 1:nmax_in)), sp)
             end if
          end if
 
@@ -583,13 +595,15 @@ contains
          fvoa => this%fvoa_cache
          fvob => this%fvob_cache
          fvee => this%fvee_cache
+         fveeo => this%fveeo_cache
       else
-         nullify (fvoa); nullify (fvob); nullify (fvee)
+         nullify (fvoa); nullify (fvob); nullify (fvee); nullify (fveeo)
       end if
       if (associated(this%fvha_cache)) then
          fvha => this%fvha_cache
+         fvhao => this%fvhao_cache
       else
-         nullify (fvha)
+         nullify (fvha); nullify (fvhao)
       end if
    end subroutine cheb_cache_ensure_scaled_velocity_sp
 
@@ -1434,6 +1448,41 @@ contains
       deallocate (g0_atom, mu_sp, F)
    end subroutine cheb_green_fast
 
+   !> Double-precision counterpart of cheb_green_fast: the same Jackson-damped sum, evaluated with zgemm.
+   subroutine cheb_green_dp(mu, nb, n_mom, natoms, ene, nv, a, b, g0)
+      integer, intent(in) :: nb, n_mom, natoms, nv
+      complex(rp), intent(in) :: mu(nb, nb, n_mom, natoms)
+      real(rp), intent(in) :: ene(nv), a, b
+      complex(rp), intent(out) :: g0(nb, nb, nv, natoms)
+      complex(rp), allocatable :: F(:, :)
+      complex(rp), parameter :: cone = (1.0_rp, 0.0_rp), czero = (0.0_rp, 0.0_rp)
+      real(rp) :: th, thl, gj, cc, pref, ang, cot
+      integer :: i, ie, n, bb
+
+      allocate (F(n_mom, nv))
+      cot = cos(pi/(n_mom + 1.0_rp))/sin(pi/(n_mom + 1.0_rp))
+      !$omp parallel do private(ie, i, th, thl, gj, cc, pref, ang) schedule(static)
+      do ie = 1, nv
+         th = acos((ene(ie) - b)/a)
+         pref = 1.0_rp/sqrt(a*a - (ene(ie) - b)**2)
+         do i = 1, n_mom                       ! i-1 = Chebyshev order
+            thl = pi*real(i - 1, rp)/(n_mom + 1.0_rp)
+            gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot) &
+                 /(n_mom + 1.0_rp)             ! Jackson, bands.f90 convention
+            cc = merge(1.0_rp, 2.0_rp, i == 1)
+            ang = real(i - 1, rp)*th           ! (-i) e^{-i ang}
+            F(i, ie) = cmplx(gj*cc*pref, 0.0_rp, rp)*cmplx(-sin(ang), -cos(ang), rp)
+         end do
+      end do
+      !$omp end parallel do
+
+      bb = nb*nb
+      do n = 1, natoms
+         call zgemm('N', 'N', bb, nv, n_mom, cone, mu(:, :, :, n), bb, F, n_mom, czero, g0(:, :, :, n), bb)
+      end do
+      deallocate (F)
+   end subroutine cheb_green_dp
+
    !> @brief Reconstruct one complex-energy Chebyshev Green function.
    !> @details This is the complex-energy counterpart of `cheb_green_fast` and
    !>          uses the same Jackson weights, zeroth-moment convention, and
@@ -1490,10 +1539,12 @@ contains
    !> Fast-CPU stochastic conductivity moments for one reference vector:
    !>   mu_nm = sum_k left_m(k)^H (v_a T_{n-1}(H~) v_b |psiref>)(k),
    !>   left_m = T_{m-1}(H~)|psiref>.  Single precision; hoh-aware (two-sweep H~
-   !>   and velocity v - vo*(h*.)). Mirrors compute_moments_stochastic.
+   !>   and velocity v - vo*(h*.) - (h*O)*(v.), applied to a slot only when hoh_vel_a/hoh_vel_b
+   !>   is true; with cur_a/cur_b the slot is the current (q V + V q)/2 of that velocity).
+   !>   Mirrors compute_moments_stochastic.
    subroutine cheb_moments_stochastic_fast(psiref, ee, hall, lsham, nn, iz, kk, nb, &
                                            nnmax, ntype, nmax, cond_ll, a, b, mu_nm, &
-                                           hoh, eeo, hallo, enim, v_a, v_b, vo_a, vo_b, eecc, hallcc)
+                                           hoh, eeo, hallo, enim, v_a, v_b, vo_a, vo_b, hoh_vel_a, hoh_vel_b, cur_a, cur_b, q_a, q_b, eecc, hallcc)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, cond_ll
       complex(rp), intent(in) :: psiref(nb, nb, kk), ee(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -1505,6 +1556,8 @@ contains
       complex(rp), intent(in) :: enim(nb, nb, ntype)
       complex(rp), intent(in) :: v_a(nb, nb, nnmax, ntype), v_b(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: vo_a(nb, nb, nnmax, ntype), vo_b(nb, nb, nnmax, ntype)
+      logical, intent(in) :: hoh_vel_a, hoh_vel_b, cur_a, cur_b
+      complex(rp), intent(in) :: q_a(nb, nb), q_b(nb, nb)
       ! ccor_2c blocks, added to the hoh H~ apply as an extra term CC*x (not to the velocity)
       complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype), hallcc(nb, nb, nnmax, *)
       ! Locals
@@ -1512,17 +1565,17 @@ contains
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :), oee(:, :, :, :), oha(:, :, :, :), hons(:, :, :)
       complex(sp), pointer :: cee(:, :, :, :), cha(:, :, :, :)
       complex(sp), pointer :: fva(:, :, :, :), fvb(:, :, :, :), fvoa(:, :, :, :), fvob(:, :, :, :)
-      complex(sp), pointer :: fvee(:, :, :, :), fvha(:, :, :, :)
+      complex(sp), pointer :: fvee(:, :, :, :), fvha(:, :, :, :), fveeo(:, :, :, :), fvhao(:, :, :, :)
       complex(sp), allocatable :: leftst(:, :, :), p0(:, :), p1(:, :), p2(:, :), rr(:, :)
-      complex(sp), allocatable :: wt(:, :), etmp(:, :), hwt(:, :)
-      complex(sp) :: dum(nb, nb)
+      complex(sp), allocatable :: wt(:, :), etmp(:, :), hwt(:, :), qx(:, :), vx(:, :)
+      complex(sp) :: dum(nb, nb), fqa(nb, nb), fqb(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer :: ld, k, c, l, n, m
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
 
       nullify (hee, hha, bee, bha, oee, oha, hons, cee, cha)
-      nullify (fva, fvb, fvoa, fvob, fvee, fvha)
+      nullify (fva, fvb, fvoa, fvob, fvee, fvha, fveeo, fvhao)
       do_hoh = hoh
       ld = nb*kk
       a_sp = real(a, sp); b_sp = real(b, sp); inva = 1.0_sp/a_sp
@@ -1533,11 +1586,13 @@ contains
       else
          call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
-      call cheb_cache%ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, kk, nb, nnmax, ntype, nmax, &
-         do_hoh, fva, fvb, fvoa, fvob, fvee, fvha)
+      call cheb_cache%ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, eeo, hallo, kk, nb, nnmax, ntype, nmax, &
+         do_hoh, fva, fvb, fvoa, fvob, fvee, fvha, fveeo, fvhao)
 
       allocate (leftst(ld, nb, cond_ll), p0(ld, nb), p1(ld, nb), p2(ld, nb), rr(ld, nb))
-      allocate (wt(ld, nb), etmp(ld, nb), hwt(ld, nb))
+      allocate (wt(ld, nb), etmp(ld, nb), hwt(ld, nb), qx(ld, nb), vx(ld, nb))
+      fqa = cmplx(real(q_a, sp), aimag(q_a), sp)
+      fqb = cmplx(real(q_b, sp), aimag(q_b), sp)
 
       !$omp parallel do private(k, c, l) schedule(static)
       do k = 1, kk
@@ -1565,7 +1620,7 @@ contains
       end do
 
       ! --- right recursion v_n = T_{n-1}(H~) (v_b|psiref>); R = v_a v_n ---
-      call vapply(fvb, fvob, leftst(:, :, 1), p0)   ! p0 = v_b psiref
+      call vapply(fvb, fvob, hoh_vel_b, cur_b, fqb, leftst(:, :, 1), p0)   ! p0 = v_b psiref
       do n = 1, cond_ll
          if (n == 1) then
             p1 = p0
@@ -1578,28 +1633,61 @@ contains
                            ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp, cee, cha)
             p0 = p1; p1 = p2
          end if
-         call vapply(fva, fvoa, p1, rr)              ! rr = v_a v_n
+         call vapply(fva, fvoa, hoh_vel_a, cur_a, fqa, p1, rr)              ! rr = v_a v_n
          do m = 1, cond_ll
             call cgemm('C', 'N', nb, nb, ld, cone, leftst(1, 1, m), ld, rr, ld, czero, dum, nb)
             mu_nm(:, :, n, m) = dum
          end do
       end do
 
-      deallocate (leftst, p0, p1, p2, rr, wt, etmp, hwt)
+      deallocate (leftst, p0, p1, p2, rr, wt, etmp, hwt, qx, vx)
 
    contains
 
-      !> Velocity apply (raw): y = v*x, hoh -> y = v*x - vo*(h_bare*x).
-      subroutine vapply(fv, fvo, x, y)
+      !> Operator apply (raw): y = v*x. With hoh and hoh_vel (velocity operators):
+      !> y = v*x - vo*(h_bare*x) - (h_bare*O)*(v*x), the on-site h*O block included.
+      !> With cur as well, y = (q*V*x + V*(q*x))/2 for that velocity V.
+      subroutine vapply(fv, fvo, hoh_vel, cur, fq, x, y)
+         complex(sp), pointer, intent(in) :: fv(:, :, :, :), fvo(:, :, :, :)
+         logical, intent(in) :: hoh_vel, cur
+         complex(sp), intent(in) :: fq(nb, nb), x(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         integer :: k, r0
+         if (.not. (do_hoh .and. hoh_vel)) then
+            call spmv_block_sp(fv, fv, nn, iz, kk, nb, nnmax, ntype, 0, ld, x, x, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+            return
+         end if
+         if (.not. cur) then
+            call vhoh(fv, fvo, x, y)
+            return
+         end if
+         call vhoh(fv, fvo, x, vx)
+         !$omp parallel do private(k, r0) schedule(static)
+         do k = 1, kk
+            r0 = nb*(k - 1)
+            call cgemm('N', 'N', nb, nb, nb, cone, fq, nb, x(r0 + 1, 1), ld, czero, qx(r0 + 1, 1), ld)
+         end do
+         !$omp end parallel do
+         call vhoh(fv, fvo, qx, y)
+         !$omp parallel do private(k, r0) schedule(static)
+         do k = 1, kk
+            r0 = nb*(k - 1)
+            call cgemm('N', 'N', nb, nb, nb, 0.5_sp*cone, fq, nb, vx(r0 + 1, 1), ld, 0.5_sp*cone, y(r0 + 1, 1), ld)
+         end do
+         !$omp end parallel do
+      end subroutine vapply
+
+      !> hoh velocity: y = v*x - vo*(h_bare*x) - (h_bare*O)*(v*x).
+      subroutine vhoh(fv, fvo, x, y)
          complex(sp), pointer, intent(in) :: fv(:, :, :, :), fvo(:, :, :, :)
          complex(sp), intent(in) :: x(ld, nb)
          complex(sp), intent(out) :: y(ld, nb)
          call spmv_block_sp(fv, fv, nn, iz, kk, nb, nnmax, ntype, 0, ld, x, x, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-         if (do_hoh) then
-            call hsweep_sp(fvee, fvha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x, x, hwt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-            call spmv_block_sp_inplace(fvo, fvo, nn, iz, kk, nb, nnmax, ntype, 0, ld, hwt, y, -1.0_sp, 1.0_sp, 1.0_sp, 0.0_sp)
-         end if
-      end subroutine vapply
+         call hsweep_sp(fveeo, fvhao, nn, iz, kk, nb, nnmax, ntype, nmax, ld, y, y, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         call hsweep_sp(fvee, fvha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x, x, hwt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         call spmv_block_sp_inplace(fvo, fvo, nn, iz, kk, nb, nnmax, ntype, 0, ld, hwt, y, -1.0_sp, 1.0_sp, 1.0_sp, 0.0_sp)
+         y = y - etmp
+      end subroutine vhoh
 
    end subroutine cheb_moments_stochastic_fast
 
