@@ -152,7 +152,6 @@ module math_mod
    public :: correct_d_shell_moments, correct_d_shell_moments_spinor
    public :: extract_hubbard_d_shell_potential, extract_hubbard_d_spinor_potential
    public :: fixed_impurity_atom_carries_uj
-   public :: auto_impurity_local_host_eligible
 
 contains
 
@@ -511,30 +510,6 @@ contains
       real(rp), intent(in) :: u_row(:), j_row(:)
       fixed_impurity_atom_carries_uj = any(abs(u_row) > 1.0e-10_rp) .or. any(abs(j_row) > 1.0e-10_rp)
    end function fixed_impurity_atom_carries_uj
-
-   pure subroutine auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, reason)
-      logical, intent(in) :: scope_eligible, host_active(:)
-      character(len=*), intent(in) :: host_mode(:)
-      logical, intent(out) :: eligible
-      character(len=*), intent(out) :: reason
-      integer :: i
-
-      eligible = .false.
-      reason = 'impurity is outside fixed Liechtenstein scalar d-shell scope'
-      if (.not. scope_eligible) return
-      reason = 'no U-carrying frozen host potential was found'
-      if (size(host_active) /= size(host_mode)) return
-      if (.not. any(host_active)) return
-      do i = 1, size(host_active)
-         if (.not. host_active(i)) cycle
-         if (trim(host_mode(i)) /= 'local') then
-            reason = 'at least one U-carrying frozen host potential is spectral or has legacy provenance'
-            return
-         end if
-      end do
-      eligible = .true.
-      reason = 'all U-carrying frozen host potentials record local moments'
-   end subroutine auto_impurity_local_host_eligible
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

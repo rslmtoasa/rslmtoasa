@@ -416,7 +416,6 @@ module self_mod
       procedure, private :: mark_frozen_hosts
       procedure, private :: all_frozen_hubbard_hosts_local
       procedure, private :: is_eligible_local_hubbard
-      procedure, private :: is_eligible_local_moments
       procedure, private :: fixed_hubbard_energy_pout
       procedure, private :: write_fixed_u_radial_replay_input
       procedure, private :: write_fixed_u_radial_replay_output
@@ -877,58 +876,6 @@ contains
       if (this%hamiltonian%hubbard_test_operator_check .and. this%hamiltonian%hubbard_test_lambda /= 0.0_rp) return
       eligible = .true.
    end function is_eligible_local_hubbard
-
-   logical function is_eligible_local_moments(this, reason) result(eligible)
-      class(self), intent(in) :: this
-      character(len=*), intent(out), optional :: reason
-      integer :: ia, ntype
-      logical :: scope_eligible, active
-      logical, allocatable :: host_active(:)
-      character(len=16), allocatable :: host_mode(:)
-      character(len=128) :: local_reason
-
-      if (this%control%calctype == 'B') then
-         eligible = this%is_eligible_local_hubbard()
-         local_reason = 'existing fixed-U clean-bulk eligibility'
-         if (.not. eligible) local_reason = 'bulk is outside existing fixed-U clean-bulk eligibility'
-         ! nsp=2 spinor U with a nonzero test operator: still local radial moments (the energy is not routed then).
-         if (.not. eligible .and. this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2 .and. &
-             this%hamiltonian%hubbard_u_general_check .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
-            eligible = .true.
-            local_reason = 'spinor fixed-U bulk (hubbard_soc_experimental)'
-         end if
-         if (present(reason)) reason = trim(local_reason)
-         return
-      end if
-
-      ! impurity or surface runs: fixed U/J in the shared scope, no test operator; scalar spin on B, I, S
-      ! or spinor U at nsp=2 on I, S
-      scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check) .and. &
-         this%hamiltonian%fixed_u_local_scope() .and. .not. this%hamiltonian%hubbard_test_operator_check .and. &
-         ((this%control%nsp == 1 .and. .not. this%control%has_soc() .and. &
-           (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. this%control%calctype == 'S')) .or. &
-          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental .and. &
-           (this%control%calctype == 'I' .or. this%control%calctype == 'S')))
-
-      ntype = size(this%symbolic_atom)
-      allocate(host_active(ntype), host_mode(ntype))
-      host_active = .false.
-      host_mode = 'spectral'
-      do ia = 1, ntype
-         if (.not. this%is_frozen_hubbard_host(ia)) cycle
-         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
-             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
-         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
-                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
-         if (.not. active) cycle
-         host_active(ia) = .true.
-         if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj) cycle
-         if (len_trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments) > 0) &
-            host_mode(ia) = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
-      end do
-      call auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, local_reason)
-      if (present(reason)) reason = trim(local_reason)
-   end function is_eligible_local_moments
 
    logical function is_frozen_hubbard_host(this, atom_type) result(frozen)
       class(self), intent(in) :: this
@@ -1727,7 +1674,7 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit, i, k
-      logical :: radial_mode_defaulted, atomsc_control_active
+      logical :: atomsc_control_active
       character(len=128) :: radial_mode_reason
       character(len=8) :: radial_mode_source
 
@@ -1908,17 +1855,14 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
+      ! auto is spectral, the standard LDA+U construction; 'local' is opt-in (see hamiltonian%hubbard_radial_moments).
       radial_mode_reason = 'n/a'
-      radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
-      if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
-         if (this%is_eligible_local_moments(radial_mode_reason)) then
-            this%hamiltonian%hubbard_radial_moments = 'local'
-         else
-            this%hamiltonian%hubbard_radial_moments = 'spectral'
-         end if
-      end if
       radial_mode_source = 'explicit'
-      if (radial_mode_defaulted) radial_mode_source = 'default'
+      if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
+         this%hamiltonian%hubbard_radial_moments = 'spectral'
+         radial_mode_source = 'default'
+         radial_mode_reason = "auto resolves to spectral; 'local' must be requested explicitly"
+      end if
       call this%mark_frozen_hosts()
       call this%validate_hubbard_mode_provenance()
       call this%write_hubbard_run_summary(radial_mode_source, radial_mode_reason)

@@ -223,7 +223,7 @@ def potential_numbers(work: Path) -> dict[str, list[float]]:
 
 def n(t): return set_nstep(t)
 def ks(t): return use_kspace(set_nstep(t))
-def ks_u(t): return add_u(ks(t), 2.0, 0.5)
+def ks_u(t): return add_u(ks(t), 2.0, 0.5, LOCAL)
 def nsp1(t): return set_nstep(t).replace("nsp = 2", "nsp = 1")
 def ks_nsp2(t): return ks_nsp2_deck(t)
 def rs_local(t): return in_hamiltonian(set_nstep(t), LOCAL)
@@ -276,7 +276,7 @@ ROWS = {
     "noU_rs_nsp1": abs_row("bulk/bccFe", nsp1, pot=True, description="no-U RS bcc Fe nsp=1", drop=("energy",)),
     "noU_ks": abs_row("k_space_scf/bccFe", ks, pot=True, description="no-U KS bcc Fe nsp=1", drop=("energy",)),
     "noU_ks_nsp2": abs_row("k_space_scf/bccFe", ks_nsp2, pot=True, description="no-U KS bcc Fe nsp=2", drop=("energy",)),
-    "U_rs": abs_row("bulk/bccFe_hubbard_nsp1", n, restart="Fe.nml", description="+U RS bulk bcc Fe nsp=1", drop=("energy",)),
+    "U_rs": abs_row("bulk/bccFe_hubbard_nsp1", rs_local, restart="Fe.nml", description="+U RS bulk bcc Fe nsp=1", drop=("energy",)),
     "U_ks": abs_row("k_space_scf/bccFe", ks_u, description="+U KS bcc Fe nsp=1, U=2 J=0.5", drop=("energy",)),
     "U_imp": abs_row("impurity/B2FeCo_nsp1", n, description="+U impurity B2FeCo nsp=1", drop=("energy",)),
     "rs_soc_u2": abs_row("bulk/bccFe_hubbard", lambda t: in_hamiltonian(set_nstep(t), LOCAL), restart="Fe.nml",
