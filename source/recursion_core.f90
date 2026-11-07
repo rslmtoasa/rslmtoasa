@@ -246,8 +246,21 @@ contains
             fac_b(ineigh, k) = cmplx(0.0_rp, -dot_product(this%transport_dir_b, this%transport_bond(:, ineigh, k)), rp)*weight
          end do
       end do
-      call this%gpu_backend%set_kubo_operators(fac_a, fac_b)
+      call this%gpu_backend%set_kubo_operators(fac_a, fac_b, kubo_kind_code(this%transport_kind_a), &
+         kubo_kind_code(this%transport_kind_b), this%transport_q_a, this%transport_q_b)
    end subroutine gpu_plugin_upload_kubo_operators
+
+   !> Operator kind code of the CUDA backend: 0 charge, 1 current, 2 local.
+   integer function kubo_kind_code(kind)
+      character(len=*), intent(in) :: kind
+      select case (trim(kind))
+      case ('charge'); kubo_kind_code = 0
+      case ('current'); kubo_kind_code = 1
+      case ('local'); kubo_kind_code = 2
+      case default
+         call g_logger%fatal('Kubo operator kind '//trim(kind)//' is not available on CUDA', __FILE__, __LINE__)
+      end select
+   end function kubo_kind_code
 
    !> @brief Build cached first-order ccor_2c Hamiltonian blocks for fast kernels.
    !> @details Combines the ordinary and ccor_2c real-space operator blocks into

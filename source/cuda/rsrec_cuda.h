@@ -54,7 +54,8 @@ int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
                                const void *hallo, const void *enim,
                                const void *eecc, const void *hallcc);
 int rsrec_cuda_set_kubo_operators(rsrec_cuda_ctx *ctx, const void *fac_a,
-                                  const void *fac_b);
+                                  const void *fac_b, int kind_a, int kind_b,
+                                  const void *q_a, const void *q_b);
 int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
                             const void *v_b, const void *vo_a,
                             const void *vo_b);

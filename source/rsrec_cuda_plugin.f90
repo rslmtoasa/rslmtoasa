@@ -110,9 +110,11 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_set_velocity
       end function rsrec_cuda_set_velocity
 
-      function rsrec_cuda_set_kubo_operators(ctx, fac_a, fac_b) bind(C, name='rsrec_cuda_set_kubo_operators')
+      function rsrec_cuda_set_kubo_operators(ctx, fac_a, fac_b, kind_a, kind_b, q_a, q_b) &
+         bind(C, name='rsrec_cuda_set_kubo_operators')
          import :: c_int, c_ptr
-         type(c_ptr), value :: ctx, fac_a, fac_b
+         type(c_ptr), value :: ctx, fac_a, fac_b, q_a, q_b
+         integer(c_int), value :: kind_a, kind_b
          integer(c_int) :: rsrec_cuda_set_kubo_operators
       end function rsrec_cuda_set_kubo_operators
 
@@ -460,13 +462,17 @@ contains
 #endif
    end subroutine set_velocity
 
-   subroutine set_kubo_operators(this, fac_a, fac_b)
+   subroutine set_kubo_operators(this, fac_a, fac_b, kind_a, kind_b, q_a, q_b)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: fac_a(:, :)
       complex(rp), target, contiguous, intent(in) :: fac_b(:, :)
+      integer, intent(in) :: kind_a, kind_b
+      complex(rp), target, contiguous, intent(in) :: q_a(:, :)
+      complex(rp), target, contiguous, intent(in) :: q_b(:, :)
 #ifdef USE_CUDA_PLUGIN
       integer(c_int) :: status
-      status = rsrec_cuda_set_kubo_operators(this%ctx, c_loc(fac_a), c_loc(fac_b))
+      status = rsrec_cuda_set_kubo_operators(this%ctx, c_loc(fac_a), c_loc(fac_b), &
+         int(kind_a, c_int), int(kind_b, c_int), c_loc(q_a), c_loc(q_b))
       call check_status(status, 'rsrec_cuda_set_kubo_operators')
 #endif
    end subroutine set_kubo_operators

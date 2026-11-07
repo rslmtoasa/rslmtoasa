@@ -65,6 +65,11 @@ extern "C" void zheev_(const char *, const char *, const int *, cplx *,
 static std::string g_err;
 extern "C" const char *rsrec_last_error(void) { return g_err.c_str(); }
 #define FAIL(msg) do { g_err = (msg); return 1; } while (0)
+/* Kubo operator kinds of a transport slot (see rsrec_set_kubo_operators). */
+#define RSREC_KUBO_CHARGE 0
+#define RSREC_KUBO_CURRENT 1
+#define RSREC_KUBO_LOCAL 2
+
 #define CUCHK(x) do { cudaError_t e = (x); if (e != cudaSuccess) { \
     g_err = std::string("CUDA: ") + cudaGetErrorString(e); return 1; } } while (0)
 #define CBCHK(x) do { if ((x) != CUBLAS_STATUS_SUCCESS) \
@@ -121,6 +126,9 @@ struct rsrec_ctx {
      * slot b = linear_in. fp32 mirrors for the default fp32 path.           */
     zc *d_fac_a = nullptr, *d_fac_b = nullptr;
     fc *f_fac_a = nullptr, *f_fac_b = nullptr;
+    zc *d_q_a = nullptr, *d_q_b = nullptr;     /* local operator q, (nb,nb)  */
+    fc *f_q_a = nullptr, *f_q_b = nullptr;
+    int kubo_kind_a = 0, kubo_kind_b = 0;      /* RSREC_KUBO_* of each slot  */
     bool have_kubo = false;
 
     int cheb_prec = 0;                       /* 0 = fp32 (default), 1 = fp64 */
@@ -157,6 +165,7 @@ struct rsrec_ctx {
         void *left = nullptr, *dmu = nullptr, *R = nullptr;
         void *w0 = nullptr, *w1 = nullptr, *w2 = nullptr;
         void *ht = nullptr, *he = nullptr, *ho = nullptr, *vtmp = nullptr;
+        void *q4 = nullptr, *q5 = nullptr, *q6 = nullptr;   /* Kubo q scratch */
         void *stage = nullptr;
         size_t field_bytes = 0;
         size_t left_bytes = 0;
@@ -230,7 +239,7 @@ static std::vector<fc> &stochastic_host_moments(
 static void release_stochastic_workspace(rsrec_ctx::stochastic_workspace *ws) {
     if (!ws) return;
     for (void *p : {ws->left, ws->dmu, ws->R, ws->w0, ws->w1, ws->w2,
-                    ws->ht, ws->he, ws->ho, ws->vtmp, ws->stage})
+                    ws->ht, ws->he, ws->ho, ws->vtmp, ws->q4, ws->q5, ws->q6, ws->stage})
         if (p) cudaFree(p);
     *ws = rsrec_ctx::stochastic_workspace();
 }
@@ -244,7 +253,7 @@ static void clear_resident_moments(rsrec_ctx *c) {
 
 template <class CT>
 static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh,
-                                       int nstates) {
+                                       bool need_q, int nstates) {
     auto *ws = &c->stoch_workspace;
     if (nstates < 1) FAIL("stochastic workspace: nstates must be positive");
     const size_t nfield = fieldsz(c) * (size_t)nstates;
@@ -259,7 +268,7 @@ static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh,
      * resident diagonal moments and CUDA runtime workspaces. */
     size_t freeb = 0, totalb = 0;
     CUCHK(cudaMemGetInfo(&freeb, &totalb));
-    const size_t required = (do_hoh ? 8 : 4) * field_bytes + left_bytes +
+    const size_t required = ((do_hoh ? 8 : 4) + (need_q ? 3 : 0)) * field_bytes + left_bytes +
                             mu_bytes + stage_bytes;
     const bool field_growth = ws->field_bytes < field_bytes;
     const bool needs_growth = !ws->w0 || !ws->w1 || !ws->w2 || !ws->R ||
@@ -275,7 +284,8 @@ static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh,
      * falsely make the old w1/w2/R allocations look large enough. */
     if (field_growth) {
         for (void **p : {&ws->w0, &ws->w1, &ws->w2, &ws->R,
-                         &ws->ht, &ws->he, &ws->ho, &ws->vtmp})
+                         &ws->ht, &ws->he, &ws->ho, &ws->vtmp,
+                         &ws->q4, &ws->q5, &ws->q6})
             if (*p) { cudaFree(*p); *p = nullptr; }
         ws->field_bytes = 0;
     }
@@ -294,6 +304,12 @@ static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh,
          grow_stochastic_buffer(&ws->he, &ws->field_bytes, field_bytes, "he") ||
          grow_stochastic_buffer(&ws->ho, &ws->field_bytes, field_bytes, "ho") ||
          grow_stochastic_buffer(&ws->vtmp, &ws->field_bytes, field_bytes, "vtmp")))
+        return 1;
+
+    if (need_q &&
+        (grow_stochastic_buffer(&ws->q4, &ws->field_bytes, field_bytes, "q4") ||
+         grow_stochastic_buffer(&ws->q5, &ws->field_bytes, field_bytes, "q5") ||
+         grow_stochastic_buffer(&ws->q6, &ws->field_bytes, field_bytes, "q6")))
         return 1;
 
     stochastic_host_moments(ws, static_cast<CT *>(nullptr)).resize(
@@ -364,6 +380,8 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_cc_ee, (void *)c->d_cc_hall,
                     (void *)c->f_cc_ee, (void *)c->f_cc_hall,
                     (void *)c->d_voa, (void *)c->d_vob,
+                    (void *)c->d_q_a, (void *)c->d_q_b, (void *)c->f_q_a, (void *)c->f_q_b,
+                    (void *)c->d_fac_a, (void *)c->d_fac_b, (void *)c->f_fac_a, (void *)c->f_fac_b,
                     (void *)c->f_va, (void *)c->f_vb,
                     (void *)c->f_voa, (void *)c->f_vob})
         if (p) cudaFree(p);
@@ -1431,7 +1449,8 @@ __global__ void k_combine(size_t n, const zc *__restrict__ t,
 }
 
 /* On-site block-diagonal multiply o = hons[type(k)] * x1, site-major.
- * One block per atom; hons is (bb per type), x1/o are (ld * ncols).         */
+ * One block per atom; hons is (bb per type), x1/o are (ld * ncols). With
+ * iz == nullptr, hons is one block applied on every site.                   */
 template <class CT>
 __global__ void k_onsite_blockmul(int kk, int nb, size_t ld, int ncols,
                                   const int *__restrict__ iz,
@@ -1443,7 +1462,7 @@ __global__ void k_onsite_blockmul(int kk, int nb, size_t ld, int ncols,
     const int l = threadIdx.x, cc = threadIdx.y;
     if (l >= nb || cc >= ncols) return;
     const size_t bb = (size_t)nb * nb;
-    const CT *H = hons + bb * (size_t)(iz[k] - 1);
+    const CT *H = iz ? hons + bb * (size_t)(iz[k] - 1) : hons;
     CT acc = czero_v<CT>();
     for (int m = 0; m < nb; ++m) {
         CT h = H[l + nb * m];
@@ -1560,6 +1579,32 @@ static int step_kubo_velo_hoh(rsrec_ctx *c, const CT *fac, const CT *bare,
     k_axpby<CT, RT><<<(int)((n + tpb - 1) / tpb), tpb>>>(n, (RT)-1, t3, (RT)1, y);
     CUCHK(cudaGetLastError());
     return 0;
+}
+
+/* o = q*x1 on every site (q: one (nb,nb) block), loop in column slabs. */
+template <class CT>
+static int step_qmul(rsrec_ctx *c, const CT *q, const CT *x1, CT *o, int nrhs) {
+    const size_t ld = (size_t)c->nb * c->kk;
+    const int cs = std::max(1, 1024 / c->nb);
+    for (int c0 = 0; c0 < nrhs; c0 += cs) {
+        const int nc = std::min(cs, nrhs - c0);
+        dim3 thr(c->nb, nc);
+        k_onsite_blockmul<CT><<<c->kk, thr>>>(c->kk, c->nb, ld, nc, nullptr, q,
+                                              x1 + ld * (size_t)c0,
+                                              o + ld * (size_t)c0);
+        CUCHK(cudaGetLastError());
+    }
+    return 0;
+}
+
+/* y = ca*a + cb*b elementwise, complex coefficients. */
+template <class CT>
+__global__ void k_cmb(size_t n, CT ca, const CT *__restrict__ a, CT cb,
+                      const CT *__restrict__ b, CT *__restrict__ y) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    CT r = cmul(ca, a[i]);
+    y[i] = cfma(cb, b[i], r);
 }
 
 /* fp64 generalized step (site-major): y = alpha*(Op x1 - bsc x1)*inva +
@@ -1708,9 +1753,27 @@ static int ensure_f32_hoh(rsrec_ctx *c) {
 /* Kubo transport operators: fac_a/fac_b are (nnmax, kk) complex per-bond
  * factors (slot a = linear_out, slot b = linear_in); see rsrec_ctx.         */
 extern "C" int rsrec_set_kubo_operators(rsrec_ctx *c, const void *fac_a,
-                                        const void *fac_b) {
-    if (!fac_a || !fac_b) FAIL("set_kubo_operators: null input");
+                                        const void *fac_b, int kind_a,
+                                        int kind_b, const void *q_a,
+                                        const void *q_b) {
+    if (!fac_a || !fac_b || !q_a || !q_b) FAIL("set_kubo_operators: null input");
+    if (kind_a < 0 || kind_a > RSREC_KUBO_LOCAL || kind_b < 0 ||
+        kind_b > RSREC_KUBO_LOCAL)
+        FAIL("set_kubo_operators: unsupported operator kind");
     clear_resident_moments(c);
+    c->kubo_kind_a = kind_a;
+    c->kubo_kind_b = kind_b;
+    const size_t nq = (size_t)c->nb * c->nb;
+    const void *qsrc[2] = {q_a, q_b};
+    zc **qz[2] = {&c->d_q_a, &c->d_q_b};
+    fc **qf[2] = {&c->f_q_a, &c->f_q_b};
+    for (int i = 0; i < 2; ++i) {
+        if (!*qz[i]) CUCHK(cudaMalloc(qz[i], nq * sizeof(zc)));
+        if (!*qf[i]) CUCHK(cudaMalloc(qf[i], nq * sizeof(fc)));
+        CUCHK(cudaMemcpy(*qz[i], qsrc[i], nq * sizeof(zc), cudaMemcpyHostToDevice));
+        k_zc_to_fc<<<(int)((nq + 255) / 256), 256>>>(nq, *qz[i], *qf[i]);
+        CUCHK(cudaGetLastError());
+    }
     const size_t n = (size_t)c->nnmax * c->kk;
     const int tpb = 256;
     const void *src[2] = {fac_a, fac_b};
@@ -2220,6 +2283,7 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
                         RT inva, RT bsc, void *mu_,
                         const CT *Hop, const CT *Himp,
                         const CT *fac_a, const CT *fac_b,
+                        const CT *q_a, const CT *q_b,
                         const CT *h_bare, const CT *h_bare_imp,
                         const CT *h_eeo, const CT *h_eeo_imp, const CT *h_hons,
                         bool retain_device,
@@ -2231,7 +2295,9 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     const size_t nfield = nf * (size_t)nstates;
     const bool do_hoh = c->have_hoh;
 
-    if (ensure_stochastic_workspace<CT>(c, lld, do_hoh, nstates)) return 1;
+    const bool need_q = c->kubo_kind_a != RSREC_KUBO_CHARGE ||
+                        c->kubo_kind_b != RSREC_KUBO_CHARGE;
+    if (ensure_stochastic_workspace<CT>(c, lld, do_hoh, need_q, nstates)) return 1;
     auto *ws = &c->stoch_workspace;
     CT *left = static_cast<CT *>(ws->left);
     CT *dmu = static_cast<CT *>(ws->dmu);
@@ -2243,6 +2309,9 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     CT *he = static_cast<CT *>(ws->he);
     CT *ho = static_cast<CT *>(ws->ho);
     CT *vtmp = static_cast<CT *>(ws->vtmp);
+    CT *q4 = static_cast<CT *>(ws->q4);
+    CT *q5 = static_cast<CT *>(ws->q5);
+    CT *q6 = static_cast<CT *>(ws->q6);
     zc *stage = static_cast<zc *>(ws->stage);
     CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * nstates * sizeof(CT)));
 
@@ -2267,6 +2336,18 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     const CT one = {(RT)1, (RT)0};
     const CT zero = {(RT)0, (RT)0};
     const int tpb = 256;
+    /* Kubo operator of one slot: charge = V, local = q, current = (qV + Vq)/2. */
+    auto kubo = [&](int kind, const CT *fac, const CT *q, const CT *x1, CT *yv) -> int {
+        if (kind == RSREC_KUBO_CHARGE) return velo(fac, x1, yv);
+        if (step_qmul<CT>(c, q, x1, kind == RSREC_KUBO_LOCAL ? yv : q4, nrhs)) return 1;
+        if (kind == RSREC_KUBO_LOCAL) return 0;
+        if (velo(fac, x1, q5) || velo(fac, q4, q6)) return 1;
+        if (step_qmul<CT>(c, q, q5, yv, nrhs)) return 1;
+        const CT half = {(RT)0.5, (RT)0};
+        k_cmb<CT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(nfield, half, yv, half, q6, yv);
+        CUCHK(cudaGetLastError());
+        return 0;
+    };
     const double h2d_start = host_seconds();
     CUCHK(cudaMemcpy(stage, psiref_h, nfield * sizeof(zc), cudaMemcpyHostToDevice));
     c->stoch_h2d_s += host_seconds() - h2d_start;
@@ -2291,7 +2372,7 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     }
 
     /* right recursion v_n = T_{n-1}(H~) V_b|psiref>; left slot 0 = psiref. */
-    if (velo(fac_b, left, w0)) return 1;        /* w0 = V_b psiref */
+    if (kubo(c->kubo_kind_b, fac_b, q_b, left, w0)) return 1;        /* w0 = V_b psiref */
     CT *v0 = w0, *v1 = w1, *v2 = w2;
     for (int n = 1; n <= lld; ++n) {
         if (n == 1) {
@@ -2303,7 +2384,7 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
             if (matvec(v1, v0, v2, (RT)2, (RT)-1)) return 1;
             CT *t = v0; v0 = v1; v1 = v2; v2 = t;
         }
-        if (velo(fac_a, v1, R)) return 1;        /* R = V_a v_n */
+        if (kubo(c->kubo_kind_a, fac_a, q_a, v1, R)) return 1;        /* R = V_a v_n */
         /* left is m-major, with each m block containing all B states;
          * R is state-major.  Keep the existing efficient m-batched GEMM
          * and issue one strided-batched call per state so both operands and
@@ -2492,24 +2573,24 @@ static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
         if (c->have_hoh)
             return stoch_engine_batch<fc, float>(
                 c, psiref_, nstates, lld, (float)(1.0 / a), (float)b, mu_,
-                c->f_ee_bare, c->f_hall_bare, c->f_fac_a, c->f_fac_b,
+                c->f_ee_bare, c->f_hall_bare, c->f_fac_a, c->f_fac_b, c->f_q_a, c->f_q_b,
                 c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
                 c->f_hons, retain_device, download_host, trace_index);
         if (ensure_f32_ham(c, a, b)) return 1;
         return stoch_engine_batch<fc, float>(
             c, psiref_, nstates, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
-            c->f_fac_a, c->f_fac_b, c->f_ee_bare, c->f_hall_bare, nullptr,
+            c->f_fac_a, c->f_fac_b, c->f_q_a, c->f_q_b, c->f_ee_bare, c->f_hall_bare, nullptr,
             nullptr, nullptr, retain_device, download_host, trace_index);
     }
     if (c->have_hoh)
         return stoch_engine_batch<zc, double>(
             c, psiref_, nstates, lld, 1.0 / a, b, mu_,
-            c->d_ee_bare, c->d_hall_bare, c->d_fac_a, c->d_fac_b,
+            c->d_ee_bare, c->d_hall_bare, c->d_fac_a, c->d_fac_b, c->d_q_a, c->d_q_b,
             c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
             retain_device, download_host, trace_index);
     return stoch_engine_batch<zc, double>(
         c, psiref_, nstates, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
-        c->d_fac_a, c->d_fac_b, c->d_ee, c->d_hall, nullptr, nullptr, nullptr,
+        c->d_fac_a, c->d_fac_b, c->d_q_a, c->d_q_b, c->d_ee, c->d_hall, nullptr, nullptr, nullptr,
         retain_device, download_host, trace_index);
 }
 
