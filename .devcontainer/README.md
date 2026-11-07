@@ -34,6 +34,60 @@ convergence information before interpreting scientific results. To monitor a
 running calculation, use `tail -f run.log` in a second terminal in the same
 directory (Ctrl+C stops the monitor).
 
+## Plot inside Codespaces
+
+Python 3, NumPy, Matplotlib, and gnuplot are installed. Save plots as image files,
+then click them in the file explorer to preview or download them. A graphical
+desktop or a Python interface to the Fortran code is not needed.
+
+After running the bcc Fe example, use its first two DOS columns as a plotting
+example (from `runs/bccFe`):
+
+```bash
+python3 - <<'PYTHON'
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+
+data = np.loadtxt("totaldos.out")
+plt.plot(data[:, 0], data[:, 1])
+plt.xlabel("Energy (Ry)")
+plt.ylabel("DOS (first data column)")
+plt.tight_layout()
+plt.savefig("dos-python.png", dpi=150)
+PYTHON
+```
+
+Or use gnuplot in the same directory:
+
+```bash
+gnuplot <<'GNUPLOT'
+set terminal pngcairo size 1000,600
+set output 'dos-gnuplot.png'
+set xlabel 'Energy (Ry)'
+set ylabel 'DOS (first data column)'
+plot 'totaldos.out' using 1:2 with lines title 'DOS'
+GNUPLOT
+```
+
+For additional pip packages, create a virtual environment from the repository
+root. This keeps Ubuntu's managed Python installation intact and makes the
+preinstalled NumPy and Matplotlib available:
+
+```bash
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+python -m pip install scipy  # example additional package
+```
+
+To include more packages for everyone, add apt packages to
+`.devcontainer/Dockerfile`, or add a virtual-environment setup and
+`python -m pip install -r ...` step to `.devcontainer/setup.sh`.
+After changing the Dockerfile, use **Codespaces: Rebuild Container** from the
+command palette. Existing codespaces need to pull the updated branch first;
+new codespaces use the updated configuration automatically.
+
 ## Download results for local plotting
 
 Right-click a file in the browser file explorer and select **Download**.
