@@ -142,3 +142,9 @@ Raw evidence is at git tag `archive/fable_v4b_u-2026-11-05` under docs/validatio
 - The Fe seed has no `vrmax`, so `ccor_2c` on it changes no digit of the step-1 result: those decks do not test CCOR. The default kernel, `cheb_backend='fast_dp'` and `'legacy'` agree to the printed digits for `ccor_2c` + U (U=2: E_F -0.001913 Ry, moment 2.185995 muB).
 - The code rewrites `fermi` in `input.nml` after a run and step 1 depends strongly on it; a deck copied from a run directory starts from a different state.
 - Not run: energy accounting with `hoh`, spectral-vs-local comparison with `hoh`, impurity or surface with `hoh`, no-`hoh` `ccor_2c` with U on a seed that has `vrmax`, an external-code comparison.
+- Derivative test of the spectral energy candidate (2026-11-07, KS bcc Fe `tests/scf/cases/k_space_scf/bccFe`, nsp=1, 12^3 k, 300 K, U=1.8 to 2.2 eV, J=0, every run converged, final Diff <= 1.4e-8, built from the pristine deck).
+  Central difference of the free energy against the fixed-P Hubbard derivative E_Hub(P_OUT(U0))/U0, Ry/eV, U0 = 2 eV. `local` candidate b: D = +0.055098, target +0.055240, miss -1.4e-4 (documented: +0.0550977, +0.0552397).
+  `spectral` candidate a (F - Tr(V_in P_OUT) + E_Hub): D = +0.064771, target +0.057828, miss +6.9e-3 (step 0.2 eV); +6.6e-3 (step 0.4 eV); at 16^3 k: +6.0e-3, with `local` b -1.8e-4. `spectral` candidate c (without the trace term): miss -0.141.
+  The documented allowance at U=2, J=0 is [1.0e-3, 1.6e-3]. At U=2 eV the spectral free energy F_a lies 8.7 mRy above the local F_b (7.7 mRy at 1.9 eV, 9.7 mRy at 2.1 eV). Spin moments: spectral 2.356302 muB (matches the earlier record), local 2.510777 muB.
+  The spectral state is therefore not a stationary point of the functional that the local state satisfies to 1.4e-4 Ry/eV; spectral energy routing is not adopted. Not tested: RS, J != 0, `hoh`, other materials.
+
