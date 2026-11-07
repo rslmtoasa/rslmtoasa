@@ -9,6 +9,7 @@ program test_reciprocal_cuda_arbitrary_k
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
+   use control_mod, only: control
    use mpi_mod, only: parallel_context, g_parallel_context, ierr
 #ifdef USE_MPI
    use mpi
@@ -26,6 +27,7 @@ program test_reciprocal_cuda_arbitrary_k
    type(reciprocal) :: recip
    type(hamiltonian), target :: ham
    type(lattice), target :: lat
+   type(control), target :: ctl
    real(rp), parameter :: points(3,4) = reshape([ &
       0.125_rp, 0.0_rp, 0.0_rp, &
       0.371_rp, -0.217_rp, 0.083_rp, &
@@ -150,6 +152,7 @@ contains
       integer :: i
 
       call obj%restore_to_default()
+      obj%control => ctl
       lat_obj%nrec = 1; lat_obj%ntype = 1; lat_obj%nn_max = 3; lat_obj%kk = 1
       allocate(lat_obj%ib(1), lat_obj%atlist(1), lat_obj%iz(1), lat_obj%nn(1,3))
       lat_obj%ib = 1; lat_obj%atlist = 1; lat_obj%iz = 1; lat_obj%nn(1,:) = [3,1,1]
