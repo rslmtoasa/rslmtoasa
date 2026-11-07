@@ -284,7 +284,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   this%idum(k) = 1
@@ -369,7 +370,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1
@@ -512,7 +514,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   if (this%hamiltonian%ccor_2c) then
                      call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih) + this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
                   else
@@ -636,7 +639,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
                   if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1
