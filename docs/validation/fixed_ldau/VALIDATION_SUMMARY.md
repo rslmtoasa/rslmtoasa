@@ -122,7 +122,7 @@ RS floors (bcc Fe, U=0, RS block, Broyden)
 
 ## Status and limits
 
-- Excluded from the energy route and not tested: SC-U, intersite V, HOH, nsp=3/4 noncollinear spinors with U (fatal guard), impurity U, impurity/surface hosts for energy, nonzero test fields, constrained SCF.
+- Excluded from the energy route and not tested: SC-U, intersite V, nsp=3/4 noncollinear spinors with U (fatal guard), impurity U, impurity/surface hosts for energy, nonzero test fields, constrained SCF.
 - Energy routing is off for surfaces and impurities (RD4 not measured).
 - No energy-anisotropy E(x)-E(z); no converged SOC-on surface; no converged nsp=2 surface vs converged nsp=1 surface.
 - R06 (converged scalar Fe U/J sweep), R07 (noncubic J), R09 SOC ladder, R10, R11, R12, R13, R15: NOT_RUN in REMEDIATION_GATES.md; R02 aggregate NOT_RUN; R14 aggregate NOT_RUN.
@@ -131,3 +131,11 @@ RS floors (bcc Fe, U=0, RS block, Broyden)
 - Surface Ni(001) response gate (Diff <= 5e-8 in two steps) failed; the threshold was later declared unsuitable by the owner and no replacement was set.
 
 Raw evidence is at git tag `archive/fable_v4b_u-2026-11-05` under docs/validation/fixed_ldau/{evidence,rs}.
+
+## 6. HOH and CCOR_2c (2026-11-07, branch main_rc_ldau_hoh)
+
+- V_U enters as an on-site term in `enim` with `hoh`, in `ee`/`hall` without. Fixed U=2/J=0 eV, bcc Fe, one step, E_F(U=2) - E_F(U=0), Ry:
+  `hoh` block recursion +0.0689 (lld 40), k-space second order +0.0677, Chebyshev +0.0681 (window +-4 Ry, 600 moments); no `hoh` block +0.0656, Chebyshev +0.0665.
+  Chebyshev with `hoh` in a +-3 Ry window and 300 moments gives -0.0220: under-resolved, not a U effect.
+- `ccor_2c`, no `hoh`: legacy block +0.0647, fp64 fast block +0.0647, Chebyshev +0.0665, default fp32 fast block +0.0412 (see `tests/KNOWN_ISSUES.md`). `ccor_2c` with `hoh`, default kernel: +0.0698.
+- Not run: energy accounting with `hoh`, spectral-vs-local comparison with `hoh`, impurity or surface with `hoh`, an external-code comparison.
