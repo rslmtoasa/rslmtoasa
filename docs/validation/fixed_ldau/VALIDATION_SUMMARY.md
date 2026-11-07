@@ -134,8 +134,11 @@ Raw evidence is at git tag `archive/fable_v4b_u-2026-11-05` under docs/validatio
 
 ## 6. HOH and CCOR_2c (2026-11-07, branch main_rc_ldau_hoh)
 
-- V_U enters as an on-site term in `enim` with `hoh`, in `ee`/`hall` without. Fixed U=2/J=0 eV, bcc Fe, one step, E_F(U=2) - E_F(U=0), Ry:
-  `hoh` block recursion +0.0689 (lld 40), k-space second order +0.0677, Chebyshev +0.0681 (window +-4 Ry, 600 moments); no `hoh` block +0.0656, Chebyshev +0.0665.
-  Chebyshev with `hoh` in a +-3 Ry window and 300 moments gives -0.0220: under-resolved, not a U effect.
-- `ccor_2c`, no `hoh`: legacy block +0.0647, fp64 fast block +0.0647, Chebyshev +0.0665, default fp32 fast block +0.0412 (see `tests/KNOWN_ISSUES.md`). `ccor_2c` with `hoh`, default kernel: +0.0698.
-- Not run: energy accounting with `hoh`, spectral-vs-local comparison with `hoh`, impurity or surface with `hoh`, an external-code comparison.
+- V_U enters as an on-site term in `enim` with `hoh`, in `ee`/`hall` without. Fixed U=2/J=0 eV, bcc Fe (`tests/scf/cases/bulk/bccFe_hubbard_nsp1` seed), one step from the repo deck,
+  E_F(U=2) - E_F(U=0), Ry: `hoh` block recursion +0.0697 (lld 40), Chebyshev +0.0682 (window +-4 Ry, 600 moments) and +0.0679 (+-3 Ry, 300 moments), k-space second order +0.0677;
+  no `hoh` Chebyshev +0.0665. Spin moment after step 1, U=0 -> U=2 (muB): `hoh` block 2.182 -> 2.147, Chebyshev 2.193 -> 2.166.
+- NiO AFM-II, 4-atom cell, `hoh` + `ccor_2c`, U=2/J=1 eV on both Ni, one step from the same potentials: E_F -0.130883 -> -0.103250 Ry (real-space Chebyshev), -0.13393 -> -0.10789 Ry (k-space second order, 8^3);
+  Ni moment 0.7117 -> 0.7834 muB (real space), 0.7741 -> 0.8355 muB (k-space). Five real-space steps: Ni moment 0.78, 1.07, 1.19, 1.21, 1.11 muB, Diff 4.8e-3, 1.1e-2, 1.3e-2, 1.3e-2, 8.3e-3; E_F -0.103 to -0.183 Ry, not converged. U=0 baseline, 6 steps: Ni moment 0.711 to 0.721 muB, Diff about 3.0e-4.
+- The Fe seed has no `vrmax`, so `ccor_2c` on it changes no digit of the step-1 result: those decks do not test CCOR. The default kernel, `cheb_backend='fast_dp'` and `'legacy'` agree to the printed digits for `ccor_2c` + U (U=2: E_F -0.001913 Ry, moment 2.185995 muB).
+- The code rewrites `fermi` in `input.nml` after a run and step 1 depends strongly on it; a deck copied from a run directory starts from a different state.
+- Not run: energy accounting with `hoh`, spectral-vs-local comparison with `hoh`, impurity or surface with `hoh`, no-`hoh` `ccor_2c` with U on a seed that has `vrmax`, an external-code comparison.

@@ -281,14 +281,6 @@ are not tracked here; see `docs/DECISIONS.md`.
 Evidence and run history: `docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`; older records in
 the archive tags.
 
-### Default (fp32) block-Lanczos kernel with `ccor_2c` and fixed U gives a different step-1 result than fp64 — 2026-11-07
-- **Verified (bcc Fe, `tests/scf/cases/bulk/bccFe_hubbard_nsp1` deck, `hoh=.false.`, `ccor_2c=.true.`, `strux_want_sdot=.true.`, `screening='fitted'`, `recur='block'`, `lld=40`, 1 step, U=2 J=0 eV vs U=0):**
-  E_F and spin moment after step 1, U=0 -> U=2: default kernel -0.062061 -> -0.020876 Ry and 2.148319 -> 1.749865 muB; `cheb_backend='fast_dp'` and
-  `'legacy'` both -0.063533 -> 0.001149 Ry and 2.164990 -> 2.141605 muB (the two agree to the printed digits); Chebyshev (window +-4 Ry, 600 moments) -0.068473 -> -0.001997 Ry.
-  The same test without `ccor_2c` shows the default kernel and legacy agreeing on E_F(U=2)-E_F(U=0) (0.0656 Ry, block).
-- **Not verified:** the cause. Single-precision loss in `block_lanczos_fast` is the suspect (fp64 removes the difference); not tested with other lld or other materials.
-- **Proposal:** `cheb_backend='fast_dp'` for `ccor_2c` with U until diagnosed (one line in the default selection, about 5 lines with a log message).
-
 ### `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
 - **Verified:** the run stops with "Fixed-U LDA+U currently requires collinear scalar-spin input" (`source/hamiltonian_build.f90:768`);
   `Val04LdaUPhysics` stops at the same guard (its script rewrites `nsp = 1` to `nsp = 2`). In a scratch copy with `nsp = 1` the guard passes and the
