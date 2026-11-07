@@ -6,6 +6,11 @@
 [![Example tests](https://github.com/rslmtoasa/rslmtoasa/actions/workflows/tests.yml/badge.svg)](https://github.com/rslmtoasa/rslmtoasa/actions/workflows/tests.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/codespaces-main-rc)
+
+For a browser-based tutorial environment based on `main_rc`, see the
+[Codespaces quick start](.devcontainer/README.md).
+
 RS-LMTO-ASA is an open-source electronic-structure code based on the **real-space linearized muffin-tin orbital method within the atomic sphere approximation**. It combines self-consistent electronic-structure calculations with recursion and Green-function techniques to study bulk materials, surfaces, and embedded impurities.
 
 The code is written primarily in Fortran and supports OpenMP and MPI parallelization. Its real-space formulation connects local electronic structure with magnetic interactions and transport responses, including effects of spin–orbit coupling and noncollinear magnetism.

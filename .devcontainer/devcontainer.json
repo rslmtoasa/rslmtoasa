@@ -1,0 +1,21 @@
+{
+  "name": "RS-LMTO-ASA main_rc tutorial",
+  "build": { "dockerfile": "Dockerfile" },
+  "remoteUser": "vscode",
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  "containerEnv": {
+    "OMP_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/build-codespaces/bin:${containerEnv:PATH}"
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "waitFor": "postCreateCommand",
+  "customizations": {
+    "vscode": {
+      "settings": { "files.associations": { "*.nml": "fortran" } }
+    },
+    "codespaces": { "openFiles": [".devcontainer/README.md"] }
+  }
+}

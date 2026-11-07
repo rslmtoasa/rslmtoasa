@@ -79,3 +79,7 @@ pip-wheel-metadata/
 
 # Small tracked native LR oracle; the test reads this historical two-row file.
 !tests/lr_baseline/cases/static_lkag/jij.out
+
+# Codespaces tutorial calculations and downloads
+/runs/
+/*-results.tar.gz
