@@ -858,21 +858,24 @@ contains
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
    end subroutine write_hubbard_moment_energy_diagnostics
 
+   !> Clean bulk with fixed Liechtenstein U/J on the bulk types: the local radial-moment route applies.
    logical function is_eligible_local_hubbard(this) result(eligible)
       class(self), intent(in) :: this
 
-      eligible = this%hamiltonian%hubbard_u_general_check .and. &
-         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
-         this%control%lmax == 2 .and. &
-         ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
-          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental)) .and. &
-         this%control%calctype == 'B' .and. &
-         this%lattice%nbulk == 0 .and. this%lattice%nrec == this%lattice%ntype .and. &
-         .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
-         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
-         .not. this%hamiltonian%hubbard_v_check .and. .not. this%hamiltonian%hubbard_u_impurity_check .and. &
-         (.not. this%hamiltonian%hubbard_test_operator_check .or. &
-          this%hamiltonian%hubbard_test_lambda == 0.0_rp)
+      eligible = .false.
+      ! U/J: explicit input for the bulk types, not the impurity-only form
+      if (.not. this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check) return
+      ! Hamiltonian: Liechtenstein, lmax=2, collinear, first order, no constraints / SC-U / V
+      if (.not. this%hamiltonian%fixed_u_local_scope()) return
+      ! spin: scalar nsp=1 without SOC, or bulk spinor U at nsp=2
+      if (.not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
+                 (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental))) return
+      ! where: bulk without an embedded cluster
+      if (this%control%calctype /= 'B' .or. this%lattice%nbulk /= 0 .or. &
+          this%lattice%nrec /= this%lattice%ntype) return
+      ! test operator: only at zero strength
+      if (this%hamiltonian%hubbard_test_operator_check .and. this%hamiltonian%hubbard_test_lambda /= 0.0_rp) return
+      eligible = .true.
    end function is_eligible_local_hubbard
 
    logical function is_eligible_local_moments(this, reason) result(eligible)
@@ -898,18 +901,14 @@ contains
          return
       end if
 
-      scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. &
-         this%hamiltonian%hubbard_u_impurity_check) .and. &
-         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
-         this%control%lmax == 2 .and. &
+      ! impurity or surface runs: fixed U/J in the shared scope, no test operator; scalar spin on B, I, S
+      ! or spinor U at nsp=2 on I, S
+      scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check) .and. &
+         this%hamiltonian%fixed_u_local_scope() .and. .not. this%hamiltonian%hubbard_test_operator_check .and. &
          ((this%control%nsp == 1 .and. .not. this%control%has_soc() .and. &
            (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. this%control%calctype == 'S')) .or. &
           (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental .and. &
-           (this%control%calctype == 'I' .or. this%control%calctype == 'S'))) .and. &
-         .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
-         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
-         .not. this%hamiltonian%hubbard_v_check .and. &
-         .not. this%hamiltonian%hubbard_test_operator_check
+           (this%control%calctype == 'I' .or. this%control%calctype == 'S')))
 
       ntype = size(this%symbolic_atom)
       allocate(host_active(ntype), host_mode(ntype))

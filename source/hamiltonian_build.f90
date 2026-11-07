@@ -102,6 +102,19 @@ contains
       end if
    end subroutine validate_fixed_u_scope
 
+   !> @brief Hamiltonian-side scope shared by the local radial-moment and RD1 routes.
+   !> @details Fixed Liechtenstein U/J on the d shell with lmax=2, collinear, first-order Hamiltonian
+   !>          (no hoh), no constraints, no SC-U, no Hubbard-V. Callers add where (calctype), which
+   !>          U/J input form, and the spin case.
+   module function fixed_u_local_scope(this) result(in_scope)
+      class(hamiltonian), intent(in) :: this
+      logical :: in_scope
+
+      in_scope = trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. this%control%lmax == 2 .and. &
+         .not. this%control%is_noncollinear() .and. .not. this%control%constraints_enable .and. &
+         .not. this%hoh .and. .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check
+   end function fixed_u_local_scope
+
    !> @brief Local-impurity RD1 V_in capture is wanted for this run.
    !> @details True for fixed Liechtenstein U/J on impurity or surface clusters (calctype I or S) with
    !>          hubbard_radial_moments='local': scalar-spin, lmax=2, first-order Hamiltonian (no hoh),
@@ -114,16 +127,13 @@ contains
       if (.not. associated(this%control) .or. .not. associated(this%lattice)) return
       ! where: impurity or surface cluster
       if (trim(this%control%calctype) /= 'I' .and. trim(this%control%calctype) /= 'S') return
-      ! what: fixed Liechtenstein U/J on the d shell, local radial moments
+      ! what: fixed Liechtenstein U/J with local radial moments, first-order Hamiltonian
       if (.not. (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check)) return
-      if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') return
+      if (.not. this%fixed_u_local_scope()) return
       if (trim(this%hubbard_radial_moments) /= 'local') return
-      if (this%control%lmax /= 2) return
       ! spin: collinear scalar-relativistic
-      if (this%control%nsp /= 1 .or. this%control%has_soc() .or. this%control%is_noncollinear()) return
-      ! Hamiltonian: first order, no constraints, no SC-U / V, no test operator or hoh bypass
-      if (this%hoh .or. this%control%constraints_enable) return
-      if (this%hubbard_u_sc_check .or. this%hubbard_v_check) return
+      if (this%control%nsp /= 1 .or. this%control%has_soc()) return
+      ! no test operator or hoh bypass
       if (this%hubbard_test_operator_check .or. this%fixed_u_test_allow_hoh_w1_u0) return
       eligible = .true.
    end function rd1_local_impurity_eligible

@@ -209,6 +209,7 @@ module hamiltonian_mod
       procedure :: get_hubbard_test_operator
       procedure :: evaluate_hubbard_energy
       procedure :: calculate_hubbard_v_potential
+      procedure :: fixed_u_local_scope
       procedure :: rd1_local_impurity_eligible
       procedure :: begin_rd1_vin_capture
       procedure :: get_rd1_recursion_site_type
@@ -395,6 +396,11 @@ module hamiltonian_mod
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
    end subroutine build_locham
+
+   module function fixed_u_local_scope(this) result(in_scope)
+      class(hamiltonian), intent(in) :: this
+      logical :: in_scope
+   end function fixed_u_local_scope
 
    module function rd1_local_impurity_eligible(this) result(eligible)
       class(hamiltonian), intent(in) :: this
