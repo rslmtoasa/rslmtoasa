@@ -1,5 +1,8 @@
 # Fixed-U energy accounting evidence
 
+> **Note (2026-11-07).** `hubbard_radial_moments='auto'` now always resolves to `spectral`. Statements below that `auto`
+> selects or resolves to `local` describe the earlier rule; set `hubbard_radial_moments = 'local'` to get that behaviour.
+
 ## Current A4.4 status (KS scalar-collinear scope)
 
 The KS M2.2/M2.3 numerical comparison passes at the explicitly limited level

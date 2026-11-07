@@ -1,5 +1,8 @@
 # Spinor d-shell occupation storage and extraction (S2 inventory)
 
+> **Note (2026-11-07).** `hubbard_radial_moments='auto'` now always resolves to `spectral`. Statements below that `auto`
+> selects or resolves to `local` describe the earlier rule; set `hubbard_radial_moments = 'local'` to get that behaviour.
+
 Index map as in `SPINOR_FUNCTIONAL_CONTRACT.md`: compact spinor index `i=(sigma-1)*5+(m+3)`, which is
 Hamiltonian row `(sigma-1)*spin_off + l*l + (m+l+1)`; for `l=2`, rows 5..9 (up) and `5+spin_off`..`9+spin_off`
 (down). `P(a,b)=sum_n f_n psi_n(a) conj(psi_n(b))`.

@@ -110,6 +110,16 @@ Implementation status
 C5 impurity radial-moment mode
 -----------------------------
 
+.. note::
+
+   ``hubbard_radial_moments='auto'`` now always resolves to ``spectral``, the standard LDA+U construction
+   (moments of the Green function of the full H = H_LDA + V_U), which also works with ``hoh``, ``ccor_2c``,
+   impurities and surfaces. ``local`` (moments of the LDA part only, V_U's own contribution removed; not the
+   standard construction) is an explicit opt-in: set ``hubbard_radial_moments = 'local'`` in ``&hamiltonian``.
+   It is the only route with the routed total energy, in the clean-bulk scalar-collinear scope without ``hoh``.
+   The sections below that say ``auto`` selects ``local`` describe the rule before 2026-11-07; the same
+   scope and host-provenance conditions apply when ``local`` is requested explicitly.
+
 For fixed Liechtenstein U/J in the supported scalar-collinear d-shell scope,
 ``hubbard_radial_moments='auto'`` selects ``local`` for an RS impurity only
 when every U-carrying frozen host potential records ``local`` mode. This
