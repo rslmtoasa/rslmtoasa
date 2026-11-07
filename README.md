@@ -6,7 +6,7 @@
 [![Example tests](https://github.com/rslmtoasa/rslmtoasa/actions/workflows/tests.yml/badge.svg)](https://github.com/rslmtoasa/rslmtoasa/actions/workflows/tests.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/codespaces-main-rc)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows)
 
 For a browser-based tutorial environment based on `main_rc`, see the
 [Codespaces quick start](.devcontainer/README.md).

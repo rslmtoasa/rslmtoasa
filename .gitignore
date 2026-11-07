@@ -45,6 +45,8 @@ __pycache__/
 .env
 .venv
 venv/
+/.venv-rsutils/
+/work/
 pip-wheel-metadata/
 *.egg-info
 .python-version
