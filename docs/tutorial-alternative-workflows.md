@@ -42,12 +42,11 @@ production-converged calculations for all five tasks.
 - Stage matched Si and MnTe reference states and fallback results, with code
   revision, full inputs, SCF residuals, energy meshes, and output provenance.
   Converged SCF and converged numerical settings are separate requirements.
-- For MnTe, choose the phase and magnetic reference explicitly. Suggested:
-  hexagonal NiAs-type alpha-MnTe with two opposite Mn sublattices, retaining
-  Te and any justified ASA empty spheres. Supply a checked lattice and Mn/Te
-  atom inputs, suitable sphere radii, and a converged reference. The checked
-  RS-LMTO checkout contains no MnTe example or Te potential: this draft does
-  not invent one or relabel another element's potential.
+- Use the instructor-supplied MnTe lattice and four checkpoints in
+  `tutorials/mnte/`. It retains both Mn and both Te sites, with opposite Mn
+  starting directions along x and `nsp = 4` (SOC). The local full-size replay met the SCF criterion on the pinned code.
+  The reduced-size replay did not; prepare a converged reduced-size state
+  before class if the exercise requires self-consistent smaller-cell J values.
 - Install the instructor-provided RS-utils package before class, rather than
   building it on every student's first launch. The uploaded source identifies
   itself as `rsutil 0.11.0rc1`. Its source repository is private; it is not copied
@@ -270,44 +269,75 @@ complete exchange model. `1 mRy = 13.605693 meV`.
 
 ## 4. MnTe: electronic sites versus magnetic sites (80–100 min)
 
-### Reference and preparation contract
+### Supplied reference and electronic/magnetic site mapping
 
-Use the instructor's alpha-MnTe calculation with a declared AFM state and
-validated atom inputs. A minimal NiAs crystallographic sketch has Mn at
-fractional `(0,0,0)` and `(0,0,1/2)`, and Te at `(1/3,2/3,1/4)` and
-`(2/3,1/3,3/4)`. This is a structural sketch, **not a complete runnable ASA
-deck**: lattice constants, radial potentials, sphere packing/empty spheres,
-XC/+U choice, magnetic direction, and convergence still need to be supplied.
-Do not convert fractional positions into `crd` without the lattice-vector
-transformation; RS uses Cartesian coordinates scaled by `alat` there.
+The instructor's working deck is included in `tutorials/mnte/`, retaining
+its original crystallographic attribution and checkpoint parameters.
 
-Use separate Mn labels for opposite magnetic sublattices and preserve their
-mapping to the primitive sites. A noncollinear/no-SOC reference (`nsp = 3`)
-can encode opposite in-plane moments; retain the instructor's actual reference
-settings rather than changing the spin treatment in the exchange step.
+| Electronic type / central cluster site | Label | Atomic number | Starting direction |
+| --- | --- | --- | --- |
+| 1 | Mn1 | 25 | +x |
+| 2 | Mn2 | 25 | -x |
+| 3 | Te1 | 52 | +z orientation marker |
+| 4 | Te2 | 52 | +z orientation marker |
 
-**Keep all Mn, Te, and required empty-sphere sites in SCF and the Hamiltonian.**
-Te contributes to bonding and Mn–Mn exchange even if it is not represented as
-a spin in the later model. An explicit `force_nonmagnetic` constraint changes
-the electronic calculation; it is not an exchange-pair filter. Do not impose
-that constraint merely to remove Te from a spin model.
+Here `izp = 1,2,3,4`, and the four primitive sites are the first four entries
+of the generated cluster. **The `mom` checkpoint vector is a direction, not
+its moment magnitude.** In particular, a unit-length Te direction does not
+mean Te carries a 1 mu_B moment. Inspect actual magnitudes in `report.out`.
+
+Retain the supplied `alat = 4.1501998901` Angstrom, `wav`, sphere radii,
+lattice, energy interval/sampling, Chebyshev `lld = 200`, and `hoh = .false.`. The teaching copy uses
+**`11x11x7` PBC (3,388 sites)** instead of the supplied `15x15x15`
+(13,500 sites), reducing the site count by about 75%. Its c vector is
+longer than its basal vectors, so the reduced physical box lengths are
+roughly balanced. This changes finite-size sampling; it is a classroom
+profile, not an established numerical-convergence setting.
+The MnTe setting is **`nsp = 4`, with SOC**, rather than
+the no-SOC example sketched in the earlier draft. Do not change that spin
+treatment between the reference replay and exchange.
+
+**Keep all four sites and all four checkpoints in the electronic Hamiltonian.**
+Te contributes to bonding and Mn–Mn exchange even when it is omitted from
+the later spin model. `force_nonmagnetic` changes the electronic calculation;
+it is not an exchange-pair filter and is not added by this lesson.
+
+### Bounded checkpoint replay
+
+Copy the tracked starting files to a working directory. The original input
+allows 100 SCF steps and contains `njij = 162` without an explicit pair list.
+For this SCF check, use one step and no exchange pairs; do not inherit that
+unused count into an exchange calculation.
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+cp -r tutorials/mnte runs/alternative-mnte-scf
+cd runs/alternative-mnte-scf
+python3 - <<'PYTHON'
+from pathlib import Path
+import f90nml
+p = Path('input.nml')
+f90nml.patch(p, {'self': {'nstep': 1},
+                'lattice': {'njij': 0, 'morton_sfc': False,
+                            'n1': 11, 'n2': 11, 'n3': 7}}, 'input.lesson.nml')
+Path('input.lesson.nml').replace(p)
+Path('input.initial.nml').write_text(p.read_text())
+PYTHON
+timeout 180 rslmto.x input.nml > run.log 2>&1
+```
+
+The replay creates `clust` and, if completed, a new report and SCF states.
+Inspect the residual, opposite Mn moments, and Te magnitudes. Do not call a
+one-step replay converged unless the log says it met the threshold. Use the
+instructor's checked reference or prepared output when the wall-time cap is
+reached. This does not require students to converge MnTe from atomic guesses.
 
 ### Select only Mn endpoints
 
-Copy the prepared full calculation to `runs/alternative-mnte-scf`, retaining
-`lattice.nml`, `input.nml`, atom files, final checkpoints, report, and generated
-`clust`. Inspect its residuals and Mn/Te moments. Verify the mapping between
-input labels, `izp`, symbolic types, and generated cluster sites.
-
-For a small demonstration, the tutorial helper selects nearby **Mn-only**
-endpoints from that generated Bravais cluster. It does not truncate the
-Hamiltonian. It assumes `morton_sfc = .false.` and the same geometry, replication,
-and ordering in the SCF and subsequent exchange setup. Rebuild and inspect
-indices if any of those change. Do not use the printed `clust` order with
-Morton reordering enabled.
-
-The following invocation is valid **only after verifying** the assumed mapping
-`Mn types = 1,2`, `central Mn cluster sites = 1,2` in the supplied data:
+In the reduced teaching geometry, `clust` contains 3,388 sites. The first two central
+sites are Mn; types 3 and 4 are Te. Keep `morton_sfc = .false.`: the helper
+uses the printed Bravais cluster order, which precedes optional Morton
+reordering. Retain this same geometry, replication, and ordering in exchange.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -317,29 +347,71 @@ python3 tools/tutorial/select_mn_pairs.py \
     --output runs/alternative-mnte-scf/mn-pairs.nml.inc
 ```
 
-It prints endpoint types and distances and writes a snippet containing
-`njij` and `ijpair`. Merge that snippet into the **existing** `&lattice` in a
-separate exchange job; retain all electronic atom types and checkpoints.
-Remove any old `njij`/`ijpair` entries first. The example selects two neighbours
-per Mn centre, not a complete shell list; degeneracies and directed-pair
-coverage must be considered for a quantitative model.
+For the reduced teaching copy of this deck the four selected directed pairs are:
 
-Set `pre_processing = 'none'`, `post_processing = 'exchange'`, and retain
-compatible reference potentials, Fermi energy, geometry, nsp, and Hamiltonian
-settings. Run one small job with the same three-minute cap. Inspect every
-`jij.out` row: **both type indices must map to Mn**. Check that each Mn
-sublattice appears as a centre. Never decide an element's identity merely
-from the numerical size of its moment.
+| Centre | Neighbour | Endpoint types | Distance/a |
+| --- | --- | --- | --- |
+| 1 | 2 | Mn1–Mn2 | 0.80951520 |
+| 1 | 1273 | Mn1–Mn2 | 0.80951520 |
+| 2 | 1 | Mn2–Mn1 | 0.80951520 |
+| 2 | 428 | Mn2–Mn1 | 0.80951521 |
 
-**Discussion:** Why can Te-mediated exchange survive after Te spins are
-omitted? How does an AFM magnetic reference affect symmetry reduction? Why
-must one avoid applying ferromagnetic or purely chemical symmetry reduction
-without checking the magnetic state?
+Indices are valid only for this generated cluster and settings. The last
+printed distance differs by rounding of stored coordinates. This selects
+two nearest neighbours per centre; it is not a complete shell list, and
+includes directed counterparts. Never count them as independent undirected
+bonds without checking the spin-model convention.
 
-If a checked MnTe reference is not ready, use this slot as a worked input and
-pair-selection demonstration with prepared results. An existing Mn3Sn example
-is a possible later substitute, but its noncollinear magnetism adds theory;
-it is not a drop-in MnTe replacement.
+### Stage the exchange job without dropping Te
+
+The next commands copy the reduced working state and its matching input into
+an exchange directory. Only use it as a converged smaller-cell result after
+checking its SCF criterion. A one-step nonconverged replay can support an
+explicitly labelled **frozen-state demonstration**, not a converged exchange
+reference. Instructor preparation should provide a smaller-cell checkpoint
+if that distinction would otherwise consume the lesson.
+
+The pair snippet replaces the unused `njij = 162` with four explicit Mn-only
+pairs. The staged job keeps all four electronic types and matching energy
+settings; it does not drop Te or revert to the original 15x15x15 geometry.
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+cp -r runs/alternative-mnte-scf runs/alternative-mnte-jij
+cd runs/alternative-mnte-jij
+python3 - <<'PYTHON'
+from pathlib import Path
+import f90nml
+snippet = Path('../alternative-mnte-scf/mn-pairs.nml.inc').read_text()
+pairs = f90nml.reads('&lattice\n' + snippet + '\n/\n')['lattice']
+p = Path('input.nml')
+f90nml.patch(p, {
+    'calculation': {'pre_processing': 'none', 'post_processing': 'exchange'},
+    'lattice': {**pairs, 'morton_sfc': False},
+    'self': {'nstep': 1},
+}, 'input.lesson.nml')
+Path('input.lesson.nml').replace(p)
+Path('input.used.nml').write_text(p.read_text())
+PYTHON
+timeout 180 rslmto.x input.nml > run.log 2>&1
+```
+
+This is a frozen-reference exchange exercise. Record whether its smaller-cell
+reference met the selected SCF threshold. To use a newly converged MnTe state,
+transfer **all four** final checkpoints and the same run's final energy/Fermi
+settings, retaining their labels and geometry.
+
+Check the exchange log's pair indices/displacements. Every `jij.out` row
+must have types `(1,2)` or `(2,1)`, and both Mn centres must be represented.
+The electronic input still contains types 1–4 and loads both Te checkpoints.
+There should be no Te exchange endpoints. Do not decide element identity
+from the magnitude of its moment.
+
+**Discussion:** Why does Te-mediated exchange remain after Te spins are
+omitted? Why does AFM/SOC symmetry require more care than chemical symmetry?
+How would you extend the pair list to in-plane Mn–Mn shells without changing
+the electronic reference? The next shells require new pair selection and a
+convergence study, not changing Te into a magnetic atom.
 
 ## 5. Export to UppASD using RS-utils (100–115 min)
 
@@ -460,9 +532,21 @@ Codespaces timings or production-accuracy claims.
   source on `PYTHONPATH` and its Python runtime dependencies installed; it
   did not use the native setup library. A normal Codespace wheel/source
   installation still needs the instructor's rehearsal.
-- A checked MnTe input/ASA reference, numerical Si convergence curves, full
-  exchange-shell coverage, and an actual UppASD run remain preparation or
-  follow-up work. No MnTe production result is claimed here.
+- The uploaded full-size MnTe state (`15x15x15`, 13,500 sites) met the SCF
+  criterion in one replayed step, residual `1.7e-9`, taking about 170 s locally.
+  Printed Mn spin magnitudes were `4.126320 mu_B`; Te magnitudes printed as
+  `0.000000 mu_B`. The checkpoint direction vectors are not those magnitudes.
+- Reducing PBC to `11x11x7` (3,388 sites) lowered the one-step replay time to
+  about 51 s. Its residual was `1.34003e-5`, so the smaller state was **not**
+  SCF converged. Its printed Mn magnitudes were `4.126274 mu_B` and its
+  Fermi energy was `-0.224518 Ry`.
+- The four-pair reduced-size exchange run completed in about 147 s, using
+  the updated one-step state and its matched Fermi energy. All rows were
+  Mn1–Mn2 or Mn2–Mn1, with J about `-2.157862 mRy`. This is a workflow and
+  frozen-state teaching observation, not a converged-material reference.
+- Numerical Si convergence curves, a converged **reduced-size** MnTe reference,
+  full exchange-shell coverage, and an actual UppASD run remain preparation
+  or follow-up work. No MnTe production result is claimed here.
 
 ## Wrap-up
 
