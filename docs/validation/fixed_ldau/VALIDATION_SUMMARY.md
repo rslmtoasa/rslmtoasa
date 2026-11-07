@@ -147,4 +147,6 @@ Raw evidence is at git tag `archive/fable_v4b_u-2026-11-05` under docs/validatio
   `spectral` candidate a (F - Tr(V_in P_OUT) + E_Hub): D = +0.064771, target +0.057828, miss +6.9e-3 (step 0.2 eV); +6.6e-3 (step 0.4 eV); at 16^3 k: +6.0e-3, with `local` b -1.8e-4. `spectral` candidate c (without the trace term): miss -0.141.
   The documented allowance at U=2, J=0 is [1.0e-3, 1.6e-3]. At U=2 eV the spectral free energy F_a lies 8.7 mRy above the local F_b (7.7 mRy at 1.9 eV, 9.7 mRy at 2.1 eV). Spin moments: spectral 2.356302 muB (matches the earlier record), local 2.510777 muB.
   The spectral state is therefore not a stationary point of the functional that the local state satisfies to 1.4e-4 Ry/eV; spectral energy routing is not adopted. Not tested: RS, J != 0, `hoh`, other materials.
+- `hoh` with `nsp=2` and SOC (spinor U, `tests/scf/cases/bulk/bccFe_hubbard`, Chebyshev, one step, U=2 J=0): E_F(U=2) - E_F(U=0) +0.0680 Ry with `hoh`, +0.0668 Ry without; orbital moment 0.0425 muB, max |P_up,dn| 1.3e-2.
+  Only the spin-diagonal placement of V_U is tested; an earlier guard (`hoh` requires `nsp=1`) was removed. Not tested: the spin-off-diagonal part of V_U with `hoh`, `ccor_2c` at `nsp=2`, tilted axes.
 

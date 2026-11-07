@@ -16,8 +16,8 @@ The supported fixed-U/J input scope remains deliberately narrow: collinear
 scalar-relativistic `nsp=1`, an onsite d channel, exact `control%lmax=2`
 (`spd` basis), and the validated orthogonal Hamiltonian path. Fixed-U/J with
 `nsp=3/4` noncollinear modes or `lmax=3` (`spdf`) is rejected by the input guard.
-With `hoh=.true.` fixed U/J is accepted for `nsp=1` (V_U is added to `enim`, outside the
-`h - h o h` product, like E_nu and L.S); `hoh` with `nsp=2`, `gbt_single_q`, k-space
+With `hoh=.true.` fixed U/J is accepted for `nsp=1` and for `nsp=2` with SOC (V_U is added to `enim`,
+outside the `h - h o h` product, like E_nu and L.S); `hoh` with `gbt_single_q`, k-space
 `kspace_ham_order='first'`, or `hubbard_radial_moments='local'` is rejected. The `hoh`
 route uses `spectral` radial moments and is not energy-routed. `spdf` is excluded because its 16-orbital
 `hcpx` path currently uses the identity rather than a cubic-to-spherical
