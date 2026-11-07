@@ -11,8 +11,8 @@ contains
 
    !> @brief Stop on fixed-U/J input outside the supported scope.
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2, collinear scalar-spin (nsp=1) or
-   !>          bulk SOC+U (nsp=2). With hoh only nsp=1 and not gbt_single_q: V_U is then added to enim
-   !>          (build_bulkham, build_locham). hubbard_radial_moments='local' also needs a first-order
+   !>          bulk SOC+U (nsp=2). With hoh (not gbt_single_q) V_U is added to enim (build_bulkham,
+   !>          build_locham), for both. hubbard_radial_moments='local' also needs a first-order
    !>          Hamiltonian (no hoh). One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
@@ -93,9 +93,6 @@ contains
       if (.not. spinor_bulk .and. (this%control%has_soc() .or. this%control%is_noncollinear())) then
          call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                              __FILE__, __LINE__)
-      end if
-      if (this%hoh .and. this%control%nsp /= 1) then
-         call g_logger%fatal('Fixed-U LDA+U with hoh=.true. requires nsp=1.', __FILE__, __LINE__)
       end if
       if (this%hoh .and. trim(this%magnetic_representation) == gbt_single_q) then
          call g_logger%fatal('Fixed-U LDA+U with hoh=.true. is unsupported for gbt_single_q.', __FILE__, __LINE__)

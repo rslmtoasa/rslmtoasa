@@ -8,12 +8,13 @@ Checks (each prints PASS/FAIL by name; the test fails if any fails):
   fermi_shift_ccor  the same with ccor_2c on (deck with vrmax, which the correction needs), both shifts above 0.05 Ry and
                     within 0.01 Ry of each other. This is the only check of ccor_2c with U without hoh (V_U in the folded
                     ee + eecc blocks). Measured: +0.0688 (hoh) and +0.0709 (no hoh).
-  guard_nsp2        hoh with U at nsp = 2 stops with "requires nsp=1"
+  fermi_shift_soc   the same at nsp = 2 with spin-orbit coupling (spinor U): both shifts above 0.05 Ry and within 0.01 Ry of each
+                    other. Only the spin-diagonal placement of V_U is tested: |P_up,dn| is 1.3e-2 on this deck. Measured: +0.0680 (hoh), +0.0668 (no hoh).
   guard_kfirst      hoh with U in k-space with kspace_ham_order = 'first' stops with "kspace_ham_order='second'"
 
 Bugs caught: V_U not reaching the hoh Hamiltonian (the hoh shift is then 0, first check fails); V_U added inside h
 (the hoh shift moves away from the no-hoh one); V_U lost in the ccor_2c operator blocks (the shift is 0 or differs
-between hoh and no hoh); a guard that stops firing (hoh with U would run on an Hamiltonian without V_U).
+between hoh and no hoh); V_U dropped at nsp = 2 with hoh; a guard that stops firing (hoh with U would run on an Hamiltonian without V_U).
 
 The code rewrites fermi in input.nml after a run, so every deck is built fresh from the committed fixture.
 
@@ -33,6 +34,7 @@ import guard_helpers as gh  # noqa: E402
 
 BULK_FIXTURE = gh.ROOT / "tests/scf/cases/bulk/bccFe_hubbard_nsp1"
 CCOR_FIXTURE = gh.ROOT / "tests/scf/cases/bulk/bccFe_hubbard_ccor"
+SOC_FIXTURE = gh.ROOT / "tests/scf/cases/bulk/bccFe_hubbard"  # nsp = 2 with SOC
 SHIFT_MIN = 0.05  # Ry
 SHIFT_TOL = 0.01  # Ry
 
@@ -97,9 +99,8 @@ def expect_fatal(status: int, log: str, message: str) -> tuple[bool, str]:
     return ok, "" if ok else f"status={status}, message {message!r} not found\n{log[-1500:]}"
 
 
-def guard_nsp2(binary: Path, scratch: Path) -> tuple[bool, str]:
-    work = bulk_deck(scratch, "guard_nsp2", hoh=True, u_ev=2.0, nsp=2)
-    return expect_fatal(*gh.run_binary(binary, work), "requires nsp=1")
+def fermi_shift_soc(binary: Path, scratch: Path) -> tuple[bool, str]:
+    return check_shifts(shifts(binary, scratch, "shift_soc", fixture=SOC_FIXTURE, nsp=2))
 
 
 def guard_kfirst(binary: Path, scratch: Path) -> tuple[bool, str]:
@@ -121,7 +122,7 @@ def main() -> int:
     args.scratch_root.mkdir(parents=True)
     failed = False
     for name, check in (("fermi_shift", fermi_shift), ("fermi_shift_ccor", fermi_shift_ccor),
-                        ("guard_nsp2", guard_nsp2), ("guard_kfirst", guard_kfirst)):
+                        ("fermi_shift_soc", fermi_shift_soc), ("guard_kfirst", guard_kfirst)):
         ok, info = check(args.binary.resolve(), args.scratch_root.resolve())
         print(f"{'PASS' if ok else 'FAIL'} {name} {info}")
         failed |= not ok
