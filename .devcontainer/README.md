@@ -1,5 +1,7 @@
 # Run RS-LMTO-ASA in Codespaces
 
+For the guided session, see the [two-hour bcc Fe SCF and exchange tutorial](../docs/tutorial-bcc-fe-2h.md).
+
 [Open the tutorial in Codespaces](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/codespaces)
 
 Sign in with your own GitHub account. Check that the branch is
