@@ -196,6 +196,20 @@ are not tracked here; see `docs/DECISIONS.md`.
   `build_gpu` binary. Not diagnosed; suspects: MKL threading of the CUDA build, and a library mismatch in that setup (binary linked to MKL 2026.2,
   `LD_LIBRARY_PATH` at 2026.1).
 
+### GPU state on `main_rc` (CUDA 13.3, 2x RTX A4000, Release, `-march=native`) — 2026-11-07
+- **Verified: GPU transport is fatal.** `gpu_plugin = .true.` with a conductivity run stops in `compute_moments_stochastic` (`recursion_transport.f90:853`,
+  "GPU transport moments are not available with the Kubo operators yet"). Deliberate since merge `7e0a9732` (matrix-free Kubo operators); the CUDA KPM
+  transport kernels were not ported. `tests/validation/val09_kubo_bastin_transport.py --gpu-plugin` therefore fails at its first case. CPU transport is unaffected.
+  Proposal, not started: port the GPU kernels to the Kubo operators (large; needs a plan).
+- **Verified: `gpu_backend` selects nothing beyond `csr`.** The Fortran side is wired (`gpu_plugin_upload_hamiltonian` -> `set_backend`), but `rsrec_cuda.cpp` only stores and
+  validates the value; it never calls `rsrec_set_grid` (the structured cuFFT kernel declared in `rsrec.h`) and nothing consumes the host BSR export. `csr`, `bsr`, `fft` and `conv`
+  give bitwise identical etot (diamond Si, fast and legacy, fp32 and fp64: difference 0.0; |detot| vs CPU 2.2e-8 fp32, 2.8e-8 fp64 for fast), no fallback warnings, so only one
+  kernel ever ran. Unchanged since the first commit of the dispatcher (`7340b6ee`). Wiring `fft`/`conv` would need an integer-lattice-coordinate mapping (one atom per cell, `nmax < kk`).
+- **Verified: no test covers the CUDA reciprocal eigensolver/Lehmann kernels directly** (three tests removed in `06106fc3`); only `ReciprocalCudaArbitraryK` and the
+  Triad rows with `--reciprocal-backend cuda` (not registered with ctest) reach them. Triad J_ij, cuda against lapack: 1.8e-15 (1_335), 4.7e-16 (1_336).
+- **Verified: six tests fail identically with and without CUDA** in this Release/`-march=native` configuration (`Nonmagnetic_SCF_nsp1/nsp4`, `UnitLdaULocalMoments`,
+  `LdaURefRsBulkNsp1U`, `LdaURefKsBulkNsp2SocUTilted`, `LdaURefNoUKeyOutputs`). Not GPU related; not diagnosed (see the `-march=native` entries above).
+
 ## Layered (`calctype = 'L'`) and surface findings
 
 ### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap
