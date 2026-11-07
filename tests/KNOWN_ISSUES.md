@@ -281,6 +281,13 @@ are not tracked here; see `docs/DECISIONS.md`.
 Evidence and run history: `docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`; older records in
 the archive tags.
 
+### k-space `second` SCF of AFM NiO with `hoh` and `ccor_2c` breaks the Ni1/Ni2 symmetry at U=0 — 2026-11-07
+- **Verified (user-supplied deck `NiO_AF_v2`: 4-atom AFM-II cell, `nsp=1`, `hoh=.true.`, `ccor_2c=.true.`, `use_kspace=.true.`, `kspace_ham_order='second'`, nk=8, beta 0.1, 20 steps, pristine potentials, no U):**
+  Ni1/Ni2 spin moments (muB) 0.774/0.774 (step 1), 0.753/0.713, 0.593/0.001 (step 3), 0.568/0.034 (step 10), 0.509/0.021 (step 20); Diff 3.0e-2 -> 4.9e-4 (looks like convergence). beta 0.05: 0.508/0.019 at step 20. beta 0.2: erratic, E_F between -0.158 and -0.010 Ry.
+  The same deck in real space (Chebyshev, lld 200) keeps Ni1/Ni2 = 0.7117/0.7109 -> 0.7142/0.7143 over 4 steps (0.74 by step 9).
+- **Not verified:** the cause (candidates not tested: k-mesh and symmetry handling for the spin-polarised cell, E_F in the gap at 300 K). The deck is hand-built and not reproduced with a second NiO deck.
+- **Related:** real-space +U on the same deck: Ni moment falls with the SCF steps at U=6 and 8 (0.39 to 0.52 and 0.14 to 0.19 muB after 6 to 8 steps) while E_F drifts to -0.4 Ry; not diagnosed. k-space with U not run.
+
 ### `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
 - **Verified:** the run stops with "Fixed-U LDA+U currently requires collinear scalar-spin input" (`source/hamiltonian_build.f90:768`);
   `Val04LdaUPhysics` stops at the same guard (its script rewrites `nsp = 1` to `nsp = 2`). In a scratch copy with `nsp = 1` the guard passes and the
