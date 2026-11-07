@@ -69,6 +69,9 @@ extern "C" const char *rsrec_last_error(void) { return g_err.c_str(); }
 #define RSREC_KUBO_CHARGE 0
 #define RSREC_KUBO_CURRENT 1
 #define RSREC_KUBO_LOCAL 2
+#define RSREC_KUBO_SPIN_TORQUE 3
+#define RSREC_KUBO_ORBITAL_TORQUE 4
+#define RSREC_KUBO_SOC_TORQUE 5
 
 #define CUCHK(x) do { cudaError_t e = (x); if (e != cudaSuccess) { \
     g_err = std::string("CUDA: ") + cudaGetErrorString(e); return 1; } } while (0)
@@ -126,6 +129,9 @@ struct rsrec_ctx {
      * slot b = linear_in. fp32 mirrors for the default fp32 path.           */
     zc *d_fac_a = nullptr, *d_fac_b = nullptr;
     fc *f_fac_a = nullptr, *f_fac_b = nullptr;
+    zc *d_ls = nullptr;                        /* lsham per type, (bb, ntype) */
+    fc *f_ls = nullptr;
+    int f_ls_ver = -1;
     zc *d_q_a = nullptr, *d_q_b = nullptr;     /* local operator q, (nb,nb)  */
     fc *f_q_a = nullptr, *f_q_b = nullptr;
     int kubo_kind_a = 0, kubo_kind_b = 0;      /* RSREC_KUBO_* of each slot  */
@@ -380,7 +386,7 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_cc_ee, (void *)c->d_cc_hall,
                     (void *)c->f_cc_ee, (void *)c->f_cc_hall,
                     (void *)c->d_voa, (void *)c->d_vob,
-                    (void *)c->d_q_a, (void *)c->d_q_b, (void *)c->f_q_a, (void *)c->f_q_b,
+                    (void *)c->d_ls, (void *)c->f_ls, (void *)c->d_q_a, (void *)c->d_q_b, (void *)c->f_q_a, (void *)c->f_q_b,
                     (void *)c->d_fac_a, (void *)c->d_fac_b, (void *)c->f_fac_a, (void *)c->f_fac_b,
                     (void *)c->f_va, (void *)c->f_vb,
                     (void *)c->f_voa, (void *)c->f_vob})
@@ -484,6 +490,13 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
     if (c->nmax > 0) {
         if (!c->d_hall) CUCHK(cudaMalloc(&c->d_hall, hha.size() * sizeof(zc)));
         CUCHK(cudaMemcpy(c->d_hall, hha.data(), hha.size() * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+    }
+    {
+        std::vector<cplx> hls(bb * c->ntype, cplx(0.0, 0.0));
+        if (ls) hls.assign(ls, ls + bb * c->ntype);
+        if (!c->d_ls) CUCHK(cudaMalloc(&c->d_ls, hls.size() * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_ls, hls.data(), hls.size() * sizeof(zc),
                          cudaMemcpyHostToDevice));
     }
     if (!c->d_nn)
@@ -1757,8 +1770,8 @@ extern "C" int rsrec_set_kubo_operators(rsrec_ctx *c, const void *fac_a,
                                         int kind_b, const void *q_a,
                                         const void *q_b) {
     if (!fac_a || !fac_b || !q_a || !q_b) FAIL("set_kubo_operators: null input");
-    if (kind_a < 0 || kind_a > RSREC_KUBO_LOCAL || kind_b < 0 ||
-        kind_b > RSREC_KUBO_LOCAL)
+    if (kind_a < 0 || kind_a > RSREC_KUBO_SOC_TORQUE || kind_b < 0 ||
+        kind_b > RSREC_KUBO_SOC_TORQUE)
         FAIL("set_kubo_operators: unsupported operator kind");
     clear_resident_moments(c);
     c->kubo_kind_a = kind_a;
@@ -1810,6 +1823,17 @@ static int ensure_f32_bare(rsrec_ctx *c) {
         CUCHK(cudaGetLastError());
     }
     c->f_hoh_ver = c->ham_ver;
+    return 0;
+}
+
+/* fp32 mirror of the lsham table (the Kubo spin-orbit torque operators). */
+static int ensure_f32_ls(rsrec_ctx *c) {
+    if (c->f_ls && c->f_ls_ver == c->ham_ver) return 0;
+    const size_t n = (size_t)c->nb * c->nb * c->ntype;
+    if (!c->f_ls) CUCHK(cudaMalloc(&c->f_ls, n * sizeof(fc)));
+    k_zc_to_fc<<<(int)((n + 255) / 256), 256>>>(n, c->d_ls, c->f_ls);
+    CUCHK(cudaGetLastError());
+    c->f_ls_ver = c->ham_ver;
     return 0;
 }
 
@@ -2283,7 +2307,7 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
                         RT inva, RT bsc, void *mu_,
                         const CT *Hop, const CT *Himp,
                         const CT *fac_a, const CT *fac_b,
-                        const CT *q_a, const CT *q_b,
+                        const CT *q_a, const CT *q_b, const CT *ls,
                         const CT *h_bare, const CT *h_bare_imp,
                         const CT *h_eeo, const CT *h_eeo_imp, const CT *h_hons,
                         bool retain_device,
@@ -2336,15 +2360,58 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     const CT one = {(RT)1, (RT)0};
     const CT zero = {(RT)0, (RT)0};
     const int tpb = 256;
-    /* Kubo operator of one slot: charge = V, local = q, current = (qV + Vq)/2. */
+    /* Unscaled Hamiltonian, hoh-aware (H of the torque operators). */
+    auto ham_raw = [&](const CT *x1, CT *yv) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo, h_eeo_imp,
+                                          h_hons, ht, he, ho, x1, nullptr, yv,
+                                          nrhs, (RT)1, (RT)0, (RT)1, (RT)0);
+        return step_apply<CT, RT>(c, h_bare, h_bare_imp, c->nmax > 0, x1, nullptr,
+                                  yv, nrhs, (RT)1, (RT)0, (RT)1, (RT)0);
+    };
+    /* On-site lsham product o = lsham[type(k)] * x1. */
+    auto ls_apply = [&](const CT *x1, CT *o) -> int {
+        const int cs = std::max(1, 1024 / nb);
+        for (int c0 = 0; c0 < nrhs; c0 += cs) {
+            const int nc = std::min(cs, nrhs - c0);
+            dim3 t2(nb, nc);
+            k_onsite_blockmul<CT><<<c->kk, t2>>>(c->kk, nb, ld, nc, c->d_iz, ls,
+                                                 x1 + ld * (size_t)c0,
+                                                 o + ld * (size_t)c0);
+            CUCHK(cudaGetLastError());
+        }
+        return 0;
+    };
+    /* Hamiltonian part of the torque of one kind: H (orbital), H without
+     * H_SOC (spin: the full H minus lsham*x, lsham entering on-site only), or
+     * lsham alone (soc). tmp is free scratch.                                 */
+    auto torque_part = [&](int kind, const CT *x1, CT *o, CT *tmp) -> int {
+        if (kind == RSREC_KUBO_SOC_TORQUE) return ls_apply(x1, o);
+        if (ham_raw(x1, o)) return 1;
+        if (kind == RSREC_KUBO_ORBITAL_TORQUE) return 0;
+        if (ls_apply(x1, tmp)) return 1;
+        k_axpby<CT, RT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(nfield, (RT)-1, tmp, (RT)1, o);
+        CUCHK(cudaGetLastError());
+        return 0;
+    };
+    /* Kubo operator of one slot: charge = V, local = q, current = (qV + Vq)/2,
+     * torque = -i (q A - A q) with A the Hamiltonian part of the kind. */
     auto kubo = [&](int kind, const CT *fac, const CT *q, const CT *x1, CT *yv) -> int {
         if (kind == RSREC_KUBO_CHARGE) return velo(fac, x1, yv);
         if (step_qmul<CT>(c, q, x1, kind == RSREC_KUBO_LOCAL ? yv : q4, nrhs)) return 1;
         if (kind == RSREC_KUBO_LOCAL) return 0;
-        if (velo(fac, x1, q5) || velo(fac, q4, q6)) return 1;
+        CT ca, cb;
+        if (kind == RSREC_KUBO_CURRENT) {
+            if (velo(fac, x1, q5) || velo(fac, q4, q6)) return 1;
+            ca = {(RT)0.5, (RT)0};
+            cb = {(RT)0.5, (RT)0};
+        } else {
+            if (torque_part(kind, x1, q5, yv) || torque_part(kind, q4, q6, yv)) return 1;
+            ca = {(RT)0, (RT)-1};
+            cb = {(RT)0, (RT)1};
+        }
         if (step_qmul<CT>(c, q, q5, yv, nrhs)) return 1;
-        const CT half = {(RT)0.5, (RT)0};
-        k_cmb<CT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(nfield, half, yv, half, q6, yv);
+        k_cmb<CT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(nfield, ca, yv, cb, q6, yv);
         CUCHK(cudaGetLastError());
         return 0;
     };
@@ -2569,28 +2636,28 @@ static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
     c->stoch_mu_pack_bytes = 0;
 
     if (c->cheb_prec == 0) {
-        if (ensure_f32_hoh(c) || ensure_f32_bare(c)) return 1;
+        if (ensure_f32_hoh(c) || ensure_f32_bare(c) || ensure_f32_ls(c)) return 1;
         if (c->have_hoh)
             return stoch_engine_batch<fc, float>(
                 c, psiref_, nstates, lld, (float)(1.0 / a), (float)b, mu_,
-                c->f_ee_bare, c->f_hall_bare, c->f_fac_a, c->f_fac_b, c->f_q_a, c->f_q_b,
+                c->f_ee_bare, c->f_hall_bare, c->f_fac_a, c->f_fac_b, c->f_q_a, c->f_q_b, c->f_ls,
                 c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
                 c->f_hons, retain_device, download_host, trace_index);
         if (ensure_f32_ham(c, a, b)) return 1;
         return stoch_engine_batch<fc, float>(
             c, psiref_, nstates, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
-            c->f_fac_a, c->f_fac_b, c->f_q_a, c->f_q_b, c->f_ee_bare, c->f_hall_bare, nullptr,
+            c->f_fac_a, c->f_fac_b, c->f_q_a, c->f_q_b, c->f_ls, c->f_ee_bare, c->f_hall_bare, nullptr,
             nullptr, nullptr, retain_device, download_host, trace_index);
     }
     if (c->have_hoh)
         return stoch_engine_batch<zc, double>(
             c, psiref_, nstates, lld, 1.0 / a, b, mu_,
-            c->d_ee_bare, c->d_hall_bare, c->d_fac_a, c->d_fac_b, c->d_q_a, c->d_q_b,
+            c->d_ee_bare, c->d_hall_bare, c->d_fac_a, c->d_fac_b, c->d_q_a, c->d_q_b, c->d_ls,
             c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
             retain_device, download_host, trace_index);
     return stoch_engine_batch<zc, double>(
         c, psiref_, nstates, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
-        c->d_fac_a, c->d_fac_b, c->d_q_a, c->d_q_b, c->d_ee, c->d_hall, nullptr, nullptr, nullptr,
+        c->d_fac_a, c->d_fac_b, c->d_q_a, c->d_q_b, c->d_ls, c->d_ee, c->d_hall, nullptr, nullptr, nullptr,
         retain_device, download_host, trace_index);
 }
 

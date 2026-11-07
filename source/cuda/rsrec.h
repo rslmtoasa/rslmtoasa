@@ -78,7 +78,8 @@ int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
 /* Kubo transport operators of the output (a) and input (b) slot: (nnmax, kk)
  * complex per-bond factors (V*psi is the bare Hamiltonian apply with each bond
  * block scaled by its factor), the operator kind (0 charge = V, 1 current =
- * (qV + Vq)/2, 2 local = q) and the (nb, nb) local operator q. */
+ * (qV + Vq)/2, 2 local = q, 3 spin, 4 orbital, 5 soc torque = -i (qA - Aq) with
+ * A = H without H_SOC, H, lsham) and the (nb, nb) local operator q. */
 int rsrec_set_kubo_operators(rsrec_ctx *ctx, const void *fac_a, const void *fac_b,
                              int kind_a, int kind_b, const void *q_a, const void *q_b);
 int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b,

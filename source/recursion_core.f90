@@ -250,13 +250,16 @@ contains
          kubo_kind_code(this%transport_kind_b), this%transport_q_a, this%transport_q_b)
    end subroutine gpu_plugin_upload_kubo_operators
 
-   !> Operator kind code of the CUDA backend: 0 charge, 1 current, 2 local.
+   !> Operator kind code of the CUDA backend: 0 charge, 1 current, 2 local, 3 spin, 4 orbital, 5 soc torque.
    integer function kubo_kind_code(kind)
       character(len=*), intent(in) :: kind
       select case (trim(kind))
       case ('charge'); kubo_kind_code = 0
       case ('current'); kubo_kind_code = 1
       case ('local'); kubo_kind_code = 2
+      case ('spin_torque'); kubo_kind_code = 3
+      case ('orbital_torque'); kubo_kind_code = 4
+      case ('soc_torque'); kubo_kind_code = 5
       case default
          call g_logger%fatal('Kubo operator kind '//trim(kind)//' is not available on CUDA', __FILE__, __LINE__)
       end select
