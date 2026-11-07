@@ -1,0 +1,2 @@
+Fe.nml: Fe_out.nml of a one-step run of ../bccFe_hubbard_nsp1 with U=J=0 (hoh=.false., block recursion, lld 21, pristine deck, commit a919ce5); it carries vrmax, which ccor_2c needs.
+input.nml: that deck plus strux_want_sdot, screening='fitted' and ccor_2c = .true.
