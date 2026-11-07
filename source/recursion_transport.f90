@@ -822,14 +822,20 @@ contains
    !>          starting states are either representative atom types or random
    !>          vectors, selected by control%cond_calctype.
    !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
-   !> @note The operators are applied matrix-free (setup_kubo_operators); GPU requests are fatal until the kernels return.
+   !> @note The operators are applied matrix-free (setup_kubo_operators). The CUDA route covers non-hoh charge operators; other requests run on the CPU.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, m, n, hblocksize, nat, loop_over, lmax
       integer :: seed_size, seed_i, seed_status, seed_ios, random_seed_value, seed_length
       integer, allocatable :: seed_values(:)
-      integer(int64) :: matrix_dimension, nnz, host_moment_bytes
+      integer :: batch_width, batch_count, batch_slot
+      integer(int64) :: matrix_dimension, nnz, host_moment_bytes, resident_moment_bytes
+      integer(int64) :: gpu_h2d_bytes, gpu_d2h_bytes, gpu_mu_pack_bytes
+      real(rp) :: gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, gpu_conversion_seconds, gpu_mu_pack_seconds
+      logical :: use_gpu, host_moment_buffer
+      character(len=8) :: precision_label
+      complex(rp), dimension(:, :, :, :), allocatable :: psiref_batch
       complex(rp), dimension(nb, nb) :: dum
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
       complex(rp), dimension(:, :, :, :), allocatable :: left_vec, work
@@ -849,9 +855,14 @@ contains
 
       ! Transport applies the operators matrix-free (setup_kubo_operators), whatever
       ! cheb_backend says. The fast CPU and CUDA kernels return with the backend switch.
-      if (gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)) &
-         call g_logger%fatal('GPU transport moments are not available with the Kubo operators yet', __FILE__, __LINE__)
-      if (trim(this%control%cheb_backend) /= 'legacy') &
+      use_gpu = gpu_plugin_ready(this, 'compute_moments_stochastic()')
+      if (use_gpu .and. (trim(this%control%linear_in) /= 'charge' .or. trim(this%control%linear_out) /= 'charge' &
+                         .or. this%hamiltonian%ccor_2c)) then
+         call g_logger%warning('gpu_plugin transport covers charge operators without ccor_2c. '// &
+            'Falling back to current recursion path.', __FILE__, __LINE__)
+         use_gpu = .false.
+      end if
+      if (.not. use_gpu .and. trim(this%control%cheb_backend) /= 'legacy') &
          call g_logger%info('Transport moments use the matrix-free Kubo operators for every cheb_backend', __FILE__, __LINE__)
 
       select case(this%control%cond_calctype)
@@ -885,6 +896,16 @@ contains
          end if
       end if
 
+      ! Only independent random-vector traces are batched on the GPU; the per_type
+      ! projectors stay scalar.
+      batch_width = 1
+      if (use_gpu .and. trim(this%control%cond_calctype) == 'random_vec') &
+         batch_width = max(1, this%control%gpu_stochastic_block)
+
+      ! The resident CUDA route keeps the moments on the device; the host tensor is
+      ! allocated for the CPU route and for the gpu_moment_download diagnostic.
+      host_moment_buffer = .not. use_gpu .or. this%control%gpu_moment_download
+      if (host_moment_buffer) then
 #ifdef USE_SAFE_ALLOC
       select case(this%control%cond_calctype)
       case('per_type')
@@ -904,11 +925,21 @@ contains
             this%control%cond_ll, this%control%random_vec_num))
       end select
 #endif
-      host_moment_bytes = int(size(this%mu_nm_stochastic), int64)*int(storage_size(this%mu_nm_stochastic)/8, int64)
+      else if (allocated(this%mu_nm_stochastic)) then
+#ifdef USE_SAFE_ALLOC
+         call g_safe_alloc%deallocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic)
+#else
+         deallocate(this%mu_nm_stochastic)
+#endif
+      end if
+      host_moment_bytes = 0_int64
+      if (allocated(this%mu_nm_stochastic)) &
+         host_moment_bytes = int(size(this%mu_nm_stochastic), int64)*int(storage_size(this%mu_nm_stochastic)/8, int64)
       call g_kpm_profile%set_moment_memory(0_int64, host_moment_bytes)
 
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), &
-         left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
+         left_vec(hblocksize, hblocksize, this%lattice%kk, merge(1, this%control%cond_ll, use_gpu)))
+      if (batch_width > 1) allocate(psiref_batch(hblocksize, hblocksize, this%lattice%kk, batch_width))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), &
          w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
       allocate(w2(hblocksize, hblocksize, this%lattice%kk), &
@@ -921,15 +952,57 @@ contains
       else
          nnz = 0_int64
       end if
-      call g_kpm_profile%configure('cpu_legacy', 'fp64', 'cpu_blas', 'fp64', &
-         trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
-         this%control%lld, loop_over)
+      if (use_gpu) then
+         precision_label = merge('fp64', 'fp32', trim(this%control%gpu_precision) == 'fp64')
+         call g_kpm_profile%configure('cuda', precision_label, 'cuda_blas', precision_label, &
+            trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+            this%control%lld, loop_over)
+      else
+         call g_kpm_profile%configure('cpu_legacy', 'fp64', 'cpu_blas', 'fp64', &
+            trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+            this%control%lld, loop_over)
+      end if
 
       call g_kpm_profile%start('P_operator_setup')
       call this%setup_kubo_operators(this%control%linear_out, this%control%linear_in)
+      if (use_gpu) then
+         call gpu_plugin_upload_hamiltonian(this)
+         call gpu_plugin_upload_kubo_operators(this)
+         call this%gpu_backend%clear_resident_moments()
+      end if
       call g_kpm_profile%stop('P_operator_setup')
 
-      do i = 1, loop_over
+      do i = 1, loop_over, batch_width
+         if (batch_width > 1) then
+            batch_count = min(batch_width, loop_over - i + 1)
+            call g_kpm_profile%start('P_trace_setup')
+            if (.not. deterministic_random_seed) call random_seed()
+            psiref_batch(:, :, :, :) = (0.0_rp, 0.0_rp)
+            do batch_slot = 1, batch_count
+               do k = 1, this%lattice%kk
+                  call random_number(rng)
+                  do m = 1, nb
+                     psiref_batch(m, m, k, batch_slot) = exp(2.0_rp*pi*i_unit*rng)/sqrt(real(this%lattice%kk, rp))
+                  end do
+               end do
+            end do
+            call g_kpm_profile%stop('P_trace_setup')
+
+            call g_kpm_profile%start('P_moments_total')
+            if (this%control%gpu_moment_download) then
+               call this%gpu_backend%stochastic_moments_resident_batch(psiref_batch(:, :, :, 1:batch_count), &
+                  batch_count, this%control%cond_ll, a, b, i, .true., &
+                  this%mu_nm_stochastic(:, :, :, :, i:i + batch_count - 1))
+            else
+               call this%gpu_backend%stochastic_moments_resident_batch(psiref_batch(:, :, :, 1:batch_count), &
+                  batch_count, this%control%cond_ll, a, b, i, .false.)
+            end if
+            call gpu_profile_request()
+            call g_kpm_profile%note_trace_batch(batch_count)
+            call g_kpm_profile%stop('P_moments_total')
+            cycle
+         end if
+
          call g_kpm_profile%start('P_trace_setup')
          if (.not. deterministic_random_seed) call random_seed()
 
@@ -972,6 +1045,19 @@ contains
          call g_kpm_profile%stop('P_trace_setup')
 
          call g_kpm_profile%start('P_moments_total')
+
+         if (use_gpu) then
+            if (this%control%gpu_moment_download) then
+               call this%gpu_backend%stochastic_moments_resident(psiref, this%control%cond_ll, a, b, i, &
+                  .true., this%mu_nm_stochastic(:, :, :, :, i))
+            else
+               call this%gpu_backend%stochastic_moments_resident(psiref, this%control%cond_ll, a, b, i, .false.)
+            end if
+            call gpu_profile_request()
+            call g_kpm_profile%note_trace_batch(1)
+            call g_kpm_profile%stop('P_moments_total')
+            cycle
+         end if
 
          ! Computing the left vector <r|Tm(H)
          do m=1, this%control%cond_ll
@@ -1039,6 +1125,24 @@ contains
       end do
 
       deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, work)
+      if (allocated(psiref_batch)) deallocate(psiref_batch)
+
+   contains
+
+      !> Record the timers and memory of the last CUDA request in the KPM profile.
+      subroutine gpu_profile_request()
+         call this%gpu_backend%stochastic_profile(gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, &
+            gpu_conversion_seconds, gpu_mu_pack_seconds, gpu_h2d_bytes, gpu_d2h_bytes, gpu_mu_pack_bytes)
+         call g_kpm_profile%add_seconds('D_moment_H2D', gpu_h2d_seconds)
+         call g_kpm_profile%add_seconds('D_moment_GPU_kernel', gpu_cheb_seconds)
+         call g_kpm_profile%add_seconds('D_moment_D2H', gpu_d2h_seconds)
+         call g_kpm_profile%add_seconds('D_conversion', gpu_conversion_seconds)
+         call g_kpm_profile%add_seconds('D_gpu_mu_pack', gpu_mu_pack_seconds)
+         call g_kpm_profile%add_bytes('H2D', gpu_h2d_bytes)
+         call g_kpm_profile%add_bytes('FULL_MOMENT_D2H', gpu_d2h_bytes)
+         resident_moment_bytes = this%gpu_backend%resident_moment_bytes()
+         call g_kpm_profile%set_moment_memory(resident_moment_bytes, host_moment_bytes)
+      end subroutine gpu_profile_request
 
    end subroutine compute_moments_stochastic
 

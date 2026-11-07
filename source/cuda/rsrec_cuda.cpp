@@ -198,6 +198,21 @@ extern "C" int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
     return validate_backend(ctx);
 }
 
+extern "C" int rsrec_cuda_set_kubo_operators(rsrec_cuda_ctx *ctx, const void *fac_a,
+                                             const void *fac_b) {
+    if (!ctx) {
+        set_error("rsrec_cuda_set_kubo_operators: null ctx");
+        return 1;
+    }
+    const int status = rsrec_set_kubo_operators(ctx->inner, fac_a, fac_b);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_set_kubo_operators: ") + rsrec_last_error());
+        return status;
+    }
+    ctx->have_v = true;
+    return 0;
+}
+
 extern "C" int rsrec_cuda_orbital_moments(rsrec_cuda_ctx *ctx, const void *left,
                                           const void *psiref, int lld, double a,
                                           double b, void *mu) {

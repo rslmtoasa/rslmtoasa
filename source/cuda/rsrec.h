@@ -75,6 +75,10 @@ int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
  * vo_a, vo_b: velocity orthogonalisation operators for the hoh velocity apply
  *   (out = v*psi - vo*(h_bare*psi)); pass NULL to disable. On-site shell-1 of
  *   vo is zeroed on upload to match velo_hoh_vec_matmul. */
+/* Kubo transport operators: (nnmax, kk) complex per-bond factors of the output
+ * (a) and input (b) velocity; V*psi is the bare Hamiltonian apply with each
+ * bond block scaled by its factor. */
+int rsrec_set_kubo_operators(rsrec_ctx *ctx, const void *fac_a, const void *fac_b);
 int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b,
                        const void *vo_a, const void *vo_b);
 

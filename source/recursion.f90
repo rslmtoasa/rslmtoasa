@@ -296,6 +296,14 @@ module recursion_mod
 
    end subroutine gpu_plugin_upload_hamiltonian
 
+   !> @brief Upload the per-bond velocity factors of the Kubo operators to the CUDA backend.
+   !> @details Factor of bond (k, ineigh) of slot a (linear_out, unweighted) and slot b (linear_in, weighted by
+   !>          velocity_scale): -i direction.d_ij, as in velo_vec_matmul. The on-site shell carries zero.
+   !> @param[inout] this Recursion object; needs setup_kubo_operators and gpu_plugin_upload_hamiltonian first.
+   module subroutine gpu_plugin_upload_kubo_operators(this)
+      class(recursion), intent(inout) :: this
+   end subroutine gpu_plugin_upload_kubo_operators
+
    !> @brief Build cached first-order ccor_2c Hamiltonian blocks for fast kernels.
    !> @details Combines the ordinary and ccor_2c real-space operator blocks into
    !>          work arrays used by no-HOH Chebyshev, block-Lanczos, and transport

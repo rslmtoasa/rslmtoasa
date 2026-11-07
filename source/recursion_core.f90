@@ -225,6 +225,30 @@ contains
       end if
    end subroutine gpu_plugin_upload_hamiltonian
 
+   !> @brief Upload the per-bond velocity factors of the Kubo operators to the CUDA backend.
+   !> @details See the interface in recursion.f90.
+   module subroutine gpu_plugin_upload_kubo_operators(this)
+      class(recursion), intent(inout) :: this
+      complex(rp), allocatable :: fac_a(:, :), fac_b(:, :)
+      integer :: k, ineigh, j
+      real(rp) :: weight
+
+      allocate (fac_a(size(this%lattice%nn, 2), this%lattice%kk), fac_b(size(this%lattice%nn, 2), this%lattice%kk))
+      fac_a = (0.0_rp, 0.0_rp)
+      fac_b = (0.0_rp, 0.0_rp)
+      do k = 1, this%lattice%kk
+         do ineigh = 2, this%lattice%nn(k, 1)
+            j = this%lattice%nn(k, ineigh)
+            if (j == 0) cycle
+            weight = max(this%hamiltonian%velocity_scale(this%lattice%iz(k)), &
+                         this%hamiltonian%velocity_scale(this%lattice%iz(j)))
+            fac_a(ineigh, k) = cmplx(0.0_rp, -dot_product(this%transport_dir_a, this%transport_bond(:, ineigh, k)), rp)
+            fac_b(ineigh, k) = cmplx(0.0_rp, -dot_product(this%transport_dir_b, this%transport_bond(:, ineigh, k)), rp)*weight
+         end do
+      end do
+      call this%gpu_backend%set_kubo_operators(fac_a, fac_b)
+   end subroutine gpu_plugin_upload_kubo_operators
+
    !> @brief Build cached first-order ccor_2c Hamiltonian blocks for fast kernels.
    !> @details Combines the ordinary and ccor_2c real-space operator blocks into
    !>          work arrays used by no-HOH Chebyshev, block-Lanczos, and transport

@@ -114,6 +114,15 @@ struct rsrec_ctx {
     int f_vel_ver = -1;
     int vel_ver = 0;
 
+    /* Kubo transport operators: per-bond complex factors fac[s + nnmax*k]
+     * (shell s of site k) that scale the hopping block as it is staged, so
+     * V*psi is the block-ELL apply of the bare Hamiltonian with factors
+     * -i*(d.bond)*weight (zero on the on-site shell). Slot a = linear_out,
+     * slot b = linear_in. fp32 mirrors for the default fp32 path.           */
+    zc *d_fac_a = nullptr, *d_fac_b = nullptr;
+    fc *f_fac_a = nullptr, *f_fac_b = nullptr;
+    bool have_kubo = false;
+
     int cheb_prec = 0;                       /* 0 = fp32 (default), 1 = fp64 */
     fc *f_ee = nullptr, *f_hall = nullptr;   /* (H - b)/a fp32 copies        */
     double f_a = 0.0, f_b = 0.0;
@@ -589,6 +598,12 @@ __device__ __forceinline__ fc cfma(fc a, fc b, fc s) {
     s.y = fmaf(a.x, b.y, fmaf(a.y, b.x, s.y));
     return s;
 }
+__device__ __forceinline__ zc cmul(zc a, zc b) {
+    return make_cuDoubleComplex(fma(a.x, b.x, -a.y * b.y), fma(a.x, b.y, a.y * b.x));
+}
+__device__ __forceinline__ fc cmul(fc a, fc b) {
+    return make_cuFloatComplex(fmaf(a.x, b.x, -a.y * b.y), fmaf(a.x, b.y, a.y * b.x));
+}
 template <class CT> __device__ __forceinline__ CT czero_v();
 template <> __device__ __forceinline__ zc czero_v<zc>() {
     return make_cuDoubleComplex(0.0, 0.0);
@@ -612,6 +627,7 @@ __global__ void k_step_t(int kk, int nnmax, int nmax,
                          const int *__restrict__ iz,
                          const CT *__restrict__ btype,
                          const CT *__restrict__ bimp, int use_imp,
+                         const CT *__restrict__ fac,
                          const CT *__restrict__ x1,
                          const CT *__restrict__ x0, CT *__restrict__ y,
                          RT alpha, RT beta, RT inva, RT bsc,
@@ -636,8 +652,14 @@ __global__ void k_step_t(int kk, int nnmax, int nmax,
     for (int s = 0; s < nr; ++s) {
         const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
         if (nbr < 0) continue;
-        for (int i = tid; i < NB * NB; i += nthr)
-            sH[(i % NB) + LDS * (i / NB)] = base[bb * s + i];
+        if (fac) {
+            const CT f = fac[(size_t)s + (size_t)nnmax * k];
+            for (int i = tid; i < NB * NB; i += nthr)
+                sH[(i % NB) + LDS * (i / NB)] = cmul(f, base[bb * s + i]);
+        } else {
+            for (int i = tid; i < NB * NB; i += nthr)
+                sH[(i % NB) + LDS * (i / NB)] = base[bb * s + i];
+        }
         for (int i = tid; i < NB * ncols; i += nthr) {
             int r = i % NB, cc = i / NB;
             sX[r + LDS * cc] =
@@ -683,6 +705,7 @@ __global__ void k_step_dyn(int kk, int nb, int nnmax, int nmax,
                            const int *__restrict__ iz,
                            const CT *__restrict__ btype,
                            const CT *__restrict__ bimp, int use_imp,
+                           const CT *__restrict__ fac,
                            const CT *__restrict__ x1,
                            const CT *__restrict__ x0, CT *__restrict__ y,
                            RT alpha, RT beta, RT inva, RT bsc,
@@ -704,8 +727,14 @@ __global__ void k_step_dyn(int kk, int nb, int nnmax, int nmax,
     for (int s = 0; s < nr; ++s) {
         const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
         if (nbr < 0) continue;
-        for (int i = tid; i < nb * nb; i += nthr)
-            sH[(i % nb) + LDS * (i / nb)] = base[bb * s + i];
+        if (fac) {
+            const CT f = fac[(size_t)s + (size_t)nnmax * k];
+            for (int i = tid; i < nb * nb; i += nthr)
+                sH[(i % nb) + LDS * (i / nb)] = cmul(f, base[bb * s + i]);
+        } else {
+            for (int i = tid; i < nb * nb; i += nthr)
+                sH[(i % nb) + LDS * (i / nb)] = base[bb * s + i];
+        }
         for (int i = tid; i < nb * ncols; i += nthr) {
             int r = i % nb, cc = i / nb;
             sX[r + LDS * cc] =
@@ -741,7 +770,8 @@ __global__ void k_step_dyn(int kk, int nb, int nnmax, int nmax,
 template <class CT, class RT>
 static int step_apply(rsrec_ctx *c, const CT *btype, const CT *bimp,
                       int use_imp, const CT *x1, const CT *x0, CT *y,
-                      int nrhs, RT alpha, RT beta, RT inva, RT bsc) {
+                      int nrhs, RT alpha, RT beta, RT inva, RT bsc,
+                      const CT *fac = nullptr) {
     const int nb = c->nb;
     const int LDS = (nb % 2 == 0) ? nb + 1 : nb;
     const size_t ld = (size_t)nb * c->kk;
@@ -757,7 +787,7 @@ static int step_apply(rsrec_ctx *c, const CT *btype, const CT *bimp,
             dim3 thr(NBv, nc / TCv);                                         \
             k_step_t<CT, NBv, TCv, RT><<<c->kk, thr, shmem>>>(               \
                 c->kk, c->nnmax, c->nmax, c->d_nn, c->d_iz, btype, bimp,     \
-                use_imp, x1, x0, y, alpha, beta, inva, bsc, ld, c0, nc);     \
+                use_imp, fac, x1, x0, y, alpha, beta, inva, bsc, ld, c0, nc);\
             done = true;                                                     \
         }
         RSREC_LAUNCH(32, 2)
@@ -769,7 +799,7 @@ static int step_apply(rsrec_ctx *c, const CT *btype, const CT *bimp,
             dim3 thr(nb, nc);
             k_step_dyn<CT, RT><<<c->kk, thr, shmem>>>(
                 c->kk, nb, c->nnmax, c->nmax, c->d_nn, c->d_iz, btype, bimp,
-                use_imp, x1, x0, y, alpha, beta, inva, bsc, ld, c0, nc);
+                use_imp, fac, x1, x0, y, alpha, beta, inva, bsc, ld, c0, nc);
         }
         CUCHK(cudaGetLastError());
     }
@@ -1696,6 +1726,51 @@ static int ensure_f32_velocity(rsrec_ctx *c) {
     return 0;
 }
 
+/* Kubo transport operators: fac_a/fac_b are (nnmax, kk) complex per-bond
+ * factors (slot a = linear_out, slot b = linear_in); see rsrec_ctx.         */
+extern "C" int rsrec_set_kubo_operators(rsrec_ctx *c, const void *fac_a,
+                                        const void *fac_b) {
+    if (!fac_a || !fac_b) FAIL("set_kubo_operators: null input");
+    clear_resident_moments(c);
+    const size_t n = (size_t)c->nnmax * c->kk;
+    const int tpb = 256;
+    const void *src[2] = {fac_a, fac_b};
+    zc **dz[2] = {&c->d_fac_a, &c->d_fac_b};
+    fc **df[2] = {&c->f_fac_a, &c->f_fac_b};
+    for (int i = 0; i < 2; ++i) {
+        if (!*dz[i]) CUCHK(cudaMalloc(dz[i], n * sizeof(zc)));
+        if (!*df[i]) CUCHK(cudaMalloc(df[i], n * sizeof(fc)));
+        CUCHK(cudaMemcpy(*dz[i], src[i], n * sizeof(zc), cudaMemcpyHostToDevice));
+        k_zc_to_fc<<<(int)((n + tpb - 1) / tpb), tpb>>>(n, *dz[i], *df[i]);
+        CUCHK(cudaGetLastError());
+    }
+    c->have_kubo = true;
+    return 0;
+}
+
+/* fp32 mirror of the raw (unscaled) bare Hamiltonian for the non-hoh velocity
+ * apply: d_ee/d_hall carry lsham only on the on-site shell, where the
+ * velocity factor is zero. With hoh the bare operands come from
+ * ensure_f32_hoh. Pure down-conversion, gated on ham_ver.                  */
+static int ensure_f32_bare(rsrec_ctx *c) {
+    if (c->have_hoh) return 0;
+    if (c->f_ee_bare && c->f_hoh_ver == c->ham_ver) return 0;
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t nee = bb * c->nnmax * c->ntype;
+    const size_t nha = bb * c->nnmax * (size_t)c->nmax;
+    if (!c->f_ee_bare) CUCHK(cudaMalloc(&c->f_ee_bare, nee * sizeof(fc)));
+    const int tpb = 256;
+    k_zc_to_fc<<<(int)((nee + tpb - 1) / tpb), tpb>>>(nee, c->d_ee, c->f_ee_bare);
+    CUCHK(cudaGetLastError());
+    if (c->nmax > 0) {
+        if (!c->f_hall_bare) CUCHK(cudaMalloc(&c->f_hall_bare, nha * sizeof(fc)));
+        k_zc_to_fc<<<(int)((nha + tpb - 1) / tpb), tpb>>>(nha, c->d_hall, c->f_hall_bare);
+        CUCHK(cudaGetLastError());
+    }
+    c->f_hoh_ver = c->ham_ver;
+    return 0;
+}
+
 /* Templated multi-state engine (block-ELL path only). Moment buffer layout:
  * dmu has 2*lld+2 slots, each slot a (bb x ns) block (state-major); the host
  * combine writes mu as (bb, nmom, ns) state-major.                          */
@@ -2165,10 +2240,10 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
                         int lld,
                         RT inva, RT bsc, void *mu_,
                         const CT *Hop, const CT *Himp,
-                        const CT *va, const CT *vb,
+                        const CT *fac_a, const CT *fac_b,
                         const CT *h_bare, const CT *h_bare_imp,
                         const CT *h_eeo, const CT *h_eeo_imp, const CT *h_hons,
-                        const CT *voa, const CT *vob, bool retain_device,
+                        bool retain_device,
                         bool download_host, int trace_index) {
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
@@ -2201,13 +2276,11 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
         return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nrhs,
                                   al, be, inva, bsc);
     };
-    /* velocity apply (raw, hoh-aware). */
-    auto velo = [&](const CT *v_op, const CT *vo_op, const CT *x1, CT *yv) -> int {
-        if (do_hoh)
-            return step_velo_hoh<CT, RT>(c, v_op, vo_op, h_bare, h_bare_imp,
-                                         vtmp, x1, yv, nrhs);
-        return step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, yv, nrhs,
-                                  (RT)1, (RT)0, (RT)1, (RT)0);
+    /* Kubo velocity apply (raw bare Hamiltonian scaled bond by bond). */
+    auto velo = [&](const CT *fac, const CT *x1, CT *yv) -> int {
+        if (do_hoh) FAIL("stochastic transport: hoh velocity is not available on CUDA yet");
+        return step_apply<CT, RT>(c, h_bare, h_bare_imp, c->nmax > 0, x1, nullptr,
+                                  yv, nrhs, (RT)1, (RT)0, (RT)1, (RT)0, fac);
     };
 
     const CT one = {(RT)1, (RT)0};
@@ -2237,7 +2310,7 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     }
 
     /* right recursion v_n = T_{n-1}(H~) V_b|psiref>; left slot 0 = psiref. */
-    if (velo(vb, vob, left, w0)) return 1;        /* w0 = V_b psiref */
+    if (velo(fac_b, left, w0)) return 1;        /* w0 = V_b psiref */
     CT *v0 = w0, *v1 = w1, *v2 = w2;
     for (int n = 1; n <= lld; ++n) {
         if (n == 1) {
@@ -2249,7 +2322,7 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
             if (matvec(v1, v0, v2, (RT)2, (RT)-1)) return 1;
             CT *t = v0; v0 = v1; v1 = v2; v2 = t;
         }
-        if (velo(va, voa, v1, R)) return 1;        /* R = V_a v_n */
+        if (velo(fac_a, v1, R)) return 1;        /* R = V_a v_n */
         /* left is m-major, with each m block containing all B states;
          * R is state-major.  Keep the existing efficient m-batched GEMM
          * and issue one strided-batched call per state so both operands and
@@ -2298,14 +2371,18 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
  * block-ELL engine; the structured/FFT backend keeps the original fp64
  * step64-based path (ee-only, non-hoh).
  * ------------------------------------------------------------------------ */
+static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
+                                         int nstates, int lld, double a,
+                                         double b, void *mu_,
+                                         bool retain_device, bool download_host,
+                                         int trace_index);
+
 static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
                                    int lld, double a, double b, void *mu_,
                                    bool retain_device, bool download_host,
                                    int trace_index) {
     if (!c->have_h) FAIL("stochastic_moments: Hamiltonian not set");
-    if (!c->have_v) FAIL("stochastic_moments: velocity operators not set");
-    if (c->have_hoh && !c->have_vo)
-        FAIL("stochastic_moments: hoh active but velocity ortho (vo) not set");
+    if (c->use_struct && !c->have_v) FAIL("stochastic_moments: velocity operators not set");
     if (download_host && !mu_)
         FAIL("stochastic_moments: host moment output is required when download_host is enabled");
 
@@ -2318,37 +2395,10 @@ static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
     c->stoch_d2h_bytes = 0;
     c->stoch_mu_pack_bytes = 0;
 
-    if (!c->use_struct) {
-        if (c->have_hoh) {
-            if (c->cheb_prec == 0) {
-                if (ensure_f32_hoh(c)) return 1;
-                if (ensure_f32_velocity(c)) return 1;
-                return stoch_engine_batch<fc, float>(
-                    c, psiref_, 1, lld, (float)(1.0 / a), (float)b, mu_,
-                    c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
-                    c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
-                    c->f_hons, c->f_voa, c->f_vob, retain_device,
-                    download_host, trace_index);
-            }
-            return stoch_engine_batch<zc, double>(
-                c, psiref_, 1, lld, 1.0 / a, b, mu_,
-                c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
-                c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
-                c->d_voa, c->d_vob, retain_device, download_host, trace_index);
-        }
-        if (c->cheb_prec == 0) {
-            if (ensure_f32_ham(c, a, b)) return 1;
-            if (ensure_f32_velocity(c)) return 1;
-            return stoch_engine_batch<fc, float>(
-                c, psiref_, 1, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
-                c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
-                nullptr, nullptr, retain_device, download_host, trace_index);
-        }
-        return stoch_engine_batch<zc, double>(
-            c, psiref_, 1, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
-            c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
-            nullptr, nullptr, retain_device, download_host, trace_index);
-    }
+    if (!c->use_struct)
+        return stochastic_moments_batch_impl(c, psiref_, 1, lld, a, b, mu_,
+                                             retain_device, download_host,
+                                             trace_index);
 
     /* --- structured/FFT backend: original fp64 step64 path (non-hoh) ----- */
     const int nb = c->nb;
@@ -2434,7 +2484,8 @@ static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
                                          bool retain_device, bool download_host,
                                          int trace_index) {
     if (!c->have_h) FAIL("stochastic_moments_batch: Hamiltonian not set");
-    if (!c->have_v) FAIL("stochastic_moments_batch: velocity operators not set");
+    if (c->use_struct ? !c->have_v : !c->have_kubo)
+        FAIL("stochastic_moments_batch: transport operators not set");
     if (nstates < 1) FAIL("stochastic_moments_batch: nstates must be positive");
     if (retain_device && trace_index < 1)
         FAIL("stochastic_moments_batch: trace index must be positive");
@@ -2442,8 +2493,6 @@ static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
         FAIL("stochastic_moments_batch: host moment output is required when download_host is enabled");
     if (c->use_struct && nstates != 1)
         FAIL("stochastic_moments_batch: structured backend supports only B=1");
-    if (c->have_hoh && !c->have_vo)
-        FAIL("stochastic_moments_batch: hoh active but velocity ortho (vo) not set");
     if (c->use_struct)
         return stochastic_moments_impl(c, psiref_, lld, a, b, mu_, retain_device,
                                        download_host, trace_index);
@@ -2457,33 +2506,30 @@ static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
     c->stoch_d2h_bytes = 0;
     c->stoch_mu_pack_bytes = 0;
 
-    if (c->have_hoh) {
-        if (c->cheb_prec == 0) {
-            if (ensure_f32_hoh(c) || ensure_f32_velocity(c)) return 1;
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_hoh(c) || ensure_f32_bare(c)) return 1;
+        if (c->have_hoh)
             return stoch_engine_batch<fc, float>(
                 c, psiref_, nstates, lld, (float)(1.0 / a), (float)b, mu_,
-                c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
+                c->f_ee_bare, c->f_hall_bare, c->f_fac_a, c->f_fac_b,
                 c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
-                c->f_hons, c->f_voa, c->f_vob, retain_device,
-                download_host, trace_index);
-        }
-        return stoch_engine_batch<zc, double>(
-            c, psiref_, nstates, lld, 1.0 / a, b, mu_,
-            c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
-            c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
-            c->d_voa, c->d_vob, retain_device, download_host, trace_index);
-    }
-    if (c->cheb_prec == 0) {
-        if (ensure_f32_ham(c, a, b) || ensure_f32_velocity(c)) return 1;
+                c->f_hons, retain_device, download_host, trace_index);
+        if (ensure_f32_ham(c, a, b)) return 1;
         return stoch_engine_batch<fc, float>(
             c, psiref_, nstates, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
-            c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+            c->f_fac_a, c->f_fac_b, c->f_ee_bare, c->f_hall_bare, nullptr,
             nullptr, nullptr, retain_device, download_host, trace_index);
     }
+    if (c->have_hoh)
+        return stoch_engine_batch<zc, double>(
+            c, psiref_, nstates, lld, 1.0 / a, b, mu_,
+            c->d_ee_bare, c->d_hall_bare, c->d_fac_a, c->d_fac_b,
+            c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
+            retain_device, download_host, trace_index);
     return stoch_engine_batch<zc, double>(
         c, psiref_, nstates, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
-        c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
-        nullptr, nullptr, retain_device, download_host, trace_index);
+        c->d_fac_a, c->d_fac_b, c->d_ee, c->d_hall, nullptr, nullptr, nullptr,
+        retain_device, download_host, trace_index);
 }
 
 extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref,

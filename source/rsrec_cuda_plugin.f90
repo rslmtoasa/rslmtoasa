@@ -36,6 +36,7 @@ module rsrec_cuda_plugin_mod
       procedure :: set_periodic_lattice
       procedure :: set_hamiltonian
       procedure :: set_velocity
+      procedure :: set_kubo_operators
       procedure :: upload_bsr
       procedure :: set_precision
       procedure :: chebyshev_dos
@@ -108,6 +109,12 @@ module rsrec_cuda_plugin_mod
          type(c_ptr), value :: ctx, v_a, v_b, vo_a, vo_b
          integer(c_int) :: rsrec_cuda_set_velocity
       end function rsrec_cuda_set_velocity
+
+      function rsrec_cuda_set_kubo_operators(ctx, fac_a, fac_b) bind(C, name='rsrec_cuda_set_kubo_operators')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, fac_a, fac_b
+         integer(c_int) :: rsrec_cuda_set_kubo_operators
+      end function rsrec_cuda_set_kubo_operators
 
       function rsrec_cuda_orbital_moments(ctx, left, psiref, lld, a, b, mu) bind(C, name='rsrec_cuda_orbital_moments')
          import :: c_double, c_int, c_ptr
@@ -452,6 +459,17 @@ contains
       if (present(vo_a) .or. present(vo_b)) continue
 #endif
    end subroutine set_velocity
+
+   subroutine set_kubo_operators(this, fac_a, fac_b)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: fac_a(:, :)
+      complex(rp), target, contiguous, intent(in) :: fac_b(:, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_set_kubo_operators(this%ctx, c_loc(fac_a), c_loc(fac_b))
+      call check_status(status, 'rsrec_cuda_set_kubo_operators')
+#endif
+   end subroutine set_kubo_operators
 
    subroutine orbital_moments(this, left, psiref, lld, a, b, mu)
       class(rsrec_cuda_backend), intent(inout) :: this
