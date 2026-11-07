@@ -854,7 +854,7 @@ contains
       b = (emax_win + emin_win)/2.0_rp
 
       ! Transport applies the operators matrix-free (setup_kubo_operators), whatever
-      ! cheb_backend says. The fast CPU and CUDA kernels return with the backend switch.
+      ! cheb_backend says; the CUDA route applies the same operators on the device.
       use_gpu = gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)
       if (use_gpu .and. this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh) then
          call g_logger%warning('gpu_plugin transport covers ccor_2c only with hoh. '// &

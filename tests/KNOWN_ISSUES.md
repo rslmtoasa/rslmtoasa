@@ -197,10 +197,15 @@ are not tracked here; see `docs/DECISIONS.md`.
   `LD_LIBRARY_PATH` at 2026.1).
 
 ### GPU state on `main_rc` (CUDA 13.3, 2x RTX A4000, Release, `-march=native`) — 2026-11-07
-- **Verified: GPU transport is fatal.** `gpu_plugin = .true.` with a conductivity run stops in `compute_moments_stochastic` (`recursion_transport.f90:853`,
-  "GPU transport moments are not available with the Kubo operators yet"). Deliberate since merge `7e0a9732` (matrix-free Kubo operators); the CUDA KPM
-  transport kernels were not ported. `tests/validation/val09_kubo_bastin_transport.py --gpu-plugin` therefore fails at its first case. CPU transport is unaffected.
-  Proposal, not started: port the GPU kernels to the Kubo operators (large; needs a plan).
+- **GPU transport restored (branch `feature/gpu-kubo-transport`), measured against the CPU on the same deck (fccPt, `cond_ll` 20, 4^3 cells; magnetic bcc Fe for the spin torque).**
+  Moments mu_nm, fp64: 1e-15 to 1e-14 relative for charge, spin/orbital/quadrupole/octupole current and accumulation, spin/orbital/soc torque, each with and without
+  `hoh`, `hoh + ccor_2c`, nsp 1/2/4, per_type, and random_vec batched (`gpu_stochastic_block` 1 to 4, uneven last batch); fp32: 4e-7 to 5e-6. The full `val09 --gpu-plugin`
+  report (fp32) differs from the CPU report by at most 8.6e-7 relative over 495 values. Not covered: transport with an impurity region (`nmax > 0`; the only impurity deck,
+  `tests/scf/cases/impurity/B2FeCo_nsp1`, stops on the CPU with a list-input read error at `calculation.f90:889` when patched to `post_processing = 'conductivity'`, so no baseline
+  exists), `ccor_2c` without `hoh` (the CUDA context holds the merged `ee`, the CPU velocity uses the plain `ee`; the run falls back to the CPU with a warning), and the structured
+  `fft`/`conv` path. Spin torque with `lsham = 0` and `spin_soc_torque` without SOC give mu = 0 on both sides (compare full blocks, not the diagonal that the reconstruction uses).
+- **Measured, not diagnosed: GPU fp64 reconstruction of sigma differs from the CPU.** With moments equal to 2e-15, `Pt_response.out` (17 digits) differs by 1.3e-7 of the peak between
+  CPU and GPU fp64 and by 8.7e-7 between CPU and GPU fp32 (fccPt, charge). The reconstruction code (`rsrec_reconstruct_conductivity`) was not touched; the cause is open.
 - **Verified: `gpu_backend` selects nothing beyond `csr`.** The Fortran side is wired (`gpu_plugin_upload_hamiltonian` -> `set_backend`), but `rsrec_cuda.cpp` only stores and
   validates the value; it never calls `rsrec_set_grid` (the structured cuFFT kernel declared in `rsrec.h`) and nothing consumes the host BSR export. `csr`, `bsr`, `fft` and `conv`
   give bitwise identical etot (diamond Si, fast and legacy, fp32 and fp64: difference 0.0; |detot| vs CPU 2.2e-8 fp32, 2.8e-8 fp64 for fast), no fallback warnings, so only one
