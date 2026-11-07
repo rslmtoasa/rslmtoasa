@@ -59,13 +59,13 @@ spin-moment projections are not substituted for this direction.
 
 ```text
 bands%mag_for = B_eff = -B_con        (mRy/mu_B)
-field_in     = +bands%mag_for
+field_in     = bands%mag_for * ry2tesla/1000   (Tesla)
 spin_dynamics%beff = -field_in         (Depondt wrapper)
 ```
 
 The explicit Euler helper uses `-gamma * m x field_in`, i.e. `-gamma * m x B_eff`. The wrapper
 negates `field_in` for abspinlib as before, so both integrators keep the same relative sign.
-The unit passed on is still mRy/\(\mu_B\) where the integrators use Tesla (open).
+`field_in` is in Tesla (1 mRy/\(\mu_B\) = `ry2tesla`/1000 = 235.05 T), the unit of the integrators.
 
 The lower-level Depondt API also has `btorque` and `she_btorque` arguments, but
 the current LMTO `processing='sd'` path passes zero arrays. `asd_jij` is read

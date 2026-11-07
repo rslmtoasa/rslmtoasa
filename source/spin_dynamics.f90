@@ -470,9 +470,9 @@ contains
          end do
          field_in(:, :) = 0.0d0
          ! mag_for is the effective field B_eff = -B_con, the negative of the constraining field (with an applied B_con the
-         ! printed field is antiparallel to it); field_in = B_eff is the field of the Euler helpers.  Its unit is mRy/mu_B
-         ! (abspinlib expects Tesla).
-         field_in(:, :) = this%bands%mag_for(:, :)
+         ! printed field is antiparallel to it), in mRy/mu_B.  field_in = B_eff in Tesla (1 mRy/mu_B = ry2tesla/1000 T) is
+         ! the field of the Euler helpers.
+         field_in(:, :) = this%bands%mag_for(:, :)*ry2tesla/1000.0_rp
 
          ! Do the abspinlib predictor step.  asd_pred converts field_in to the Depondt
          ! field (beff = -field_in) and preserves the spin norm.
@@ -487,7 +487,7 @@ contains
          ! LMTO -> field -> integrator -> electronic feedback loop.
          call this%self%run()
          call this%bands%calculate_magnetic_torques()
-         field_in(:, :) = this%bands%mag_for(:, :)
+         field_in(:, :) = this%bands%mag_for(:, :)*ry2tesla/1000.0_rp
          call this%asd_corr(mom_in, field_in, temp_in, dt_in, na_in)
 
          do na = 1, na_in
