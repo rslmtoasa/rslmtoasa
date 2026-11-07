@@ -640,7 +640,11 @@ conductivity (``linear_out``/``linear_in`` transport). Independent of ``cheb_bac
   Runs every ``linear_in``/``linear_out`` operator, with or without ``hoh``, except ``spin_torque`` and
   ``orbital_torque`` with ``hoh``. The other cases (``ccor_2c``, impurity sites, bond vectors that differ
   between sites of one atom type) run ``'legacy'`` and write one warning to the log.
-- ``'gpu'``: reserved; fatal at run time.
+- ``'gpu'``: requires ``gpu_plugin = .true.`` and a setup the CUDA route covers; fatal at run time otherwise.
+  With ``gpu_plugin = .true.`` and ``'legacy'`` the moments also run on the CUDA route (every
+  ``linear_in``/``linear_out`` operator, ``ccor_2c`` only with ``hoh``; ``gpu_precision`` sets the arithmetic and
+  ``gpu_stochastic_block`` batches random vectors); an uncovered setup runs the loops with a warning. ``'fast_sp'``
+  with ``gpu_plugin`` runs the CPU kernel with a warning. Transport with impurity sites has not been tested on the GPU.
 
 **Default:** ``'legacy'``
 
