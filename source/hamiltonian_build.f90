@@ -770,9 +770,12 @@ contains
             call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                                 __FILE__, __LINE__)
          end if
-         if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then
-            call g_logger%fatal('Fixed-U LDA+U is unsupported with hoh=.true. (generalized-overlap Hamiltonian).', &
-                                __FILE__, __LINE__)
+         ! With hoh the on-site V_U is added to enim (applied outside the h-o-h product), see build_bulkham.
+         if (this%hoh .and. this%control%nsp /= 1) then
+            call g_logger%fatal('Fixed-U LDA+U with hoh=.true. requires nsp=1.', __FILE__, __LINE__)
+         end if
+         if (this%hoh .and. trim(this%magnetic_representation) == gbt_single_q) then
+            call g_logger%fatal('Fixed-U LDA+U with hoh=.true. is unsupported for gbt_single_q.', __FILE__, __LINE__)
          end if
       end if
 
@@ -1317,7 +1320,7 @@ contains
             ! write(132,*) ’m=’, m
             ! write(132,’(18f10.6)’) aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
-         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
+         if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
@@ -1372,6 +1375,11 @@ contains
             end do
          end if
       end do ! end of atom type number
+      ! With hoh, H = h - h o h + enim + lsham: V_U is an additive on-site term like E_nu and L.S, not part of h.
+      if (this%hoh .and. (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)) then
+         this%enim = this%enim + this%hubbard_u_pot
+         if (this%local_axis) this%enim_glob = this%enim
+      end if
       call this%build_ccor_bulk()
       if (this%local_axis) then
          this%ee_glob = this%ee
@@ -1762,7 +1770,7 @@ contains
                end do
             end do
          end do
-         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
+         if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
             do i = 1, nb
                do j = 1, nb
                   this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + &
@@ -1810,6 +1818,11 @@ contains
          end if
       end do
     !!$omp end parallel do
+      ! With hoh, V_U enters as an additive on-site term (see build_bulkham), indexed by type like enim.
+      if (this%hoh .and. (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)) then
+         this%enim = this%enim + this%hubbard_u_pot
+         if (this%local_axis) this%enim_glob = this%enim
+      end if
       call this%build_ccor_local()
       if (this%local_axis) then
          this%hall_glob = this%hall

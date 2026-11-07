@@ -303,6 +303,11 @@ contains
       !       path (fourier_transform_hamiltonian_second_order). The on-site spin-orbit
       !       term (lsham) is added for nsp = 2 and 4 in both orders. See kspace_ham_order.
 
+      ! With hoh, V_U lives in enim, which only the second-order path adds.
+      if (this%hamiltonian%hoh .and. (this%hamiltonian%hubbard_u_general_check .or. &
+                                      this%hamiltonian%hubbard_test_operator_check)) then
+         call g_logger%fatal("Fixed-U LDA+U with hoh=.true. requires kspace_ham_order='second' in k-space.", __FILE__, __LINE__)
+      end if
       call this%make_reciprocal_assembler(assembler)
       assembler%use_second_order = .false.
       call this%workspace%ensure_capacity(size(hk_result,1), 1, .false., this%hamiltonian%operator_generation, &
