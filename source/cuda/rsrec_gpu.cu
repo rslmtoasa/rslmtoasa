@@ -1534,25 +1534,31 @@ static int step_apply_hoh(rsrec_ctx *c, const CT *bare, const CT *bare_imp,
     return 0;
 }
 
-/* Velocity apply with hoh orthogonalisation, mirroring velo_hoh_vec_matmul:
- *   out = v*x - vo*(h_bare*x)
- * vo carries the on-site block already zeroed at upload (velo_hoh applies vo
- * off-site only). Velocity operators are UNSCALED (inva=1, bsc=0), like the
- * non-hoh velocity apply. Reuses step_apply entirely (no new kernel); `tmp`
- * is caller-provided (nfield) scratch. */
+/* Kubo velocity with hoh, mirroring velo_hoh_vec_matmul:
+ *   out = V*x - (h O)*(V*x) - (V O)*(h*x)
+ * V = bond-scaled bare h (fac), h O = eeo (its on-site shell included). All
+ * applies are unscaled; psi1 and t3 are caller-provided (nfield) scratch.   */
 template <class CT, class RT>
-static int step_velo_hoh(rsrec_ctx *c, const CT *v_op, const CT *vo_op,
-                         const CT *bare, const CT *bare_imp, CT *tmp,
-                         const CT *x1, CT *y, int nrhs) {
-    /* out = v*x1 */
-    if (step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, y, nrhs,
+static int step_kubo_velo_hoh(rsrec_ctx *c, const CT *fac, const CT *bare,
+                              const CT *bare_imp, const CT *eeo,
+                              const CT *eeo_imp, CT *psi1, CT *t3,
+                              const CT *x1, CT *y, int nrhs) {
+    const bool imp = c->nmax > 0;
+    const size_t n = (size_t)c->nb * c->kk * (size_t)nrhs;
+    /* psi1 = h*x1, y = V*x1 */
+    if (step_apply<CT, RT>(c, bare, bare_imp, imp, x1, nullptr, psi1, nrhs,
                            (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
-    /* tmp = h_bare*x1 */
-    if (step_apply<CT, RT>(c, bare, bare_imp, c->nmax > 0, x1, nullptr, tmp, nrhs,
+    if (step_apply<CT, RT>(c, bare, bare_imp, imp, x1, nullptr, y, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0, fac)) return 1;
+    /* t3 = eeo*y + (fac*eeo)*psi1 */
+    if (step_apply<CT, RT>(c, eeo, eeo_imp, imp, y, nullptr, t3, nrhs,
                            (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
-    /* out = -vo*tmp + out  (x0 = y, beta = 1, alpha = -1) */
-    if (step_apply<CT, RT>(c, vo_op, nullptr, 0, tmp, y, y, nrhs,
-                           (RT)-1, (RT)1, (RT)1, (RT)0)) return 1;
+    if (step_apply<CT, RT>(c, eeo, eeo_imp, imp, psi1, t3, t3, nrhs,
+                           (RT)1, (RT)1, (RT)1, (RT)0, fac)) return 1;
+    /* y -= t3 */
+    const int tpb = 256;
+    k_axpby<CT, RT><<<(int)((n + tpb - 1) / tpb), tpb>>>(n, (RT)-1, t3, (RT)1, y);
+    CUCHK(cudaGetLastError());
     return 0;
 }
 
@@ -1696,33 +1702,6 @@ static int ensure_f32_hoh(rsrec_ctx *c) {
     }
 #undef RSREC_DOWNCONV
     c->f_hoh_ver = c->ham_ver;
-    return 0;
-}
-
-/* fp32 mirrors of the (unscaled) velocity operators v_a/v_b and, when hoh is
- * active, vo_a/vo_b (on-site already zeroed at upload). Pure down-conversion,
- * gated on vel_ver. */
-static int ensure_f32_velocity(rsrec_ctx *c) {
-    if (!c->have_v) return 0;
-    if (c->f_va && c->f_vel_ver == c->vel_ver) return 0;
-    const size_t ne = (size_t)c->nb * c->nb * c->nnmax * c->ntype;
-    if (!c->f_va) CUCHK(cudaMalloc(&c->f_va, ne * sizeof(fc)));
-    if (!c->f_vb) CUCHK(cudaMalloc(&c->f_vb, ne * sizeof(fc)));
-    const int tpb = 256;
-    const int nbl = (int)((ne + tpb - 1) / tpb);
-    k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_va, c->f_va);
-    CUCHK(cudaGetLastError());
-    k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_vb, c->f_vb);
-    CUCHK(cudaGetLastError());
-    if (c->have_vo) {
-        if (!c->f_voa) CUCHK(cudaMalloc(&c->f_voa, ne * sizeof(fc)));
-        if (!c->f_vob) CUCHK(cudaMalloc(&c->f_vob, ne * sizeof(fc)));
-        k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_voa, c->f_voa);
-        CUCHK(cudaGetLastError());
-        k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_vob, c->f_vob);
-        CUCHK(cudaGetLastError());
-    }
-    c->f_vel_ver = c->vel_ver;
     return 0;
 }
 
@@ -2228,12 +2207,12 @@ extern "C" int rsrec_scalar_lanczos(rsrec_ctx *c, int site_j, int lld,
 /* --------------------------------------------------------------------------
  * Stochastic conductivity moments, block-ELL path, templated precision.
  *   mu_{nm} = left_m^H (V_a T_{n-1}(H~) V_b |psiref>),   left_m = T_{m-1}(H~)|psiref>
- * Reuses step_apply / step_apply_hoh (H~) and step_velo_hoh / step_apply (V).
+ * Reuses step_apply / step_apply_hoh (H~) and step_kubo_velo_hoh / step_apply (V).
  * Operator pointers and scaling follow the same conventions as cheb_engine:
  *  - non-hoh: Hop = folded H, (inva,bsc) = (1/a,b) fp64 or (1,0) fp32-prescaled;
- *    velocity raw (va/vb), no vo.
+ *    velocity = raw bare h scaled bond by bond (fac_a/fac_b).
  *  - hoh: H via two-sweep (h_bare/eeo/hons, inva=1/a, bsc=b), velocity via
- *    step_velo_hoh (va/vb + voa/vob + h_bare); operators raw.
+ *    step_kubo_velo_hoh (fac + h_bare + eeo); operators raw.
  * ------------------------------------------------------------------------ */
 template <class CT, class RT>
 static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
@@ -2278,7 +2257,9 @@ static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
     };
     /* Kubo velocity apply (raw bare Hamiltonian scaled bond by bond). */
     auto velo = [&](const CT *fac, const CT *x1, CT *yv) -> int {
-        if (do_hoh) FAIL("stochastic transport: hoh velocity is not available on CUDA yet");
+        if (do_hoh)
+            return step_kubo_velo_hoh<CT, RT>(c, fac, h_bare, h_bare_imp, h_eeo,
+                                              h_eeo_imp, ht, he, x1, yv, nrhs);
         return step_apply<CT, RT>(c, h_bare, h_bare_imp, c->nmax > 0, x1, nullptr,
                                   yv, nrhs, (RT)1, (RT)0, (RT)1, (RT)0, fac);
     };

@@ -822,7 +822,7 @@ contains
    !>          starting states are either representative atom types or random
    !>          vectors, selected by control%cond_calctype.
    !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
-   !> @note The operators are applied matrix-free (setup_kubo_operators). The CUDA route covers non-hoh charge operators; other requests run on the CPU.
+   !> @note The operators are applied matrix-free (setup_kubo_operators). The CUDA route covers charge operators (ccor_2c only with hoh); other requests run on the CPU.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -855,10 +855,10 @@ contains
 
       ! Transport applies the operators matrix-free (setup_kubo_operators), whatever
       ! cheb_backend says. The fast CPU and CUDA kernels return with the backend switch.
-      use_gpu = gpu_plugin_ready(this, 'compute_moments_stochastic()')
+      use_gpu = gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)
       if (use_gpu .and. (trim(this%control%linear_in) /= 'charge' .or. trim(this%control%linear_out) /= 'charge' &
-                         .or. this%hamiltonian%ccor_2c)) then
-         call g_logger%warning('gpu_plugin transport covers charge operators without ccor_2c. '// &
+                         .or. (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh))) then
+         call g_logger%warning('gpu_plugin transport covers charge operators, and ccor_2c only with hoh. '// &
             'Falling back to current recursion path.', __FILE__, __LINE__)
          use_gpu = .false.
       end if
