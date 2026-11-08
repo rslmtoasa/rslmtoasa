@@ -104,13 +104,24 @@ After saving an edited input, preserve a copy before starting SCF:
 
 ## 1. bcc Fe SCF (10–30 min)
 
-Use the familiar bulk example, Broyden mixing, and a bounded SCF run. In this
-`main_rc` checkout the example holds atom inputs rather than the old supplied
-bulk checkpoint, so do not assume the old main-branch iteration count.
+Use the supplied explicit-lattice Fe deck, Broyden mixing, and a bounded
+SCF run. This deck holds atom inputs rather than the old supplied bulk
+checkpoint, so do not assume the old main-branch iteration count.
+
+Both Fe starting inputs use **`crystal_sym = 'file'`**. Open
+`lattice.nml` beside `input.nml`: it contains the one-site primitive bcc
+vectors, an Fe site at the origin, and the site/type mapping. The lattice
+parameter remains `alat = 2.86120` Angstrom in `input.nml`; vectors and
+positions in `lattice.nml` are scaled by `alat`. This primitive cell has
+one atom and volume `a^3/2`, not two atoms in a conventional cubic box.
+
+Keep `pre_processing = 'bravais'`: that selects the bulk SCF workflow,
+while `crystal_sym = 'file'` selects the explicit geometry source. The same
+`lattice.nml` will be carried into exchange and UppASD export.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-cp -r example/bulk/bccFe runs/alternative-fe-scf
+cp -r tutorials/bccFe runs/alternative-fe-scf
 ```
 
 Open **`runs/alternative-fe-scf/input.nml`** in the editor. Replace its
@@ -311,13 +322,15 @@ production-converged gap or prove equality of the two broadening kernels.
 
 ## 3. Fe exchange from task 1 (65–80 min)
 
-Use the complete exchange fixture and the converged Fe checkpoint. Retain the
-same lattice, spin treatment, and recursion settings. In this code path,
+Use the explicit-lattice exchange starting input and the converged Fe
+checkpoint. Retain the same lattice, spin treatment, and recursion settings. In this code path,
 exchange is post-processing of the saved electronic state, not a new SCF.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-cp -r tests/postproc/cases/exchange/bccFe runs/alternative-fe-jij
+cp -r tutorials/bccFe runs/alternative-fe-jij
+cp runs/alternative-fe-jij/input.exchange.nml runs/alternative-fe-jij/input.nml
+cp runs/alternative-fe-scf/lattice.nml runs/alternative-fe-jij/lattice.nml
 cp runs/alternative-fe-scf/Fe_scf.nml runs/alternative-fe-jij/Fe_out.nml
 ```
 
@@ -329,8 +342,8 @@ Open **`runs/alternative-fe-jij/input.nml`** alongside the **final**
   than a number printed in this handout.
 - In `&control`, match the SCF values of `nsp`, `recur`, and `lld`.
 - In `&self`, set `nstep = 1`.
-- Retain `post_processing = 'exchange'`, the complete supplied exchange
-  geometry, and its two `ijpair` entries.
+- Retain `post_processing = 'exchange'`, **`crystal_sym = 'file'`**, the
+  copied `lattice.nml`, and the two supplied `ijpair` entries.
 
 Save the exchange input, then run:
 
@@ -542,32 +555,17 @@ columns in the supplied exchange file, so select `jij.out` deliberately.
 Do not silently substitute another perturbation-order output. The CLI reads
 `lattice.nml` and obtains moment magnitudes from `report.out`.
 
-### Stage the one-site bcc primitive cell
+### Reuse the Fe calculation's lattice file
 
-From the repository root, prepare a separate export directory. This is the
-bcc primitive-cell geometry in the code's lattice-parameter units; it is not
-a 5984-site real-space cluster or a conventional two-site cubic cell.
+Copy the **same `lattice.nml` used in task 1** into a separate export
+directory. No geometry reconstruction or new lattice file is needed. It
+represents the one-site primitive bcc cell, not the generated real-space
+cluster or a conventional two-site cubic cell.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 mkdir runs/alternative-fe-export
-```
-
-In the file explorer, right-click `runs/alternative-fe-export`, select
-**New File**, and name it **`lattice.nml`**. Paste the following into the editor
-and save:
-
-```fortran
-&lattice
-nbulk_bulk = 1
-ntot = 1
-nbas = 1
-nrec = 1
-a(:, 1) = -0.5, 0.5, 0.5
-a(:, 2) = 0.5, -0.5, 0.5
-a(:, 3) = 0.5, 0.5, -0.5
-crd(:, 1) = 0.0, 0.0, 0.0
-/
+cp runs/alternative-fe-scf/lattice.nml runs/alternative-fe-export/lattice.nml
 ```
 
 Then run the exporter from the repository root:
@@ -641,6 +639,11 @@ Codespaces timings or production-accuracy claims.
 - The RC Fe pilot converged after a second bounded SCF block (final printed
   residual `1.28e-8`). Its two-pair exchange output contained `0.731162` and
   `0.483901` mRy. These are setup-specific observations, not reference targets.
+- The explicit `crystal_sym = 'file'` Fe deck reproduced the built-in bcc
+  preset's 5,984 cluster positions and types. A checkpoint replay met the
+  teaching threshold (printed residual `1.16e-8`), and the exchange rows
+  matched the built-in pilot at printed precision. The same `lattice.nml`
+  was used for the SCF, exchange, and one-site UppASD export.
 - The uploaded RS-utils Python CLI path wrote all four Fe export files. The
   moment magnitude was `2.104052 mu_B`; the two exchange rows retained the
   source values and displacement components. Those equalities hold by
