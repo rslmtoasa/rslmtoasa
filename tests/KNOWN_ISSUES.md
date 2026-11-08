@@ -379,3 +379,21 @@ the archive tags.
   (`example/bulk/bccFe/input_frozen_magnon_constrained.nml`) is an `nsp = 4` frozen-magnon run. So there is no converged constraint-target result for
   the S6b path.
 
+
+### k-space `nsp = 1` AF with mirrored channels breaks at U=0: the density axis follows the measured moment, not `potential%mom` — 2026-11-08
+- **Verified (MnO AFM-II, 4-atom cell, first order, `nsp = 1`, Mn2 file with up/down swapped and `mom = +z`, 12^3, 300 K):** k-space starts at `Diff` 0.16 and does not converge
+  at U=0 (the Mn2 moment is reported as +4.21 muB at step 1, mix diff 0.66); real space converges the same deck (4.2088 muB). With `density_policy = 'constrained_spiral'` k-space converges
+  (`Diff` 2e-8 at U=0) and, at U=2 with `local`, reproduces real space to 0.005 eV on the d-up and d-down shifts against O p. At `nsp = 3` with `mom = +z, -z` both policies give axes (0,0,+1), (0,0,-1).
+- **Read in the source:** `resolve_density_axes` (`bands.f90`) sets the axis to `potential%mom` under `relaxed_reference`; `fill_band_moments_from_spin_density` (`reciprocal_spin_density.f90`)
+  passes the measured axis (`resolve_site_axis`: `axis = m/|m|`) to `set_axis`. For a mirrored site the measured axis is -z, so its radial up/down channels are swapped every iteration.
+- **Not verified:** that the AF NiO and AF bcc Fe k-space entries above and below have this cause (only MnO was run). Not tested: symmetry-reduced meshes (no spglib in the build used).
+- **Proposal, not done:** for `nsp < 3` take the reference axis in the k-space route, as in real space (about 5 lines in `reciprocal_spin_density.f90`).
+
+### Radial moments with U: `spectral` moves the Mn d band against O p about twice as far as `U/2` and as Quantum ESPRESSO; `local` agrees with QE — 2026-11-08
+- **Measured (MnO AFM-II, ideal rocksalt a = 4.446 A, PBE `txc = 108`, U = 2 eV, J = 0; shifts U=2 minus U=0 of the occupied d-up centroid against the occupied O p centroid):** HOH + ccor_2c `nsp = 3` spectral -2.00 eV (RS and k-space agree to 0.005 eV,
+  start from the no-U state gives -1.99); first order `nsp = 1` spectral -1.72 to -1.75 eV (not fully settled, `Diff` ~2e-5 to 1.8e-4); first order `nsp = 1` `local` -1.11 eV; Quantum ESPRESSO PBE (GBRV Mn, PAW O, U_eff = 2, `ortho-atomic` / `atomic`) -1.24 / -1.29 eV.
+  `V` alone gives about -0.9 eV. The Mn charge change is +0.05 e (spectral, HOH) and -0.014 e (`local`); QE -0.011 e.
+- **Measured, isolating the part (first order, `nsp = 1`, 30 steps, temporary switch, not committed):** applying only the centre correction `c' = c - Tr(VP)/q0` reproduces `local` (-1.02 eV, bare Mn-O -0.20/-0.33 eV); applying only the `q2` correction stays near `spectral` (-1.58 eV, -0.89/-0.81 eV).
+  First order against HOH + ccor_2c at `nsp = 3`: the extra shift of HOH is about 0.2 to 0.25 eV; `nsp = 1` and `nsp = 3` first order give identical `Diff` sequences to seven digits.
+- **Read in the source:** `gravity_center` (the linearization energy, through `calculate_pl`) includes `V` in `spectral` mode and excludes it in `local` (`correct_d_shell_moments`, `math.f90`).
+- **Not verified:** the mechanism beyond the above (a derivation from `psi = phi u + phidot (h u)` makes `local` the h-moment construction, algebra checked against `correct_d_shell_moments`; no literature source for the ASA radial-moment step was found); one material; QE at 6^3 k and one cutoff.
