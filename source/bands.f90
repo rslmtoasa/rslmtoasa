@@ -1262,7 +1262,9 @@ contains
 #endif
       end if
 
-      spinor_flag = this%control%nsp == 2 .and. this%recursion%hamiltonian%hubbard_soc_experimental .and. lmax_basis >= 2
+      ! nsp=2 always takes the spinor route; nsp=3 only for local radial moments, whose correction needs the site axis.
+      spinor_flag = (this%control%nsp == 2 .or. (this%control%nsp == 3 .and. local_moments_active)) .and. &
+                    this%recursion%hamiltonian%hubbard_soc_experimental .and. lmax_basis >= 2
       spinor_local = local_moments_active .and. spinor_flag
       ! The spinor correction needs the current spinor P and M1 before the radial moments are mapped.
       if (spinor_flag) call this%calculate_spinor_dm()

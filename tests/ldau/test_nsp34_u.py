@@ -9,9 +9,12 @@ Checks (each prints PASS/FAIL by name; the test fails if any fails):
                  noncollinear setup (the same potential file on both sites, mom = +z and -z) against nsp = 1 with the
                  spin-swapped file on site 2. E_F and the site-1 moment agree within 1e-5, and the two site moments are
                  opposite at nsp = 3.
+  af_fe_local    the same pair with hubbard_radial_moments = 'local': nsp = 3 (spinor correction along each site axis)
+                 against nsp = 1 (the scalar route, validated against Quantum ESPRESSO for MnO).
 
 Bugs caught: V_U dropped at nsp >= 3 (the shifts are 0); V_U built from the wrong spin channel for the site with
-mom = -z (the AF run leaves the nsp = 1 result). Not caught: the spinor against the collinear V at nsp = 4 (they differ by
+mom = -z (the AF run leaves the nsp = 1 result); the local radial-moment correction taken in the global instead of the
+site spin frame for the site with mom = -z (af_fe_local leaves the nsp = 1 result). Not caught: the spinor against the collinear V at nsp = 4 (they differ by
 7e-5 Ry in E_F at step 2 and not at step 1).
 
 The code rewrites fermi in input.nml after a run, so every deck is built fresh.
@@ -62,7 +65,8 @@ def moment_line(text: str, mom: tuple[float, float, float]) -> str:
 
 
 def af_deck(scratch: Path, name: str, *, nsp: int, mom1=(0.0, 0.0, 1.0), mom2=(0.0, 0.0, -1.0), swap2: bool | None = None,
-            hoh: bool = False, nstep: int = 2, recur: str = "chebyshev", kspace: bool = False, self_extra: str = "") -> Path:
+            hoh: bool = False, nstep: int = 2, recur: str = "chebyshev", kspace: bool = False, self_extra: str = "",
+            radial: str = "auto") -> Path:
     """Two-atom Fe cell (simple cubic, sites at 0 and (1/2,1/2,1/2)) from the bcc Fe seed, U = 2 eV on both sites.
     Site moments mom1, mom2 (the noncollinear convention: the same potential file on both sites); swap2 swaps the spin
     channels of the site-2 file (the nsp = 1 convention, default at nsp = 1, where mom is ignored)."""
@@ -96,7 +100,8 @@ def af_deck(scratch: Path, name: str, *, nsp: int, mom1=(0.0, 0.0, 1.0), mom2=(0
         f"&control\ncalctype = 'B'\nnsp = {nsp}\nlld = {200 if recur == 'chebyshev' else 21}\nrecur = '{recur}'\n/\n"
         "&mix\nbeta = 0.1\nmixtype = 'broyden'\n/\n"
         f"{reciprocal}"
-        f"&hamiltonian\nhoh = {'.true.' if hoh else '.false.'}\nhubbard_u_general(1,3) = 2.0\nhubbard_u_general(2,3) = 2.0\n/\n")
+        f"&hamiltonian\nhoh = {'.true.' if hoh else '.false.'}\nhubbard_u_general(1,3) = 2.0\nhubbard_u_general(2,3) = 2.0\n"
+        f"{'' if radial == 'auto' else 'hubbard_radial_moments = ' + repr(radial) + chr(10)}/\n")
     return work
 
 
@@ -129,10 +134,10 @@ def shift_nsp4_hoh(binary: Path, scratch: Path) -> tuple[bool, str]:
     return ok, f"E_F shift, U=2 eV, hoh, SOC: nsp=4 {new:+.6f} Ry, nsp=2 {ref:+.6f} Ry (need > {hu.SHIFT_MIN} and |difference| < {SHIFT_TOL})"
 
 
-def af_fe(binary: Path, scratch: Path) -> tuple[bool, str]:
+def af_fe(binary: Path, scratch: Path, radial: str = "auto") -> tuple[bool, str]:
     res = {}
     for nsp in (1, 3):
-        status, log = gh.run_binary(binary, af_deck(scratch, f"af_nsp{nsp}", nsp=nsp))
+        status, log = gh.run_binary(binary, af_deck(scratch, f"af_{radial}_nsp{nsp}", nsp=nsp, radial=radial))
         if status != 0:
             return False, f"run failed (nsp={nsp})\n{log[-1500:]}"
         res[nsp] = af_numbers(log)
@@ -155,7 +160,8 @@ def main() -> int:
     shutil.rmtree(args.scratch_root, ignore_errors=True)
     args.scratch_root.mkdir(parents=True)
     failed = False
-    for name, check in (("shift_nsp3", shift_nsp3), ("shift_nsp4_hoh", shift_nsp4_hoh), ("af_fe", af_fe)):
+    for name, check in (("shift_nsp3", shift_nsp3), ("shift_nsp4_hoh", shift_nsp4_hoh), ("af_fe", af_fe),
+                        ("af_fe_local", lambda b, s: af_fe(b, s, "local"))):
         ok, info = check(args.binary.resolve(), args.scratch_root.resolve())
         print(f"{'PASS' if ok else 'FAIL'} {name} {info}")
         failed |= not ok

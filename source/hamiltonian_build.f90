@@ -14,12 +14,14 @@ contains
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
    !>          antiferromagnet with mom = +z and -z). With hoh (not gbt_single_q) V_U is added to enim
    !>          (build_bulkham, build_locham). hubbard_radial_moments='local' also needs a first-order
-   !>          Hamiltonian (no hoh) and nsp <= 2. One condition per statement; the message names the feature.
+   !>          Hamiltonian (no hoh) and nsp <= 3 (nsp=3: bulk, collinear site axes). One condition per statement;
+   !>          the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
       logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
       integer :: i, l
       logical :: spinor_bulk
+      real(rp) :: axis(3), first_axis(3)
 
       spinor_bulk = this%hubbard_soc_experimental .and. this%control%nsp == 2
 
@@ -29,11 +31,31 @@ contains
             call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
                'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
          end if
-         if (this%control%nsp /= 1 .and. .not. spinor_bulk) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only for bulk fixed U/J).", __FILE__, __LINE__)
+         if (this%control%nsp /= 1 .and. this%control%nsp /= 3 .and. .not. spinor_bulk) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 and 3 only for bulk fixed U/J).", &
+               __FILE__, __LINE__)
          end if
-         if ((this%control%has_soc() .and. .not. spinor_bulk) .or. this%control%is_noncollinear()) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
+         if ((this%control%has_soc() .and. .not. spinor_bulk) .or. this%control%nsp == 4) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC with nsp=4.", __FILE__, __LINE__)
+         end if
+         if (this%control%nsp == 3) then
+            if (trim(this%control%calctype) /= 'B') then
+               call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 requires calctype='B'.", __FILE__, __LINE__)
+            end if
+            ! collinear: the site axes of the correlated types lie on one line (n and -n are the same axis)
+            first_axis = 0.0_rp
+            do i = 1, this%lattice%ntype
+               if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) <= 1.0e-10_rp .and. &
+                   maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) <= 1.0e-10_rp) cycle
+               axis = this%lattice%symbolic_atoms(i)%potential%mom(:)
+               axis = axis/max(sqrt(sum(axis**2)), 1.0e-12_rp)
+               if (all(first_axis == 0.0_rp)) then
+                  first_axis = axis
+               else if (norm2(cross_product(axis, first_axis)) > 1.0e-8_rp) then
+                  call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 requires collinear site axes: type "// &
+                     fmt('i0', i)//' differs from the other correlated types.', __FILE__, __LINE__)
+               end if
+            end do
          end if
          if (this%hoh .and. .not. this%fixed_u_test_allow_hoh_w1_u0) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
