@@ -198,7 +198,7 @@ for collinear setups only: bcc Fe ferromagnet, a two-atom Fe antiferromagnet and
 ``nsp=1`` (``nsp=3``) and ``nsp=2`` (``nsp=4``) routes. Tilted and noncollinear states are checked by symmetry only
 (global spin rotation, exchange of the two sublattices, cubic equivalence of the spin axis with SOC, restart round trip; no external
 reference), with Chebyshev recursion and k-space ``second``. RS block recursion at ``nsp>=3`` with noncollinear axes is not
-rotation invariant (``tests/KNOWN_ISSUES.md``). ``local_axis``, ``gbt_single_q``, constraints
+rotation invariant with the default terminator and nearly so (1e-4 muB) with ``sym_term = .true.`` (``tests/KNOWN_ISSUES.md``). ``local_axis``, ``gbt_single_q``, constraints
 and impurity/surface runs with U at ``nsp>=3`` are untested. To set up a collinear antiferromagnet use the noncollinear
 convention: the same potential file (majority along the site axis) for both sublattices with ``mom = 0, 0, 1`` and
 ``0, 0, -1``. Potential files in the ``nsp=1`` convention (the second sublattice with up and down swapped, ``mom = +z``) run at
