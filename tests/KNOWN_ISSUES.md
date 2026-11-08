@@ -288,6 +288,15 @@ the archive tags.
 - **Not verified:** the cause (candidates not tested: k-mesh and symmetry handling for the spin-polarised cell, E_F in the gap at 300 K). The deck is hand-built and not reproduced with a second NiO deck.
 - **Related:** real-space +U on the same deck: Ni moment falls with the SCF steps at U=6 and 8 (0.39 to 0.52 and 0.14 to 0.19 muB after 6 to 8 steps) while E_F drifts to -0.4 Ry; not diagnosed. k-space with U not run.
 
+### AFM bcc Fe cell with U=2 eV: block recursion at `nsp=3` depends on the quantization axes; k-space at `nsp=1` breaks the site symmetry — 2026-11-08
+- **Verified (`af_deck` in `tests/ldau/test_nsp34_u.py`, bcc Fe 2-atom AF cell, U=2 eV, J=0, spectral radial moments):**
+  Block recursion, `nsp=3`, 2 steps, moments (z, x) against the same state rotated to (x, -z): E_F identical (+0.01929, -0.04356 Ry), site |m| step 1 2.33066/2.32922 against 2.32922/2.33066 and step 2 2.50357/2.50950 against 2.50950/2.50357 muB: the two sites swap their values, i.e. the result is not invariant under a global spin rotation. The same rotated pair with Chebyshev agrees to the log precision (the `af_angle` check).
+  Block recursion for the collinear AF (m2 = -z) at `nsp=3` and at `nsp=1` (swapped files) agree with each other (|m| 2.29663, 2.59689 on both sites).
+  k-space (`kspace_ham_order='second'`, nk=8), 4 steps: `nsp=3` AF keeps |m1| = |m2| = 2.38557, 2.63216, 2.65215, 2.58727; `nsp=1` AF (swapped files) gives |m2| = 2.38557, 2.29157, 1.67461, 0.60094 against |m1| = 2.38557, 2.78926, 2.86059, 2.61954.
+- **Not verified:** causes. Nothing was triaged: the block-recursion spinor path for non-collinear starting axes and the k-space `nsp=1` AF assembly are untouched suspects. The k-space `nsp=1` behaviour looks like the NiO entry above (same symmetry breaking, there at U=0). A hand-built deck is a live suspect for the block case until a second deck reproduces it.
+- **Coverage:** `LdaUNsp34Noncollinear` uses Chebyshev for the rotation checks and k-space `nsp=3` for the mirror check; block recursion at `nsp>=3` with non-collinear axes is not tested.
+- **Proposal (not started, owner decision):** one fatal or warning for block recursion with `nsp>=3` and U; or a triage of the block path (size not estimated).
+
 ### `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
 - **Verified:** the run stops with "Fixed-U LDA+U currently requires collinear scalar-spin input" (`source/hamiltonian_build.f90:768`);
   `Val04LdaUPhysics` stops at the same guard (its script rewrites `nsp = 1` to `nsp = 2`). In a scratch copy with `nsp = 1` the guard passes and the

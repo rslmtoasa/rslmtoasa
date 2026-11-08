@@ -57,14 +57,31 @@ def swap_spin_channels(text: str) -> str:
     return "\n".join(out) + "\n"
 
 
-def af_deck(scratch: Path, name: str, *, nsp: int) -> Path:
-    """Two-atom Fe AF cell from the bcc Fe seed: nsp = 1 swaps the spin channels of site 2, nsp = 3 sets mom = -z on it."""
+def moment_line(text: str, mom: tuple[float, float, float]) -> str:
+    return re.sub(r"(?m)^ mom = .*$", f" mom = {mom[0]!r}, {mom[1]!r}, {mom[2]!r}", text)
+
+
+def af_deck(scratch: Path, name: str, *, nsp: int, mom1=(0.0, 0.0, 1.0), mom2=(0.0, 0.0, -1.0), swap2: bool | None = None,
+            hoh: bool = False, nstep: int = 2, recur: str = "chebyshev", kspace: bool = False, self_extra: str = "") -> Path:
+    """Two-atom Fe cell (simple cubic, sites at 0 and (1/2,1/2,1/2)) from the bcc Fe seed, U = 2 eV on both sites.
+    Site moments mom1, mom2 (the noncollinear convention: the same potential file on both sites); swap2 swaps the spin
+    channels of the site-2 file (the nsp = 1 convention, default at nsp = 1, where mom is ignored)."""
     work = scratch / name
     work.mkdir(parents=True)
     seed = (hu.BULK_FIXTURE / "Fe.nml").read_text()
-    site2 = swap_spin_channels(seed) if nsp == 1 else re.sub(r"(?m)^ mom = .*$", " mom = 0.0, 0.0, -1.0", seed)
-    (work / "Fe1.nml").write_text(seed.replace("symbol = 'Fe'", "symbol = 'Fe1'"))
-    (work / "Fe2.nml").write_text(site2.replace("symbol = 'Fe'", "symbol = 'Fe2'"))
+    if swap2 is None:
+        swap2 = nsp == 1
+    if nsp == 1:  # the spin lives in the channels; mom stays +z
+        mom1 = mom2 = (0.0, 0.0, 1.0)
+    site2 = swap_spin_channels(seed) if swap2 else seed
+    (work / "Fe1.nml").write_text(moment_line(seed, mom1).replace("symbol = 'Fe'", "symbol = 'Fe1'"))
+    (work / "Fe2.nml").write_text(moment_line(site2, mom2).replace("symbol = 'Fe'", "symbol = 'Fe2'"))
+    periodic = "pbc = .true.\nb1 = .true.\nb2 = .true.\nb3 = .true.\nn1 = 20\nn2 = 20\nn3 = 20\nstrux_backend = 'strux_lib'\n" if kspace else ""
+    reciprocal = ""
+    if kspace:
+        text = (gh.ROOT / "tests/scf/cases/k_space_scf/bccFe/input.nml").read_text()
+        block = re.search(r"(?ms)^&reciprocal\b.*?^/\s*$", text).group(0)
+        reciprocal = re.sub(r"(?m)^nk([123])\s*=.*$", r"nk\1 = 8", block) + "\n"
     (work / "lattice.nml").write_text(
         "&lattice\nnbulk_bulk = 2\nntot = 2\nnbas = 2\nnrec = 2\n"
         "a(:, 1) = 1.0, 0.0, 0.0\na(:, 2) = 0.0, 1.0, 0.0\na(:, 3) = 0.0, 0.0, 1.0\n"
@@ -72,22 +89,24 @@ def af_deck(scratch: Path, name: str, *, nsp: int) -> Path:
         "izp(1) = 1\nizp(2) = 2\nno(1) = 1\nno(2) = 2\niu(1) = 1\niu(2) = 2\nib(1) = 1\nib(2) = 2\nirec(1) = 1\nirec(2) = 2\n/\n")
     (work / "input.nml").write_text(
         "&calculation\npre_processing = 'bravais'\nverbose = T\n/\n"
-        "&lattice\nrc = 040\nalat = 2.86120\ncrystal_sym = 'file'\nwav = 1.40880\nntype = 2\nct(1) = 3.0d0\nct(2) = 3.0d0\nr2 = 9.00d0\n/\n"
+        f"&lattice\nrc = 040\nalat = 2.86120\ncrystal_sym = 'file'\nwav = 1.40880\nntype = 2\nct(1) = 3.0d0\nct(2) = 3.0d0\nr2 = 9.00d0\n{periodic}/\n"
         "&atoms\ndatabase = './'\nlabel(1) = 'Fe1'\nlabel(2) = 'Fe2'\n/\n"
-        "&self\nnstep = 2\n/\n"
+        f"&self\nnstep = {nstep}\n{'use_kspace = .true.' + chr(10) if kspace else ''}{self_extra}/\n"
         "&energy\nfermi = -0.042265\nenergy_min = -3.0\nenergy_max = 3.0\nchannels_ldos = 2500\n/\n"
-        f"&control\ncalctype = 'B'\nnsp = {nsp}\nlld = 200\nrecur = 'chebyshev'\n/\n"
+        f"&control\ncalctype = 'B'\nnsp = {nsp}\nlld = {200 if recur == 'chebyshev' else 21}\nrecur = '{recur}'\n/\n"
         "&mix\nbeta = 0.1\nmixtype = 'broyden'\n/\n"
-        "&hamiltonian\nhoh = .false.\nhubbard_u_general(1,3) = 2.0\nhubbard_u_general(2,3) = 2.0\n/\n")
+        f"{reciprocal}"
+        f"&hamiltonian\nhoh = {'.true.' if hoh else '.false.'}\nhubbard_u_general(1,3) = 2.0\nhubbard_u_general(2,3) = 2.0\n/\n")
     return work
 
 
-def af_numbers(log: str) -> tuple[list[float], list[float], list[float]]:
+def af_numbers(log: str) -> tuple[list[float], dict[int, list[tuple[float, float, float]]]]:
+    """E_F per step and the moment vector of each site per step."""
     ef = [float(x) for x in re.findall(r"Free Fermi energy:\s*(-?\d+\.\d+)", log)]
-    mz = {1: [], 2: []}
-    for atom, _, _, z in re.findall(r"Spin moment projections of atom\s+(\d)\s+is\s+(\S+)\s+(\S+)\s+(\S+)", log):
-        mz[int(atom)].append(float(z))
-    return ef, mz[1], mz[2]
+    mom: dict[int, list[tuple[float, float, float]]] = {1: [], 2: []}
+    for atom, x, y, z in re.findall(r"Spin moment projections of atom\s+(\d)\s+is\s+(\S+)\s+(\S+)\s+(\S+)", log):
+        mom[int(atom)].append((float(x), float(y), float(z)))
+    return ef, mom
 
 
 def shift_nsp3(binary: Path, scratch: Path) -> tuple[bool, str]:
@@ -117,12 +136,12 @@ def af_fe(binary: Path, scratch: Path) -> tuple[bool, str]:
         if status != 0:
             return False, f"run failed (nsp={nsp})\n{log[-1500:]}"
         res[nsp] = af_numbers(log)
-    (ef1, m11, _), (ef3, m13, m23) = res[1], res[3]
-    if min(len(ef1), len(ef3), len(m11), len(m13), len(m23)) < 2:
+    (ef1, m1), (ef3, m3) = res[1], res[3]
+    if min(len(ef1), len(ef3), len(m1[1]), len(m3[1]), len(m3[2])) < 2:
         return False, "fewer than two SCF steps in the log"
     d_ef = max(abs(a - b) for a, b in zip(ef1, ef3))
-    d_m = max(abs(abs(a) - abs(b)) for a, b in zip(m11, m13))
-    opposite = max(abs(a + b) for a, b in zip(m13, m23))
+    d_m = max(abs(abs(a[2]) - abs(b[2])) for a, b in zip(m1[1], m3[1]))
+    opposite = max(abs(a[2] + b[2]) for a, b in zip(m3[1], m3[2]))
     ok = d_ef < AF_TOL and d_m < AF_TOL and opposite < AF_TOL
     return ok, (f"nsp=3 against nsp=1: max |dE_F| {d_ef:.1e} Ry, max ||m1| difference| {d_m:.1e} muB, "
                 f"max |m1 + m2| at nsp=3 {opposite:.1e} muB (need < {AF_TOL})")

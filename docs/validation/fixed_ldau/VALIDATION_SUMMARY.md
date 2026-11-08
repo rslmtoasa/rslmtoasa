@@ -122,7 +122,7 @@ RS floors (bcc Fe, U=0, RS block, Broyden)
 
 ## Status and limits
 
-- Excluded from the energy route and not tested: SC-U, intersite V, truly noncollinear nsp=3/4 spinors with U (untested), impurity U, impurity/surface hosts for energy, nonzero test fields, constrained SCF.
+- Excluded from the energy route and not tested: SC-U, intersite V, nsp=3/4 with U beyond the symmetry checks of section 6, impurity U, impurity/surface hosts for energy, nonzero test fields, constrained SCF.
 - Energy routing is off for surfaces and impurities (RD4 not measured).
 - No energy-anisotropy E(x)-E(z); no converged SOC-on surface; no converged nsp=2 surface vs converged nsp=1 surface.
 - R06 (converged scalar Fe U/J sweep), R07 (noncubic J), R09 SOC ladder, R10, R11, R12, R13, R15: NOT_RUN in REMEDIATION_GATES.md; R02 aggregate NOT_RUN; R14 aggregate NOT_RUN.
@@ -149,4 +149,8 @@ Raw evidence is at git tag `archive/fable_v4b_u-2026-11-05` under docs/validatio
   The spectral state is therefore not a stationary point of the functional that the local state satisfies to 1.4e-4 Ry/eV; spectral energy routing is not adopted. Not tested: RS, J != 0, `hoh`, other materials.
 - `hoh` with `nsp=2` and SOC (spinor U, `tests/scf/cases/bulk/bccFe_hubbard`, Chebyshev, one step, U=2 J=0): E_F(U=2) - E_F(U=0) +0.0680 Ry with `hoh`, +0.0668 Ry without; orbital moment 0.0425 muB, max |P_up,dn| 1.3e-2.
   Only the spin-diagonal placement of V_U is tested; an earlier guard (`hoh` requires `nsp=1`) was removed. Not tested: the spin-off-diagonal part of V_U with `hoh`, `ccor_2c` at `nsp=2`, tilted axes.
-
+- Symmetry checks of `nsp=3`/`4` with U (`tests/ldau/test_nsp34_noncollinear.py`; no external reference; bcc Fe, U=2 eV, J=0, Chebyshev unless stated; tolerance 2e-6 Ry or muB): ferromagnet with the moment along z against (0.612, 0.612, 0.5): E_F and |m| differences 0 to the log precision, spinor-P eigenvalues differ by 8.8e-12, |P_up,dn| in the global frame 0.297 for the tilted run;
+  two-atom AF with moments (z, x) against (x, -z) and with the sites exchanged: E_F and site |m| equal over 2 steps; two parallel moments at `nsp=3` against the `nsp=1` ferromagnet: equal; `nsp=4` with SOC, moment along z against x: 1.0e-6 (E_F, |m|); SOC off at `nsp=4` against `nsp=3`: equal;
+  k-space second order `nsp=3` AF, |m1| - |m2| over 3 steps: 0 (|m1| 2.385568, 2.632155, 2.652151 muB); restart from `_out.nml` + `_dm.nml` after 2 steps against the continuous step 3: E_F -0.052606 Ry and |m| 2.526930 muB on both.
+  With bugs injected locally (not committed): spin-off-diagonal V_U blocks dropped: rotation E_F difference 5.0e-3 Ry, |m| 1.6e-1 muB, AF angle 6.4e-1, SOC cubic 2.2e-1; U skipped on site 2: k-space mirror 7.9e-1 muB; spin coherences not read from the DM file: restart E_F -0.051938 against -0.051902 Ry.
+  Not covered: block recursion at `nsp>=3` with noncollinear axes (not rotation invariant, KNOWN_ISSUES), k-space `nsp=1` AF (breaks the site symmetry, KNOWN_ISSUES), `local_axis`, constraints, impurity/surface.

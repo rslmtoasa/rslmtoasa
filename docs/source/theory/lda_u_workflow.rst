@@ -195,7 +195,10 @@ and RS block recursion with a spin axis not parallel to global z (see "Spin axis
 
 ``nsp=3`` and ``4`` with U are accepted (spinor U as at ``nsp=2``; with HOH the V is added to ``enim``). They are tested
 for collinear setups only: bcc Fe ferromagnet, a two-atom Fe antiferromagnet and NiO AFM-II, where results agree with the
-``nsp=1`` (``nsp=3``) and ``nsp=2`` (``nsp=4``) routes. Truly noncollinear states, ``local_axis``, ``gbt_single_q``, constraints
+``nsp=1`` (``nsp=3``) and ``nsp=2`` (``nsp=4``) routes. Tilted and noncollinear states are checked by symmetry only
+(global spin rotation, exchange of the two sublattices, cubic equivalence of the spin axis with SOC, restart round trip; no external
+reference), with Chebyshev recursion and k-space ``second``. RS block recursion at ``nsp>=3`` with noncollinear axes is not
+rotation invariant (``tests/KNOWN_ISSUES.md``). ``local_axis``, ``gbt_single_q``, constraints
 and impurity/surface runs with U at ``nsp>=3`` are untested. To set up a collinear antiferromagnet use the noncollinear
 convention: the same potential file (majority along the site axis) for both sublattices with ``mom = 0, 0, 1`` and
 ``0, 0, -1``. Potential files in the ``nsp=1`` convention (the second sublattice with up and down swapped, ``mom = +z``) run at
@@ -297,7 +300,7 @@ agrees with the nsp=1 impurity to 9e-9 (d up), 1.9e-8 (d down) and 2.6e-7 muB (m
 Surfaces (RS, ``recur='chebyshev'`` or ``'block'`` along z; tilted axes need Chebyshev) follow the impurity rules: every
 U-carrying frozen host written at ``nsp=2`` in local mode with the spinor ``_dm`` file and a matching axis, ``fermi`` equal to the host E_F,
 ``ldm_beta=0.3``, and the energy window checked against the U-shifted d band. The empty sphere carries no U. ``auto`` resolves to ``local``
-under the impurity host rule; ``nsp=3/4`` with U stays fatal and KS surfaces are not supported. Seed a surface from the converged
+under the impurity host rule; ``nsp=3/4`` with U was not run for surfaces, and KS surfaces are not supported. Seed a surface from the converged
 ``nsp=1`` surface (zero spin coherences) or, for SOC on, expect the spin-orbit transient: a host converged without SOC moves when SOC is
 switched on (``ni_host_soc`` in ``decks` (archive tag `archive/fable_v4b_u-2026-11-05`)`).
 
