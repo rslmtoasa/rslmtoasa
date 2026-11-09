@@ -13,9 +13,8 @@ contains
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
    !>          antiferromagnet with mom = +z and -z). With hoh (not gbt_single_q) V_U is added to enim
-   !>          (build_bulkham, build_locham). hubbard_radial_moments='local' also needs a first-order
-   !>          Hamiltonian (no hoh) and nsp <= 3 (nsp=3: bulk, collinear site axes). One condition per statement;
-   !>          the message names the feature.
+   !>          (build_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 3 (nsp=3: bulk, collinear
+   !>          site axes) and, with hoh, calctype 'B'. One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
       logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
@@ -57,8 +56,10 @@ contains
                end if
             end do
          end if
-         if (this%hoh .and. .not. this%fixed_u_test_allow_hoh_w1_u0) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
+         ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
+         ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface local routes are first order only.
+         if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0) then
+            call g_logger%fatal("hubbard_radial_moments='local' with hoh=.true. requires calctype='B'.", __FILE__, __LINE__)
          end if
          if (this%control%lmax /= 2) then
             call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)

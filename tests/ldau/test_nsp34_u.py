@@ -11,6 +11,8 @@ Checks (each prints PASS/FAIL by name; the test fails if any fails):
                  opposite at nsp = 3.
   af_fe_local    the same pair with hubbard_radial_moments = 'local': nsp = 3 (spinor correction along each site axis)
                  against nsp = 1 (the scalar route, validated against Quantum ESPRESSO for MnO).
+  af_fe_local_hoh  the same with hoh (V_U in enim): nsp = 3 against nsp = 1. This tests the site spin frame under hoh, not the
+                 correction itself, which has no independent reference under hoh (see KNOWN_ISSUES).
 
 Bugs caught: V_U dropped at nsp >= 3 (the shifts are 0); V_U built from the wrong spin channel for the site with
 mom = -z (the AF run leaves the nsp = 1 result); the local radial-moment correction taken in the global instead of the
@@ -134,10 +136,11 @@ def shift_nsp4_hoh(binary: Path, scratch: Path) -> tuple[bool, str]:
     return ok, f"E_F shift, U=2 eV, hoh, SOC: nsp=4 {new:+.6f} Ry, nsp=2 {ref:+.6f} Ry (need > {hu.SHIFT_MIN} and |difference| < {SHIFT_TOL})"
 
 
-def af_fe(binary: Path, scratch: Path, radial: str = "auto") -> tuple[bool, str]:
+def af_fe(binary: Path, scratch: Path, radial: str = "auto", hoh: bool = False) -> tuple[bool, str]:
     res = {}
     for nsp in (1, 3):
-        status, log = gh.run_binary(binary, af_deck(scratch, f"af_{radial}_nsp{nsp}", nsp=nsp, radial=radial))
+        status, log = gh.run_binary(binary, af_deck(scratch, f"af_{radial}{'_hoh' if hoh else ''}_nsp{nsp}", nsp=nsp,
+                                                    radial=radial, hoh=hoh))
         if status != 0:
             return False, f"run failed (nsp={nsp})\n{log[-1500:]}"
         res[nsp] = af_numbers(log)
@@ -161,7 +164,8 @@ def main() -> int:
     args.scratch_root.mkdir(parents=True)
     failed = False
     for name, check in (("shift_nsp3", shift_nsp3), ("shift_nsp4_hoh", shift_nsp4_hoh), ("af_fe", af_fe),
-                        ("af_fe_local", lambda b, s: af_fe(b, s, "local"))):
+                        ("af_fe_local", lambda b, s: af_fe(b, s, "local")),
+                        ("af_fe_local_hoh", lambda b, s: af_fe(b, s, "local", hoh=True))):
         ok, info = check(args.binary.resolve(), args.scratch_root.resolve())
         print(f"{'PASS' if ok else 'FAIL'} {name} {info}")
         failed |= not ok

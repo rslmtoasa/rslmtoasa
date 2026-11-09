@@ -189,8 +189,8 @@ energies come from the spinor functional, and the radial moments use the spinor 
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
 Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, self-consistent U, intersite V, HOH with
-``gbt_single_q`` or with k-space ``kspace_ham_order='first'``, ``hubbard_radial_moments='local'`` with HOH, at ``nsp=4``, or at
-``nsp=3`` in k-space, for ``calctype`` other than ``B``, or with site axes that are not parallel or antiparallel,
+``gbt_single_q`` or with k-space ``kspace_ham_order='first'``, ``hubbard_radial_moments='local'`` at ``nsp=4``, at ``nsp=3`` in k-space, for ``calctype``
+other than ``B`` (with HOH: any calctype but ``B``), or at ``nsp=3`` with site axes that are not parallel or antiparallel,
 at ``nsp=2`` correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear axes: use nsp=3 or 4"),
 and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
 
@@ -202,7 +202,9 @@ reference), with Chebyshev recursion and k-space ``second``. RS block recursion 
 rotation invariant with the default terminator and nearly so (1e-4 muB) with ``sym_term = .true.`` (``tests/KNOWN_ISSUES.md``). ``local_axis``, ``gbt_single_q``, constraints
 and impurity/surface runs with U at ``nsp>=3`` are untested. ``hubbard_radial_moments='local'`` at ``nsp=3`` (real space, bulk,
 collinear axes) takes the spinor correction along each site axis; the two-atom Fe antiferromagnet reproduces the ``nsp=1`` ``local``
-route (``tests/ldau/test_nsp34_u.py``, ``af_fe_local``). Its energy is not routed (as for impurities). To set up a collinear antiferromagnet use the noncollinear
+route (``tests/ldau/test_nsp34_u.py``, ``af_fe_local``). Its energy is not routed (as for impurities). ``local`` with HOH removes V_U from the moments of the orthonormal-basis Green
+function in the same way as at first order (H = H0 + V_U with V_U additive in ``enim``); the nsp=3 against nsp=1 check
+``af_fe_local_hoh`` tests the spin frame, not the correction. To set up a collinear antiferromagnet use the noncollinear
 convention: the same potential file (majority along the site axis) for both sublattices with ``mom = 0, 0, 1`` and
 ``0, 0, -1``. Potential files in the ``nsp=1`` convention (the second sublattice with up and down swapped, ``mom = +z``) run at
 ``nsp>=3`` with the default ``density_policy='relaxed_reference'`` silently turn ferromagnet-like after the first step
