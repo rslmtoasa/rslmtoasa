@@ -38,7 +38,7 @@
 !------------------------------------------------------------------------------
 submodule(reciprocal_mod) reciprocal_spin_density
    use spin_density_mod, only: spin_density, sd_orders, sd_producer_kspace, &
-                               sd_constrained_spiral
+                               sd_constrained_spiral, sd_relaxed_reference
    implicit none
 
 contains
@@ -182,6 +182,10 @@ contains
          if (sqrt(sum(ref(:)**2)) <= 1.0e-12_rp) ref(:) = [0.0_rp, 0.0_rp, 1.0_rp]
          call this%rf_density%resolve_site_axis(isite, ref, axis, site_charge, m_long, &
                                                 m_transverse, torque)
+         ! Scalar collinear spin (nsp<3): the spin lives in the up/down channels and the axis is the sign convention
+         ! of the site file (potential%mom, +z), as in real space (resolve_density_axes). A site whose majority spin
+         ! is the global down channel has a measured axis of -z, which would swap its radial channels every iteration.
+         if (this%control%nsp < 3 .and. trim(policy) == sd_relaxed_reference) axis(:) = ref(:)/sqrt(sum(ref(:)**2))
          call this%rf_density%set_axis(isite, axis)
          axis_out(:, isite) = axis(:)
 

@@ -15,12 +15,14 @@ Checks (each prints PASS/FAIL by name; the test fails if any fails):
   soc_cubic       FM Fe with SOC at nsp = 4, moment along z and along x (related by a cubic rotation): equal; with SOC held at
                   zero nsp = 4 equals nsp = 3.
   ks_af_mirror    two-atom Fe AF in k-space at nsp = 3 (the same potential file on both sites, mom = +z and -z): |m1| = |m2| at
-                  every step (the sublattice mirror symmetry; the nsp = 1 spin-swapped route breaks it, see KNOWN_ISSUES).
+                  every step (the sublattice mirror symmetry).
+  ks_af_mirror_nsp1  the same at nsp = 1 (the second site's file with up and down swapped): the k-space density axis must stay
+                  +z, as in real space; an axis that follows the measured moment swaps the radial channels of site 2.
   restart         tilted AF: a restart from <label>_out.nml and <label>_dm.nml after step 2 reproduces step 3 of the continuous run.
 
 Bugs caught: a spinor V or density matrix built in the wrong spin frame (rot_fm, af_angle), a tilted-axis error that only the
 site-to-site coupling shows (af_angle), V_U lost in the SOC path (soc_cubic), the k-space route dropping the mirror symmetry
-(ks_af_mirror), moment axes or density matrix not persisted in the restart files (restart).
+(ks_af_mirror, ks_af_mirror_nsp1), moment axes or density matrix not persisted in the restart files (restart).
 
 usage: test_nsp34_noncollinear.py --binary rslmto.x --scratch-root DIR
 """
@@ -144,8 +146,8 @@ def soc_cubic(binary: Path, scratch: Path) -> tuple[bool, str]:
                 f"(E_F in Ry and |m| in muB over 2 steps, need < {5 * TOL:.0e})")
 
 
-def ks_af_mirror(binary: Path, scratch: Path) -> tuple[bool, str]:
-    status, log = run(binary, t3.af_deck(scratch, "ks_af", nsp=3, kspace=True, nstep=3))
+def ks_af_mirror(binary: Path, scratch: Path, nsp: int = 3) -> tuple[bool, str]:
+    status, log = run(binary, t3.af_deck(scratch, f"ks_af_nsp{nsp}", nsp=nsp, kspace=True, nstep=3))
     if status != 0:
         return False, f"run failed\n{log[-1500:]}"
     m1, m2 = moments(log, 1), moments(log, 2)
@@ -188,7 +190,8 @@ def main() -> int:
     args.scratch_root.mkdir(parents=True)
     failed = False
     for name, check in (("rot_fm", rot_fm), ("af_angle", af_angle), ("soc_cubic", soc_cubic),
-                        ("ks_af_mirror", ks_af_mirror), ("restart", restart)):
+                        ("ks_af_mirror", ks_af_mirror), ("ks_af_mirror_nsp1", lambda b, s: ks_af_mirror(b, s, 1)),
+                        ("restart", restart)):
         ok, info = check(args.binary.resolve(), args.scratch_root.resolve())
         print(f"{'PASS' if ok else 'FAIL'} {name} {info}")
         failed |= not ok

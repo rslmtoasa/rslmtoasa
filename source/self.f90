@@ -3151,7 +3151,12 @@ contains
             ! up and down channels from one iteration to the next and stalls the SCF (VAL-03). The site then keeps the
             ! direction it had, so a small seeded moment is not relabelled, while a moment that grows in either sign
             ! passes the floor within one iteration and sets mom as before.
-            if (mtot > moment_direction_floor) then
+            ! Only at nsp >= 3. At nsp < 3 (scalar collinear spin) the spin lives in the up/down channels of the site file
+            ! and potential%mom is just that file's sign convention (+z), which the real-space route also keeps
+            ! (bands.f90, calculate_magnetic_moments). A site stored with swapped channels (an antiferromagnet at nsp=1)
+            ! has mz < 0 here; following it would set mom = -z, and the next Hamiltonian build (obarm, enim, hmag) would swap
+            ! the channels of that site again. The density axis is held on mom as well (reciprocal_spin_density.f90).
+            if (mtot > moment_direction_floor .and. this%control%nsp >= 3) then
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = &
                   [this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx, &
                    this%symbolic_atom(this%lattice%nbulk + ia)%potential%my, &

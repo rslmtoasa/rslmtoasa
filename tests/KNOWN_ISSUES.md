@@ -286,13 +286,13 @@ the archive tags.
   Ni1/Ni2 spin moments (muB) 0.774/0.774 (step 1), 0.753/0.713, 0.593/0.001 (step 3), 0.568/0.034 (step 10), 0.509/0.021 (step 20); Diff 3.0e-2 -> 4.9e-4 (looks like convergence). beta 0.05: 0.508/0.019 at step 20. beta 0.2: erratic, E_F between -0.158 and -0.010 Ry.
   The same deck in real space (Chebyshev, lld 200) keeps Ni1/Ni2 = 0.7117/0.7109 -> 0.7142/0.7143 over 4 steps (0.74 by step 9).
 - **Not verified:** the cause (candidates not tested: k-mesh and symmetry handling for the spin-polarised cell, E_F in the gap at 300 K). The deck is hand-built and not reproduced with a second NiO deck.
+- **Possibly the same cause as a fixed k-space `nsp=1` AF bug** (a mirrored-channel site had `potential%mom` flipped to -z each iteration and its density projected on the measured axis; fixed for the two-atom Fe cell and MnO, `ks_af_mirror_nsp1`): this deck was not re-run.
 - **Related:** real-space +U on the same deck: Ni moment falls with the SCF steps at U=6 and 8 (0.39 to 0.52 and 0.14 to 0.19 muB after 6 to 8 steps) while E_F drifts to -0.4 Ry; not diagnosed. k-space with U not run.
 
-### AFM bcc Fe cell with U=2 eV: block recursion at `nsp=3` depends on the quantization axes (mostly the terminator); k-space at `nsp=1` breaks the site symmetry — 2026-11-08
+### AFM bcc Fe cell with U=2 eV: block recursion at `nsp=3` depends on the quantization axes (mostly the terminator) — 2026-11-08
 - **Verified (`af_deck` in `tests/ldau/test_nsp34_u.py`, bcc Fe 2-atom AF cell, U=2 eV, J=0, spectral radial moments):**
   Block recursion, `nsp=3`, 2 steps, moments (z, x) against the same state rotated to (x, -z): E_F identical (+0.01929, -0.04356 Ry), site |m| step 1 2.33066/2.32922 against 2.32922/2.33066 and step 2 2.50357/2.50950 against 2.50950/2.50357 muB: the two sites swap their values, i.e. the result is not invariant under a global spin rotation. With `sym_term = .true.` (orbital-independent terminator, &control) the same pair gives E_F +0.018950, -0.043334 Ry on both and site |m| step 1 2.333923/2.333990 against 2.333990/2.333923, step 2 2.508328/2.508447 against 2.508447/2.508328 muB: the swap shrinks from 1.4e-3 / 5.9e-3 to 6.7e-5 / 1.2e-4 muB but is still above the log precision. The default (`sym_term = .false.`, orbital-dependent terminator) is what the numbers above were run with. The same rotated pair with Chebyshev agrees to the log precision (the `af_angle` check).
   Block recursion for the collinear AF (m2 = -z) at `nsp=3` and at `nsp=1` (swapped files) agree with each other (|m| 2.29663, 2.59689 on both sites).
-  k-space (`kspace_ham_order='second'`, nk=8), 4 steps: `nsp=3` AF keeps |m1| = |m2| = 2.38557, 2.63216, 2.65215, 2.58727; `nsp=1` AF (swapped files) gives |m2| = 2.38557, 2.29157, 1.67461, 0.60094 against |m1| = 2.38557, 2.78926, 2.86059, 2.61954.
 - **Not verified:** causes; the `sym_term` comparison suggests the default orbital-dependent terminator is the main part, the 1e-4 residual is not explained. Nothing else was triaged: the block-recursion spinor path for non-collinear starting axes and the k-space `nsp=1` AF assembly are untouched suspects. The k-space `nsp=1` behaviour looks like the NiO entry above (same symmetry breaking, there at U=0). A hand-built deck is a live suspect for the block case until a second deck reproduces it.
 - **Coverage:** `LdaUNsp34Noncollinear` uses Chebyshev for the rotation checks and k-space `nsp=3` for the mirror check; block recursion at `nsp>=3` with non-collinear axes is not tested.
 - **Proposal (not started, owner decision):** one fatal or warning for block recursion with `nsp>=3` and U; or a triage of the block path (size not estimated).
@@ -379,15 +379,6 @@ the archive tags.
   (`example/bulk/bccFe/input_frozen_magnon_constrained.nml`) is an `nsp = 4` frozen-magnon run. So there is no converged constraint-target result for
   the S6b path.
 
-
-### k-space `nsp = 1` AF with mirrored channels breaks at U=0: the density axis follows the measured moment, not `potential%mom` — 2026-11-08
-- **Verified (MnO AFM-II, 4-atom cell, first order, `nsp = 1`, Mn2 file with up/down swapped and `mom = +z`, 12^3, 300 K):** k-space starts at `Diff` 0.16 and does not converge
-  at U=0 (the Mn2 moment is reported as +4.21 muB at step 1, mix diff 0.66); real space converges the same deck (4.2088 muB). With `density_policy = 'constrained_spiral'` k-space converges
-  (`Diff` 2e-8 at U=0) and, at U=2 with `local`, reproduces real space to 0.005 eV on the d-up and d-down shifts against O p. At `nsp = 3` with `mom = +z, -z` both policies give axes (0,0,+1), (0,0,-1).
-- **Read in the source:** `resolve_density_axes` (`bands.f90`) sets the axis to `potential%mom` under `relaxed_reference`; `fill_band_moments_from_spin_density` (`reciprocal_spin_density.f90`)
-  passes the measured axis (`resolve_site_axis`: `axis = m/|m|`) to `set_axis`. For a mirrored site the measured axis is -z, so its radial up/down channels are swapped every iteration.
-- **Not verified:** that the AF NiO and AF bcc Fe k-space entries above and below have this cause (only MnO was run). Not tested: symmetry-reduced meshes (no spglib in the build used).
-- **Proposal, not done:** for `nsp < 3` take the reference axis in the k-space route, as in real space (about 5 lines in `reciprocal_spin_density.f90`).
 
 ### Radial moments with U: `spectral` moves the Mn d band against O p about twice as far as `U/2` and as Quantum ESPRESSO; `local` agrees with QE — 2026-11-08
 - **Measured (MnO AFM-II, ideal rocksalt a = 4.446 A, PBE `txc = 108`, U = 2 eV, J = 0; shifts U=2 minus U=0 of the occupied d-up centroid against the occupied O p centroid):** HOH + ccor_2c `nsp = 3` spectral -2.00 eV (RS and k-space agree to 0.005 eV,
