@@ -235,7 +235,8 @@ contains
       end if
 
       ! Spinor fixed U (nsp>=2, bulk): the full 10x10 d-shell V, including the up-down blocks, from the
-      ! spinor P in the global spin frame; the build routines add hubbard_u_pot to the on-site block once.
+      ! spinor P in the global spin frame; the build routines add hubbard_u_pot to the on-site block once: to ee
+      ! (h, first order) without hoh, to enim (additive on-site term, H = h - h o h + enim + lsham) with hoh.
       if (this%hubbard_soc_experimental .and. .not. present(potential_out)) then
          have_axis = .false.
          do na = 1, this%lattice%ntype

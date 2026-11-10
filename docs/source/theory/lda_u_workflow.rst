@@ -405,7 +405,11 @@ convention actually used by the Hamiltonian route.  Namelist U/J values are
 in eV and are converted to Ry on input.
 
 The current route applies this potential to the on-site block of both the
-real-space Hamiltonian and the shared reciprocal Fourier assembly.  The
+real-space Hamiltonian and the shared reciprocal Fourier assembly.  Without
+``hoh`` it is added to the on-site block of ``ee`` (the first-order ``h``).  With ``hoh`` it is added to
+``enim``, the additive on-site term of :math:`H = h - h\,o\,h + \mathrm{enim} + \mathrm{lsham}`, so that
+:math:`H = H_2 + V_U`; adding it to ``ee`` would put :math:`V_U` inside :math:`h\,o\,h` as well.
+``hoh`` with ``gbt_single_q`` or with ``kspace_ham_order='first'`` stops with a fatal.  The
 Hamiltonian source currently does not accumulate a separate scalar
 :math:`E_U-E_{dc}` correction.  Therefore ``etot`` and ``sumev`` in a
 validation run are reported as finite response observables under the active

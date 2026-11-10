@@ -1603,6 +1603,8 @@ contains
          end do
          deallocate(ham_vec)
 
+         ! gbt_single_q: V_U goes into ee, which is correct only without hoh (with hoh it would also enter h o h);
+         ! validate_fixed_u_scope stops hoh with gbt_single_q and U, so this insertion is not reached with hoh.
          if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
             ! Hubbard-U is onsite (spin-diagonal in the collinear rotating
             ! frame, from potential%ldm) and is added at bond slot m=1, where
