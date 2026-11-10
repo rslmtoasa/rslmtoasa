@@ -549,6 +549,14 @@ contains
       ! Reconstruct 4D density matrix from serialized restart storage.
       ! Without this, potential%ldm can stay at constructor defaults (zeros)
       ! even when ldm_flatten was read from *_out.nml.
+      if (len_trim(this%dm_file) > 0 .and. .not. exists(trim(density_matrix_path(this, fname)))) then
+         ! The potential names a density-matrix file that is not there: continue as for a potential without one (P starts from
+         ! ldm_flatten, zero if absent, and the first Green function provides it); the orbital occupation pattern of the
+         ! restart is lost, so the run may settle in a different state.
+         if (rank == 0) call g_logger%warning('Referenced density-matrix file is missing: '// &
+            trim(density_matrix_path(this, fname))//'; continuing without it.', __FILE__, __LINE__)
+         this%dm_file = ''
+      end if
       if (len_trim(this%dm_file) > 0) then
          call read_density_matrix_file(this, fname)
          call this%flatten_ldm()
@@ -1790,6 +1798,18 @@ contains
       close(unit)
    end subroutine write_density_matrix_file
 
+   !> Path of the density-matrix file named by the potential: relative to the directory of the potential file.
+   function density_matrix_path(this, potential_file) result(dm_path)
+      class(potential), intent(in) :: this
+      character(len=*), intent(in) :: potential_file
+      character(len=pl) :: dm_path
+      integer :: slash
+
+      slash = index(trim(potential_file), '/', back=.true.)
+      dm_path = trim(this%dm_file)
+      if (slash > 0) dm_path = potential_file(:slash)//trim(this%dm_file)
+   end function density_matrix_path
+
    subroutine read_density_matrix_file(this, potential_file)
       class(potential), intent(inout) :: this
       character(len=*), intent(in) :: potential_file
@@ -1798,7 +1818,7 @@ contains
       character(len=pl) :: dm_path
       real(rp), allocatable :: dm_re(:, :, :, :, :), dm_im(:, :, :, :, :)
       real(rp) :: hubbard_u_ev(4), hubbard_j_ev(4)
-      integer :: iteration, unit, ios, slash, l, spin, nm, spinor_d, tspin
+      integer :: iteration, unit, ios, l, spin, nm, spinor_d, tspin
       character(len=256) :: ios_message
 #ifdef USE_MPI
       integer :: mpi_error
@@ -1807,9 +1827,7 @@ contains
 
       dm_file = trim(this%dm_file)
       spinor_d = 0
-      slash = index(trim(potential_file), '/', back=.true.)
-      dm_path = trim(dm_file)
-      if (slash > 0) dm_path = potential_file(:slash)//trim(dm_file)
+      dm_path = density_matrix_path(this, potential_file)
       if (rank == 0) then
          if (.not. exists(trim(dm_path))) &
             call g_logger%fatal('Referenced density-matrix file is missing: '//trim(dm_path), __FILE__, __LINE__)
