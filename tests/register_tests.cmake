@@ -367,6 +367,9 @@ if(RUN_UNIT_TESTS)
   rslmto_add_test(NAME LdaUImpurityEqualsBulk TIER standard LABELS lda_u hoh
     COMMAND "${PY}" "${TestDIR}/ldau/test_impurity_equals_bulk.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/impurity_equals_bulk")
+  rslmto_add_test(NAME LdaUNonfinitePotentialGuard TIER standard LABELS lda_u guards
+    COMMAND "${PY}" "${TestDIR}/ldau/test_nonfinite_potential_guard.py" "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/nonfinite_potential_guard")
 
   # Stored-reference rows (tests/ldau/reference_rows.py; tests/ldau/references/*.json).
   # LdaURefRsImpurityNsp2 is tier validation: on Linux/OpenBLAS the nsp=2 (SOC = 0) run differs from nsp=1 by 1e-6
