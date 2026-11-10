@@ -109,15 +109,17 @@ contains
    !>          (no hoh unless allow_hoh), no constraints, no SC-U, no Hubbard-V. Callers add where (calctype), which
    !>          U/J input form, and the spin case. The bulk energy-routing eligibility keeps the default (no hoh); the
    !>          impurity and surface V_in capture passes allow_hoh, since with hoh V_U is additive in enim.
-   module function fixed_u_local_scope(this, allow_hoh) result(in_scope)
+   module function fixed_u_local_scope(this, allow_hoh, allow_noncollinear) result(in_scope)
       class(hamiltonian), intent(in) :: this
-      logical, intent(in), optional :: allow_hoh
-      logical :: in_scope, hoh_ok
+      logical, intent(in), optional :: allow_hoh, allow_noncollinear
+      logical :: in_scope, hoh_ok, nc_ok
 
       hoh_ok = .not. this%hoh
       if (present(allow_hoh)) hoh_ok = hoh_ok .or. allow_hoh
+      nc_ok = .not. this%control%is_noncollinear()
+      if (present(allow_noncollinear)) nc_ok = nc_ok .or. allow_noncollinear
       in_scope = trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. this%control%lmax == 2 .and. &
-         .not. this%control%is_noncollinear() .and. .not. this%control%constraints_enable .and. &
+         nc_ok .and. .not. this%control%constraints_enable .and. &
          hoh_ok .and. .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check
    end function fixed_u_local_scope
 

@@ -865,10 +865,10 @@ contains
       ! U/J: explicit input for the bulk types, not the impurity-only form
       if (.not. this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check) return
       ! Hamiltonian: Liechtenstein, lmax=2, collinear, first order, no constraints / SC-U / V
-      if (.not. this%hamiltonian%fixed_u_local_scope()) return
+      if (.not. this%hamiltonian%fixed_u_local_scope(allow_noncollinear=.true.)) return
       ! spin: scalar nsp=1 without SOC, or bulk spinor U at nsp=2
       if (.not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
-                 (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental))) return
+                 (this%control%nsp >= 2 .and. this%hamiltonian%hubbard_soc_experimental))) return
       ! where: bulk without an embedded cluster
       if (this%control%calctype /= 'B' .or. this%lattice%nbulk /= 0 .or. &
           this%lattice%nrec /= this%lattice%ntype) return
@@ -1079,7 +1079,7 @@ contains
       if (.not. this%is_eligible_local_hubbard()) return
       if (trim(this%hamiltonian%hubbard_radial_moments) /= 'local') return
 
-      if (this%control%nsp == 2) then
+      if (this%control%nsp >= 2) then
          ! Spinor d shell: the full 10x10 P_out of every site.
          do isite = 1, this%lattice%nrec
             call spinor_site_hubbard_energy(this%symbolic_atom(this%lattice%nbulk + isite)%potential, e_int_s, e_dc_s, e_hub_s)

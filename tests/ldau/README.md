@@ -10,6 +10,7 @@
 | `test_local_noncollinear_u.py` | `LdaULocalNoncollinear`: `hubbard_radial_moments='local'` at `nsp=3` with noncollinear site axes (real space): rotated, exchanged and generally rotated moment pairs against the same pair, parallel against `nsp=1`, `local` against `spectral` |
 | `test_surface_hoh_u.py` | `LdaUSurfaceHoh`: `hubbard_radial_moments='local'` with `hoh` on the reduced Ni(001) surface (calctype S), `nsp=2` (SOC held at zero) against `nsp=1`, and `local` against `spectral` |
 | `test_local_nsp4_u.py` | `LdaULocalNsp4`: `hubbard_radial_moments='local'` at `nsp=4` (real space): SOC held at zero against `nsp=3`, a ferromagnet with SOC against `nsp=2` and z against x, and `local` against `spectral` |
+| `test_local_energy_u.py` | `LdaULocalEnergy`: the Hubbard energy of `hubbard_radial_moments='local'` at `nsp=3` and `4` (real space): AF `nsp=3` against `nsp=1`, SOC-off `nsp=4` against `nsp=3`, FM with SOC `nsp=4` against `nsp=2` |
 | `reference_rows.py` | stored-reference rows: `reference_rows.py --list`, `reference_rows.py ROW --binary rslmto.x` |
 | `references/` | JSON scalars of every row; five rows are registered with ctest, the others are archived data |
 | `data/` | fixtures read by the Fortran oracles (`UnitHubbardSpinor`, `UnitLdaULocalMoments`) |
