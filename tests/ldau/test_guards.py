@@ -8,6 +8,7 @@ Scenarios (each prints PASS/FAIL by name; the test fails if any fails):
   mixed_axes                     different spin axes on different sites at nsp = 2
   impurity_host_nsp1             nsp = 2 impurity with a host written at nsp = 1
   impurity_host_axis_mismatch    frozen host written along z, run axis along x
+  local_kspace_nsp4              local radial moments in k-space at nsp = 4
 
 Bugs caught: a guard that stops firing (the run would continue with an unsupported U path), or one that
 fires with a different message.
@@ -77,6 +78,12 @@ def impurity_guards(binary: Path, scratch: Path) -> dict[str, tuple[bool, str]]:
     return results
 
 
+def local_kspace_nsp4_guard(binary: Path, scratch: Path) -> dict[str, tuple[bool, str]]:
+    import test_nsp34_u as af  # noqa: E402  (the two-atom Fe antiferromagnet deck)
+    status, log = gh.run_binary(binary, af.af_deck(scratch, "local_kspace_nsp4", nsp=4, radial="local", kspace=True))
+    return {"local_kspace_nsp4": expect_fatal(status, log, "in k-space does not support nsp=4")}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--binary", required=True, type=Path)
@@ -92,6 +99,8 @@ def main() -> int:
     for scenario, case in CASE_GUARDS.items():
         results[scenario] = run_case_guard(case, binary, scratch / "cases")
     results.update(impurity_guards(binary, scratch / "impurity"))
+    (scratch / "kspace_nsp4").mkdir()
+    results.update(local_kspace_nsp4_guard(binary, scratch / "kspace_nsp4"))
 
     for name, (ok, detail) in results.items():
         print(f"{'PASS' if ok else 'FAIL'} {name}")

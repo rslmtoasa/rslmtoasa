@@ -370,6 +370,9 @@ if(RUN_UNIT_TESTS)
   rslmto_add_test(NAME LdaUSurfaceHoh TIER standard LABELS lda_u hoh TIMEOUT 1800
     COMMAND "${PY}" "${TestDIR}/ldau/test_surface_hoh_u.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/surface_hoh")
+  rslmto_add_test(NAME LdaULocalNsp4 TIER standard LABELS lda_u nsp34 TIMEOUT 1200
+    COMMAND "${PY}" "${TestDIR}/ldau/test_local_nsp4_u.py" "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/local_nsp4")
 
   # Stored-reference rows (tests/ldau/reference_rows.py; tests/ldau/references/*.json).
   # LdaURefRsImpurityNsp2 is tier validation: on Linux/OpenBLAS the nsp=2 (SOC = 0) run differs from nsp=1 by 1e-6

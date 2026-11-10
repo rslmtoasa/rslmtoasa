@@ -13,7 +13,7 @@ contains
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
    !>          antiferromagnet with mom = +z and -z). With hoh V_U is added to enim
-   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 3 (nsp=3: bulk, any
+   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 4 (nsp=3 and 4: bulk, any
    !>          site axes) and, with hoh, calctype 'B'. One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
@@ -29,16 +29,16 @@ contains
             call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
                'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
          end if
-         if (this%control%nsp /= 1 .and. this%control%nsp /= 3 .and. .not. spinor_bulk) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 and 3 only for bulk fixed U/J).", &
+         if (this%control%nsp /= 1 .and. this%control%nsp < 3 .and. .not. spinor_bulk) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2, 3 and 4 only for bulk fixed U/J).", &
                __FILE__, __LINE__)
          end if
-         if ((this%control%has_soc() .and. .not. spinor_bulk) .or. this%control%nsp == 4) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC with nsp=4.", __FILE__, __LINE__)
+         if (this%control%has_soc() .and. .not. spinor_bulk .and. this%control%nsp /= 4) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC at nsp=1 or 3.", __FILE__, __LINE__)
          end if
-         if (this%control%nsp == 3) then
+         if (this%control%nsp >= 3) then
             if (trim(this%control%calctype) /= 'B') then
-               call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 requires calctype='B'.", __FILE__, __LINE__)
+               call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 and 4 requires calctype='B'.", __FILE__, __LINE__)
             end if
          end if
          ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction

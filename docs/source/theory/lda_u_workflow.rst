@@ -189,7 +189,7 @@ energies come from the spinor functional, and the radial moments use the spinor 
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
 Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, self-consistent U, intersite V, HOH with
-k-space ``kspace_ham_order='first'``, onsite U with ``kspace_ham_order='orthogonal'``, ``hubbard_radial_moments='local'`` at ``nsp=4``, at ``nsp=3`` for ``calctype``
+k-space ``kspace_ham_order='first'``, onsite U with ``kspace_ham_order='orthogonal'``, in k-space at ``nsp=4`` with ``hubbard_radial_moments='local'``, at ``nsp=3`` and ``4`` with it for ``calctype``
 other than ``B``, with HOH for ``calctype`` other than ``B`` outside ``nsp=1`` without SOC and the ``nsp=2`` spinor route,
 at ``nsp=2`` correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear axes: use nsp=3 or 4"),
 and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
@@ -201,7 +201,7 @@ for collinear setups only: bcc Fe ferromagnet, a two-atom Fe antiferromagnet and
 reference), with Chebyshev recursion and k-space ``second``. RS block recursion at ``nsp>=3`` with noncollinear axes is not
 rotation invariant with the default terminator and nearly so (1e-4 muB) with ``sym_term = .true.`` (``tests/KNOWN_ISSUES.md``). ``local_axis``, ``gbt_single_q``, constraints
 and impurity/surface runs with U at ``nsp>=3`` are untested. ``hubbard_radial_moments='local'`` at ``nsp=3`` (bulk;
-real space and k-space) takes the spinor correction along each site axis, with any site axes; ``tests/ldau/test_local_noncollinear_u.py`` checks that rotating or exchanging a noncollinear pair leaves E_F and the site moments unchanged. The two-atom Fe antiferromagnet reproduces the ``nsp=1`` ``local``
+real space and k-space) and ``nsp=4`` (bulk, real space) takes the spinor correction along each site axis, with any site axes (``tests/ldau/test_local_nsp4_u.py``: ``nsp=4`` with SOC held at zero against ``nsp=3``, a ferromagnet with SOC against ``nsp=2``, and z against x); ``tests/ldau/test_local_noncollinear_u.py`` checks that rotating or exchanging a noncollinear pair leaves E_F and the site moments unchanged. The two-atom Fe antiferromagnet reproduces the ``nsp=1`` ``local``
 route (``tests/ldau/test_nsp34_u.py``, ``af_fe_local``, real space; ``tests/ldau/test_kspace_local_nsp3.py``, k-space, antiferromagnet and ferromagnet). Its energy is not routed (as for impurities). ``local`` with HOH removes V_U from the moments of the orthonormal-basis Green
 function in the same way as at first order (H = H0 + V_U with V_U additive in ``enim``); the nsp=3 against nsp=1 check
 ``af_fe_local_hoh`` tests the spin frame, not the correction. On impurity (``calctype I``) and surface (``S``) clusters with HOH (``nsp=1``, and the ``nsp=2`` spinor route) V_U is captured at the ``enim`` insertion, as at the ``ee`` or ``hall`` insertion without HOH; ``tests/ldau/test_impurity_hoh_u.py`` compares the ``nsp=2`` run with SOC held at zero against ``nsp=1`` for the B2FeCo impurity (an Fe impurity in an Fe host does not reproduce the bulk even at U = 0, see ``tests/KNOWN_ISSUES.md``) and ``tests/ldau/test_surface_hoh_u.py`` does the same for the Ni(001) surface of ``tests/ldau/decks/ni001_soc_u3`` (the HOH Chebyshev recursion needs the window -3 to 3 Ry there; the deck's -1 to 1.5 Ry stops with "Chebyshev moments did not converge"). To set up a collinear antiferromagnet use the noncollinear
