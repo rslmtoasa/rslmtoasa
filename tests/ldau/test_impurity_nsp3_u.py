@@ -26,14 +26,14 @@ TOL = rr.IMP_SOC0_TOL
 ENGAGED = 1.0e-2  # muB
 
 
-def host_and_impurity(binary: Path, base: Path, tag: str, nsp: int, mode: str, hoh: bool = False):
+def host_and_impurity(binary: Path, base: Path, tag: str, nsp: int, mode: str, hoh: bool = False, soc0: bool = False):
     keys = f"hubbard_radial_moments = '{mode}'\n" + ("hoh = .true.\n" if hoh else "")
-    host_edit = lambda t: rr.add_u(rr.use_kspace(rr.set_nstep(t)), 2.0, 0.0, keys).replace("nsp = 1", f"nsp = {nsp}")
+    host_edit = lambda t: (rr.soc_off if soc0 else str)(rr.add_u(rr.use_kspace(rr.set_nstep(t)), 2.0, 0.0, keys).replace("nsp = 1", f"nsp = {nsp}"))
     host = rr.prepare(rr.CASES / "k_space_scf/bccFe", base / f"{tag}_host", host_edit)
     if rr.run(binary, host) != 0:
         return f"{tag}: host run failed\n{rr.log_text(host)[-1200:]}"
-    imp_edit = lambda t: rr.in_hamiltonian(rr.set_nstep(t).replace("nsp = 1", f"nsp = {nsp}").replace("hoh = false", "hoh = .true." if hoh else "hoh = false"),
-                                           f"hubbard_radial_moments = '{mode}'\n")
+    imp_edit = lambda t: (rr.soc_off if soc0 else str)(rr.in_hamiltonian(rr.set_nstep(t).replace("nsp = 1", f"nsp = {nsp}").replace("hoh = false", "hoh = .true." if hoh else "hoh = false"),
+                                           f"hubbard_radial_moments = '{mode}'\n"))
     d = rr.prepare(rr.CASES / "impurity/B2FeCo_nsp1", base / tag, imp_edit)
     shutil.copy2(host / "Fe_out.nml", d / "Fe.nml")
     shutil.copy2(host / "Fe_dm.nml", d / "Fe_dm.nml")

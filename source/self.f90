@@ -3048,7 +3048,7 @@ contains
             allocate(local_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=.true., m1_out=local_m1)
-            if ((this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental) .or. this%control%nsp == 3) &
+            if (this%control%nsp >= 2) &
                call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
             if (present(m1_out)) then
                m1_out(:, 1:size(local_m1, 2), 1:size(local_m1, 3), &
@@ -3077,7 +3077,7 @@ contains
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
                if (l == 2 .and. allocated(local_m1)) then
                   site_type = this%lattice%ib(ia)
-                  if ((this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental) .or. this%control%nsp == 3) then
+                  if (this%control%nsp >= 2) then
                      ! spinor operator (nsp=2, or nsp=3 with collinear axes): both radial spin channels from the full 10x10 P, M1 and V_in.
                      call extract_hubbard_d_spinor_potential(this%hamiltonian%hubbard_u_pot, site_type, spin_off, &
                         v_spinor, moment_status)

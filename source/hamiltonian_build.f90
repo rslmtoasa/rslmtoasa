@@ -13,8 +13,8 @@ contains
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
    !>          antiferromagnet with mom = +z and -z). With hoh V_U is added to enim
-   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 4 (nsp=3: bulk, or impurity and
-   !>          surface without hoh; nsp=4: bulk; any site axes) and, with hoh, calctype 'B' (nsp=1 and the nsp=2 spinor route excepted). One condition per statement; the message names the feature.
+   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 4 (nsp=3 and 4: any calctype, any site axes) and, with hoh,
+   !>          calctype 'B' unless nsp=1 without SOC or a spinor route (nsp=2, 3, 4). One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
       logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
@@ -36,16 +36,13 @@ contains
          if (this%control%has_soc() .and. .not. spinor_bulk .and. this%control%nsp /= 4) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support SOC at nsp=1 or 3.", __FILE__, __LINE__)
          end if
-         if (this%control%nsp == 4 .and. trim(this%control%calctype) /= 'B') then
-            call g_logger%fatal("hubbard_radial_moments='local' at nsp=4 requires calctype='B'.", __FILE__, __LINE__)
-         end if
          ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
          ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)
          ! cover scalar-spin nsp=1 and the spinor routes at nsp=2 and 3 (which read V_in by type, as in the bulk).
          if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0 .and. &
-             .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk .or. this%control%nsp == 3)) then
+             .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk .or. this%control%nsp >= 3)) then
             call g_logger%fatal("hubbard_radial_moments='local' with hoh=.true. requires calctype='B', nsp=1 without SOC, "// &
-                                "or the nsp=2 or 3 spinor route.", __FILE__, __LINE__)
+                                "or the nsp=2, 3 or 4 spinor route.", __FILE__, __LINE__)
          end if
          if (this%control%lmax /= 2) then
             call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)

@@ -382,6 +382,9 @@ if(RUN_UNIT_TESTS)
   rslmto_add_test(NAME LdaUImpurityNsp3 TIER standard LABELS lda_u nsp34 TIMEOUT 1200
     COMMAND "${PY}" "${TestDIR}/ldau/test_impurity_nsp3_u.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/impurity_nsp3")
+  rslmto_add_test(NAME LdaULocalNsp4Workflows TIER standard LABELS lda_u nsp34 TIMEOUT 1800
+    COMMAND "${PY}" "${TestDIR}/ldau/test_local_nsp4_workflows_u.py" "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/local_nsp4_workflows")
   rslmto_add_test(NAME LdaUImpurityEqualsBulk TIER standard LABELS lda_u hoh
     COMMAND "${PY}" "${TestDIR}/ldau/test_impurity_equals_bulk.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/impurity_equals_bulk")

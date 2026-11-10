@@ -812,9 +812,6 @@ end subroutine calculate_band_moments
       ! Orbital indexing: 
       ! iorb = 1 (s, 1 orbital), iorb = 2 (p, 3 orbitals), iorb = 3 (d, 5 orbitals)
       
-      if (trim(this%hamiltonian%hubbard_radial_moments) == 'local' .and. this%hamiltonian%control%nsp == 4) &
-         call g_logger%fatal("hubbard_radial_moments='local' in k-space does not support nsp=4.", __FILE__, __LINE__)
-
       call root_info('calculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS', __FILE__, __LINE__)
 
       call this%invalidate_if_operator_changed('reciprocal%calculate_ldm_from_projected_dos', operator_changed)

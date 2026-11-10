@@ -8,6 +8,7 @@
 | `test_kspace_local_nsp3.py` | `LdaUKspaceLocalNsp3`: `hubbard_radial_moments='local'` in k-space at `nsp=3` against `nsp=1`, antiferromagnet and ferromagnet, and `local` against `spectral` at `nsp=3` |
 | `test_impurity_hoh_u.py` | `LdaUImpurityHoh`: `hubbard_radial_moments='local'` with `hoh` on the B2FeCo impurity, `nsp=2` (SOC held at zero) against `nsp=1`, and `local` against `spectral` |
 | `test_impurity_nsp3_u.py` | `LdaUImpurityNsp3`: `hubbard_radial_moments='local'` at `nsp=3` on the B2FeCo impurity (first order and hoh) in an `nsp=3` k-space host against `nsp=1`, and `local` against `spectral` |
+| `test_local_nsp4_workflows_u.py` | `LdaULocalNsp4Workflows`: `hubbard_radial_moments='local'` at `nsp=4` in k-space (AF and FM, first order and hoh) and on the B2FeCo impurity: SOC off against `nsp=3`, SOC on against `nsp=2` |
 | `test_local_noncollinear_u.py` | `LdaULocalNoncollinear`: `hubbard_radial_moments='local'` at `nsp=3` with noncollinear site axes (real space): rotated, exchanged and generally rotated moment pairs against the same pair, parallel against `nsp=1`, `local` against `spectral` |
 | `test_surface_hoh_u.py` | `LdaUSurfaceHoh`: `hubbard_radial_moments='local'` with `hoh` on the reduced Ni(001) surface (calctype S), `nsp=2` (SOC held at zero) against `nsp=1`, and `local` against `spectral` |
 | `test_local_nsp4_u.py` | `LdaULocalNsp4`: `hubbard_radial_moments='local'` at `nsp=4` (real space): SOC held at zero against `nsp=3`, a ferromagnet with SOC against `nsp=2` and z against x, and `local` against `spectral` |
