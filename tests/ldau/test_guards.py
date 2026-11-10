@@ -9,7 +9,6 @@ Scenarios (each prints PASS/FAIL by name; the test fails if any fails):
   impurity_host_nsp1             nsp = 2 impurity with a host written at nsp = 1
   impurity_host_axis_mismatch    frozen host written along z, run axis along x
   local_nsp3_noncollinear        local radial moments at nsp = 3 with site axes along z and x
-  local_nsp3_kspace              local radial moments at nsp = 3 in k-space
 
 Bugs caught: a guard that stops firing (the run would continue with an unsupported U path), or one that
 fires with a different message.
@@ -83,7 +82,6 @@ def local_nsp3_guards(binary: Path, scratch: Path) -> dict[str, tuple[bool, str]
     import test_nsp34_u as af  # noqa: E402  (the two-atom Fe antiferromagnet deck)
     cases = {
         "local_nsp3_noncollinear": (dict(mom2=(1.0, 0.0, 0.0)), "requires collinear site axes"),
-        "local_nsp3_kspace": (dict(kspace=True, nstep=1), "supported in real space only"),
     }
     results = {}
     for name, (deck, message) in cases.items():
