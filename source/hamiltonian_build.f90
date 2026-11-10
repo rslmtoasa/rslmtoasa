@@ -39,17 +39,13 @@ contains
          if (this%control%nsp == 4 .and. trim(this%control%calctype) /= 'B') then
             call g_logger%fatal("hubbard_radial_moments='local' at nsp=4 requires calctype='B'.", __FILE__, __LINE__)
          end if
-         if (this%control%nsp == 3 .and. trim(this%control%calctype) /= 'B' .and. this%hoh) then
-            call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 on impurities and surfaces requires hoh=.false.", &
-               __FILE__, __LINE__)
-         end if
          ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
          ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)
-         ! cover scalar-spin nsp=1 and the nsp=2 spinor route (which reads V_in by type, as in the bulk).
+         ! cover scalar-spin nsp=1 and the spinor routes at nsp=2 and 3 (which read V_in by type, as in the bulk).
          if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0 .and. &
-             .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk)) then
+             .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk .or. this%control%nsp == 3)) then
             call g_logger%fatal("hubbard_radial_moments='local' with hoh=.true. requires calctype='B', nsp=1 without SOC, "// &
-                                "or the nsp=2 spinor route.", __FILE__, __LINE__)
+                                "or the nsp=2 or 3 spinor route.", __FILE__, __LINE__)
          end if
          if (this%control%lmax /= 2) then
             call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)
