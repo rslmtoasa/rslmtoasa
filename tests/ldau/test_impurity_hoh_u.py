@@ -9,7 +9,7 @@ and the moments of H0 = H - V_U need the V_in that was actually inserted; the ca
   engaged       the same impurity in a spectral-mode host (hoh) gives spin moments that differ from the local run by more than 1e-2 muB at
                 some step, so the correction is acting (a skipped correction would make the first case pass trivially).
 Not covered: surface (calctype S) with hoh, nsp = 3 and 4 on impurities, an independent reference for the corrected moments themselves
-(an Fe impurity in an Fe host does not reproduce the bulk, even at U = 0 and without hoh: KNOWN_ISSUES.md, embedding offset).
+(test_impurity_equals_bulk.py gives the Fe-in-Fe identity for hoh, local mode).
 
 usage: test_impurity_hoh_u.py --binary rslmto.x --scratch-root DIR
 """

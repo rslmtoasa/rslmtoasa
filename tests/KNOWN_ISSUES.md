@@ -311,6 +311,22 @@ the archive tags.
 - **Probable cause (not tested):** cluster mismatch, rc=80 for bulk against rc=100 for the impurity; the matched test is blocked by the rc=100 entry
   below.
 
+- **Update (impurity-in-host test decks, 2026-11): the dominant offset is the fixed Fermi energy of the impurity deck, not the Hamiltonian.** `calctype I`
+  keeps E_F at its input value; the bulk step determines E_F from the electron count and it moves with hoh and U. bcc Fe, nsp = 1, one step from the same
+  state, rc = 40 (impurity 'Fe-imp' copy of the host, identical potentials, same cluster size of 748 atoms in the bulk and impurity `clust` files).
+  Verified (bulk against impurity spin moment, muB): U = 0 first order 2.0837 against 2.2215 with the deck's E_F = -0.042265 Ry, 2.0797 with the bulk step's
+  E_F (-0.069773); U = 0 hoh 2.273531 against 2.273516 (E_F -0.084057, max parameter difference 8e-6); U = 2 hoh local 2.521310 against 2.521297 (E_F
+  -0.110565, 9e-6); U = 2 first order local 2.349640 against 2.349847. The earlier offsets (hoh 2.52 against 2.35) were the stale E_F: the bulk E_F moves
+  by 0.04 to 0.07 Ry with hoh, U. Registered as `LdaUImpurityEqualsBulk` (rc = 20, hoh, local, U = 2: 2.471169 against 2.471392; with the stale E_F the
+  impurity gives 2.3775, so the test can fail). So build_locham and build_bulkham agree for the hoh local route (the hoh blocks, enim/obarm at the cluster
+  edge, V_U insertion): no builder bug found.
+- **Residuals, open (not diagnosed):** first order (non-hoh) at U = 0: 4e-3 muB; first order U = 2: 2e-4; hoh spectral U = 2: 3.5e-3 (2.514966 against
+  2.518487, parameters 7e-4). The impurity run reports a nonzero charge transfer at the central atom (-2.9e-3 e first order U = 0, -9.8e-3 e hoh
+  spectral; zero to 4e-6 where the moments agree to 1e-5), i.e. the cluster electron count at the bulk E_F is not the bulk count. Moving E_F by +1e-4 and
+  +5e-4 Ry changes the first-order impurity moment by -5.4e-3 and +2.4e-3 muB (non-monotonic, 2.0797, 2.0743, 2.0821), so these residuals are within the
+  sensitivity to E_F (the bulk E_F is printed with six decimals and the Green's-function energy integration is noisy); SPECULATIVE that this is all there is.
+  Excluded by runs: cluster size (same atom count), different E_F precision is not excluded. Not checked: recursion start vectors/terminator differences, Madelung.
+
 ### RS rc=100 runs non-finite or non-converging — OPEN
 - **Verified:** the Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0; the rc=100 U=0 bulk is not accepted
   after 600 steps; reproduces on `8b8f7ef`. In a Debug trajectory the d-spin occupation exceeded its five-state capacity at iteration 90 (`ql =
