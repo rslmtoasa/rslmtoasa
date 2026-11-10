@@ -13,14 +13,13 @@ contains
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
    !>          antiferromagnet with mom = +z and -z). With hoh V_U is added to enim
-   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 3 (nsp=3: bulk, collinear
+   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 3 (nsp=3: bulk, any
    !>          site axes) and, with hoh, calctype 'B'. One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
       logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
       integer :: i, l
       logical :: spinor_bulk
-      real(rp) :: axis(3), first_axis(3)
 
       spinor_bulk = this%hubbard_soc_experimental .and. this%control%nsp == 2
 
@@ -41,20 +40,6 @@ contains
             if (trim(this%control%calctype) /= 'B') then
                call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 requires calctype='B'.", __FILE__, __LINE__)
             end if
-            ! collinear: the site axes of the correlated types lie on one line (n and -n are the same axis)
-            first_axis = 0.0_rp
-            do i = 1, this%lattice%ntype
-               if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) <= 1.0e-10_rp .and. &
-                   maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) <= 1.0e-10_rp) cycle
-               axis = this%lattice%symbolic_atoms(i)%potential%mom(:)
-               axis = axis/max(sqrt(sum(axis**2)), 1.0e-12_rp)
-               if (all(first_axis == 0.0_rp)) then
-                  first_axis = axis
-               else if (norm2(cross_product(axis, first_axis)) > 1.0e-8_rp) then
-                  call g_logger%fatal("hubbard_radial_moments='local' at nsp=3 requires collinear site axes: type "// &
-                     fmt('i0', i)//' differs from the other correlated types.', __FILE__, __LINE__)
-               end if
-            end do
          end if
          ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
          ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)

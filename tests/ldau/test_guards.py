@@ -8,7 +8,6 @@ Scenarios (each prints PASS/FAIL by name; the test fails if any fails):
   mixed_axes                     different spin axes on different sites at nsp = 2
   impurity_host_nsp1             nsp = 2 impurity with a host written at nsp = 1
   impurity_host_axis_mismatch    frozen host written along z, run axis along x
-  local_nsp3_noncollinear        local radial moments at nsp = 3 with site axes along z and x
 
 Bugs caught: a guard that stops firing (the run would continue with an unsupported U path), or one that
 fires with a different message.
@@ -78,18 +77,6 @@ def impurity_guards(binary: Path, scratch: Path) -> dict[str, tuple[bool, str]]:
     return results
 
 
-def local_nsp3_guards(binary: Path, scratch: Path) -> dict[str, tuple[bool, str]]:
-    import test_nsp34_u as af  # noqa: E402  (the two-atom Fe antiferromagnet deck)
-    cases = {
-        "local_nsp3_noncollinear": (dict(mom2=(1.0, 0.0, 0.0)), "requires collinear site axes"),
-    }
-    results = {}
-    for name, (deck, message) in cases.items():
-        status, log = gh.run_binary(binary, af.af_deck(scratch, name, nsp=3, radial="local", **deck))
-        results[name] = expect_fatal(status, log, message)
-    return results
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--binary", required=True, type=Path)
@@ -105,8 +92,6 @@ def main() -> int:
     for scenario, case in CASE_GUARDS.items():
         results[scenario] = run_case_guard(case, binary, scratch / "cases")
     results.update(impurity_guards(binary, scratch / "impurity"))
-    (scratch / "local_nsp3").mkdir()
-    results.update(local_nsp3_guards(binary, scratch / "local_nsp3"))
 
     for name, (ok, detail) in results.items():
         print(f"{'PASS' if ok else 'FAIL'} {name}")
