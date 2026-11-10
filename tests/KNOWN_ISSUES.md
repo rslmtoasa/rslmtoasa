@@ -104,11 +104,7 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Measured (AFM bcc Cr, `nsp = 3`, q = 0, one iteration):** with `mom(3) < 0` on a site, `gbt_single_q` bands are 4.2e-2 Ry from `periodic_nc` and
   the moment is about 4.3 times smaller (0.207 against 0.884 muB); the same antiferromagnet with swapped channels and `mom(3) = +1` agrees to 2.7e-15
   Ry. Real-space GBT is frozen for the restart.
-
-### GBT: second-order onsite C differs between real-space `gbt_single_q` and the collinear route — 2026-10-18
-- **Read, not run:** with `hoh = .true.` the collinear pair builder passes `cex` as the onsite term and adds `enim = cx - cex`, while `gbt_single_q`
-  builds `h` from `cx`, so the first-order onsite term would be `2 cx - cex` (`source/hamiltonian_build.f90`, around lines 1993-1994). No run compares
-  the two at `hoh = .true.`. The k-space path follows the collinear route; `test_kspace_commensurate.py` at second order is the check.
+- **Measured again (2026-11-10, real space, two-atom Fe cell, `nsp = 3`, block recursion, q = 0, U = 0, no `hoh`, one step, hand-built deck):** with `mom = +z, -z` on the two sites `gbt_single_q` gives E_F -0.069256 Ry and |m| 2.104043 muB against `periodic_nc` -0.043287 Ry and 2.179464 muB; with U = 2 eV and `hoh` the antiferromagnet under `gbt_single_q` reproduces the ferromagnet to all printed digits. Not traced.
 
 ### `cmplx` without `kind` rounds double-precision arguments to single in four places — 2026-10-18
 - **Read, not run:** `source/bands.f90:1366` and `:1444` (`cmplx(0.0_rp, res)`, Gauss-Legendre nodes), `source/green_block.f90:214`,

@@ -189,7 +189,7 @@ energies come from the spinor functional, and the radial moments use the spinor 
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
 Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, self-consistent U, intersite V, HOH with
-``gbt_single_q`` or with k-space ``kspace_ham_order='first'``, ``hubbard_radial_moments='local'`` at ``nsp=4``, at ``nsp=3`` in k-space, for ``calctype``
+k-space ``kspace_ham_order='first'``, onsite U with k-space ``gbt_single_q``, ``hubbard_radial_moments='local'`` at ``nsp=4``, at ``nsp=3`` in k-space, for ``calctype``
 other than ``B`` (with HOH: any calctype but ``B``), or at ``nsp=3`` with site axes that are not parallel or antiparallel,
 at ``nsp=2`` correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear axes: use nsp=3 or 4"),
 and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
@@ -409,7 +409,9 @@ real-space Hamiltonian and the shared reciprocal Fourier assembly.  Without
 ``hoh`` it is added to the on-site block of ``ee`` (the first-order ``h``).  With ``hoh`` it is added to
 ``enim``, the additive on-site term of :math:`H = h - h\,o\,h + \mathrm{enim} + \mathrm{lsham}`, so that
 :math:`H = H_2 + V_U`; adding it to ``ee`` would put :math:`V_U` inside :math:`h\,o\,h` as well.
-``hoh`` with ``gbt_single_q`` or with ``kspace_ham_order='first'`` stops with a fatal.  The
+Real-space ``gbt_single_q`` follows the same rule: with ``hoh`` V_U goes into ``enim`` and the onsite term of ``h`` is ``cex``, as in the collinear builder
+(``LdaUGbtHoh`` compares it with ``periodic_nc`` at q = 0; antiferromagnets are not covered, see ``tests/KNOWN_ISSUES.md``, F1).
+``hoh`` with ``kspace_ham_order='first'`` stops with a fatal.  The
 Hamiltonian source currently does not accumulate a separate scalar
 :math:`E_U-E_{dc}` correction.  Therefore ``etot`` and ``sumev`` in a
 validation run are reported as finite response observables under the active

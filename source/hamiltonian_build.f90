@@ -12,8 +12,8 @@ contains
    !> @brief Stop on fixed-U/J input outside the supported scope.
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
-   !>          antiferromagnet with mom = +z and -z). With hoh (not gbt_single_q) V_U is added to enim
-   !>          (build_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 3 (nsp=3: bulk, collinear
+   !>          antiferromagnet with mom = +z and -z). With hoh V_U is added to enim
+   !>          (build_bulkham, build_gbt_bulkham, build_locham). hubbard_radial_moments='local' needs nsp <= 3 (nsp=3: bulk, collinear
    !>          site axes) and, with hoh, calctype 'B'. One condition per statement; the message names the feature.
    subroutine validate_fixed_u_scope(this, has_general, has_legacy, has_impurity)
       class(hamiltonian), intent(inout) :: this
@@ -114,9 +114,6 @@ contains
             end if
          end do
       end do
-      if (this%hoh .and. trim(this%magnetic_representation) == gbt_single_q) then
-         call g_logger%fatal('Fixed-U LDA+U with hoh=.true. is unsupported for gbt_single_q.', __FILE__, __LINE__)
-      end if
    end subroutine validate_fixed_u_scope
 
    !> @brief Hamiltonian-side scope shared by the local radial-moment and RD1 routes.
@@ -1454,6 +1451,7 @@ contains
       complex(rp) :: raw_orb(norb, norb), raw_sdot(norb, norb)
       complex(rp) :: linked_spin(nb, nb), pair_spin(nb, nb), ccor_spin(nb, nb)
       real(rp) :: max_q0_common_link_error
+      real(rp) :: c_on0, c_on1
       real(rp), parameter :: term_tolerance = 1.0e-14_rp
 
       if (trim(lower(this%lattice%strux_backend)) /= 'strux_lib') then
@@ -1573,13 +1571,17 @@ contains
                this%lattice%symbolic_atoms(jt)%potential%wx1(1:norb), sign_i, sign_j, pair_spin)
 
             if (norm2(vet) <= 0.01_rp) then
+               ! As the collinear builder (ham0m_nc): with hoh the onsite term of h is cex and enim = cx - cex is added separately.
                do i = 1, norb
-                  pair_spin(i, i) = pair_spin(i, i) + &
-                     this%lattice%symbolic_atoms(it)%potential%cx0(i) + &
-                     sign_i*this%lattice%symbolic_atoms(it)%potential%cx1(i)
-                  pair_spin(i + spin_off, i + spin_off) = pair_spin(i + spin_off, i + spin_off) + &
-                     this%lattice%symbolic_atoms(it)%potential%cx0(i) - &
-                     sign_i*this%lattice%symbolic_atoms(it)%potential%cx1(i)
+                  if (this%hoh) then
+                     c_on0 = this%lattice%symbolic_atoms(it)%potential%cex0(i)
+                     c_on1 = this%lattice%symbolic_atoms(it)%potential%cex1(i)
+                  else
+                     c_on0 = this%lattice%symbolic_atoms(it)%potential%cx0(i)
+                     c_on1 = this%lattice%symbolic_atoms(it)%potential%cx1(i)
+                  end if
+                  pair_spin(i, i) = pair_spin(i, i) + c_on0 + sign_i*c_on1
+                  pair_spin(i + spin_off, i + spin_off) = pair_spin(i + spin_off, i + spin_off) + c_on0 - sign_i*c_on1
                end do
                call add_constraining_field_spin_block(this, it, pair_spin)
             end if
@@ -1603,9 +1605,8 @@ contains
          end do
          deallocate(ham_vec)
 
-         ! gbt_single_q: V_U goes into ee, which is correct only without hoh (with hoh it would also enter h o h);
-         ! validate_fixed_u_scope stops hoh with gbt_single_q and U, so this insertion is not reached with hoh.
-         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
+         ! Without hoh V_U goes into ee; with hoh it goes into enim below, since in ee it would also enter h o h.
+         if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
             ! Hubbard-U is onsite (spin-diagonal in the collinear rotating
             ! frame, from potential%ldm) and is added at bond slot m=1, where
             ! d=0 and the endpoint link G_ii=I by construction. It therefore
@@ -1633,6 +1634,8 @@ contains
          ! not the global HOH operator consumed by either solver.
          call this%build_obarm()
          call this%build_enim()
+         ! V_U is an additive onsite term in the same rotating frame as enim: H = h - h o h + enim + V_U.
+         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) this%enim = this%enim + this%hubbard_u_pot
          do ntype = 1, this%lattice%ntype
             ia = this%lattice%atlist(ntype)
             nr = this%lattice%nn(ia, 1)
