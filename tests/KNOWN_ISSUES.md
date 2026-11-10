@@ -311,6 +311,42 @@ the archive tags.
 - **Probable cause (not tested):** cluster mismatch, rc=80 for bulk against rc=100 for the impurity; the matched test is blocked by the rc=100 entry
   below.
 
+- **Update (impurity-in-host test decks, 2026-11): the dominant offset is the fixed Fermi energy of the impurity deck, not the Hamiltonian.** `calctype I`
+  keeps E_F at its input value; the bulk step determines E_F from the electron count and it moves with hoh and U. bcc Fe, nsp = 1, one step from the same
+  state, rc = 40 (impurity 'Fe-imp' copy of the host, identical potentials, same cluster size of 748 atoms in the bulk and impurity `clust` files).
+  Verified (bulk against impurity spin moment, muB): U = 0 first order 2.0837 against 2.2215 with the deck's E_F = -0.042265 Ry, 2.0797 with the bulk step's
+  E_F (-0.069773); U = 0 hoh 2.273531 against 2.273516 (E_F -0.084057, max parameter difference 8e-6); U = 2 hoh local 2.521310 against 2.521297 (E_F
+  -0.110565, 9e-6); U = 2 first order local 2.349640 against 2.349847. The earlier offsets (hoh 2.52 against 2.35) were the stale E_F: the bulk E_F moves
+  by 0.04 to 0.07 Ry with hoh, U. Registered as `LdaUImpurityEqualsBulk` (rc = 20, hoh, local, U = 2: 2.471169 against 2.471392; with the stale E_F the
+  impurity gives 2.3775, so the test can fail). So build_locham and build_bulkham agree for the hoh local route (the hoh blocks, enim/obarm at the cluster
+  edge, V_U insertion): no builder bug found.
+- **Residuals, open (not diagnosed):** first order (non-hoh) at U = 0: 4e-3 muB; first order U = 2: 2e-4; hoh spectral U = 2: 3.5e-3 (2.514966 against
+  2.518487, parameters 7e-4). The impurity run reports a nonzero charge transfer at the central atom (-2.9e-3 e first order U = 0, -9.8e-3 e hoh
+  spectral; zero to 4e-6 where the moments agree to 1e-5), i.e. the cluster electron count at the bulk E_F is not the bulk count. Moving E_F by +1e-4 and
+  +5e-4 Ry changes the first-order impurity moment by -5.4e-3 and +2.4e-3 muB (non-monotonic, 2.0797, 2.0743, 2.0821), so these residuals are within the
+  sensitivity to E_F (the bulk E_F is printed with six decimals and the Green's-function energy integration is noisy); SPECULATIVE that this is all there is.
+  Excluded by runs: cluster size (same atom count), different E_F precision is not excluded. Not checked: recursion start vectors/terminator differences, Madelung.
+
+### Spectral radial moments under PBE: NaN potential, stop in the k-space eigensolver — OPEN (partly diagnosed)
+- **Verified (instrumented run, NiO AFM-II 4-atom cell, k-space nsp = 1, hoh + ccor_2c, txc = 108, spectral, U = 2, J = 0, restart from the converged PBE U = 0
+  state, `ldm_beta` = beta = 0.1, one thread; stops at step 33 in every run):** the cause is **not** `calculate_pl`/POTPAR. At the failing step PL(s,p,d) of Niu
+  are 4.607, 4.317, 3.786 (the previous step: 4.607, 4.317, 3.787, all POTPAR solves finite, p eigenvalue -0.55 Ry); the atomic self-consistency loop of that step
+  (`atomsc`, fixed PL and Q) does not converge: its radial-density residual DRHO starts at 3.4e3 in every step (as in the earlier ones, 57-59 iterations to the
+  tolerance), but at steps 24, 26, 27 and 32 it hits the 80-iteration cap and at step 33 it grows to 1e2 and then, at iteration 60, becomes NaN. During these
+  iterations the spin-2 radial density goes negative (min -0.9 to -0.1 e/bohr), the spin-2 valence eigenvalues oscillate (s: 0.31, -0.54, 1.25, 2.1 Ry), the
+  radial eigenvalue search finds no solution (`RSEQ NIT GT 400 AND BAD NODES`, E = 10 to 50), the density and then V become NaN (495 of 495 radial points), and
+  POTPAR returns NaN C, Q, srdel and enu(d) with the sentinel 10 for enu(s,p). The NaN reaches the k-space Hamiltonian and the run stops in
+  `reciprocal_backend.f90:810`. With the Fermi energy of the base deck (-0.093245 instead of -0.263911) the run did not crash within 80 steps (Diff 4e-3), and with
+  `ldm_beta` 0.3 / radial beta 0.03 it still crashed in earlier runs, so the trigger is the state of the atomic loop and not the outer mixing.
+- **Changed:** `reciprocal_fourier.f90` (`build_kspace_hamiltonian`) stops at the first non-finite C, Q or srdel with `B1 non-finite guard: atom=Niu site=1 channel=s l=0
+  spin=1 ... field=potential parameter C (atomic radial solve failed)`; the run stops at the same step as before, only with a clear message (test
+  `LdaUNonfinitePotentialGuard`, fails without the guard). The Diff of the LDA NiO local U = 2 run (4 steps) is identical to the stored log to ten digits.
+- **Not fixed (needs `self.f90`, off-limits):** the atomic loop in `atomsc` (about line 3915; `rho_in = BETA1*RHO + (1-BETA1)*rho_in` with `BETA1` 0.3/0.5 from
+  `atomsc_mixing_beta`, no guard on the sign of `rho_in`, GGA gradient taken from the negative density in `VXC0SP`) is the place to act. SPECULATIVE proposals,
+  untested: clamp `rho_in` to non-negative before `VXC0SP` (PBE only), lower the atomic BETA when DRHO grows between iterations, and stop with a message naming
+  the atom and iteration when `rho` is not finite. It is not known why PBE does so and LDA (txc = 106) does not at this U; not investigated whether the negative
+  density comes from the spectral correction terms (Q2, hoh) or from the GGA potential.
+
 ### RS rc=100 runs non-finite or non-converging — OPEN
 - **Verified:** the Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0; the rc=100 U=0 bulk is not accepted
   after 600 steps; reproduces on `8b8f7ef`. In a Debug trajectory the d-spin occupation exceeded its five-state capacity at iteration 90 (`ql =

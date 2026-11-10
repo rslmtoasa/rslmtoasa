@@ -1,5 +1,6 @@
 submodule (reciprocal_mod) reciprocal_fourier
    use magnetic_representation_mod, only: gbt_single_q
+   use scf_guard_mod, only: guard_nonfinite_scalar
    implicit none
 
 contains
@@ -757,6 +758,19 @@ contains
 
       call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
       call this%force_full_bz_for_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
+      ! A failed atomic radial solve (self.f90 RSEQSR: 'RSEQ NIT GT 400 AND BAD NODES' in the log) leaves NaN potential parameters; stop here
+      ! naming the atom, shell and field instead of in the eigensolver.
+      do i = 1, this%lattice%ntype
+         do ik = 0, ubound(this%lattice%symbolic_atoms(i)%potential%c, 1)
+            do j = 1, size(this%lattice%symbolic_atoms(i)%potential%c, 2)
+               associate (pot => this%lattice%symbolic_atoms(i)%potential, symbol => this%lattice%symbolic_atoms(i)%element%symbol)
+                  call guard_nonfinite_scalar(symbol, i, ik, j, 'potential parameter C (atomic radial solve failed)', 0, pot%c(ik, j))
+                  call guard_nonfinite_scalar(symbol, i, ik, j, 'potential parameter Q (atomic radial solve failed)', 0, pot%qpar(ik, j))
+                  call guard_nonfinite_scalar(symbol, i, ik, j, 'potential parameter srdel (atomic radial solve failed)', 0, pot%srdel(ik, j))
+               end associate
+            end do
+         end do
+      end do
       ! The Hamiltonian may have changed between SCF/frozen-magnon probes while
       ! the reciprocal object and k mesh are intentionally reused.  Invalidate
       ! every spectrum-derived object before rebuilding so no old eigenpairs,
