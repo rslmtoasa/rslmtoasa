@@ -6,6 +6,7 @@
 | `test_gbt_hoh_u.py` | `LdaUGbtHoh`: real-space `gbt_single_q` at q = 0 against `periodic_nc` with U, `hoh`, `ccor_2c` (ferromagnet) |
 | `test_kspace_gbt_u.py` | `LdaUKspaceGbt`: k-space `gbt_single_q` at q = 0 against `periodic_nc` with U at first and second order, ferromagnet and antiferromagnet |
 | `test_kspace_local_nsp3.py` | `LdaUKspaceLocalNsp3`: `hubbard_radial_moments='local'` in k-space at `nsp=3` against `nsp=1`, antiferromagnet and ferromagnet, and `local` against `spectral` at `nsp=3` |
+| `test_impurity_hoh_u.py` | `LdaUImpurityHoh`: `hubbard_radial_moments='local'` with `hoh` on the B2FeCo impurity, `nsp=2` (SOC held at zero) against `nsp=1`, and `local` against `spectral` |
 | `reference_rows.py` | stored-reference rows: `reference_rows.py --list`, `reference_rows.py ROW --binary rslmto.x` |
 | `references/` | JSON scalars of every row; five rows are registered with ctest, the others are archived data |
 | `data/` | fixtures read by the Fortran oracles (`UnitHubbardSpinor`, `UnitLdaULocalMoments`) |

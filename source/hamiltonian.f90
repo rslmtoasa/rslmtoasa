@@ -404,8 +404,9 @@ module hamiltonian_mod
 
    end subroutine build_locham
 
-   module function fixed_u_local_scope(this) result(in_scope)
+   module function fixed_u_local_scope(this, allow_hoh) result(in_scope)
       class(hamiltonian), intent(in) :: this
+      logical, intent(in), optional :: allow_hoh
       logical :: in_scope
    end function fixed_u_local_scope
 

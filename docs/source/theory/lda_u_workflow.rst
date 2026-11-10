@@ -189,8 +189,8 @@ energies come from the spinor functional, and the radial moments use the spinor 
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
 Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, self-consistent U, intersite V, HOH with
-k-space ``kspace_ham_order='first'``, onsite U with ``kspace_ham_order='orthogonal'``, ``hubbard_radial_moments='local'`` at ``nsp=4``, for ``calctype``
-other than ``B`` (with HOH: any calctype but ``B``), or at ``nsp=3`` with site axes that are not parallel or antiparallel,
+k-space ``kspace_ham_order='first'``, onsite U with ``kspace_ham_order='orthogonal'``, ``hubbard_radial_moments='local'`` at ``nsp=4``, at ``nsp=3`` for ``calctype``
+other than ``B``, with HOH for ``calctype`` other than ``B`` outside ``nsp=1`` without SOC and the ``nsp=2`` spinor route, or at ``nsp=3`` with site axes that are not parallel or antiparallel,
 at ``nsp=2`` correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear axes: use nsp=3 or 4"),
 and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
 
@@ -204,7 +204,7 @@ and impurity/surface runs with U at ``nsp>=3`` are untested. ``hubbard_radial_mo
 collinear axes; real space and k-space) takes the spinor correction along each site axis; the two-atom Fe antiferromagnet reproduces the ``nsp=1`` ``local``
 route (``tests/ldau/test_nsp34_u.py``, ``af_fe_local``, real space; ``tests/ldau/test_kspace_local_nsp3.py``, k-space, antiferromagnet and ferromagnet). Its energy is not routed (as for impurities). ``local`` with HOH removes V_U from the moments of the orthonormal-basis Green
 function in the same way as at first order (H = H0 + V_U with V_U additive in ``enim``); the nsp=3 against nsp=1 check
-``af_fe_local_hoh`` tests the spin frame, not the correction. To set up a collinear antiferromagnet use the noncollinear
+``af_fe_local_hoh`` tests the spin frame, not the correction. On impurity (``calctype I``) and surface (``S``) clusters with HOH (``nsp=1``, and the ``nsp=2`` spinor route) V_U is captured at the ``enim`` insertion, as at the ``ee`` or ``hall`` insertion without HOH; ``tests/ldau/test_impurity_hoh_u.py`` compares the ``nsp=2`` run with SOC held at zero against ``nsp=1`` for the B2FeCo impurity (the surface route with HOH has no test, and an Fe impurity in an Fe host does not reproduce the bulk even at U = 0, see ``tests/KNOWN_ISSUES.md``). To set up a collinear antiferromagnet use the noncollinear
 convention: the same potential file (majority along the site axis) for both sublattices with ``mom = 0, 0, 1`` and
 ``0, 0, -1``. Potential files in the ``nsp=1`` convention (the second sublattice with up and down swapped, ``mom = +z``) run at
 ``nsp>=3`` with the default ``density_policy='relaxed_reference'`` silently turn ferromagnet-like after the first step

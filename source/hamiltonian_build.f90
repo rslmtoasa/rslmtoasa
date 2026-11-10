@@ -57,9 +57,12 @@ contains
             end do
          end if
          ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
-         ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface local routes are first order only.
-         if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0) then
-            call g_logger%fatal("hubbard_radial_moments='local' with hoh=.true. requires calctype='B'.", __FILE__, __LINE__)
+         ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)
+         ! cover scalar-spin nsp=1 and the nsp=2 spinor route (which reads V_in by type, as in the bulk).
+         if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0 .and. &
+             .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk)) then
+            call g_logger%fatal("hubbard_radial_moments='local' with hoh=.true. requires calctype='B', nsp=1 without SOC, "// &
+                                "or the nsp=2 spinor route.", __FILE__, __LINE__)
          end if
          if (this%control%lmax /= 2) then
             call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)
@@ -118,20 +121,23 @@ contains
 
    !> @brief Hamiltonian-side scope shared by the local radial-moment and RD1 routes.
    !> @details Fixed Liechtenstein U/J on the d shell with lmax=2, collinear, first-order Hamiltonian
-   !>          (no hoh), no constraints, no SC-U, no Hubbard-V. Callers add where (calctype), which
-   !>          U/J input form, and the spin case.
-   module function fixed_u_local_scope(this) result(in_scope)
+   !>          (no hoh unless allow_hoh), no constraints, no SC-U, no Hubbard-V. Callers add where (calctype), which
+   !>          U/J input form, and the spin case. The bulk energy-routing eligibility keeps the default (no hoh); the
+   !>          impurity and surface V_in capture passes allow_hoh, since with hoh V_U is additive in enim.
+   module function fixed_u_local_scope(this, allow_hoh) result(in_scope)
       class(hamiltonian), intent(in) :: this
-      logical :: in_scope
+      logical, intent(in), optional :: allow_hoh
+      logical :: in_scope, hoh_ok
 
+      hoh_ok = .not. this%hoh
+      if (present(allow_hoh)) hoh_ok = hoh_ok .or. allow_hoh
       in_scope = trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. this%control%lmax == 2 .and. &
          .not. this%control%is_noncollinear() .and. .not. this%control%constraints_enable .and. &
-         .not. this%hoh .and. .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check
+         hoh_ok .and. .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check
    end function fixed_u_local_scope
 
    !> @brief Local-impurity RD1 V_in capture is wanted for this run.
-   !> @details True for fixed Liechtenstein U/J on impurity or surface clusters (calctype I or S) with
-   !>          hubbard_radial_moments='local': scalar-spin, lmax=2, first-order Hamiltonian (no hoh),
+   !>          hubbard_radial_moments='local': scalar-spin, lmax=2, first order or hoh (V_U in ee or in enim),
    !>          no constraints, no SC-U, no Hubbard-V, no test operator.
    module function rd1_local_impurity_eligible(this) result(eligible)
       class(hamiltonian), intent(in) :: this
@@ -143,7 +149,7 @@ contains
       if (trim(this%control%calctype) /= 'I' .and. trim(this%control%calctype) /= 'S') return
       ! what: fixed Liechtenstein U/J with local radial moments, first-order Hamiltonian
       if (.not. (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check)) return
-      if (.not. this%fixed_u_local_scope()) return
+      if (.not. this%fixed_u_local_scope(allow_hoh=.true.)) return
       if (trim(this%hubbard_radial_moments) /= 'local') return
       ! spin: collinear scalar-relativistic
       if (this%control%nsp /= 1 .or. this%control%has_soc()) return
@@ -1422,6 +1428,18 @@ contains
       if (this%hoh .and. (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)) then
          this%enim = this%enim + this%hubbard_u_pot
          if (this%local_axis) this%enim_glob = this%enim
+         ! Surface recursion: capture the exact operand at this insertion so RD1 uses the same V_in (as for ee without hoh).
+         if (trim(this%control%calctype) == 'S' .and. this%rd1_capture_enabled .and. this%rd1_local_impurity_eligible()) then
+            do ntype = 1, this%charge%lattice%ntype
+               ia = this%charge%lattice%atlist(ntype)
+               call this%capture_rd1_vin_insertion(ia, ntype, this%hubbard_u_pot(:, :, ntype), rd1_status)
+               if (rd1_status /= rd1_vin_ok .and. rd1_status /= rd1_vin_not_recursion_site) then
+                  call g_logger%fatal('RD1 surface V-in capture failed: status='//fmt('i0', rd1_status)// &
+                     ' iteration='//fmt('i0', this%rd1_capture_iteration)//' cluster='//fmt('i0', ia)// &
+                     ' type='//fmt('i0', ntype), __FILE__, __LINE__)
+               end if
+            end do
+         end if
       end if
       call this%build_ccor_bulk()
       if (this%local_axis) then
@@ -1873,6 +1891,18 @@ contains
       if (this%hoh .and. (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)) then
          this%enim = this%enim + this%hubbard_u_pot
          if (this%local_axis) this%enim_glob = this%enim
+         ! Impurity recursion: capture the exact operand per cluster site at this insertion (as at the hall insertion without hoh).
+         if (this%rd1_capture_enabled .and. this%rd1_local_impurity_eligible()) then
+            do nlim = 1, this%charge%lattice%nmax
+               u_type = this%charge%lattice%iz(nlim)
+               call this%capture_rd1_vin_insertion(nlim, u_type, this%hubbard_u_pot(:, :, u_type), rd1_status)
+               if (rd1_status /= rd1_vin_ok .and. rd1_status /= rd1_vin_not_recursion_site) then
+                  call g_logger%fatal('RD1 exact V-in capture failed: status='//fmt('i0', rd1_status)// &
+                     ' iteration='//fmt('i0', this%rd1_capture_iteration)//' cluster='//fmt('i0', nlim)// &
+                     ' type='//fmt('i0', u_type), __FILE__, __LINE__)
+               end if
+            end do
+         end if
       end if
       call this%build_ccor_local()
       if (this%local_axis) then
