@@ -102,12 +102,7 @@ contains
       assembler%lattice => this%lattice
       assembler%control => this%control
       allocate(assembler%ham_vec_type_direct, source=this%ham_vec_type_direct)
-      ! The k-space local radial-moment correction (self.f90) is written for the scalar and nsp=2 spinor routes only.
-      if (this%hamiltonian%hubbard_u_general_check .and. trim(this%hamiltonian%hubbard_radial_moments) == 'local' .and. &
-          this%control%nsp >= 3) then
-         call g_logger%fatal("hubbard_radial_moments='local' at nsp>=3 is supported in real space only, not in k-space.", &
-                             __FILE__, __LINE__)
-      end if
+      ! The k-space local radial-moment correction (self.f90) covers the scalar, nsp=2 and (collinear axes) nsp=3 routes; nsp=4 stops in validate_fixed_u_scope.
       select case (trim(this%kspace_ham_order))
       case ('second'); assembler%use_second_order = .true.
       case ('first')
