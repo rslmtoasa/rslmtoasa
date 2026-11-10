@@ -138,8 +138,9 @@ contains
                end if
                if (u_on) enu(:, :, isite) = enu(:, :, isite) + this%hamiltonian%hubbard_u_pot(:, :, it)
             end if
-            ! V_U: with hoh it is part of enim, hence of enu above (H = h - h o h + enim). At first order it is added to the onsite
-            ! block of h below, with the same spin swap for a site with mom(3) < 0 (V_U is spin-diagonal in the rotating frame).
+            ! V_U: with hoh it is added to enu above (H = h - h o h + enim + V_U), after the spin swap of E_nu; at first order it is added
+            ! to the onsite block of h below. Never swapped for a site with mom(3) < 0: V_U is built from the P of the rotating
+            ! frame, which is already in the majority-first order (a swap breaks the antiferromagnet, see LdaUKspaceGbt).
             vons(:, :, isite) = cmplx(0.0_rp, 0.0_rp, rp)
             if (u_on) vons(:, :, isite) = this%hamiltonian%hubbard_u_pot(:, :, it)
          end associate
