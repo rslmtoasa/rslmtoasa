@@ -23,13 +23,14 @@ contains
       complex(rp), allocatable :: sdotblock(:, :, :), hcc(:, :)
       real(rp), allocatable :: ccd(:, :, :)
       real(rp) :: ccd_full(norb, 0:2), lam
-      complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
+      complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), vons(:, :, :), wunit(:, :, :), czero3(:, :, :)
       complex(rp), allocatable :: fieldblk(:, :, :), cmat(:, :)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
       real(rp) :: wow
       integer :: lmax_o, l, o, sp, iv
       real(rp) :: q_dir(3), theta, phi, mom_ref(3)
-      logical :: second, gbt_rep
+      logical :: second, gbt_rep, u_on
+      complex(rp) :: enu_nu(nb, nb)
 
       gbt_rep = trim(this%hamiltonian%magnetic_representation) == gbt_single_q
       if (.not. gbt_rep .and. .not. this%use_orthogonal) &
@@ -46,8 +47,9 @@ contains
          call this%hamiltonian%validate_ccor_inputs()
          lam = this%hamiltonian%ccor_vmt_scalar() - this%hamiltonian%ccor_elin
       end if
-      if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check) &
-         call g_logger%fatal('k-space GBT/orthogonal does not support onsite U.', __FILE__, __LINE__)
+      u_on = this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check
+      if (u_on .and. this%use_orthogonal) &
+         call g_logger%fatal("kspace_ham_order='orthogonal' does not support onsite U.", __FILE__, __LINE__)
       if (this%hamiltonian%hubbard_v_check) &
          call g_logger%fatal('k-space GBT/orthogonal does not support intersite V.', __FILE__, __LINE__)
       if (this%hamiltonian%local_axis) call g_logger%fatal('k-space GBT/orthogonal does not support local_axis.', __FILE__, __LINE__)
@@ -66,7 +68,7 @@ contains
       nrec = this%lattice%nrec
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
-                h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
+                h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), vons(nb, nb, nrec), &
                 cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), cmat(nb*nrec, nb*nrec), fieldblk(nb, nb, nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
                 sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec))
       wunit = cmplx(1.0_rp, 0.0_rp, rp)
@@ -126,13 +128,20 @@ contains
                c(:, 2, isite) = pot%cex0(1:norb) - pot%cex1(1:norb)
                obar(:, :, isite) = this%hamiltonian%obarm(:, :, it)
                enu(:, :, isite) = this%hamiltonian%enim(:, :, it)
+               if (u_on) enu(:, :, isite) = enu(:, :, isite) - this%hamiltonian%hubbard_u_pot(:, :, it)   ! E_nu only; V_U is added below
+               enu_nu = enu(:, :, isite)
                if (mom_ref(3) < 0.0_rp) then
                   obar(1:norb, 1:norb, isite) = this%hamiltonian%obarm(norb + 1:nb, norb + 1:nb, it)
                   obar(norb + 1:nb, norb + 1:nb, isite) = this%hamiltonian%obarm(1:norb, 1:norb, it)
-                  enu(1:norb, 1:norb, isite) = this%hamiltonian%enim(norb + 1:nb, norb + 1:nb, it)
-                  enu(norb + 1:nb, norb + 1:nb, isite) = this%hamiltonian%enim(1:norb, 1:norb, it)
+                  enu(1:norb, 1:norb, isite) = enu_nu(norb + 1:nb, norb + 1:nb)
+                  enu(norb + 1:nb, norb + 1:nb, isite) = enu_nu(1:norb, 1:norb)
                end if
+               if (u_on) enu(:, :, isite) = enu(:, :, isite) + this%hamiltonian%hubbard_u_pot(:, :, it)
             end if
+            ! V_U: with hoh it is part of enim, hence of enu above (H = h - h o h + enim). At first order it is added to the onsite
+            ! block of h below, with the same spin swap for a site with mom(3) < 0 (V_U is spin-diagonal in the rotating frame).
+            vons(:, :, isite) = cmplx(0.0_rp, 0.0_rp, rp)
+            if (u_on) vons(:, :, isite) = this%hamiltonian%hubbard_u_pot(:, :, it)
          end associate
          do ineigh = 1, nr
             if (ineigh == 1) then
@@ -203,6 +212,12 @@ contains
             end do
          end if
          call to_spherical(h)
+         if (u_on .and. .not. second) then   ! spherical basis, as hubbard_u_pot
+            do isite = 1, nrec
+               i0 = (isite - 1)*nb
+               h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + vons(:, :, isite)
+            end do
+         end if
          if (.not. gbt_rep .and. this%control%nsp /= 1) call to_lab(h)   ! outside GBT the eigenvectors are in the lab spin basis
          if (second) then   ! h, obar and enu are all in the spherical-harmonic basis here
             call gbt_kspace_h2(norb, nrec, h, obar, enu, h2)
