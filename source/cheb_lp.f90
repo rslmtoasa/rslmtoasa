@@ -21,6 +21,7 @@ module cheb_lp_mod
    use control_mod, only: control
    use logger_mod, only: g_logger
    use precision_mod, only: rp
+   use string_mod, only: int2str, real2str
    implicit none
 
    private
@@ -35,6 +36,7 @@ module cheb_lp_mod
       integer :: factor = 4
    contains
       procedure :: n_total
+      procedure :: apply
    end type cheb_lp
 
    interface cheb_lp
@@ -66,6 +68,26 @@ contains
       n = 2*lld + 2
       if (this%enabled) n = n*this%factor
    end function n_total
+
+   !> @brief Extend one moment block when enabled and log the fit diagnostics.
+   !> @param[inout] mu Moments (nb,nb,n_total) of one atom or pair slot; 1:n_known in.
+   !> @param[in] n_known Number of known moments (2*lld+2).
+   !> @param[in] label Atom or pair identifier for the log line.
+   subroutine apply(this, mu, n_known, label)
+      class(cheb_lp), intent(in) :: this
+      complex(rp), intent(inout) :: mu(:, :, :)
+      integer, intent(in) :: n_known
+      character(len=*), intent(in) :: label
+      integer :: n_rank, n_unstable
+      real(rp) :: lam_max, fit_res, imag_max
+
+      if (.not. this%enabled) return
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max)
+      call g_logger%info('Chebyshev LP '//label//': p='//int2str(n_known/p_div)//' rank='//int2str(n_rank)// &
+                         ' unstable='//int2str(n_unstable)//' lam_max='//real2str(lam_max, '(f9.6)')// &
+                         ' fit_res='//real2str(fit_res, '(es9.2)')//' imag='//real2str(imag_max, '(es9.2)'), &
+                         __FILE__, __LINE__)
+   end subroutine apply
 
    !> @brief Extend the moments mu(:,:,n_known+1:) by linear prediction.
    !> @details Index i of mu is order i-1. Fit window: orders n_lo..n_known-1.
