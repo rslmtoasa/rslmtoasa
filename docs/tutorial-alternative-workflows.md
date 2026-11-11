@@ -365,6 +365,27 @@ for a changed geometry. In this `jij.out`, columns 1–2 are symbolic-type IDs,
 pairs are representatives of the first two bcc shells. They are not a
 complete exchange model. `1 mRy = 13.605693 meV`.
 
+### Plot the selected exchange rows
+
+From the repository root, plot the actual exchange output and save a table:
+
+```bash
+python3 tools/tutorial/plot_exchange.py runs/alternative-fe-jij/jij.out \
+    --types 1 --output runs/alternative-fe-jij/exchange.png \
+    --csv runs/alternative-fe-jij/exchange.csv
+```
+
+The plot shows J in meV versus distance/a, grouped by **directed symbolic-type
+pair**. CSV retains the seven source columns, including J in **mRy** and
+Cartesian displacement/a. Both endpoints must match `--types`; the script
+prints selected/excluded counts. It checks finite values, integer types, and
+agreement of distance with displacement to `2e-6 a` (printed-coordinate
+rounding). It accepts this branch's seven-column `jij.out`, not `dij.out` or
+`jtens.out`. It preserves reverse rows and overlapping points; it does not
+average shells, infer elements, reconstruct cluster-site IDs, or expand symmetry.
+Choose fresh output paths on reruns. Two Fe points illustrate a workflow,
+not convergence of an exchange-shell model.
+
 ## 4. MnTe: electronic sites versus magnetic sites (80–100 min)
 
 ### Supplied reference and electronic/magnetic site mapping
@@ -533,6 +554,23 @@ must have types `(1,2)` or `(2,1)`, and both Mn centres must be represented.
 The electronic input still contains types 1–4 and loads both Te checkpoints.
 There should be no Te exchange endpoints. Do not decide element identity
 from the magnitude of its moment.
+
+Plot the completed MnTe exchange job from the repository root:
+
+```bash
+python3 tools/tutorial/plot_exchange.py runs/alternative-mnte-jij/jij.out \
+    --types 1 2 --output runs/alternative-mnte-jij/mn-exchange.png \
+    --csv runs/alternative-mnte-jij/mn-exchange.csv
+```
+
+For this four-pair deck expect **4 selected, 0 excluded**. Investigate any
+excluded rows against the original pair list; filtering a plot does not fix
+an incorrect exchange job. The legend retains Mn1→Mn2 and Mn2→Mn1 identities.
+Label a result from the unconverged reduced replay as a frozen-state demonstration.
+Download PNG, CSV, and the original `jij.out` through the Codespaces explorer.
+For local plotting, download `tools/tutorial/plot_exchange.py` too, install
+NumPy and Matplotlib (`python -m pip install numpy matplotlib`), and run the
+same command with local paths. No solver or RS-utils installation is needed.
 
 **Discussion:** Why does Te-mediated exchange remain after Te spins are
 omitted? Why does AFM/SOC symmetry require more care than chemical symmetry?
