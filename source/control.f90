@@ -243,6 +243,10 @@ module control_mod
       !> <element>_out.nml restart is present.  The default preserves the
       !> historical restart preference.
       logical :: fresh_start
+      !> Extend the Chebyshev moments by linear prediction before reconstruction.
+      logical :: cheb_lp
+      !> Extension factor of the linear prediction: N_ext = cheb_lp_factor*(2*lld+2).
+      integer :: cheb_lp_factor
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -419,6 +423,8 @@ contains
       density_policy = this%density_policy
       gbt_scf_diagnostics = this%gbt_scf_diagnostics
       fresh_start = this%fresh_start
+      cheb_lp = this%cheb_lp
+      cheb_lp_factor = this%cheb_lp_factor
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
@@ -478,6 +484,8 @@ contains
       this%density_policy = trim(adjustl(density_policy))
       this%gbt_scf_diagnostics = gbt_scf_diagnostics
       this%fresh_start = fresh_start
+      this%cheb_lp = cheb_lp
+      this%cheb_lp_factor = cheb_lp_factor
 
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
@@ -607,6 +615,8 @@ contains
       this%density_policy = 'relaxed_reference'
       this%gbt_scf_diagnostics = .false.
       this%fresh_start = .false.
+      this%cheb_lp = .false.
+      this%cheb_lp_factor = 4
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
@@ -653,6 +663,8 @@ contains
       density_policy = this%density_policy
       gbt_scf_diagnostics = this%gbt_scf_diagnostics
       fresh_start = this%fresh_start
+      cheb_lp = this%cheb_lp
+      cheb_lp_factor = this%cheb_lp_factor
       txc = this%txc
       blockrec = this%blockrec
       partype = this%partype
@@ -745,6 +757,8 @@ contains
       call nml%add('density_policy', this%density_policy)
       call nml%add('gbt_scf_diagnostics', this%gbt_scf_diagnostics)
       call nml%add('fresh_start', this%fresh_start)
+      call nml%add('cheb_lp', this%cheb_lp)
+      call nml%add('cheb_lp_factor', this%cheb_lp_factor)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -802,6 +816,12 @@ contains
           .and. this%cheb_backend /= 'mkl_sparse' &
           .and. this%cheb_backend /= 'legacy') then
          call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''fast_dp'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_lp .and. this%recur /= 'chebyshev') then
+         call g_logger%fatal('control%cheb_lp requires recur = ''chebyshev''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_lp_factor < 2) then
+         call g_logger%fatal('control%cheb_lp_factor must be >= 2.', __FILE__, __LINE__)
       end if
       if (this%transport_backend /= 'legacy' &
           .and. this%transport_backend /= 'fast_sp' &
