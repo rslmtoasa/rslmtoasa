@@ -107,6 +107,50 @@ working files, run the solver, and invoke plotting or pair-selection tools.
 After saving an edited input, preserve a copy before starting SCF:
 `cp input.nml input.initial.nml`. Use `input.used.nml` for an exchange run. Commands that create working directories are intended to be run once.
 
+## Plot SCF progress and all available DOS
+
+Run these from the repository root after a calculation (including a bounded,
+incomplete SCF run):
+
+```bash
+python3 tools/tutorial/plot_convergence.py runs/alternative-fe-scf/run.log
+python3 tools/tutorial/plot_dos.py runs/alternative-fe-scf
+```
+
+The convergence figure is `run-convergence.png` beside the log. It plots each
+completed step's printed mixing residual, including the final converged step.
+The title reports the last step's logged status; a time-limited run is not
+assumed converged. Appended restarts appear in log order. The vertical axis
+is logarithmic except near zero (`5e-11`), preserving residuals rounded to zero
+by the solver's ten-decimal output. It is not an energy-error estimate or a
+numerical-convergence test. Preserve separate logs when comparing mixing settings.
+
+The DOS script automatically creates a PNG under the run's `plots/` directory
+for every available `totaldos.out`, `magneticdos.out` (or `magneticdos`),
+`XX_dos.out`, and `XX_orbital_dos.out`. Missing files are normal; malformed
+files are reported and produce a nonzero exit status after other files are
+processed. Running again regenerates the figures. With no arguments, each
+script uses the current directory (`run.log` for convergence).
+
+Total DOS stays spin-summed. Magnetic DOS uses the written up/down columns;
+local DOS uses columns 3/4, not the total in column 2. Orbital files contain
+all up orbitals followed by all down orbitals; normal sp, spd, and spdf bases
+are supported. Each orbital has its own panel, grouped in s/p/d/f file order
+and numbered within its shell. Down/minority curves are mirrored below zero
+in all spin and orbital plots. In SOC/noncollinear runs these are the stored
+spin projections, not automatically identified majority/minority eigenchannels.
+Signed numerical artifacts are retained rather than rectified with absolute values.
+
+Energy is the **written** Fermi-relative energy converted from Ry to eV;
+DOS is converted from states/Ry to states/eV without extra normalization.
+Files are plotted separately: the real-space writer can use different Fermi
+updates for total and local/magnetic files. For cross-route alignment use
+`compare_totaldos.py`. Local filenames use the solver's symbolic labels;
+identically named files overwritten by the solver cannot be recovered here.
+Download the PNGs and original files through the Codespaces explorer. To plot
+locally, download these scripts and install NumPy and Matplotlib with
+`python -m pip install numpy matplotlib`; run the same commands with local paths.
+
 ## 1. bcc Fe SCF (10–30 min)
 
 Use the supplied explicit-lattice Fe deck, Broyden mixing, and a bounded
