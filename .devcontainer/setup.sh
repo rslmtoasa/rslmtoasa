@@ -4,6 +4,11 @@ set -euo pipefail
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# f90nml is not an Ubuntu 24.04 apt package. Keep pip out of system Python.
+python3 -m venv --system-site-packages .venv-tutorial
+.venv-tutorial/bin/python -m pip install 'f90nml==1.5.0'
+export PATH="$repo_root/.venv-tutorial/bin:$PATH"
+
 cmake -S . -B build-codespaces \
     -DCMAKE_Fortran_COMPILER=gfortran \
     -DCMAKE_BUILD_TYPE=Release \
@@ -22,3 +27,6 @@ fi
 
 printf '\nReady. Open runs/bccFe/input.nml, then run:\n'
 printf '  cd runs/bccFe\n  rslmto.x input.nml > run.log 2>&1\n'
+
+# Install the release-prep wheel bundled with this tutorial branch.
+bash .devcontainer/install-rsutils.sh
