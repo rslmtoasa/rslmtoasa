@@ -18,13 +18,28 @@
 
 module cheb_lp_mod
 
+   use control_mod, only: control
    use logger_mod, only: g_logger
    use precision_mod, only: rp
    implicit none
 
    private
 
-   public :: cheb_lp_extend
+   public :: cheb_lp, cheb_lp_extend
+
+   !> Linear-prediction settings taken from the control namelist.
+   type :: cheb_lp
+      !> Extend the Chebyshev moments before reconstruction.
+      logical :: enabled = .false.
+      !> Extension factor: n_total = factor*(2*lld+2).
+      integer :: factor = 4
+   contains
+      procedure :: n_total
+   end type cheb_lp
+
+   interface cheb_lp
+      procedure :: constructor
+   end interface cheb_lp
 
    !> Order p = n_known/p_div and window start n_lo = n_known/nlo_div (Stage A toy study).
    integer, parameter :: p_div = 4
@@ -33,6 +48,24 @@ module cheb_lp_mod
    real(rp), parameter :: delta = 1.0e-12_rp
 
 contains
+
+   function constructor(ctrl) result(obj)
+      type(control), intent(in) :: ctrl
+      type(cheb_lp) :: obj
+
+      obj%enabled = ctrl%cheb_lp
+      obj%factor = ctrl%cheb_lp_factor
+   end function constructor
+
+   !> @brief Length of the stored moment array: 2*lld+2, times the factor when enabled.
+   pure function n_total(this, lld) result(n)
+      class(cheb_lp), intent(in) :: this
+      integer, intent(in) :: lld
+      integer :: n
+
+      n = 2*lld + 2
+      if (this%enabled) n = n*this%factor
+   end function n_total
 
    !> @brief Extend the moments mu(:,:,n_known+1:) by linear prediction.
    !> @details Index i of mu is order i-1. Fit window: orders n_lo..n_known-1.

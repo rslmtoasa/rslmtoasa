@@ -65,7 +65,7 @@ contains
 
       this%g0 = 0.0d0
 
-      allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
+      allocate (kernel(size(this%recursion%mu_n, 3)), polycheb(this%en%channels_ldos + 10, 0:size(this%recursion%mu_n, 3)), w(this%en%channels_ldos + 10), &
                 wscale(this%en%channels_ldos + 10))
       ! Defining rescaling coeficients
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
@@ -75,7 +75,7 @@ contains
       wscale(:) = (this%en%ene(:) - b)/a
 
       ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
+      call jackson_kernel(size(this%recursion%mu_n, 3), kernel)
 
       ! Calculating the Lorentz Kernel
 !    call lorentz_kernel(this%control%lld, kernel, 4.0d0)
@@ -244,8 +244,8 @@ contains
       complex(rp), dimension(nb, nb, atoms_per_process), intent(inout), optional :: g_ef
       logical, intent(in), optional :: use_gpu
       ! Local variables
-      real(rp), dimension(this%control%lld*2 + 2) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
+      real(rp), dimension(size(this%recursion%mu_n, 3)) :: kernel
+      real(rp), dimension(this%en%channels_ldos + 10, 0:size(this%recursion%mu_n, 3)) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
@@ -288,7 +288,7 @@ contains
       nv = this%en%channels_ldos + 10
 
       if (.not. present(eta) .and. do_gpu) then
-         call jackson_kernel((this%control%lld)*2 + 2, kernel)
+         call jackson_kernel(size(this%recursion%mu_n, 3), kernel)
          do n_glob = start_atom, end_atom
             n = g2l_map(n_glob)
             do l = 1, nb
@@ -342,7 +342,7 @@ contains
       wscale(:) = (this%en%ene(:) - b)/a
 
       ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
+      call jackson_kernel(size(this%recursion%mu_n, 3), kernel)
 
       ! Calculating the Lorentz Kernel
       ! call lorentz_kernel(this%control%lld, kernel, 4.0d0)

@@ -381,11 +381,13 @@ contains
    module subroutine restore_to_default(this, full)
       class(recursion) :: this
       logical, intent(in), optional :: full
-      integer :: lmax
+      integer :: lmax, nmom
 
       this%b2_b_is_sqrt = .false.
 
       lmax = lmax_basis
+      this%lp = cheb_lp(this%control)
+      nmom = this%lp%n_total(this%control%lld)
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('recursion.a', this%a, (/max(this%lattice%control%llsp, this%lattice%control%lld), nb, this%lattice%nrec, 3/))
@@ -408,13 +410,13 @@ contains
       if ((this%lattice%njij == 0) .and. (this%lattice%njijk == 0)) then
          call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/nb, nb, this%control%lld, this%lattice%nrec/))
          call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld,, this%lattice%nrec/))
-         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%nrec/))
-         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%nrec/))
+         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, nmom, this%lattice%nrec/))
+         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/nb, nb, nmom, this%lattice%nrec/))
       else
          call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/nb, nb, this%control%lld, this%lattice%njij*4/))
          call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, nmom, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/nb, nb, nmom, this%lattice%njij*4/))
       end if
       call g_safe_alloc%allocate('recursion.psi_b', this%psi_b, (/nb, nb, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.hpsi', this%hpsi, (/nb, nb, this%lattice%kk/))
@@ -441,13 +443,13 @@ contains
       if (this%lattice%njij == 0) then
          allocate (this%a_b(nb, nb, this%control%lld, this%lattice%nrec))
          allocate (this%b2_b(nb, nb, this%control%lld, this%lattice%nrec))
-         allocate (this%mu_n(nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%nrec), &
-                   this%mu_ng(nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%nrec))
+         allocate (this%mu_n(nb, nb, nmom, this%lattice%nrec), &
+                   this%mu_ng(nb, nb, nmom, this%lattice%nrec))
       else
          allocate (this%a_b(nb, nb, this%control%lld, this%lattice%njij*4))
          allocate (this%b2_b(nb, nb, this%control%lld, this%lattice%njij*4))
-         allocate (this%mu_n(nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%njij*4), &
-                   this%mu_ng(nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%njij*4))
+         allocate (this%mu_n(nb, nb, nmom, this%lattice%njij*4), &
+                   this%mu_ng(nb, nb, nmom, this%lattice%njij*4))
       end if
       allocate (this%psi_b(nb, nb, this%lattice%kk))
       allocate (this%hpsi(nb, nb, this%lattice%kk))
@@ -466,6 +468,10 @@ contains
       this%pmn(:, :) = 0.0d0
       this%mu_n(:, :, :, :) = 0.0d0
       this%mu_ng(:, :, :, :) = 0.0d0
+      if (this%control%recur == 'chebyshev') &
+         call g_logger%info('Chebyshev moments: '//int2str(nmom)//' orders x '//int2str(size(this%mu_n, 4))// &
+                            ' slots; mu_n+mu_ng = '//real2str(32.0_rp*real(size(this%mu_n), rp)/1.0e6_rp, '(f10.1)')//' MB', &
+                            __FILE__, __LINE__)
       this%izero(:) = 0
       this%idum(:) = 0
       this%izeroll(:, :) = 0

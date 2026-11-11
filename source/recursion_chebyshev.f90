@@ -786,7 +786,7 @@ contains
                this%psi0(l, l, j) = (1.0d0, 0.0d0)
             end do
             call this%gpu_backend%chebyshev_moments(this%psi0, this%control%lld, a, b, &
-               this%mu_n(:, :, :, i_loc))
+               this%mu_n(:, :, 1:llcheb, i_loc))
             call g_logger%info('CUDA Chebyshev recursion done for atom '// &
                int2str(j), __FILE__, __LINE__)
          end do
@@ -807,7 +807,7 @@ contains
          ! Dispatch to the selected CPU backend (fast kernels or, for hoh /
          ! cheb_backend='legacy', the wrapped legacy recursion).
          call cheb_moments_cpu(this, this%psi0, this%control%lld, a, b, &
-            this%mu_n(:, :, :, i_loc))
+            this%mu_n(:, :, 1:llcheb, i_loc))
       end do ! End loop on the number of atoms to be treat self-consistently
    end subroutine chebyshev_recur
 
