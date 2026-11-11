@@ -8,8 +8,8 @@ and spin-diagonal d density-matrix entries agree to SURF_SOC0_TOL.
   engaged           nsp = 3 local against spectral: spin moments differ by more than 1e-3 muB at some step
 With the default density_policy ('relaxed_reference') the empty sphere's small moment turns negative after step 1 and its axis flips to -z at nsp = 3,
 and the runs then differ from nsp = 1 by 2.6e-2 (also in spectral mode; identical at U = 0, where that moment stays positive): see KNOWN_ISSUES.md.
-Bug caught: the correction missing or in the wrong spin frame on a surface cluster at nsp = 3. Not covered: nsp = 4, SOC, noncollinear axes, an
-independent reference for the corrected moments.
+Bug caught: the correction missing or in the wrong spin frame on a surface cluster at nsp = 3. Not covered: SOC, noncollinear axes, an independent
+reference for the corrected moments. nsp = 4 (SOC held at zero) is in test_surface_nsp4_u.py, which reuses surface() below.
 
 usage: test_surface_nsp3_u.py --binary rslmto.x --scratch-root DIR
 """
@@ -28,15 +28,15 @@ import test_surface_hoh_u as sh  # noqa: E402
 
 
 def surface(binary: Path, base: Path, tag: str, nsp: int, mode: str, hoh: bool):
-    d = rr.surface_deck(base / tag, "host_soc0", nsp, False)
+    d = rr.surface_deck(base / tag, "host_soc0", nsp, nsp == 4)  # nsp = 4 carries SOC: hold it at zero
     for f in d.glob("*.nml"):  # the seed potentials carry the radial-moment mode they were written in
         f.write_text(f.read_text().replace("hubbard_radial_moments = 'local'", f"hubbard_radial_moments = '{mode}'"))
-    if nsp == 3:
+    if nsp >= 3:
         pot = d / "Ni.nml"
-        pot.write_text(pot.read_text().replace("hubbard_nsp = 2", "hubbard_nsp = 3"))
+        pot.write_text(pot.read_text().replace("hubbard_nsp = 2", f"hubbard_nsp = {nsp}"))
     deck = d / "input.nml"
     text = deck.read_text()
-    if nsp == 3:
+    if nsp >= 3:
         text = text.replace("&control\n", "&control\ndensity_policy = 'constrained_spiral'\n", 1)
     if hoh:  # the hoh Chebyshev recursion needs the wider window
         text = re.sub(r"(?m)^energy_min\s*=.*$", "energy_min = -3.0", text)
