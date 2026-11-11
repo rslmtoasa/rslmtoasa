@@ -24,7 +24,9 @@ esac
 
 python3 -c 'import sys; assert sys.version_info >= (3, 11), "RS-utils needs Python 3.11 or newer; rebuild the Ubuntu 24.04 container"'
 venv="$repo_root/.venv-rsutils"
-python3 -m venv --system-site-packages "$venv"
+# Keep pip Matplotlib and mpl_toolkits isolated from Ubuntu apt packages.
+# Re-running venv also disables system-site-packages in existing environments.
+python3 -m venv "$venv"
 "$venv/bin/python" -m pip install --upgrade pip packaging
 if [ "$wheel_bundle" = true ]; then
     wheel_dir="$(mktemp -d)"
@@ -56,10 +58,14 @@ PYWHEEL
 fi
 # Remove both distribution names so even an equal-version snapshot is replaced.
 "$venv/bin/python" -m pip uninstall --yes rsutil rslmto-utils
-"$venv/bin/python" -m pip install "$artifact"
+"$venv/bin/python" -m pip install "${artifact}[bands]"
 "$venv/bin/python" - <<'PY'
 from importlib.metadata import version
 import rsutil
+# Exercise the bands import that loads mpl_toolkits.mplot3d, not only CLI help.
+import rsutil.bands
+import seekpath
+from mpl_toolkits.mplot3d import Axes3D
 installed = version('rslmto-utils')
 if installed != '0.11.0rc1':
     raise RuntimeError(f'Expected instructor release-prep 0.11.0rc1, found {installed}')
