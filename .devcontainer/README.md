@@ -102,13 +102,16 @@ After setup, open a new terminal and run:
 rsutil --help
 ```
 
-Installation uses `.venv-rsutils`. The installer checks archive checksums,
+Installation uses an isolated `.venv-rsutils` with the `bands` extras
+(including `seekpath`). It does not inherit Ubuntu Python packages, avoiding
+mixed Matplotlib/`mpl_toolkits` versions. The installer checks archive checksums,
 package version, CLI, and the loaded native Fortran library. It replaces any
 older installation even if the version number is unchanged. Python 3.11+
 is required; the Ubuntu 24.04 image uses Python 3.12. Python dependencies are
 resolved from PyPI, so initial setup still needs internet access.
 
-To reinstall the bundled package from the repository root:
+To reinstall or repair an existing mixed Matplotlib environment, run from
+the repository root (a container rebuild is not needed):
 
 ```bash
 bash .devcontainer/install-rsutils.sh
