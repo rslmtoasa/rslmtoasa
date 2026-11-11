@@ -8,7 +8,7 @@
     "OPENBLAS_NUM_THREADS": "1"
   },
   "remoteEnv": {
-    "PATH": "${containerWorkspaceFolder}/build-codespaces/bin:${containerEnv:PATH}"
+    "PATH": "${containerWorkspaceFolder}/.venv-rsutils/bin:${containerWorkspaceFolder}/.venv-tutorial/bin:${containerWorkspaceFolder}/build-codespaces/bin:${containerEnv:PATH}"
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "waitFor": "postCreateCommand",

@@ -47,30 +47,35 @@ production-converged calculations for all five tasks.
   starting directions along x and `nsp = 4` (SOC). The local full-size replay met the SCF criterion on the pinned code.
   The reduced-size replay did not; prepare a converged reduced-size state
   before class if the exercise requires self-consistent smaller-cell J values.
-- Install the instructor-provided RS-utils package before class, rather than
-  building it on every student's first launch. The uploaded source identifies
-  itself as `rsutil 0.11.0rc1`. Its source repository is private; it is not copied
-  into this public tutorial branch. Students need an instructor-authorized
-  archive/wheel or repository access. No access tokens belong in this repository.
+- RS-utils installs automatically from the author-provided `release-prep`
+  wheel archives bundled in `vendor/rsutils/`. Students do not upload files
+  or need private repository access. Verify `rsutil --help` before class.
+  The installed distribution is `rslmto-utils` 0.11.0rc1.
 - Rehearse the complete export with the chosen UppASD version. The supplied
   exporter is a starter converter, not a substitute for checking the target
   spin Hamiltonian, geometry, units, and simulation settings.
 
-The environment includes NumPy, Matplotlib, gnuplot, and `f90nml`. Additional
-RS-utils dependencies are installed in a virtual environment. From the
-repository root, after placing the approved source at `work/RS-utils-main`:
+The environment includes NumPy, Matplotlib, gnuplot, and `f90nml`. The latter
+is installed through pip in `.venv-tutorial`, since Ubuntu 24.04 does not
+provide an apt package named `python3-f90nml`.
+
+RS-utils installs automatically from the bundled **release-prep** wheels.
+After creation/rebuild, open a terminal and check:
 
 ```bash
-python3 -m venv --system-site-packages .venv-rsutils
-source .venv-rsutils/bin/activate
-python -m pip install ./work/RS-utils-main
 rsutil --help
 ```
 
-The source installation builds native Fortran utilities and installs its
-runtime dependencies. The existing compiler and CMake are used. An appropriate
-prebuilt wheel avoids the compile step. Do not assume a public PyPI package
-with the same name is the instructor's version.
+The installer selects the compatible wheel and checks its archive checksum,
+version, CLI, and native library. The distribution is **`rslmto-utils`**,
+version `0.11.0rc1`; command/import remain `rsutil`. Python 3.11+ is required.
+Installation is isolated in `.venv-rsutils`; system Python is unchanged.
+The bundled package does not need to be uploaded, and normal startup does
+not compile RS-utils. Dependencies are downloaded from PyPI.
+
+To reinstall, run `bash .devcontainer/install-rsutils.sh` from the repository
+root. See the [environment guide](../.devcontainer/README.md) for instructor
+package overrides and recovery from the old apt failure.
 
 ## 0. Start and identify the environment
 
@@ -648,12 +653,10 @@ Codespaces timings or production-accuracy claims.
   moment magnitude was `2.104052 mu_B`; the two exchange rows retained the
   source values and displacement components. Those equalities hold by
   construction of the serialization and do not test the physical model.
-- The native RS-utils wheel build failed in this local extracted toolchain
-  when a static, non-PIC `libgfortran.a` was linked into its shared library.
-  Export was exercised through `python -m rsutil.cli` with the supplied
-  source on `PYTHONPATH` and its Python runtime dependencies installed; it
-  did not use the native setup library. A normal Codespace wheel/source
-  installation still needs the instructor's rehearsal.
+- The release-prep source package built and loaded its native library in a
+  clean Ubuntu 24.04/Python 3.12 test. The supplied x86_64 wheel bundle also
+  installed with its CLI and native library loading successfully on Linux
+  CPython 3.12. The ARM64 wheel tags/metadata were inspected, not executed.
 - The uploaded full-size MnTe state (`15x15x15`, 13,500 sites) met the SCF
   criterion in one replayed step, residual `1.7e-9`, taking about 170 s locally.
   Printed Mn spin magnitudes were `4.126320 mu_B`; Te magnitudes printed as
