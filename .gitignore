@@ -61,3 +61,8 @@ pip-wheel-metadata/
 # Logs
 *.log
 *.out
+
+# Local tutorial Python environments and instructor package uploads
+/.venv-tutorial/
+/.venv-rsutils/
+/work/

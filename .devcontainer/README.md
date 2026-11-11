@@ -89,6 +89,63 @@ After changing the Dockerfile, use **Codespaces: Rebuild Container** from the
 command palette. Existing codespaces need to pull the updated branch first;
 new codespaces use the updated configuration automatically.
 
+## Bundled RS-utils (release-prep)
+
+RS-utils installs automatically during Codespaces setup. Students do not
+upload a package or need access to the private source repository.
+`vendor/rsutils/` contains the author-provided x86_64 and ARM64 wheel archives;
+the installer selects the wheel matching the current Python/CPU/platform.
+The distribution is `rslmto-utils` 0.11.0rc1; command/import remain `rsutil`.
+
+After setup, open a new terminal and run:
+
+```bash
+rsutil --help
+```
+
+Installation uses `.venv-rsutils`. The installer checks archive checksums,
+package version, CLI, and the loaded native Fortran library. It replaces any
+older installation even if the version number is unchanged. Python 3.11+
+is required; the Ubuntu 24.04 image uses Python 3.12. Python dependencies are
+resolved from PyPI, so initial setup still needs internet access.
+
+To reinstall the bundled package from the repository root:
+
+```bash
+bash .devcontainer/install-rsutils.sh
+source .venv-rsutils/bin/activate
+```
+
+For an instructor override, pass an individual compatible Linux `.whl`, one
+of the pinned wheel bundles, or the supplied `RS-utils-release-prep.zip`:
+
+```bash
+bash .devcontainer/install-rsutils.sh "work/rsutils/path-to-instructor-package.whl"
+```
+
+Use the actual provided filename. The source ZIP requires compilation;
+bundled wheels do not. A different source/bundle snapshot requires updating
+the pinned checksums (and expected version if changed) together. Local uploads
+and venvs are ignored by Git; bundled wheels are deliberately versioned.
+
+## Recover an existing Codespace
+
+In a working terminal, run `git pull --ff-only` on the tutorial branch.
+Open the command palette (F1) and choose **Codespaces: Rebuild Container**.
+If normal rebuild continues using an old image, use
+**Codespaces: Full Rebuild Container**. Results under `runs/` are preserved;
+download important outputs first.
+
+The alternative branch previously requested `python3-f90nml` from apt, but
+Ubuntu 24.04 has no package by that name. That image build fails before setup
+runs. The corrected setup installs `f90nml==1.5.0` with pip in
+`.venv-tutorial`, keeping Ubuntu's system Python intact.
+
+If recovery mode persists, open **Codespaces: View Creation Log** and locate
+the **first failing Docker/build/post-create command**, including the error
+lines above it. A later log that only starts the recovery container can end
+successfully without showing the original configuration failure.
+
 ## Download results for local plotting
 
 Right-click a file in the browser file explorer and select **Download**.
