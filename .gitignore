@@ -85,3 +85,6 @@ pip-wheel-metadata/
 # Codespaces tutorial calculations and downloads
 /runs/
 /*-results.tar.gz
+
+# Local tutorial Python environments and instructor package uploads
+/.venv-tutorial/
