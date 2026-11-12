@@ -1,19 +1,35 @@
 # RS-LMTO-ASA tutorial for ASP 2026
 
-**Draft · `main_rc` · two-core Codespaces · Fe, Si, MnTe, and UppASD export**
+**Draft · `main_rc` · two-core Codespaces · Fe, Si, NiMnSb, Mn2FeSi, and UppASD export**
 
-This tutorial contains the following tasks: 
-(1) bcc Fe SCF and 
-(2) periodic Si with
-Chebyshev recursion and the reciprocal-space solver,
-(3) Fe exchange from task 1, 
-(4) Exchange in multisublattice MnTe,
-(5) Export calculation to UppASD using RS-utils.
-(6) Import your own .cif file to RS-LMTO-ASA
+This tutorial covers the following tasks:
+
+1. Converge bcc Fe and investigate how recursion levels and cluster size affect its density of states (DOS).
+2. Converge periodic Si with the Chebyshev method, investigate the effect of the number of polynomials, and compare its DOS with the reciprocal-space solver.
+3. Calculate selected and automatically generated exchange interactions for bcc Fe, then export the results to UppASD with RS-utils.
+4. Select Mn–Mn exchange pairs in half-Heusler NiMnSb and compare DOS results across calculation methods.
+5. Generate RS-LMTO-ASA inputs from a Mn2FeSi CIF file, automate exchange calculations, and export the results to UppASD.
+6. Set up and converge a material of your choice from a CIF file.
 
 [Launch the Codespace](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows).
 
 ## Practical details
+
+### Navigating files and viewing plots
+
+Use the **Explorer** icon in the left sidebar to browse the repository. Expand a
+folder to see its files; for example, `tutorials/bccFe` contains the supplied
+Fe inputs, while the tasks create working copies under `runs/`. Click a text
+file to open it in the editor. To locate the directory used by the terminal,
+run `pwd`; use `ls` to list its contents and `cd ..` to move up one directory.
+The command `cd "$(git rev-parse --show-toplevel)"` returns to the repository
+root from any subdirectory.
+
+After running `plot_dos.py`, expand the `plots` folder in the current run
+directory and click a `.png` file to view it in the editor. `plot_exchange.py`
+saves `exchange.png` in the current directory by default. If that image already
+exists, choose a new filename with, for example,
+`plot_exchange.py jijso.out --output exchange-second.png`.
 
 ### Editing inputs in the browser
 
@@ -32,16 +48,15 @@ After saving an edited input, preserve a copy before starting SCF:
 
 ### A) Convergence to self-consistent solution
 
-Use the supplied Fe deck in the `tutorials/bccFe`folder. 
+Use the supplied Fe deck in the `tutorials/bccFe` folder.
 
-Open
-`lattice.nml` and `input.nml`: Inspect their contents and try to understand how the bcc Fe crystal is defined. The lattice
+Open `lattice.nml` and `input.nml`. Inspect their contents and consider how the bcc Fe crystal is defined. The lattice
 parameter remains `alat = 2.86120` Angstrom in `input.nml`; vectors and
 positions in `lattice.nml` are scaled by `alat`. 
 
 Keep `pre_processing = 'bravais'`: that selects the bulk SCF workflow,
 while `crystal_sym = 'file'` selects the explicit geometry source. The same
-`lattice.nml` will be carried into exchange and UppASD export. In order to not overwrite the original setup, copy the files to a run folder as per below:
+`lattice.nml` will be used for the exchange calculation and UppASD export. To avoid overwriting the original setup, copy the files to a run folder as shown below:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -79,16 +94,16 @@ If needed, allow **one** further block using the saved checkpoint:
 ```bash
 rslmto.x input.nml > restart.log 2>&1
 ```	
-Check again if the run has converged. 
+Check again whether the run has converged.
 
 ### B) Investigation of recursion levels and cluster size
 
-Once the bcc Fe calculation has converged to an accepted norm, generate the density of states (DOS) plots by running
+Once the bcc Fe calculation has converged to an accepted residual, generate the density of states (DOS) plots by running
 
 ```
 plot_dos.py
 ```
-and investigate the images that has been created in the current folder. How doest the total DOS look, and how about the spin-projected DOS?
+and inspect the images created in the current folder. What does the total DOS look like? What about the spin-projected DOS?
 
 Next, copy the converged potential and input files to a new directory and move to that directory
 
@@ -108,7 +123,7 @@ Note: Make sure you have the correct `input.nml` open, i.e. not the one from the
 Now, change `nstep` to `1`, and change the number of recursion levels `lld` to another value (keep it between 15 and 50). Then run the `rslmto.x` binary again, and generate the new DOS files.
 
 ```bash
-rslmto.x | out.log
+rslmto.x > out.log 2>&1
 plot_dos.py
 ```
 
@@ -121,7 +136,7 @@ If you want, you can test several different choices of `lld` or even the cluster
 
 ### A) Convergence to self-consistent solution
 
-Copy the starting fixture into a working directories and move to that directory.
+Copy the starting fixture into a working directory and move into it.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -165,7 +180,7 @@ cd runs/kspace-si/scf
 
 and open `input.nml` in the new directory. In the `%self` namelist, add the line `use_kspace = .true.` and change `nstep` to `100`. Then run the calculation and generate the DOS plots. 
 
-How does the DOS differ from the Chebyshev DOS? 
+How does the DOS differ from the Chebyshev DOS?
 
 
 ## 3. Fe exchange interactions
@@ -194,7 +209,7 @@ verbose = T
 /
 ```
 
-This sets the task for the code to calculating exchange interactions. Next we need to decide which pairs of atoms to calculate `Jij` for. We do this by adding the following lines in the `&lattice` namelist.
+This sets the code to calculate exchange interactions. Next, decide which pairs of atoms to calculate `Jij` for by adding the following lines to the `&lattice` namelist.
 
 ```
 nij = 2
@@ -202,8 +217,7 @@ ijpair(1, :) = 1, 2634
 ijpair(2, :) = 1, 2635
 ```
 
-I.e. two interactions between the atoms that are given on each `ijpair` line. Note that the atoms are given by their index in the cluster. This means that 
-a) it is advised to have the same cluster size settings in the SCF run as in the exchange run, and b) you can find the indices for the atoms in the `clust.xyz` file which shows the coordinates for each atom in the cluster.
+These lines specify two interactions between the atoms listed on each `ijpair` line. The atoms are identified by their indices in the cluster. Therefore, use the same cluster-size settings in the SCF and exchange runs. You can find the atom indices in `clust.xyz`, which lists the coordinates of every atom in the cluster.
 
 Save `input.nml` and run the code. 
 
@@ -240,7 +254,7 @@ plot_exchange.py jijso.out
 
 ### Automated export to UppASD
 
-The `rsutil` package can also export `rslmto` calculations to minimal `UppASD`input. For this we need the input files `input.nml` and `lattice.nml` as well as the exchange file `jijso.out` and the log file `report,out`. The latter is needed since `UppASD` needs moment magnitude information in addition to structure and exchange inputs. So this can be done as follows:
+The `rsutil` package can also export `rslmto` calculations to a minimal UppASD input. This requires `input.nml`, `lattice.nml`, the exchange file `jijso.out`, and the log file `report.out`. The log is needed because UppASD also requires moment magnitudes, in addition to the structure and exchange data. Run:
 
 ```
 cd ..
@@ -250,38 +264,38 @@ rsutil --export --jij Atom_1/jijso.out
 
 This creates a minimal `UppASD` setup in the folder `uppasd_out`, unless another name is specified with the `--out OUTDIR` flag.
 
-Inspect the resulting `UppASD` input. Does it look correct`
+Inspect the resulting UppASD input. Does it look correct?
 
-## half-Heusler NiMnSi
+## Half-Heusler NiMnSb
 
 
-### Selectiv exchange pair selection
+### Selective exchange-pair selection
 
-While the `rsutil` exchange setup tool is convenient, one sometimes want more control over the selection. As an example, the half-Heusler compound NiMnSi only contains one magnetic ion, Mn. Ni does have a small moment here, but can be approximated to not be relevant here. 
+While the `rsutil` exchange setup tool is convenient, sometimes you need more control over pair selection. For example, the half-Heusler compound NiMnSb has only one strongly magnetic ion, Mn. Ni also has a small moment, but we can treat it as negligible here.
 
-So here we want to setup an exchange calculation between Mn-Mn pairs only and this we do manually. Start by copying the converged NiMnSi system to a run folder.
+Here, we want to set up an exchange calculation for Mn–Mn pairs only, so we will select the pairs manually. Start by copying the supplied NiMnSb files to a run folder.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-mkdir -p runs/exchange-nimnsi
-cp  ./tutorials/MnNiSb/* runs/exchange-nimnsi
-cd runs/exchange-nimnsi
+mkdir -p runs/exchange-nimnsb
+cp ./tutorials/MnNiSb/* runs/exchange-nimnsb
+cd runs/exchange-nimnsb
 ```
-Now, open `clust.xyz` in the new folder and identify relevant Mn-Mn couplings. Enter these into the existing `input.nml` as `jijpair` lines. And remember to set `njij` to the number of exchange pairs you have defined. Also comment out the `pre_processing` line and add the relevant `post_processing` line.
+Open `clust.xyz` in the new folder and identify relevant Mn–Mn couplings. Enter them in the existing `input.nml` as `ijpair` lines. Set `nij` to the number of exchange pairs you have defined. Also comment out the `pre_processing` line and add the appropriate `post_processing` line.
 
-Run the calculation and plot the resulting exchange couplings using the `plot_exchange.py` script. Does it seem as you have captured Mn-Mn couplings?
+Run the calculation and plot the resulting exchange couplings with `plot_exchange.py`. Does it look as though you have captured the Mn–Mn couplings?
 
 ### Advanced: DOS features across methodologies
 
-Among its interesting properties, NiMnSi is half-metallic, i.e. it has a gap in one of the spin channels. This is difficult to resolve with block recursion and the Chebyshev method does need a lot of recursion levels. 
+NiMnSb is half-metallic, meaning it has a gap in one spin channel. This can be difficult to resolve with block recursion, and the Chebyshev method requires many recursion levels.
 
-To get a feel of how the DOS is reconstructed from these different approachs, one can do single-shot DOS calculations from the converged potentials. To do this, edit `input.nml` accordingly, i.e. change the values of `use_kspace`, `lld`, and `recur`. To ensure a single iteration, also change `nstep` to `1`.
+To see how these different methods reconstruct the DOS, perform single-shot DOS calculations using the converged potentials. Edit `input.nml` by changing the values of `use_kspace`, `lld`, and `recur`. Set `nstep` to `1` to run a single iteration.
 
-Perform the `input.mml` changes and run the code. After each run, genreate the DOS with `plot_dos.py` and store the relevant images so you don't overwrite them. What differnces do you see across the different methods?
+Make the changes in `input.nml` and run the code. After each run, generate the DOS with `plot_dos.py` and save the relevant images so they are not overwritten. What differences do you see across the methods?
 
 ## Heusler Mn2FeSi
 
-Another well studied material of the Heusler family is `Mn2FeSi`. Here we can try to use our `rsutil` functionalities to the max with minimal human interaction, i.e. moving towards a high-troughput methodology.
+Another well-studied material in the Heusler family is `Mn2FeSi`. Here, we will use the `rsutil` tools with minimal manual intervention, moving toward a high-throughput workflow.
 
 To prepare the tasks, copy the reference data to a run directory and list the copied files.
 
@@ -295,7 +309,7 @@ ls .
 
 ### From .cif to RS-LMTO-ASA input
 
-As you can see, the run directory only contains a `.cif` file, i.e a crystal structure descriptor. In order to run `rslmto.x` we thus need to process the `.cif` file. This can be done with `rsutil` using the following syntax:
+The run directory contains only a `.cif` file, a crystal-structure description. To run `rslmto.x`, first process the CIF file with `rsutil` using this command:
 
 ```
 rsutil setup bulk --cif EntryWithCollCode221028.cif --empty_spheres
@@ -305,17 +319,17 @@ Open the generated `input.nml` and `lattice.nml` and inspect them. If everything
 
 ### Automatic exchange pair setup
 
-Once converged, you can use `rsutil` tool again to generate the relevant exchange couplings for the system. Note: Before the setup, ensure that `use_kspace = .false` is set in the `input.nml` file.
+Once the system has converged, use `rsutil` again to generate the relevant exchange couplings. Before setting them up, ensure that `use_kspace = .false.` in `input.nml`.
 
 ```
 rsutil --exchange --cutoff 1.0 --unique
 ```
 
-This time, the script will generate four folders, one for each atom in the unit cell. Here we use a limited cutoff 
+This time, the script generates four folders, one for each atom in the unit cell. Here, we use a limited cutoff.
 
 ### Running the exchange calculations
 
-Now you can run the `rsutil.x` code in each directory to calculate the exchange interactions, and then paste the results to a single output file.
+Now run `rslmto.x` in each directory to calculate the exchange interactions, then combine the results in a single output file.
 
 ```bash
 for dir in Atom_?
@@ -336,7 +350,12 @@ With all exchange interactions prepared, we can run `rsutil` a final time to exp
 rsutil --export --jij ./jij_all.txt
 ```
 
-Unless you specify an output directory name, the generated files are placed in an `uppasd_out` subdirectory. Examine the outputs, do the look as expected?
+Unless you specify an output directory, the generated files are placed in an `uppasd_out` subdirectory. Examine the outputs. Do they look as expected?
+
+## Material X
+
+Now you are ready to run the code on your own. Choose a CIF file from an online source, set up the calculation, and see whether you can converge the system.
+
 
 ### End of tutorial
 
