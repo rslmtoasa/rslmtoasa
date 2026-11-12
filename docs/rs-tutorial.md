@@ -359,7 +359,7 @@ Now you are ready to run the code on your own. Choose a CIF file from an online 
 
 ### End of tutorial
 
-References: 
-The pinned RS-LMTO source/fixtures; RS-utils `0.11.0rc1` supplied
-source, `docs/export_submodule.rst`, `docs/notes/UppASD_format.md`, and
-`rsutil/export/uppasd.py`; [RS-utils manual](https://aibergman.github.io/RS-utils/).
+References: the RS-LMTO fixtures in `tutorials/` and
+`tests/scf/cases/bulk/diamondSi`; the bundled RS-utils release-prep wheels
+([package notes](../vendor/rsutils/README.md)); and the
+[RS-utils manual](https://aibergman.github.io/RS-utils/).
