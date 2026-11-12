@@ -252,7 +252,91 @@ This creates a minimal `UppASD` setup in the folder `uppasd_out`, unless another
 
 Inspect the resulting `UppASD` input. Does it look correct`
 
+## half-Heusler NiMnSi
 
+
+### Selectiv exchange pair selection
+
+While the `rsutil` exchange setup tool is convenient, one sometimes want more control over the selection. As an example, the half-Heusler compound NiMnSi only contains one magnetic ion, Mn. Ni does have a small moment here, but can be approximated to not be relevant here. 
+
+So here we want to setup an exchange calculation between Mn-Mn pairs only and this we do manually. Start by copying the converged NiMnSi system to a run folder.
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+mkdir -p runs/exchange-nimnsi
+cp  ./tutorials/MnNiSb/* runs/exchange-nimnsi
+cd runs/exchange-nimnsi
+```
+Now, open `clust.xyz` in the new folder and identify relevant Mn-Mn couplings. Enter these into the existing `input.nml` as `jijpair` lines. And remember to set `njij` to the number of exchange pairs you have defined. Also comment out the `pre_processing` line and add the relevant `post_processing` line.
+
+Run the calculation and plot the resulting exchange couplings using the `plot_exchange.py` script. Does it seem as you have captured Mn-Mn couplings?
+
+### Advanced: DOS features across methodologies
+
+Among its interesting properties, NiMnSi is half-metallic, i.e. it has a gap in one of the spin channels. This is difficult to resolve with block recursion and the Chebyshev method does need a lot of recursion levels. 
+
+To get a feel of how the DOS is reconstructed from these different approachs, one can do single-shot DOS calculations from the converged potentials. To do this, edit `input.nml` accordingly, i.e. change the values of `use_kspace`, `lld`, and `recur`. To ensure a single iteration, also change `nstep` to `1`.
+
+Perform the `input.mml` changes and run the code. After each run, genreate the DOS with `plot_dos.py` and store the relevant images so you don't overwrite them. What differnces do you see across the different methods?
+
+## Heusler Mn2FeSi
+
+Another well studied material of the Heusler family is `Mn2FeSi`. Here we can try to use our `rsutil` functionalities to the max with minimal human interaction, i.e. moving towards a high-troughput methodology.
+
+To prepare the tasks, copy the reference data to a run directory and list the copied files.
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+mkdir -p runs/ht-mn2fesi
+cp  ./tutorials/Mn2FeSi/* runs/ht-mn2fesi
+cd runs/ht-mn2fesi
+ls .
+```
+
+### From .cif to RS-LMTO-ASA input
+
+As you can see, the run directory only contains a `.cif` file, i.e a crystal structure descriptor. In order to run `rslmto.x` we thus need to process the `.cif` file. This can be done with `rsutil` using the following syntax:
+
+```
+rsutil setup bulk --cif EntryWithCollCode221028.cif --empty_spheres
+```
+
+Open the generated `input.nml` and `lattice.nml` and inspect them. If everything looks good, run the code to converge the system. *Hint: If slow, you can run a `use_kspace` enabled run to speed things up.*
+
+### Automatic exchange pair setup
+
+Once converged, you can use `rsutil` tool again to generate the relevant exchange couplings for the system. Note: Before the setup, ensure that `use_kspace = .false` is set in the `input.nml` file.
+
+```
+rsutil --exchange --cutoff 1.0 --unique
+```
+
+This time, the script will generate four folders, one for each atom in the unit cell. Here we use a limited cutoff 
+
+### Running the exchange calculations
+
+Now you can run the `rsutil.x` code in each directory to calculate the exchange interactions, and then paste the results to a single output file.
+
+```bash
+for dir in Atom_?
+do
+cd $dir 
+echo Processing $dir
+rslmto.x | tee out.jij | grep atoms
+cd ..
+done
+cat Atom_?/jijso.out > jij_all.txt
+```
+
+### Exporting to UppASD
+
+With all exchange interactions prepared, we can run `rsutil` a final time to export our system to a minimal `UppASD` setup.
+
+```
+rsutil --export --jij ./jij_all.txt
+```
+
+Unless you specify an output directory name, the generated files are placed in an `uppasd_out` subdirectory. Examine the outputs, do the look as expected?
 
 ### End of tutorial
 
