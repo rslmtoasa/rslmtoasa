@@ -699,7 +699,7 @@ copy the AFM moment directions explicitly. Te and empty spheres are absent
 from the spin model, not from the electronic state used to obtain its J values.
 
 The supplied starter CLI has no Mn-only selection option, collapses its
-lattice-only path to one default type, and writes +x moment directions.
+rlattice-only path to one default type, and writes +x moment directions.
 Therefore it must not be presented as a one-command, AFM-preserving MnTe
 exporter. The first session exports Fe; a reviewed Mn-only projection and
 AFM-preserving export are a follow-up step. Do not silently export Te with
