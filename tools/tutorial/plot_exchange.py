@@ -7,8 +7,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-MRY_TO_MEV = 13.605693122994
-
 
 def read_exchange(path):
     rows = []
@@ -58,12 +56,12 @@ def main():
     fig, ax = plt.subplots(figsize=(7, 4))
     for first, second in np.unique(selected[:, :2], axis=0):
         group = selected[(selected[:, 0] == first) & (selected[:, 1] == second)]
-        ax.scatter(group[:, 6], group[:, 5] * MRY_TO_MEV,
+        ax.scatter(group[:, 6], group[:, 5] ,
                    label=f'type {int(first)} → {int(second)}', alpha=0.7)
         print(f'Types {int(first)} -> {int(second)}: {len(group)} rows; '
               f'J = [{group[:, 5].min():.8g}, {group[:, 5].max():.8g}] mRy')
     ax.axhline(0, color='black', linewidth=0.6)
-    ax.set(xlabel='Pair distance / a', ylabel='J (meV)', title='Selected directed exchange rows')
+    ax.set(xlabel='Pair distance / a', ylabel='J (mRy)', title='Selected directed exchange rows')
     ax.legend()
     fig.tight_layout()
     for path in paths:
