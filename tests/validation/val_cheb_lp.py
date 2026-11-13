@@ -116,11 +116,15 @@ def bulk(binary, work, L, F):
         prepare(scf, dst, v, F, [("self", "nstep", 1), ("energy", "energy_min", -1.2),
                                  ("energy", "energy_max", 1.2), ("energy", "channels_ldos", 2500)])
         info = execute(binary, dst)
-        info["dos"] = np.loadtxt(dst / "Fe_dos.out", comments="#")
+        dos = np.loadtxt(dst / "Fe_dos.out", comments="#")
+        dos[:, 0] += info["ef"]    # the code writes E - E_F(run); convert to absolute energy (same mesh in all runs)
+        info["dos"] = dos
         res[name] = info
     ref = res["iii"]
     e = ref["dos"][:, 0]
     ef = ref["ef"]
+    for name in ("i", "ii"):
+        assert np.allclose(res[name]["dos"][:, 0], e, atol=1e-5), "energy meshes differ"
     print("\nrun   lld   LP  exit  E_F(Ry)    wall(s) maxrss(MB) mu(MB) posproj  LP log (first atom)")
     for name, v in variants(L, F):
         r = res[name]
@@ -134,7 +138,7 @@ def bulk(binary, work, L, F):
             occ, win = e <= ef, np.abs(e - ef) <= 0.1
             print("%-4s  %-4s  %9.3e  %9.3e  %9.3e  %9.3e" % (name, spin, np.abs(d[occ]).max(), np.sqrt(np.mean(d[occ] ** 2)),
                   np.abs(d[win]).max(), np.sqrt(np.mean(d[win] ** 2))))
-    print("\nrun   DOS_total(E_F own)  DOS_total(E_F(iii))   two highest peaks of total DOS: height@E(Ry)")
+    print("\nrun   DOS_total(E_F own)  DOS_total(E_F(iii))   two highest peaks of total DOS: height@E_abs(Ry)")
     for name, _ in variants(L, F):
         r = res[name]
         tot = r["dos"][:, 1]
