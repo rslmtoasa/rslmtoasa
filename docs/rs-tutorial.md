@@ -1,6 +1,6 @@
 # RS-LMTO-ASA tutorial for ASP 2026
 
-**Draft · `main_rc` · two-core Codespaces · Fe, Si, NiMnSb, Mn2FeSi, and UppASD export**
+**Draft · `main_rc` · two-core Codespaces · Fe, Si, NiMnSb, Co2FeSi, and UppASD export**
 
 This tutorial covers the following tasks:
 
@@ -8,7 +8,7 @@ This tutorial covers the following tasks:
 2. Converge periodic Si with the Chebyshev method, investigate the effect of the number of polynomials, and compare its DOS with the reciprocal-space solver.
 3. Calculate selected and automatically generated exchange interactions for bcc Fe, then export the results to UppASD with RS-utils.
 4. Select Mn–Mn exchange pairs in half-Heusler NiMnSb and compare DOS results across calculation methods.
-5. Generate RS-LMTO-ASA inputs from a Mn2FeSi CIF file, automate exchange calculations, and export the results to UppASD.
+5. Generate RS-LMTO-ASA inputs from a Co2FeSi CIF file, automate exchange calculations, and export the results to UppASD.
 6. Set up and converge a material of your choice from a CIF file.
 
 [Launch the Codespace](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows).
@@ -60,10 +60,10 @@ while `crystal_sym = 'file'` selects the explicit geometry source. The same
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-cp -r tutorials/bccFe runs/alternative-fe-scf
+cp -r tutorials/bccFe runs/bccfe-scf
 ```
 
-Open **`runs/alternative-fe-scf/input.nml`** in the editor. If needed, replace its
+Open **`runs/bccfe-scf/input.nml`** in the editor. If needed, replace its
 existing `&self` and `&mix` sections with:
 
 ```fortran
@@ -80,7 +80,7 @@ mixtype = 'broyden'
 Save, then run in the terminal:
 
 ```bash
-cd runs/alternative-fe-scf
+cd runs/bccfe-scf
 rslmto.x input.nml > run.log 2>&1
 ```
 
@@ -140,12 +140,12 @@ Copy the starting fixture into a working directory and move into it.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-mkdir -p runs/alternative-si
-cp -r tests/scf/cases/bulk/diamondSi runs/alternative-si/scf
-cd runs/alternative-si/scf
+mkdir -p runs/silicon
+cp -r tests/scf/cases/bulk/diamondSi runs/silicon/scf
+cd runs/silicon/scf
 ```
 
-Open **`runs/alternative-si/scf/input.nml`** and investigate the inputs. 
+Open **`runs/silicon/scf/input.nml`** and investigate the inputs. 
 What looks different from bcc Fe?
 
 This system uses the Chebyshev method instead of block recursion since we expect Si to be non-metallic. The Chebyshev method needs a larger number of recursion levels `lld`. 
@@ -189,18 +189,18 @@ Now we can go back to bcc Fe and calculate exchange interactions between neighbo
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-mkdir runs/alternative-fe-jij
-cp runs/alternative-fe-scf/Fe_out.nml runs/alternative-fe-jij/
-cp runs/alternative-fe-scf/input.nml runs/alternative-fe-jij/
-cp runs/alternative-fe-scf/lattice.nml runs/alternative-fe-jij/
-cp runs/alternative-fe-scf/report.out runs/alternative-fe-jij/
-cp runs/alternative-fe-scf/fort.805 runs/alternative-fe-jij/clust.xyz
-cd runs/alternative-fe-jij/
+mkdir runs/bccfe-jij
+cp runs/bccfe-scf/Fe_out.nml runs/bccfe-jij/
+cp runs/bccfe-scf/input.nml runs/bccfe-jij/
+cp runs/bccfe-scf/lattice.nml runs/bccfe-jij/
+cp runs/bccfe-scf/report.out runs/bccfe-jij/
+cp runs/bccfe-scf/fort.805 runs/bccfe-jij/clust.xyz
+cd runs/bccfe-jij/
 ```
 
 In addition to the input files, we also copied `fort.805` to `clust.xyz` for reasons that soon will be explained. We will also need the `report.out` file for later tasks.
 
-In the `runs/alternative-fe-jij` directory, open `input.nml` and change the `&calculation` namelist to
+In the `runs/bccfe-jij` directory, open `input.nml` and change the `&calculation` namelist to
 
 ```
 &calculation
@@ -293,17 +293,17 @@ To see how these different methods reconstruct the DOS, perform single-shot DOS 
 
 Make the changes in `input.nml` and run the code. After each run, generate the DOS with `plot_dos.py` and save the relevant images so they are not overwritten. What differences do you see across the methods?
 
-## Heusler Mn2FeSi
+## Heusler Co2FeSi
 
-Another well-studied material in the Heusler family is `Mn2FeSi`. Here, we will use the `rsutil` tools with minimal manual intervention, moving toward a high-throughput workflow.
+Another well-studied material in the Heusler family is `Co2FeSi`. Here, we will use the `rsutil` tools with minimal manual intervention, moving toward a high-throughput workflow.
 
 To prepare the tasks, copy the reference data to a run directory and list the copied files.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-mkdir -p runs/ht-mn2fesi
-cp  ./tutorials/Mn2FeSi/* runs/ht-mn2fesi
-cd runs/ht-mn2fesi
+mkdir -p runs/ht-Co2Fesi
+cp  ./tutorials/Co2FeSi/* runs/ht-Co2Fesi
+cd runs/ht-Co2Fesi
 ls .
 ```
 
@@ -359,7 +359,7 @@ Now you are ready to run the code on your own. Choose a CIF file from an online 
 
 ### End of tutorial
 
-References: the RS-LMTO fixtures in `tutorials/` and
-`tests/scf/cases/bulk/diamondSi`; the bundled RS-utils release-prep wheels
-([package notes](../vendor/rsutils/README.md)); and the
-[RS-utils manual](https://aibergman.github.io/RS-utils/).
+References: 
+The pinned RS-LMTO source/fixtures; RS-utils `0.11.0rc1` supplied
+source, `docs/export_submodule.rst`, `docs/notes/UppASD_format.md`, and
+`rsutil/export/uppasd.py`; [RS-utils manual](https://aibergman.github.io/RS-utils/).
