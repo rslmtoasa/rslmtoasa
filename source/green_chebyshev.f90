@@ -123,6 +123,7 @@ contains
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
       complex(rp), allocatable :: mu_local(:, :, :, :), g0_local(:, :, :, :)
+      real(rp), allocatable :: damp(:)
       real(rp) :: a, b, emin_win, emax_win
       integer :: nv, n_mom
       type(rsrec_cuda_backend), pointer :: gpu_backend
@@ -145,7 +146,8 @@ contains
       gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
       call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
-      call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local)
+      call cheb_damping(this, n_mom, damp)
+      call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local, damp)
       this%g0(:, :, 1:nv, 1:4) = g0_local(:, :, :, 1:4)
       deallocate (mu_local, g0_local)
    end subroutine chebyshev_green_ij_gpu
@@ -295,9 +297,10 @@ contains
          gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
          call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
+         call cheb_damping(this, size(this%recursion%mu_n, 3), damp)
          call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
                                          this%en%ene(1:nv), a, b,                         &
-                                         this%g0(:, :, 1:nv, start_atom:end_atom))
+                                         this%g0(:, :, 1:nv, start_atom:end_atom), damp)
          call enforce_chebyshev_spectral_positivity(this, nv)
          return
       end if
@@ -393,7 +396,7 @@ contains
 
    !> Optional damping argument of the reconstruction kernels: left unallocated for the default
    !> Jackson kernel (the kernels then build it inline, bit-identical to before).
-   subroutine cheb_damping(this, n, damping)
+   module subroutine cheb_damping(this, n, damping)
       class(green), intent(in) :: this
       integer, intent(in) :: n
       real(rp), allocatable, intent(out) :: damping(:)
