@@ -49,6 +49,8 @@ module cheb_lp_mod
    integer, parameter :: nlo_div = 2
    !> Pseudo-inverse cutoff, relative to the largest eigenvalue of the normal matrix (PRB 90, 045144 uses 1e-5 to 1e-6).
    real(rp), parameter :: delta = 1.0e-6_rp
+   !> Largest |mu(l,m,n) - conjg(mu(m,l,n))| over the known moments, relative to max|mu|, for which the block is treated as Hermitian.
+   real(rp), parameter :: herm_tol = 1.0e-8_rp
 
 contains
 
@@ -95,6 +97,9 @@ contains
    !> @brief Extend the moments mu(:,:,n_known+1:) by linear prediction.
    !> @details Index i of mu is order i-1. Fit window: orders n_lo..n_known-1.
    !>          Roots with |lambda| >= 1 are dropped before extrapolating.
+   !>          A Hermitian block (to herm_tol) is fitted on its nb*nb unique real channels, Re mu(l,m) for l <= m and
+   !>          Im mu(l,m) for l < m, with weights 1 on the diagonal and 2 off it, which reproduces the sums over all 2*nb*nb
+   !>          channels; the extension is stored in both triangles. Any other block is fitted on all 2*nb*nb channels.
    !> @param[inout] mu Moments (nb,nb,n_total); 1:n_known in, the rest out.
    !> @param[in] n_known Number of known moments.
    !> @param[out] n_rank Eigenvalues of the normal matrix kept by the cutoff.
@@ -109,9 +114,11 @@ contains
       integer, intent(out) :: n_rank, n_unstable
       real(rp), intent(out) :: lam_max, fit_res, imag_max, unstable_weight
       integer :: nb, nb2, nch, p, nlo, n_ext, nsteps, nkeep, q, i, j, k, info, lwork
-      integer, allocatable :: ipiv(:)
+      integer, allocatable :: ipiv(:), cl(:), cm(:)
+      logical, allocatable :: cim(:)
+      logical :: herm
       real(rp) :: smax, ynorm, rnorm, mult
-      real(rp), allocatable :: xr(:, :), tg(:, :), dd(:, :), gg(:, :), rr(:, :), rcopy(:, :), rv(:), ev(:), t(:), a(:)
+      real(rp), allocatable :: wch(:), xr(:, :), xw(:, :), tg(:, :), dd(:, :), gg(:, :), rr(:, :), rcopy(:, :), rv(:), ev(:), t(:), a(:)
       real(rp), allocatable :: comp(:, :), wr(:), wi(:), vr(:, :), work(:), amp(:), dre(:, :), bst(:, :), ext(:, :)
       logical, allocatable :: unst(:)
       complex(rp), allocatable :: vc(:, :), bm(:, :), lam(:), v1(:), cv(:), oc(:)
@@ -120,24 +127,29 @@ contains
 
       nb = size(mu, 1)
       nb2 = nb*nb
-      nch = 2*nb2
       n_ext = size(mu, 3)
       p = n_known/p_div
       nlo = n_known/nlo_div
       if (p < 2 .or. n_ext <= n_known .or. nlo < p) &
          call g_logger%fatal('cheb_lp_extend: need n_known >= 8 and size(mu,3) > n_known', __FILE__, __LINE__)
 
-      ! Real channels: c = (m-1)*nb + l for Re mu(l,m,:), plus nb2 for Im.
-      allocate (xr(n_known, nch))
+      herm = is_hermitian()
+      nch = merge(nb2, 2*nb2, herm)
+      allocate (cl(nch), cm(nch), cim(nch), wch(nch), xr(n_known, nch))
       call load_channels()
 
-      ! Normal equations R a = -r over all channels and the window, from the lag Gram matrix T(a,b) = sum_c x_c(a) x_c(b)
+      ! Normal equations R a = -r over all (weighted) channels and the window, from the lag Gram matrix T(a,b) = sum_c w_c x_c(a) x_c(b)
       ! (positions a, b = 1..n_known). The window sums are differences along the diagonals of T:
-      !   G(i,j) = sum_c sum_{n=nlo+1}^{n_known} x_c(n-i) x_c(n-j) = D(n_known-i, n_known-j) - D(nlo-i, nlo-j),
+      !   G(i,j) = sum_c w_c sum_{n=nlo+1}^{n_known} x_c(n-i) x_c(n-j) = D(n_known-i, n_known-j) - D(nlo-i, nlo-j),
       !   D(a,b) = T(a,b) + D(a-1,b-1), D = 0 for a = 0 or b = 0.
       ! Then R(i,j) = G(i,j), r(i) = G(i,0) (i,j = 1..p), |y|^2 = G(0,0), and the fit residual is |y|^2 + 2 a.r + a.R.a.
       allocate (tg(n_known, n_known), dd(0:n_known, 0:n_known), gg(0:p, 0:p))
-      call dsyrk('U', 'N', n_known, nch, 1.0_rp, xr, n_known, 0.0_rp, tg, n_known)
+      allocate (xw(n_known, nch))
+      do i = 1, nch
+         xw(:, i) = sqrt(wch(i))*xr(:, i)
+      end do
+      call dsyrk('U', 'N', n_known, nch, 1.0_rp, xw, n_known, 0.0_rp, tg, n_known)
+      deallocate (xw)
       dd = 0.0_rp
       do j = 1, n_known
          do i = 1, j
@@ -226,7 +238,7 @@ contains
       if (info /= 0) call g_logger%fatal('cheb_lp_extend: zgesv failed (singular eigenvector matrix)', __FILE__, __LINE__)
       allocate (amp(p))
       do i = 1, p
-         amp(i) = abs(v1(i))*sum(abs(bm(i, :)))
+         amp(i) = abs(v1(i))*sum(wch*abs(bm(i, :)))
       end do
       unstable_weight = sum(amp, mask=unst)/sum(amp)
       nsteps = n_ext - n_known
@@ -248,9 +260,7 @@ contains
       end do
       ext = 0.0_rp
       if (nkeep > 0) call dgemm('T', 'N', nch, nsteps, 2*nkeep, 1.0_rp, bst, 2*nkeep, dre, 2*nkeep, 0.0_rp, ext, nch)
-      do k = 1, nsteps
-         mu(:, :, n_known + k) = reshape(cmplx(ext(1:nb2, k), ext(nb2 + 1:nch, k), rp), [nb, nb])
-      end do
+      call store_extension()
       ! imag_max: the imaginary part dropped by Re, evaluated for the last extrapolation step only (not the maximum over steps).
       cv = v1*lam**nsteps
       call zgemv('T', p, nch, (1.0_rp, 0.0_rp), bm, p, cv, 1, (0.0_rp, 0.0_rp), oc, 1)
@@ -258,15 +268,72 @@ contains
 
    contains
 
+      !> Hermitian to herm_tol: max |mu(l,m,n) - conjg(mu(m,l,n))| <= herm_tol * max|mu| over the known moments.
+      logical function is_hermitian()
+         real(rp) :: dev
+         integer :: n
+         dev = 0.0_rp
+         do n = 1, n_known
+            dev = max(dev, maxval(abs(mu(:, :, n) - conjg(transpose(mu(:, :, n))))))
+         end do
+         is_hermitian = dev <= herm_tol*maxval(abs(mu(:, :, 1:n_known)))
+      end function is_hermitian
+
+      !> Real channels c: Re or Im (cim) of mu(cl,cm,:) with weight wch. Hermitian: l <= m real, l < m imaginary, taken
+      !> from the Hermitian part of mu. Otherwise every element, real part c = (m-1)*nb + l, imaginary part nb2 + that.
       subroutine load_channels()
-         integer :: l, m
+         integer :: l, m, c, n
+         complex(rp) :: z
+
+         c = 0
          do m = 1, nb
             do l = 1, nb
-               xr(:, (m - 1)*nb + l) = real(mu(l, m, 1:n_known), rp)
-               xr(:, nb2 + (m - 1)*nb + l) = aimag(mu(l, m, 1:n_known))
+               if (herm .and. l > m) cycle
+               c = c + 1
+               cl(c) = l; cm(c) = m; cim(c) = .false.
+               wch(c) = merge(2.0_rp, 1.0_rp, herm .and. l < m)
+               if (.not. herm) then
+                  cl(nb2 + c) = l; cm(nb2 + c) = m; cim(nb2 + c) = .true.; wch(nb2 + c) = 1.0_rp
+               end if
+            end do
+         end do
+         if (herm) then
+            do m = 2, nb
+               do l = 1, m - 1
+                  c = c + 1
+                  cl(c) = l; cm(c) = m; cim(c) = .true.; wch(c) = 2.0_rp
+               end do
+            end do
+         end if
+         do c = 1, nch
+            do n = 1, n_known
+               z = mu(cl(c), cm(c), n)
+               if (herm) z = 0.5_rp*(z + conjg(mu(cm(c), cl(c), n)))
+               xr(n, c) = merge(aimag(z), real(z, rp), cim(c))
             end do
          end do
       end subroutine load_channels
+
+      !> Write ext(:,k) to mu(:,:,n_known+k); a Hermitian block also gets its other triangle.
+      subroutine store_extension()
+         real(rp) :: er(nb, nb), ei(nb, nb)
+         integer :: c, kk
+
+         do kk = 1, nsteps
+            er = 0.0_rp
+            ei = 0.0_rp
+            do c = 1, nch
+               if (cim(c)) then
+                  ei(cl(c), cm(c)) = ext(c, kk)
+                  if (herm) ei(cm(c), cl(c)) = -ext(c, kk)
+               else
+                  er(cl(c), cm(c)) = ext(c, kk)
+                  if (herm) er(cm(c), cl(c)) = ext(c, kk)
+               end if
+            end do
+            mu(:, :, n_known + kk) = cmplx(er, ei, rp)
+         end do
+      end subroutine store_extension
 
    end subroutine cheb_lp_extend
 

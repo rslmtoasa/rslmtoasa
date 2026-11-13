@@ -18,6 +18,8 @@
 !>          U4: one damped and one growing pole (rho = 1.003). The growing pair must be
 !>          dropped and carry the share w2 rho2^(N-1)/(w1 rho1^(N-1) + w2 rho2^(N-1))
 !>          of the mode amplitude at the last known moment.
+!>          U5: as U2 but with NON-Hermitian W_k = u v^H (u /= v), so the full-channel path is taken;
+!>          the closed form is compared to the same 1e-11 as U2.
 !------------------------------------------------------------------------------
 program test_cheb_lp
    use precision_mod, only: rp
@@ -35,6 +37,7 @@ program test_cheb_lp
    call test_block(failed)
    call test_spectral(failed)
    call test_unstable(failed)
+   call test_nonhermitian(failed)
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -183,6 +186,51 @@ contains
          bad = .true.
       end if
    end subroutine test_unstable
+
+   !> U5: catches a silent Hermitian assumption (symmetrised input or mirrored output) and a wrong full-channel fallback.
+   subroutine test_nonhermitian(bad)
+      logical, intent(inout) :: bad
+      integer, parameter :: nk = 4, nb = 3
+      real(rp), parameter :: rho(nk) = [0.970_rp, 0.985_rp, 0.992_rp, 0.996_rp]
+      real(rp), parameter :: th(nk) = [0.45_rp, 1.05_rp, 1.90_rp, 2.60_rp]
+      complex(rp) :: wk(nb, nb, nk), mu(nb, nb, n_total), ex(nb, nb, n_total), u(nb), v(nb)
+      real(rp) :: err, herm
+      integer :: n, k, l, n_rank, n_unstable
+      real(rp) :: lam_max, fit_res, imag_max, uw
+
+      do k = 1, nk
+         do l = 1, nb
+            u(l) = cmplx(cos(0.7_rp*l + 1.3_rp*k), sin(1.1_rp*l - 0.4_rp*k), rp)
+            v(l) = cmplx(sin(0.9_rp*l + 0.6_rp*k), cos(0.5_rp*l - 1.7_rp*k), rp)
+         end do
+         wk(:, :, k) = spread(u, 2, nb)*conjg(spread(v, 1, nb))
+      end do
+      do n = 0, n_total - 1
+         ex(:, :, n + 1) = (0.0_rp, 0.0_rp)
+         do k = 1, nk
+            ex(:, :, n + 1) = ex(:, :, n + 1) + wk(:, :, k)*rho(k)**n*cos(n*th(k))
+         end do
+      end do
+      herm = 0.0_rp
+      do n = 1, n_known
+         herm = max(herm, maxval(abs(ex(:, :, n) - conjg(transpose(ex(:, :, n))))))
+      end do
+      mu = (0.0_rp, 0.0_rp)
+      mu(:, :, 1:n_known) = ex(:, :, 1:n_known)
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, uw)
+      err = maxval(abs(mu(:, :, n_known + 1:) - ex(:, :, n_known + 1:)))/maxval(abs(ex(:, :, 1:n_known)))
+      write (*, '(a,es10.3,a,i0,a,i0,a,f8.5,a,es9.2,a,es9.2,a,es9.2)') 'U5 non-Hermitian block: max rel err = ', err, &
+         '  rank=', n_rank, '  unstable=', n_unstable, '  lam_max=', lam_max, '  fit_res=', fit_res, '  imag=', imag_max, '  unst_weight=', uw
+      write (*, '(a,es9.2,a)') 'U5 input non-Hermiticity max|mu - mu^H| = ', herm, '  (must be well above 1e-8 max|mu|)'
+      if (herm < 1.0e-3_rp*maxval(abs(ex(:, :, 1:n_known)))) then
+         write (*, '(a)') 'FAIL: U5 input is not non-Hermitian'
+         bad = .true.
+      end if
+      if (err > tol) then
+         write (*, '(a)') 'FAIL: U5 extension differs from the closed form'
+         bad = .true.
+      end if
+   end subroutine test_nonhermitian
 
    pure function poisson(r, phi) result(p)
       real(rp), intent(in) :: r, phi
