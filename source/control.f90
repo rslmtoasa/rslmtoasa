@@ -247,6 +247,10 @@ module control_mod
       logical :: cheb_lp
       !> Extension factor of the linear prediction: N_ext = cheb_lp_factor*(2*lld+2).
       integer :: cheb_lp_factor
+      !> Damping kernel of the Chebyshev reconstruction: 'jackson' (default), 'lorentz' or 'none'.
+      character(len=16) :: cheb_kernel
+      !> Lorentz kernel parameter lambda: g_n = sinh(lambda*(1-n/N))/sinh(lambda).
+      real(rp) :: cheb_kernel_lambda
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -425,6 +429,8 @@ contains
       fresh_start = this%fresh_start
       cheb_lp = this%cheb_lp
       cheb_lp_factor = this%cheb_lp_factor
+      cheb_kernel = this%cheb_kernel
+      cheb_kernel_lambda = this%cheb_kernel_lambda
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
@@ -486,6 +492,8 @@ contains
       this%fresh_start = fresh_start
       this%cheb_lp = cheb_lp
       this%cheb_lp_factor = cheb_lp_factor
+      this%cheb_kernel = cheb_kernel(:len(this%cheb_kernel))
+      this%cheb_kernel_lambda = cheb_kernel_lambda
 
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
@@ -617,6 +625,8 @@ contains
       this%fresh_start = .false.
       this%cheb_lp = .false.
       this%cheb_lp_factor = 2
+      this%cheb_kernel = 'jackson'
+      this%cheb_kernel_lambda = 3.0_rp
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
@@ -665,6 +675,8 @@ contains
       fresh_start = this%fresh_start
       cheb_lp = this%cheb_lp
       cheb_lp_factor = this%cheb_lp_factor
+      cheb_kernel = this%cheb_kernel
+      cheb_kernel_lambda = this%cheb_kernel_lambda
       txc = this%txc
       blockrec = this%blockrec
       partype = this%partype
@@ -759,6 +771,8 @@ contains
       call nml%add('fresh_start', this%fresh_start)
       call nml%add('cheb_lp', this%cheb_lp)
       call nml%add('cheb_lp_factor', this%cheb_lp_factor)
+      call nml%add('cheb_kernel', this%cheb_kernel)
+      call nml%add('cheb_kernel_lambda', this%cheb_kernel_lambda)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -822,6 +836,21 @@ contains
       end if
       if (this%cheb_lp_factor < 2) then
          call g_logger%fatal('control%cheb_lp_factor must be >= 2.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel /= 'jackson' .and. this%cheb_kernel /= 'lorentz' .and. this%cheb_kernel /= 'none') then
+         call g_logger%fatal('control%cheb_kernel must be one of: ''jackson'', ''lorentz'' or ''none''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel /= 'jackson' .and. this%recur /= 'chebyshev') then
+         call g_logger%fatal('control%cheb_kernel /= ''jackson'' requires recur = ''chebyshev''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel == 'none' .and. .not. this%cheb_lp) then
+         call g_logger%fatal('control%cheb_kernel = ''none'' requires cheb_lp = .true. (a hard cutoff of computed moments rings).', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel == 'lorentz' .and. this%cheb_kernel_lambda <= 0.0_rp) then
+         call g_logger%fatal('control%cheb_kernel_lambda must be > 0 for the Lorentz kernel.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel /= 'jackson' .and. this%gpu_plugin) then
+         call g_logger%fatal('control%cheb_kernel /= ''jackson'' is not implemented for the GPU plugin (the kernel is built into the CUDA code).', __FILE__, __LINE__)
       end if
       if (this%transport_backend /= 'legacy' &
           .and. this%transport_backend /= 'fast_sp' &
