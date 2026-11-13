@@ -6,8 +6,11 @@ d density-matrix entries agree to SURF_SOC0_TOL. The decks are those of test_sur
   nsp4_vs_nsp3      first order
   nsp4_vs_nsp3_hoh  hoh (V_U in enim)
   engaged           nsp = 4 local against spectral: spin moments differ by more than 1e-3 muB at some step
-Bug caught: the correction missing or in the wrong spin frame on a surface cluster at nsp = 4 (a skipped correction passes the parity cases only if
-'engaged' also fails). Not covered: SOC on, noncollinear axes, an independent reference for the corrected moments (nsp = 3 is the same code).
+Bug caught: an nsp = 4 surface run that fails or departs from nsp = 3 with SOC off (a guard on nsp = 4, SOC not zeroed on the surface route, a nonzero
+SOC matrix from build_lsham). The parity cases hold by construction for the correction itself: with SOC off the nsp = 4 run differs from nsp = 3 only by a
+zero SOC matrix and the correction code is shared for nsp >= 3 (measured max |delta| 0 over 112 quantities, bit identical), so a wrong or missing spin-frame
+correction is not caught by them; LdaUSurfaceNsp3 (nsp = 3 against nsp = 1) covers that code and 'engaged' shows it acts at nsp = 4. Not covered: SOC on,
+noncollinear axes, an independent reference for the corrected moments.
 
 usage: test_surface_nsp4_u.py --binary rslmto.x --scratch-root DIR
 """
