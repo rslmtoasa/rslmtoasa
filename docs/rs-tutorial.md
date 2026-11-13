@@ -61,7 +61,10 @@ while `crystal_sym = 'file'` selects the explicit geometry source. The same
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-cp -r tutorials/bccFe runs/bccfe-scf
+mkdir -p runs
+if [ ! -e runs/bccfe-scf ]; then
+    cp -r tutorials/bccFe runs/bccfe-scf
+fi
 ```
 
 Open **`runs/bccfe-scf/input.nml`** in the editor. If needed, replace its
@@ -85,7 +88,7 @@ cd runs/bccfe-scf
 rslmto.x input.nml > run.log 2>&1
 ```
 
-Inspect `run.log`, `report.out`, and `Fe_scf.nml`. Record the printed mixing
+Inspect `run.log`, `report.out`, and `Fe_out.nml`. Record the printed mixing
 residual, total energy, spin/orbital moments, and Fermi energy. Only an explicit
 `Converged!` at a residual below `5e-8` satisfies this teaching criterion;
 reaching the iteration cap or returning exit code zero does not.
