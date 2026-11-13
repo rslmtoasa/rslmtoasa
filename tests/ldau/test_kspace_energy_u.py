@@ -6,7 +6,7 @@ adds the energy of the spinor P_out to physical_total_energy; for collinear setu
   af_nsp4_nsp3    the same antiferromagnet, nsp = 4 with SOC held at zero against nsp = 3
   fm_nsp4_nsp2    ferromagnet along z with SOC, 4 steps: nsp = 4 against nsp = 2
   engaged         |E_Hub_P_OUT| of the nsp = 1 antiferromagnet and of the nsp = 2 ferromagnet is above 1e-2 Ry at every step (a skipped routing prints 0)
-Bug caught: the k-space energy not routed at nsp >= 2, or built from the wrong spin frame or site. Not covered: hoh (not routed), impurities and surfaces
+Bug caught: the k-space energy not routed at nsp >= 2, or built from the wrong spin frame or site. Not covered: hoh (test_hoh_energy_u.py), impurities and surfaces
 (test_cluster_energy_u.py), an independent reference for the energy itself (the nsp = 1 energy is the reference), a finite-difference dE/dU check.
 
 usage: test_kspace_energy_u.py --binary rslmto.x --scratch-root DIR

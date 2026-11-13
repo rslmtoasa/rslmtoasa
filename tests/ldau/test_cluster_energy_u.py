@@ -7,7 +7,7 @@ physical_total_energy (Ry) must agree at every step:
   surf_nsp3_nsp1  Ni(001) surface (calctype S, tests/ldau/test_surface_nsp3_u.py decks, U = 3 eV, J = 0.7, constrained_spiral): nsp = 3 against nsp = 1
   engaged         |E_Hub_P_OUT| of both nsp = 1 runs is above 1e-2 Ry at every step (a skipped routing prints 0 and makes the parities hold trivially)
 Bug caught: the energy not routed on a cluster, taken from the wrong type (the recursion site index is not the type), or built from the wrong spin frame.
-Not covered: hoh (not routed anywhere), nsp = 4, k-space, an independent reference for the energy itself (the nsp = 1 energy is the reference), a
+Not covered: hoh (test_hoh_energy_u.py), nsp = 4, k-space, an independent reference for the energy itself (the nsp = 1 energy is the reference), a
 finite-difference dE/dU check.
 
 usage: test_cluster_energy_u.py --binary rslmto.x --scratch-root DIR

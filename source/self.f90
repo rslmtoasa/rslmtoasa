@@ -869,7 +869,7 @@ contains
          return
       end if
       ! Hamiltonian: Liechtenstein, lmax=2, collinear, first order, no constraints / SC-U / V
-      if (.not. this%hamiltonian%fixed_u_local_scope(allow_noncollinear=.true.)) return
+      if (.not. this%hamiltonian%fixed_u_local_scope(allow_hoh=.true., allow_noncollinear=.true.)) return
       ! spin: scalar nsp=1 without SOC, or bulk spinor U at nsp=2
       if (.not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
                  (this%control%nsp >= 2 .and. this%hamiltonian%hubbard_soc_experimental))) return

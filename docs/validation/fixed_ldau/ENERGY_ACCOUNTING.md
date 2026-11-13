@@ -22,8 +22,8 @@ The implemented route is limited to ordinary native reciprocal KS
 (`use_kspace=.true.`, `calctype='B'`) and qualifying clean-bulk RS
 (`use_kspace=.false.`, `calctype='B'`), with `nbulk=0`, `nrec=ntype`, explicit
 fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`, and
-disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite V,
-impurity U, impurity/surface hosts, and nonzero test fields are excluded. For
+disabled constraints. SOC/noncollinear, self-consistent U, intersite V,
+impurity U, impurity/surface hosts, and nonzero test fields were excluded at A4.4 (HOH is routed since 2026-11-13, see below). For
 clean-bulk RS, the C4 RC2 candidate gate passes at U=2 eV and J=0, 0.5, and
 0.9 eV under the amended occupation-response allowance; the independent
 arithmetic is summarized in `VALIDATION_SUMMARY.md` (raw data: tag archive/fable_v4b_u-2026-11-05). The reviewed B3 extension enables the
@@ -42,7 +42,7 @@ zero-target setup fatal; a successful constrained SCF route remains untested.
 B3 removes the backend selector from the shared local-Hubbard eligibility
 predicate. The existing guards remain: fixed Liechtenstein U/J, scalar
 collinear `nsp=1`, `lmax=2`, `calctype='B'`, clean bulk (`nbulk=0`,
-`nrec=ntype`), and no constraints, SOC/noncollinearity, HOH,
+`nrec=ntype`), and no constraints, SOC/noncollinearity,
 self-consistent U/V, impurity U, or nonzero test-operator field. Thus the
 automatic local route is available to both RS and native KS when those
 conditions hold. In either backend, local `E_Hub(P_OUT)` is included in the
@@ -52,6 +52,27 @@ outside this eligibility scope. This describes the reviewed implementation scope
 reproduction and unchanged-mode/no-U controls are summarized in
 `VALIDATION_SUMMARY.md` (raw data: tag archive/fable_v4b_u-2026-11-05). This is not a new RS ASA
 derivative-gate verdict.
+
+### hoh (2026-11-13)
+
+With `hoh = .true.` V_U is added to `enim` and the radial moments come from the orthonormal-basis Green function; `bands.f90` and `self.f90`
+have no `hoh` branch, so the correction `c - t/q0`, `q2'` and the radial step are the ones of the first-order route. `E_Hub(P_OUT)` is routed
+into `physical_total_energy` by the same predicate (`is_eligible_local_hubbard`), now with `allow_hoh=.true.`.
+Finite differences, bulk bcc Fe (`tests/scf/cases/bulk/bccFe_hubbard_nsp1`, `nsp=1`, RS block, rc=80, J=0, `local`, beta 0.1, `conv_thr` 1e-9,
+all runs converged, 62 to 98 steps), central differences of the converged `physical_total_energy` against `E_Hub/U` at U=2 eV
+(E_Hub is linear in U at J=0, so `dE_Hub/dU` at fixed P is `E_Hub/U`); criterion fixed before the hoh runs: relative difference within 5e-3:
+
+| run | FD, Ry/eV | E_Hub/U, Ry/eV | relative |
+| --- | ---: | ---: | ---: |
+| hoh, U=1.8/2.2 | 0.05342474 | 0.05355919 | -2.5e-3 |
+| hoh, U=1.9/2.1 | 0.05350306 | 0.05355919 | -1.0e-3 |
+| hoh, five-point U=1.8 to 2.2 | 0.05352916 | 0.05355919 | -5.6e-4 |
+| first order, U=1.8/2.2 | 0.05424312 | 0.05442266 | -3.3e-3 |
+
+`tests/ldau/test_hoh_energy_u.py` (`LdaUHohEnergy`) checks `nsp=3` against `nsp=1` with hoh (a consistency check, not an energy reference):
+k-space and real-space antiferromagnet, B2FeCo impurity, Ni(001) surface; max |dE_Hub| 9.2e-13, 1.7e-13, 7.4e-12, 3.5e-10 Ry and max |dE_total|
+7.4e-10, 3.0e-10, 4.5e-10, 1.4e-8 Ry. Not measured: a hoh finite difference on a cluster (the first-order impurity values are in `tests/KNOWN_ISSUES.md`),
+`ccor_2c`, nsp=4.
 
 ## Gate result (historical pre-A5 status)
 
