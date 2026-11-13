@@ -616,7 +616,7 @@ contains
       this%gbt_scf_diagnostics = .false.
       this%fresh_start = .false.
       this%cheb_lp = .false.
-      this%cheb_lp_factor = 4
+      this%cheb_lp_factor = 2
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
