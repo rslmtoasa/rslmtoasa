@@ -15,6 +15,9 @@
 !>          A(x) = sum_k w_k [P(t-t_k) + P(t+t_k)]/(2 pi sin t), x = cos t,
 !>          P(f) = (1-r^2)/(1-2 r cos f+r^2). The RMS error on |x|<0.8 must be
 !>          below 0.6 times the Jackson@N error (worst Stage A ratio: 0.51).
+!>          U4: one damped and one growing pole (rho = 1.003). The growing pair must be
+!>          dropped and carry the share w2 rho2^(N-1)/(w1 rho1^(N-1) + w2 rho2^(N-1))
+!>          of the mode amplitude at the last known moment.
 !------------------------------------------------------------------------------
 program test_cheb_lp
    use precision_mod, only: rp
@@ -31,6 +34,7 @@ program test_cheb_lp
    call test_scalar(failed)
    call test_block(failed)
    call test_spectral(failed)
+   call test_unstable(failed)
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -51,7 +55,7 @@ contains
       complex(rp) :: mu(1, 1, n_total)
       real(rp) :: ex(n_total), err
       integer :: n, k, n_rank, n_unstable
-      real(rp) :: lam_max, fit_res, imag_max
+      real(rp) :: lam_max, fit_res, imag_max, uw
 
       do n = 0, n_total - 1
          ex(n + 1) = 0.0_rp
@@ -61,10 +65,10 @@ contains
       end do
       mu = (0.0_rp, 0.0_rp)
       mu(1, 1, 1:n_known) = ex(1:n_known)
-      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max)
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, uw)
       err = maxval(abs(real(mu(1, 1, n_known + 1:)) - ex(n_known + 1:)))/maxval(abs(ex(1:n_known)))
-      write (*, '(a,es10.3,a,i0,a,i0,a,f8.5,a,es9.2,a,es9.2)') 'U1 scalar: max rel err = ', err, &
-         '  rank=', n_rank, '  unstable=', n_unstable, '  lam_max=', lam_max, '  fit_res=', fit_res, '  imag=', imag_max
+      write (*, '(a,es10.3,a,i0,a,i0,a,f8.5,a,es9.2,a,es9.2,a,es9.2)') 'U1 scalar: max rel err = ', err, &
+         '  rank=', n_rank, '  unstable=', n_unstable, '  lam_max=', lam_max, '  fit_res=', fit_res, '  imag=', imag_max, '  unst_weight=', uw
       if (err > tol) then
          write (*, '(a)') 'FAIL: U1 extrapolation differs from the closed form'
          bad = .true.
@@ -80,7 +84,7 @@ contains
       complex(rp) :: wk(nb, nb, nk), mu(nb, nb, n_total), ex(nb, nb, n_total), u(nb), v(nb)
       real(rp) :: err, herm
       integer :: n, k, l, n_rank, n_unstable
-      real(rp) :: lam_max, fit_res, imag_max
+      real(rp) :: lam_max, fit_res, imag_max, uw
 
       do k = 1, nk
          do l = 1, nb
@@ -98,14 +102,14 @@ contains
       end do
       mu = (0.0_rp, 0.0_rp)
       mu(:, :, 1:n_known) = ex(:, :, 1:n_known)
-      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max)
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, uw)
       err = maxval(abs(mu(:, :, n_known + 1:) - ex(:, :, n_known + 1:)))/maxval(abs(ex(:, :, 1:n_known)))
       herm = 0.0_rp
       do n = n_known + 1, n_total
          herm = max(herm, maxval(abs(mu(:, :, n) - conjg(transpose(mu(:, :, n))))))
       end do
-      write (*, '(a,es10.3,a,i0,a,i0,a,f8.5,a,es9.2,a,es9.2)') 'U2 3x3 block: max rel err = ', err, &
-         '  rank=', n_rank, '  unstable=', n_unstable, '  lam_max=', lam_max, '  fit_res=', fit_res, '  imag=', imag_max
+      write (*, '(a,es10.3,a,i0,a,i0,a,f8.5,a,es9.2,a,es9.2,a,es9.2)') 'U2 3x3 block: max rel err = ', err, &
+         '  rank=', n_rank, '  unstable=', n_unstable, '  lam_max=', lam_max, '  fit_res=', fit_res, '  imag=', imag_max, '  unst_weight=', uw
       write (*, '(a,es9.2,a)') 'U2 Hermiticity of extension: max|mu - mu^H| = ', herm, '  (by construction, not counted)'
       if (err > tol) then
          write (*, '(a)') 'FAIL: U2 extension differs from the closed form'
@@ -122,7 +126,7 @@ contains
       real(rp), parameter :: w(nk) = [1.0_rp, 0.8_rp, 1.2_rp]
       complex(rp) :: mu(1, 1, n_ext), mu_n(1, 1, n_known, 1), mu_e(1, 1, n_ext, 1)
       complex(rp) :: g_n(1, 1, nx, 1), g_e(1, 1, nx, 1)
-      real(rp) :: x(nx), ref(nx), t, err_n, err_e, lam_max, fit_res, imag_max
+      real(rp) :: x(nx), ref(nx), t, err_n, err_e, lam_max, fit_res, imag_max, uw
       integer :: i, k, n, n_rank, n_unstable
 
       do i = 1, nx
@@ -140,7 +144,7 @@ contains
          end do
       end do
       mu_n(1, 1, :, 1) = mu(1, 1, 1:n_known)
-      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max)
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, uw)
       mu_e(:, :, :, 1) = mu
       call cheb_green_dp(mu_n, 1, n_known, 1, x, nx, 1.0_rp, 0.0_rp, g_n)
       call cheb_green_dp(mu_e, 1, n_ext, 1, x, nx, 1.0_rp, 0.0_rp, g_e)
@@ -153,6 +157,32 @@ contains
          bad = .true.
       end if
    end subroutine test_spectral
+
+   !> U4: catches a wrong unstable-root mask or a weight taken after the roots are zeroed.
+   subroutine test_unstable(bad)
+      logical, intent(inout) :: bad
+      real(rp), parameter :: rho(2) = [0.985_rp, 1.003_rp], th(2) = [0.9_rp, 2.0_rp], w(2) = [1.0_rp, 0.05_rp]
+      complex(rp) :: mu(1, 1, n_total)
+      real(rp) :: lam_max, fit_res, imag_max, uw, expected, a1, a2
+      integer :: n, k, n_rank, n_unstable
+
+      mu = (0.0_rp, 0.0_rp)
+      do n = 0, n_known - 1
+         do k = 1, 2
+            mu(1, 1, n + 1) = mu(1, 1, n + 1) + w(k)*rho(k)**n*cos(n*th(k))
+         end do
+      end do
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, uw)
+      a1 = w(1)*rho(1)**(n_known - 1)
+      a2 = w(2)*rho(2)**(n_known - 1)
+      expected = a2/(a1 + a2)
+      write (*, '(a,i0,a,i0,a,f8.5,a,es10.3,a,es10.3)') 'U4 growing pole: unstable=', n_unstable, '  rank=', n_rank, &
+         '  lam_max=', lam_max, '  weight=', uw, '  closed form=', expected
+      if (n_unstable /= 2 .or. abs(uw - expected) > 1.0e-7_rp*expected) then
+         write (*, '(a)') 'FAIL: U4 dropped roots or their weight differ from the closed form'
+         bad = .true.
+      end if
+   end subroutine test_unstable
 
    pure function poisson(r, phi) result(p)
       real(rp), intent(in) :: r, phi

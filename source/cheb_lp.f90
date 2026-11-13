@@ -80,12 +80,12 @@ contains
       integer, intent(in) :: n_known
       character(len=*), intent(in) :: label
       integer :: n_rank, n_unstable
-      real(rp) :: lam_max, fit_res, imag_max
+      real(rp) :: lam_max, fit_res, imag_max, unstable_weight
 
       if (.not. this%enabled) return
-      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max)
+      call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, unstable_weight)
       call g_logger%info('Chebyshev LP '//label//': p='//int2str(n_known/p_div)//' rank='//int2str(n_rank)// &
-                         ' unstable='//int2str(n_unstable)//' lam_max='//real2str(lam_max, '(f9.6)')// &
+                         ' unstable='//int2str(n_unstable)//' (weight '//real2str(unstable_weight, '(f6.3)')//') lam_max='//real2str(lam_max, '(f9.6)')// &
                          ' fit_res='//real2str(fit_res, '(es9.2)')//' imag='//real2str(imag_max, '(es9.2)'), &
                          __FILE__, __LINE__)
    end subroutine apply
@@ -100,16 +100,18 @@ contains
    !> @param[out] lam_max Largest |lambda| before stabilization.
    !> @param[out] fit_res Relative residual of the fit on the window.
    !> @param[out] imag_max Largest imaginary part discarded in the extrapolation.
-   subroutine cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max)
+   !> @param[out] unstable_weight Share of the mode amplitude carried by the dropped roots (small: the drop is harmless).
+   subroutine cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, unstable_weight)
       complex(rp), intent(inout) :: mu(:, :, :)
       integer, intent(in) :: n_known
       integer, intent(out) :: n_rank, n_unstable
-      real(rp), intent(out) :: lam_max, fit_res, imag_max
+      real(rp), intent(out) :: lam_max, fit_res, imag_max, unstable_weight
       integer :: nb, nb2, nch, p, nlo, nwin, n_ext, c, i, j, k, info, lwork
       integer, allocatable :: ipiv(:)
       real(rp) :: smax, ynorm, rnorm
       real(rp), allocatable :: xr(:, :), amat(:, :), yv(:), rr(:, :), rv(:), ev(:), t(:), a(:)
-      real(rp), allocatable :: comp(:, :), wr(:), wi(:), vr(:, :), work(:), outc(:)
+      real(rp), allocatable :: comp(:, :), wr(:), wi(:), vr(:, :), work(:), outc(:), amp(:)
+      logical, allocatable :: unst(:)
       complex(rp), allocatable :: vc(:, :), bm(:, :), lam(:), v1(:), lamk(:), cv(:), oc(:)
       real(rp) :: dummy(1, 1)
 
@@ -140,7 +142,7 @@ contains
       end do
       if (ynorm == 0.0_rp) then
          mu(:, :, n_known + 1:) = (0.0_rp, 0.0_rp)
-         n_rank = 0; n_unstable = 0; lam_max = 0.0_rp; fit_res = 0.0_rp; imag_max = 0.0_rp
+         n_rank = 0; n_unstable = 0; lam_max = 0.0_rp; fit_res = 0.0_rp; imag_max = 0.0_rp; unstable_weight = 0.0_rp
          return
       end if
 
@@ -195,8 +197,9 @@ contains
       end do
       lam = cmplx(wr, wi, rp)
       lam_max = maxval(abs(lam))
-      n_unstable = count(abs(lam) >= 1.0_rp)
-      where (abs(lam) >= 1.0_rp) lam = (0.0_rp, 0.0_rp)
+      unst = abs(lam) >= 1.0_rp
+      n_unstable = count(unst)
+      where (unst) lam = (0.0_rp, 0.0_rp)
 
       ! x(n_known-1+k) = Re [V lam^k V^-1 s]_1, s = [x(n_known-1), ..., x(n_known-p)].
       allocate (v1(p), bm(p, nch), ipiv(p), lamk(p), cv(p), oc(nch), outc(nch))
@@ -206,6 +209,11 @@ contains
       end do
       call zgesv(p, nch, vc, p, ipiv, bm, p, info)
       if (info /= 0) call g_logger%fatal('cheb_lp_extend: zgesv failed (singular eigenvector matrix)', __FILE__, __LINE__)
+      allocate (amp(p))
+      do i = 1, p
+         amp(i) = abs(v1(i))*sum(abs(bm(i, :)))
+      end do
+      unstable_weight = sum(amp, mask=unst)/sum(amp)
       lamk = lam
       imag_max = 0.0_rp
       do k = 1, n_ext - n_known
