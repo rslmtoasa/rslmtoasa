@@ -116,7 +116,7 @@ C5 impurity radial-moment mode
    (moments of the Green function of the full H = H_LDA + V_U), which also works with ``hoh``, ``ccor_2c``,
    impurities and surfaces. ``local`` (moments of the LDA part only, V_U's own contribution removed; not the
    standard construction) is an explicit opt-in: set ``hubbard_radial_moments = 'local'`` in ``&hamiltonian``.
-   It is the only route with the routed total energy, in the clean-bulk scalar-collinear scope without ``hoh``.
+   It is the only route with the routed total energy, at first order (no ``hoh``) for the bulk and for impurity and surface clusters (cluster sites only, host types excluded).
    The sections below that say ``auto`` selects ``local`` describe the rule before 2026-11-07; the same
    scope and host-provenance conditions apply when ``local`` is requested explicitly.
 
@@ -143,10 +143,10 @@ the deck Fermi value with the host run output's endpoint ``E_F`` and requires
 a difference no greater than ``1e-6 Ry``. It records the host output path and
 value, and rejects a mismatch before the solver starts.
 
-Selecting local impurity density moments does not add ``E_Hub(P_imp)`` to the
-reported impurity energy; impurity energies exclude the Hubbard term. Impurity
-Hubbard-energy routing remains off. The
-clean-bulk eligibility and energy formula are unchanged. C5's numerical
+With ``hubbard_radial_moments='local'`` at first order, ``E_Hub`` of the cluster sites' P_out
+(host types excluded) is added to ``physical_total_energy`` as in the bulk
+(``tests/ldau/test_cluster_energy_u.py``: ``nsp=3`` against ``nsp=1``); with ``spectral`` or ``hoh`` impurity energies
+exclude the Hubbard term. The energy formula is unchanged. C5's numerical
 KS-host-to-RS-impurity equivalence for Ni remains unvalidated, and RD4 has no
 energy measurement: its optimized Release diagnostic has only been checked
 through one complete iteration. See the C5 records in
@@ -171,8 +171,8 @@ frozen host potential with the accepted local host potential, set U/J, and set
 preflight before launch. Use the same deck for RS and KS surface calculations;
 the local density mode is independent of the host's backend.
 
-Surface Hubbard support is density-only. Surface energies exclude the Hubbard
-term; surface Hubbard-energy routing remains off. Surface density support is experimental. A Ni(001) probe showed a narrow-window
+Surface Hubbard support is density-only. With ``hubbard_radial_moments='local'`` at first order the surface energy includes ``E_Hub`` of the
+surface-layer P_out (host types excluded; ``tests/ldau/test_cluster_energy_u.py``); with ``spectral`` or ``hoh`` it excludes the Hubbard term. Surface density support is experimental. A Ni(001) probe showed a narrow-window
 non-finite/NaN projected-DOS observation; widening the energy window did not
 remove it. See the C6 records in
 ``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`` and
@@ -201,7 +201,7 @@ reference), with Chebyshev recursion and k-space ``second``. RS block recursion 
 rotation invariant with the default terminator and nearly so (1e-4 muB) with ``sym_term = .true.`` (``tests/KNOWN_ISSUES.md``). ``local_axis``, ``gbt_single_q``, constraints
 and runs with U at ``nsp>=3`` on surfaces other than the Ni(001) test are untested; ``local`` at ``nsp=3`` on impurity clusters, with and without hoh (spinor correction with V by type as at ``nsp=2``; with hoh V_U is in ``enim``), is checked against ``nsp=1`` by ``tests/ldau/test_impurity_nsp3_u.py`` (B2FeCo, nsp=3 k-space host); the nsp=3 surface route is checked on the Ni(001) surface below. ``hubbard_radial_moments='local'`` at ``nsp=3`` (bulk;
 real space and k-space) and ``nsp=4`` (bulk real space and k-space, impurity clusters) takes the spinor correction along each site axis, with any site axes (``tests/ldau/test_local_nsp4_u.py``: ``nsp=4`` with SOC held at zero against ``nsp=3``, a ferromagnet with SOC against ``nsp=2``, and z against x); ``tests/ldau/test_local_nsp4_workflows_u.py`` checks ``nsp=4`` in k-space (antiferromagnet with SOC off against ``nsp=3``, with and without hoh; ferromagnet with SOC against ``nsp=2``) and on the B2FeCo impurity (SOC off against ``nsp=3``, with and without hoh; surfaces: ``tests/ldau/test_surface_nsp3_u.py`` checks ``nsp=3`` against ``nsp=1`` on the Ni(001) surface, with and without hoh, with ``density_policy='constrained_spiral'`` (the default policy differs once the axis of a small-moment site flips, ``tests/KNOWN_ISSUES.md``); ``tests/ldau/test_surface_nsp4_u.py`` compares ``nsp=4`` with SOC held at zero against ``nsp=3`` on the same surface, with and without hoh (largest difference 0 over 4 iterations and 112 quantities; the SOC matrix is zero and the correction code is shared for ``nsp>=3``, so this does not test the correction itself; ``nsp=4`` surfaces with SOC on are not tested)); ``tests/ldau/test_local_noncollinear_u.py`` checks that rotating or exchanging a noncollinear pair leaves E_F and the site moments unchanged. The two-atom Fe antiferromagnet reproduces the ``nsp=1`` ``local``
-route (``tests/ldau/test_nsp34_u.py``, ``af_fe_local``, real space; ``tests/ldau/test_kspace_local_nsp3.py``, k-space, antiferromagnet and ferromagnet). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` for bulk ``local`` at ``nsp=3`` and ``4`` as at ``nsp=2`` (``tests/ldau/test_local_energy_u.py``, real space: ``nsp=3`` antiferromagnet against ``nsp=1``, ``nsp=4`` with SOC held at zero against ``nsp=3``, a ferromagnet with SOC ``nsp=4`` against ``nsp=2``; k-space energies are not tested); impurity and surface energies are not routed. ``local`` with HOH removes V_U from the moments of the orthonormal-basis Green
+route (``tests/ldau/test_nsp34_u.py``, ``af_fe_local``, real space; ``tests/ldau/test_kspace_local_nsp3.py``, k-space, antiferromagnet and ferromagnet). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` for bulk ``local`` at ``nsp=3`` and ``4`` as at ``nsp=2`` (``tests/ldau/test_local_energy_u.py``, real space: ``nsp=3`` antiferromagnet against ``nsp=1``, ``nsp=4`` with SOC held at zero against ``nsp=3``, a ferromagnet with SOC ``nsp=4`` against ``nsp=2``; k-space energies are not tested); impurity and surface energies are routed at first order with ``local`` (``tests/ldau/test_cluster_energy_u.py``: ``nsp=3`` against ``nsp=1``; ``hoh`` is not routed; ``nsp=4`` clusters take the same route and are not tested). ``local`` with HOH removes V_U from the moments of the orthonormal-basis Green
 function in the same way as at first order (H = H0 + V_U with V_U additive in ``enim``); the nsp=3 against nsp=1 check
 ``af_fe_local_hoh`` tests the spin frame, not the correction. On impurity (``calctype I``) and surface (``S``) clusters with HOH (``nsp=1``, and the ``nsp=2`` spinor route) V_U is captured at the ``enim`` insertion, as at the ``ee`` or ``hall`` insertion without HOH; ``tests/ldau/test_impurity_hoh_u.py`` compares the ``nsp=2`` run with SOC held at zero against ``nsp=1`` for the B2FeCo impurity (the surface route with HOH is compared the same way on the Ni(001) surface by ``tests/ldau/test_surface_hoh_u.py``, ``nsp=2`` with SOC held at zero against ``nsp=1``; ``tests/ldau/test_impurity_equals_bulk.py`` checks that an Fe impurity in an Fe host with the bulk Fermi energy reproduces the bulk moment, see ``tests/KNOWN_ISSUES.md``). To set up a collinear antiferromagnet use the noncollinear
 convention: the same potential file (majority along the site axis) for both sublattices with ``mom = 0, 0, 1`` and
@@ -281,7 +281,7 @@ SOC+U for impurities and surfaces (nsp=2, calctype I and S)
 ----------------------------------------------------------
 
 Impurity (``calctype='I'``) and surface (``'S'``) runs with U accept ``nsp=2``. The density is spinor as in the bulk;
-impurity and surface energies exclude the Hubbard term (density only, no energy routing), as at nsp=1.
+with ``local`` at first order the impurity and surface energies include ``E_Hub`` of the cluster sites' P_out as at nsp=1; otherwise they exclude the Hubbard term.
 
 Host requirements. Every U-carrying frozen host must be local mode, written at ``nsp=2``, and carry the spinor
 density matrix (``spinor_d = 1`` in its ``_dm`` file). The potential file records ``hubbard_nsp``; a host written at another
