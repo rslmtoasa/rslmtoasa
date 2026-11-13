@@ -7,19 +7,26 @@
 !>          G(E) = sum_n g_n c_n (-i) exp(-i n theta) mu_n / sqrt(a^2 - (E-b)^2), theta = acos((E-b)/a),
 !>          c_0 = 1, c_n = 2, with the Jackson coefficients g_n of Weisse et al., Rev. Mod. Phys. 78, 275 (2006), Eq. (71).
 !>          cheb_green_dp must agree to rounding; the single-precision cheb_green_fast error is printed for scale.
+!>          The optional damping argument is checked with the Lorentz kernel (lambda = 3.5,
+!>          g_n = sinh(lambda (1 - n/N))/sinh(lambda)) and with no kernel (g_n = 1), written here in closed
+!>          form, for cheb_green_dp, cheb_green_fast and the complex-energy cheb_green_complex. A damping
+!>          argument that is ignored, inverted or indexed off by one gives errors of order one.
 !------------------------------------------------------------------------------
 program test_chebyshev_green_precision
    use precision_mod, only: rp
-   use chebyshev_fast_mod, only: cheb_green_dp, cheb_green_fast
+   use chebyshev_fast_mod, only: cheb_green_dp, cheb_green_fast, cheb_green_complex
+   use math_mod, only: lorentz_kernel
    implicit none
 
    integer, parameter :: nmat = 4, n_mom = 64, nv = 25
    real(rp), parameter :: a = 1.2_rp, b = 0.1_rp, pi = 3.14159265358979323846_rp
    real(rp), parameter :: tolerance = 1.0e-12_rp
    complex(rp) :: h(nmat, nmat), moments(nmat, nmat, n_mom, 1), g_dp(nmat, nmat, nv, 1), g_sp(nmat, nmat, nv, 1)
-   complex(rp) :: g_ref(nmat, nmat)
-   real(rp) :: ene(nv), err_dp, err_sp, scale
-   integer :: ie
+   complex(rp) :: g_ref(nmat, nmat), g_cplx(nmat, nmat), z
+   real(rp) :: ene(nv), err_dp, err_sp, scale, err_k, err_c, kern(n_mom), kern_math(n_mom), err_math
+   real(rp), parameter :: lambda = 3.5_rp
+   integer :: ie, ik
+   character(len=8), parameter :: kernel_names(3) = ['jackson ', 'lorentz ', 'none    ']
 
    call build_fixture(h)
    call dense_chebyshev_moments(h, moments(:, :, :, 1))
@@ -33,7 +40,7 @@ program test_chebyshev_green_precision
    err_sp = 0.0_rp
    scale = 0.0_rp
    do ie = 1, nv
-      call literal_green(moments(:, :, :, 1), ene(ie), g_ref)
+      call literal_green(moments(:, :, :, 1), ene(ie), closed_kernel('jackson '), g_ref)
       err_dp = max(err_dp, maxval(abs(g_dp(:, :, ie, 1) - g_ref)))
       err_sp = max(err_sp, maxval(abs(g_sp(:, :, ie, 1) - g_ref)))
       scale = max(scale, maxval(abs(g_ref)))
@@ -43,27 +50,97 @@ program test_chebyshev_green_precision
       write (*, '(a)') 'RESULT: FAIL'
       error stop 1
    end if
+
+   ! math_mod's Lorentz kernel against the closed form
+   call lorentz_kernel(n_mom, kern_math, lambda)
+   err_math = maxval(abs(kern_math - closed_kernel('lorentz ')))
+   write (*, '(a,es12.4)') 'max |lorentz_kernel - closed form| = ', err_math
+   if (err_math > 1.0e-14_rp) then
+      write (*, '(a)') 'RESULT: FAIL'
+      error stop 1
+   end if
+
+   ! Selectable damping: dp (rounding), fast (single precision) and complex energy (rounding)
+   z = cmplx(0.15_rp, 0.07_rp, rp)
+   do ik = 2, 3
+      kern = closed_kernel(kernel_names(ik))
+      call cheb_green_dp(moments, nmat, n_mom, 1, ene, nv, a, b, g_dp, kern)
+      call cheb_green_fast(moments, nmat, n_mom, 1, ene, nv, a, b, g_sp, kern)
+      err_dp = 0.0_rp
+      err_sp = 0.0_rp
+      scale = 0.0_rp
+      do ie = 1, nv
+         call literal_green(moments(:, :, :, 1), ene(ie), kern, g_ref)
+         err_dp = max(err_dp, maxval(abs(g_dp(:, :, ie, 1) - g_ref)))
+         err_sp = max(err_sp, maxval(abs(g_sp(:, :, ie, 1) - g_ref)))
+         scale = max(scale, maxval(abs(g_ref)))
+      end do
+      call literal_green_complex(moments(:, :, :, 1), z, kern, g_ref)
+      call cheb_green_complex(moments(:, :, :, 1), nmat, n_mom, z, a, b, g_cplx, kern)
+      err_c = maxval(abs(g_cplx - g_ref))/maxval(abs(g_ref))
+      err_k = err_dp/scale
+      write (*, '(a,a,a,es10.3,a,es10.3,a,es10.3)') 'kernel ', trim(kernel_names(ik)), ': dp ', err_k, &
+         '  fast ', err_sp/scale, '  complex ', err_c
+      if (err_k > tolerance .or. err_sp/scale > 1.0e-4_rp .or. err_c > tolerance) then
+         write (*, '(a)') 'RESULT: FAIL'
+         error stop 1
+      end if
+   end do
    write (*, '(a)') 'RESULT: PASS'
 
 contains
 
-   subroutine literal_green(mu, energy, g)
+   !> Damping coefficients g_n, n = 0..n_mom-1, in closed form (Weisse et al., Eqs. (71) and (80)).
+   function closed_kernel(name) result(gk)
+      character(len=8), intent(in) :: name
+      real(rp) :: gk(n_mom)
+      real(rp) :: angle
+      integer :: n
+
+      do n = 0, n_mom - 1
+         select case (trim(name))
+         case ('jackson')
+            angle = pi*real(n, rp)/real(n_mom + 1, rp)
+            gk(n + 1) = (real(n_mom - n + 1, rp)*cos(angle) + sin(angle)/tan(pi/real(n_mom + 1, rp)))/real(n_mom + 1, rp)
+         case ('lorentz')
+            gk(n + 1) = sinh(lambda*(1.0_rp - real(n, rp)/real(n_mom, rp)))/sinh(lambda)
+         case default
+            gk(n + 1) = 1.0_rp
+         end select
+      end do
+   end function closed_kernel
+
+   subroutine literal_green(mu, energy, gk, g)
       complex(rp), intent(in) :: mu(nmat, nmat, n_mom)
-      real(rp), intent(in) :: energy
+      real(rp), intent(in) :: energy, gk(n_mom)
       complex(rp), intent(out) :: g(nmat, nmat)
-      real(rp) :: theta, gn, cn, angle
+      real(rp) :: theta, gn, cn
       integer :: n
 
       theta = acos((energy - b)/a)
       g = (0.0_rp, 0.0_rp)
       do n = 0, n_mom - 1
-         angle = pi*real(n, rp)/real(n_mom + 1, rp)
-         gn = (real(n_mom - n + 1, rp)*cos(angle) + sin(angle)/tan(pi/real(n_mom + 1, rp)))/real(n_mom + 1, rp)
+         gn = gk(n + 1)
          cn = merge(1.0_rp, 2.0_rp, n == 0)
          g = g + gn*cn*cmplx(0.0_rp, -1.0_rp, rp)*exp(cmplx(0.0_rp, -real(n, rp)*theta, rp))*mu(:, :, n + 1) &
                  /sqrt(a*a - (energy - b)**2)
       end do
    end subroutine literal_green
+
+   subroutine literal_green_complex(mu, zz, gk, g)
+      complex(rp), intent(in) :: mu(nmat, nmat, n_mom), zz
+      real(rp), intent(in) :: gk(n_mom)
+      complex(rp), intent(out) :: g(nmat, nmat)
+      complex(rp) :: theta
+      integer :: n
+
+      theta = acos((zz - b)/a)
+      g = (0.0_rp, 0.0_rp)
+      do n = 0, n_mom - 1
+         g = g + gk(n + 1)*merge(1.0_rp, 2.0_rp, n == 0)*cmplx(0.0_rp, -1.0_rp, rp)*exp(-cmplx(0.0_rp, 1.0_rp, rp)*real(n, rp)*theta) &
+                 *mu(:, :, n + 1)/sqrt(a*a - (zz - b)**2)
+      end do
+   end subroutine literal_green_complex
 
    subroutine build_fixture(matrix)
       complex(rp), intent(out) :: matrix(:, :)
