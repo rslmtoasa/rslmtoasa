@@ -41,8 +41,9 @@ def match_host(text: str, host: Path) -> str:
     return text
 
 
-def host_and_impurity(binary: Path, base: Path, tag: str, nsp: int, mode: str, hoh: bool = False, soc0: bool = False):
-    keys = f"hubbard_radial_moments = '{mode}'\n" + ("hoh = .true.\n" if hoh else "")
+def host_and_impurity(binary: Path, base: Path, tag: str, nsp: int, mode: str, hoh: bool = False, soc0: bool = False,
+                      host_mode: str | None = None):
+    keys = f"hubbard_radial_moments = '{host_mode or mode}'\n" + ("hoh = .true.\n" if hoh else "")
     host_edit = lambda t: (rr.soc_off if soc0 else str)(rr.add_u(rr.use_kspace(converged(t)), 2.0, 0.0, keys).replace("nsp = 1", f"nsp = {nsp}"))
     host = rr.prepare(rr.CASES / "k_space_scf/bccFe", base / f"{tag}_host", host_edit)
     if rr.run(binary, host) != 0:

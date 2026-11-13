@@ -1035,16 +1035,16 @@ contains
             end if
             stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
             if (len_trim(stored_mode) == 0) then
-               stored_mode = 'spectral'
                if (rank == 0) call g_logger%warning('Legacy U-carrying potential for symbolic atom '//fmt('i0', ia)// &
-                  ' has no hubbard_radial_moments field; its mode is unknown, treating it as spectral; '// &
+                  ' has no hubbard_radial_moments field; its mode is unknown, accepting it as is; '// &
                   'restart the host once with the current version to record its mode.', __FILE__, __LINE__)
-            end if
-            if (this%symbolic_atom(ia)%potential%hubbard_file_has_uj .and. &
-                trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
-               call g_logger%fatal('Fixed-U potential moment-mode mismatch for symbolic atom '//fmt('i0', ia)// &
-                  ': file mode='//trim(stored_mode)//', run mode='//trim(this%hamiltonian%hubbard_radial_moments)// &
-                  '. Regenerate the host potential in the selected mode or select the matching mode.', __FILE__, __LINE__)
+            else if (this%symbolic_atom(ia)%potential%hubbard_file_has_uj .and. &
+                     trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
+               call reset_hubbard_density_matrix(this%symbolic_atom(ia)%potential)
+               if (rank == 0) call g_logger%warning('Frozen U-carrying host (symbolic atom '//fmt('i0', ia)// &
+                  ') was written with hubbard_radial_moments='//trim(stored_mode)//', run uses '// &
+                  trim(this%hamiltonian%hubbard_radial_moments)//': its density matrix is reset and the run continues; '// &
+                  'the host is not self-consistent in the run mode, regenerate it for quantitative results.', __FILE__, __LINE__)
             end if
          end if
 
@@ -1054,9 +1054,11 @@ contains
                stored_mode = 'spectral'
                if (rank == 0) call g_logger%info('restart seed in '//trim(stored_mode)//', run uses '// &
                   trim(this%hamiltonian%hubbard_radial_moments)//'; seed will be rewritten', __FILE__, __LINE__)
-            else if (trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments) .and. rank == 0) then
-               call g_logger%info('restart seed in '//trim(stored_mode)//', run uses '// &
-                  trim(this%hamiltonian%hubbard_radial_moments)//'; seed will be rewritten', __FILE__, __LINE__)
+            else if (trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
+               call reset_hubbard_density_matrix(this%symbolic_atom(ia)%potential)
+               if (rank == 0) call g_logger%warning('restart seed of symbolic atom '//fmt('i0', ia)//' was written with '// &
+                  'hubbard_radial_moments='//trim(stored_mode)//', run uses '//trim(this%hamiltonian%hubbard_radial_moments)// &
+                  ': its density matrix is reset and the run continues; the seed will be rewritten.', __FILE__, __LINE__)
             end if
          end if
 
@@ -1121,6 +1123,19 @@ contains
       end do
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
    end function fixed_hubbard_energy_pout
+
+   !> Reset the density matrix a potential file carried (written in the other radial-moment mode): P starts from zero and the
+   !> first Green function provides it, as for a potential without a density-matrix file.
+   subroutine reset_hubbard_density_matrix(site)
+      type(potential), intent(inout) :: site
+
+      if (allocated(site%ldm)) site%ldm = (0.0_rp, 0.0_rp)
+      if (allocated(site%ldm_flatten)) site%ldm_flatten = 0.0_rp
+      if (allocated(site%ldm_flatten_imag)) site%ldm_flatten_imag = 0.0_rp
+      if (allocated(site%ldm_spinor)) site%ldm_spinor = (0.0_rp, 0.0_rp)
+      if (allocated(site%ldm_spinor_prev)) site%ldm_spinor_prev = (0.0_rp, 0.0_rp)
+      if (allocated(site%ldm_spinor_mix)) site%ldm_spinor_mix = (0.0_rp, 0.0_rp)
+   end subroutine reset_hubbard_density_matrix
 
    !> Spinor d-shell E_int, E_DC and E_Hub (Ry) of one site from the full 10x10 P_out held in ldm_spinor.
    subroutine spinor_site_hubbard_energy(site, e_int, e_dc, e_hub)
@@ -1864,13 +1879,21 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
-      ! auto is spectral, the standard LDA+U construction; 'local' is opt-in (see hamiltonian%hubbard_radial_moments).
+      ! auto is resolved in hamiltonian when a nonzero fixed U/J is given (local if implemented, else spectral); without
+      ! U it is spectral, a no-op (see hamiltonian%hubbard_radial_moments).
       radial_mode_reason = 'n/a'
       radial_mode_source = 'explicit'
       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
          this%hamiltonian%hubbard_radial_moments = 'spectral'
          radial_mode_source = 'default'
-         radial_mode_reason = "auto resolves to spectral; 'local' must be requested explicitly"
+         radial_mode_reason = 'auto resolves to spectral without a nonzero fixed U/J'
+      else if (trim(this%hamiltonian%hubbard_radial_auto_reason) == 'local') then
+         radial_mode_source = 'default'
+         radial_mode_reason = "auto resolves to local with a nonzero fixed U/J; 'spectral' must be requested explicitly"
+      else if (len_trim(this%hamiltonian%hubbard_radial_auto_reason) > 0) then
+         radial_mode_source = 'default'
+         radial_mode_reason = 'auto resolves to spectral, local is not implemented here: '// &
+            trim(this%hamiltonian%hubbard_radial_auto_reason)
       end if
       call this%mark_frozen_hosts()
       call this%validate_hubbard_mode_provenance()

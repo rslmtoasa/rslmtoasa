@@ -9,6 +9,57 @@ submodule(hamiltonian_mod) hamiltonian_build
 
 contains
 
+   !> @brief Why hubbard_radial_moments='local' is not implemented for this input; blank when it is.
+   !> @details The first failing condition, as the full message. Used by validate_fixed_u_scope (explicit 'local' stops
+   !>          with it) and by the 'auto' resolution (an unsupported input falls back to 'spectral').
+   function local_radial_unsupported(this, has_general, has_legacy, has_impurity) result(reason)
+      class(hamiltonian), intent(in) :: this
+      logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
+      character(len=256) :: reason
+      logical :: spinor_bulk
+
+      spinor_bulk = this%hubbard_soc_experimental .and. this%control%nsp == 2
+      reason = ''
+      if (.not. has_general .and. .not. has_legacy .and. .not. has_impurity .and. &
+          .not. this%hubbard_test_operator_check) then
+         reason = "hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
+            'numeric U=J=0 is allowed and remains a no-op.'
+         return
+      end if
+      if (this%control%nsp /= 1 .and. this%control%nsp < 3 .and. .not. spinor_bulk) then
+         reason = "hubbard_radial_moments='local' requires nsp=1 (nsp=2, 3 and 4 only for bulk fixed U/J)."
+         return
+      end if
+      if (this%control%has_soc() .and. .not. spinor_bulk .and. this%control%nsp /= 4) then
+         reason = "hubbard_radial_moments='local' does not support SOC at nsp=1 or 3."
+         return
+      end if
+      ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
+      ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)
+      ! cover scalar-spin nsp=1 and the spinor routes at nsp=2 and 3 (which read V_in by type, as in the bulk).
+      if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0 .and. &
+          .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk .or. this%control%nsp >= 3)) then
+         reason = "hubbard_radial_moments='local' with hoh=.true. requires calctype='B', nsp=1 without SOC, "// &
+            'or the nsp=2, 3 or 4 spinor route.'
+         return
+      end if
+      if (this%control%lmax /= 2) then
+         reason = "hubbard_radial_moments='local' requires lmax=2."
+         return
+      end if
+      if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
+         reason = "hubbard_radial_moments='local' requires fixed Liechtenstein U/J."
+         return
+      end if
+      if (this%hubbard_u_sc_check) then
+         reason = "hubbard_radial_moments='local' does not support self-consistent U."
+         return
+      end if
+      if (this%hubbard_v_check) then
+         reason = "hubbard_radial_moments='local' does not support intersite Hubbard V."
+      end if
+   end function local_radial_unsupported
+
    !> @brief Stop on fixed-U/J input outside the supported scope.
    !> @details Supported: Liechtenstein/FLL on the d shell with lmax=2 at nsp=1 (scalar spin), nsp=2 (SOC, spinor U)
    !>          and nsp=3/4 (noncollinear Hamiltonians, spinor U; tested for collinear +z/-z setups, e.g. an
@@ -19,43 +70,11 @@ contains
       class(hamiltonian), intent(inout) :: this
       logical, intent(in) :: has_general, has_legacy, has_impurity ! which U/J input form was given
       integer :: i, l
-      logical :: spinor_bulk
-
-      spinor_bulk = this%hubbard_soc_experimental .and. this%control%nsp == 2
+      character(len=256) :: reason
 
       if (this%hubbard_radial_moments == 'local') then
-         if (.not. has_general .and. .not. has_legacy .and. .not. has_impurity .and. &
-             .not. this%hubbard_test_operator_check) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
-               'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
-         end if
-         if (this%control%nsp /= 1 .and. this%control%nsp < 3 .and. .not. spinor_bulk) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2, 3 and 4 only for bulk fixed U/J).", &
-               __FILE__, __LINE__)
-         end if
-         if (this%control%has_soc() .and. .not. spinor_bulk .and. this%control%nsp /= 4) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC at nsp=1 or 3.", __FILE__, __LINE__)
-         end if
-         ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
-         ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)
-         ! cover scalar-spin nsp=1 and the spinor routes at nsp=2 and 3 (which read V_in by type, as in the bulk).
-         if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0 .and. &
-             .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk .or. this%control%nsp >= 3)) then
-            call g_logger%fatal("hubbard_radial_moments='local' with hoh=.true. requires calctype='B', nsp=1 without SOC, "// &
-                                "or the nsp=2, 3 or 4 spinor route.", __FILE__, __LINE__)
-         end if
-         if (this%control%lmax /= 2) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)
-         end if
-         if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
-            call g_logger%fatal("hubbard_radial_moments='local' requires fixed Liechtenstein U/J.", __FILE__, __LINE__)
-         end if
-         if (this%hubbard_u_sc_check) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support self-consistent U.", __FILE__, __LINE__)
-         end if
-         if (this%hubbard_v_check) then
-            call g_logger%fatal("hubbard_radial_moments='local' does not support intersite Hubbard V.", __FILE__, __LINE__)
-         end if
+         reason = local_radial_unsupported(this, has_general, has_legacy, has_impurity)
+         if (len_trim(reason) > 0) call g_logger%fatal(trim(reason), __FILE__, __LINE__)
       end if
 
       ! Test-only bypass of the hoh guard of the local route: U=J=0 local W1 runs only.
@@ -403,6 +422,7 @@ contains
       integer :: ntype_nml, nrec_nml
       logical :: legacy_uj_present
       logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
+      character(len=256) :: reason
       character(len=1) :: orbch
       real(rp), parameter :: hubbard_sentinel = -9.87654321e30_rp
       integer, parameter :: hubbard_sc_sentinel = -999
@@ -808,6 +828,20 @@ contains
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
       end if
 
+      ! 'auto' is local when a nonzero fixed U/J is given and local is implemented for the input, spectral otherwise
+      ! (no U: it stays auto and self resolves it to spectral). An explicit mode is never changed.
+      this%hubbard_radial_auto_reason = ''
+      if (this%hubbard_radial_moments == 'auto' .and. (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check)) then
+         reason = local_radial_unsupported(this, has_hubbard_general, has_legacy_uj, has_impurity_uj)
+         if (len_trim(reason) == 0) then
+            this%hubbard_radial_moments = 'local'
+            this%hubbard_radial_auto_reason = 'local'
+         else
+            this%hubbard_radial_moments = 'spectral'
+            this%hubbard_radial_auto_reason = reason
+         end if
+      end if
+
       call validate_fixed_u_scope(this, has_hubbard_general, has_legacy_uj, has_impurity_uj)
 
       if (rank == 0) then
@@ -990,6 +1024,7 @@ contains
       ! Resolve the omitted-option sentinel only after the self namelist tells
       ! us whether this calculation uses the reciprocal KS backend.
       this%hubbard_radial_moments = 'auto'
+      this%hubbard_radial_auto_reason = ''
       this%hubbard_test_operator = 'none'
       this%hubbard_test_lambda = 0.0_rp
       this%hubbard_test_spin = 0
