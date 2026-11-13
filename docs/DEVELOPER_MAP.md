@@ -94,7 +94,13 @@ calculation%pre_processing_bravais / _buildsurf / _newclubulk / _newclusurf
                    -> else: cheb_moments_cpu() dispatcher (recursion.f90)
                         -> chebyshev_fast.f90: cheb_moments_fast /
                            _batched / _mkl_batch / _mkl_sparse, or legacy path
+                   -> control%cheb_lp: extend_moments() [OpenMP loop, after the moment loops]
+                        -> cheb_lp_mod: lp%apply() -> cheb_lp_extend()   [cheb_lp.f90]
+                        (chebyshev_recur_ij does the same for the four slots of every pair)
        -> green.f90               (sgreen / block_green / chebyshev_dos_dispatch per recur)
+            -> green_chebyshev.f90: chebyshev_green_core -> cheb_green_dp / cheb_green_fast / GPU chebyshev_dos,
+               damping kernel from control%cheb_kernel (cheb_damping), then
+               enforce_chebyshev_spectral_positivity (+ charge-conserving rescale with cheb_lp)
        -> charge.f90 / mix.f90    (charge transfer, mixing, convergence check)
 ```
 
@@ -201,6 +207,13 @@ select-case near line 641) writes files in the same format
 
 ## 3. Kernel inventory
 
+- **`cheb_lp_mod`** (`cheb_lp.f90`): linear prediction of Chebyshev moments.
+  `cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max,
+  unstable_weight)` extends one `(nb,nb,n_total)` block in place (plain arrays,
+  LAPACK only); `type cheb_lp` (`enabled`, `factor`, `n_total(lld)`, `apply`)
+  holds the settings and logs the fit. Method, usage and measured limits:
+  `docs/source/theory/chebyshev_lp.rst`. `recursion%mu_n` is allocated at
+  `lp%n_total(lld)`; `mu_ng` no longer exists.
 - **`ham_apply_t`** (`chebyshev_fast.f90`): the operator-apply callback
   interface — `subroutine ham_apply_t(x1, x0, y, alpha, beta, ld, nb)`
   computing `y = alpha*H*x1 + beta*x0`. Every fast Chebyshev kernel
@@ -390,6 +403,8 @@ Every test has exactly one tier label (`quick`, `standard`, `validation`); see `
 | MKL kernels | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` (skip, exit 77, without MKL) | regression case `diamondSi_sp_chebyshev_mkl_batch` |
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | manual |
 | Unit oracles (core, Green function, electrostatics, structure constants, K-point workset, ...) | `quick` (`unit`) | `tests/unit/test_*.f90` |
+| Chebyshev linear prediction: closed-form and naive-reference kernel tests (`UnitChebyshevLP`), no-kernel density (`UnitChebyshevKernel`), kernel vector (`UnitChebyshevDamping`) | `quick` (`chebyshev;lp`) | `tests/unit/test_cheb_lp.f90`, `test_cheb_kernel.f90`, `test_cheb_damping.f90` |
+| Chebyshev LP campaign scripts (toy study, production check on frozen potentials) | manual (`validation` content, not registered) | `tests/validation/val_cheb_lp_toy.py`, `val_cheb_lp.py` |
 | XC: three executables (`UnitXcKernels`, `UnitXcGuards`, `UnitXcLibxc`) with sub-cases | `quick` (`xc`) | `tests/unit/test_xc_*.f90` |
 | LDA+U: tensor, spinor functional, local-moment kernels, projector frozen-H oracles | `quick` (`lda_u`) | `tests/unit/test_lda_u_tensor.f90`, `test_hubbard_spinor.f90`, `test_ldau_*.f90`; data and oracle generators in `tests/ldau/` |
 | LDA+U guards: nsp=1 host, U-less host, tilted axis with block recursion, mixed axes, host-axis mismatch | `standard` (`LdaUGuards`) | `tests/ldau/test_guards.py` |
