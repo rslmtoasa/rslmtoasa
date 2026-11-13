@@ -47,8 +47,8 @@ module cheb_lp_mod
    !> n_known moments (T = n_known) and p = T/2, the choice of Ganahl et al., PRB 90, 045144.
    integer, parameter :: p_div = 2
    integer, parameter :: nlo_div = 2
-   !> Pseudo-inverse cutoff, relative to the largest eigenvalue of the normal matrix.
-   real(rp), parameter :: delta = 1.0e-12_rp
+   !> Pseudo-inverse cutoff, relative to the largest eigenvalue of the normal matrix (PRB 90, 045144 uses 1e-5 to 1e-6).
+   real(rp), parameter :: delta = 1.0e-6_rp
 
 contains
 
