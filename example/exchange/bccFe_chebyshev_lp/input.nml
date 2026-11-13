@@ -2,8 +2,8 @@
 ! Based on tests/regression/triad_bccFe_exchange, with a third neighbour shell added (pair 1,235).
 ! lld = 150 gives 302 computed moments per pair slot;
 ! cheb_lp = .true. extends them to cheb_lp_factor*302 = 604 before the Jackson-damped reconstruction.
-! Memory: mu_n + mu_ng take about 6.3 MB per slot at factor 2, and there are 4 slots per pair
-! (12 slots, about 75 MB in total; the log prints the real number).
+! Memory: mu_n takes about 3.1 MB per slot at factor 2, and there are 4 slots per pair
+! (12 slots, about 38 MB in total; the log prints the real number).
 ! Compare with cheb_lp = .false. and with lld = 301 (the reference of the same moment count:
 ! 2*(150+1)-1 = 301 gives 604 moments).
 &calculation

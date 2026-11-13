@@ -61,6 +61,7 @@ contains
       real(rp), dimension(:), allocatable :: kernel
       real(rp), dimension(:, :), allocatable :: polycheb
       real(rp), dimension(:), allocatable :: w, wscale
+      complex(rp), dimension(:, :, :), allocatable :: mug
       real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n
@@ -69,6 +70,7 @@ contains
 
       allocate (kernel(size(this%recursion%mu_n, 3)), polycheb(this%en%channels_ldos + 10, 0:size(this%recursion%mu_n, 3)), w(this%en%channels_ldos + 10), &
                 wscale(this%en%channels_ldos + 10))
+      allocate (mug(nb, nb, size(this%recursion%mu_n, 3)))
       ! Defining rescaling coeficients
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
@@ -83,10 +85,10 @@ contains
          ! Multiply the moments with the kernel
          do l = 1, nb
             do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n + istart - 1) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
+               mug(l, m, :) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
             end do
          end do
-         this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1) = this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1)*2.0_rp
+         mug(:, :, 2:size(kernel)) = mug(:, :, 2:size(kernel))*2.0_rp
 
          ! Calculate the Chebyshev polynomials
          call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
@@ -98,7 +100,7 @@ contains
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
                do l = 1, nb
                   do m = 1, nb
-                     this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
+                     this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + mug(l, m, i)*exp_factor
                   end do
                end do
             end do
@@ -111,7 +113,7 @@ contains
          !$omp end parallel do
       end do  ! End loop on n
 
-      deallocate (kernel, polycheb, w, wscale)
+      deallocate (kernel, polycheb, w, wscale, mug)
    end subroutine chebyshev_green_ij
 
    !---------------------------------------------------------------------------
@@ -252,7 +254,7 @@ contains
       real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n, nv, n_glob, n_local
-      complex(rp), allocatable :: mu_local(:, :, :, :)
+      complex(rp), allocatable :: mug(:, :, :)
       complex(rp), allocatable :: g0_local(:, :, :, :)
       type(rsrec_cuda_backend), pointer :: gpu_backend
       logical :: do_gpu
@@ -290,18 +292,6 @@ contains
       nv = this%en%channels_ldos + 10
 
       if (.not. present(eta) .and. do_gpu) then
-         call jackson_kernel(size(this%recursion%mu_n, 3), kernel)
-         do n_glob = start_atom, end_atom
-            n = g2l_map(n_glob)
-            do l = 1, nb
-               do m = 1, nb
-                  this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
-               end do
-            end do
-            this%recursion%mu_ng(:, :, 2:size(kernel), n) = &
-               this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
-         end do
-
          gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
          call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
@@ -316,21 +306,18 @@ contains
          n_local = end_atom - start_atom + 1
          if (n_local <= 0) return
 
-         allocate (mu_local(nb, nb, size(this%recursion%mu_n, 3), n_local))
          allocate (g0_local(nb, nb, nv, n_local))
 
-         do n_glob = start_atom, end_atom
-            n = g2l_map(n_glob)
-            mu_local(:, :, :, n) = this%recursion%mu_n(:, :, :, n)
-         end do
-
+         ! The local atoms are mu_n(:,:,:,1:n_local) (g2l_map is compact): no copy of the moments.
          ! fast_dp (default) and legacy reconstruct in double precision; the other backends keep fp32.
          ! damp stays unallocated for the Jackson kernel, which the reconstruction builds inline.
-         call cheb_damping(this, size(mu_local, 3), damp)
+         call cheb_damping(this, size(this%recursion%mu_n, 3), damp)
          if (trim(this%control%cheb_backend) == 'fast_dp' .or. trim(this%control%cheb_backend) == 'legacy') then
-            call cheb_green_dp(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local, damp)
+            call cheb_green_dp(this%recursion%mu_n(:, :, :, 1:n_local), nb, size(this%recursion%mu_n, 3), n_local, &
+                               this%en%ene(1:nv), nv, a, b, g0_local, damp)
          else
-            call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local, damp)
+            call cheb_green_fast(this%recursion%mu_n(:, :, :, 1:n_local), nb, size(this%recursion%mu_n, 3), n_local, &
+                                 this%en%ene(1:nv), nv, a, b, g0_local, damp)
          end if
 
          do n_glob = start_atom, end_atom
@@ -338,7 +325,7 @@ contains
             this%g0(:, :, 1:nv, n) = g0_local(:, :, :, n)
          end do
 
-         deallocate (g0_local, mu_local)
+         deallocate (g0_local)
          call enforce_chebyshev_spectral_positivity(this, nv)
          return
       end if
@@ -348,14 +335,16 @@ contains
       ! Calculating the damping kernel selected by control%cheb_kernel (Jackson by default)
       call cheb_kernel_vector(this, size(this%recursion%mu_n, 3), kernel)
 
+      allocate (mug(nb, nb, size(this%recursion%mu_n, 3)))
       do n_glob = start_atom, end_atom ! Loop on self-consistent atoms
          n = g2l_map(n_glob)
-         ! Multiply the moments with the kernel
+         ! Multiply the moments with the kernel (diagonal elements only)
+         mug = (0.0_rp, 0.0_rp)
          do i = 1, nb
-            this%recursion%mu_ng(i, i, :, n) = this%recursion%mu_n(i, i, :, n)*kernel(:)
+            mug(i, i, :) = this%recursion%mu_n(i, i, :, n)*kernel(:)
          end do
 
-         this%recursion%mu_ng(:, :, 2:size(kernel), n) = this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
+         mug(:, :, 2:size(kernel)) = mug(:, :, 2:size(kernel))*2.0_rp
 
          !do i=1, size(kernel)
          !  write(400+n, *) i, sum(this%recursion%mu_n(n, i, 1:18, 1:18))
@@ -371,7 +360,7 @@ contains
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
                do l = 1, nb
                   do m = 1, nb
-                     g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n)*exp_factor
+                     g_ef(l, m, n) = g_ef(l, m, n) + mug(l, m, i)*exp_factor
                   end do
                end do
             end do
@@ -383,6 +372,7 @@ contains
          end do
          !$omp end parallel do
       end do  ! End loop on self-consistent atoms
+      deallocate (mug)
    end subroutine chebyshev_green_core
 
    !> Damping kernel g_n (n = 0..n-1) selected by control%cheb_kernel; always filled.
