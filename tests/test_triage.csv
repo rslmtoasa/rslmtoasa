@@ -102,6 +102,7 @@ UnitKspaceGFValidation,keep,quick,unit core
 UnitFermiDiracEntropy,keep,quick,unit core
 UnitChebyshevGFOracle,keep,quick,unit core
 UnitChebyshevSpectralPositivity,keep,quick,unit core
+UnitChebyshevLP,keep,quick,unit core
 UnitDysonEquivalence,keep,quick,unit core
 UnitGammaSupercell,keep,quick,unit core
 UnitBsfSumRule,keep,quick,unit core

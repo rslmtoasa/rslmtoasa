@@ -12,6 +12,7 @@ add_library(${PROJECT_NAME} STATIC
     charge_interface.f90
     charge_madelung_2d.f90
     chebyshev_fast.f90
+    cheb_lp.f90
     haydock_fast.f90
     bsf_kernel.f90
     conductivity.f90
