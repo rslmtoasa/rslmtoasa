@@ -1864,13 +1864,16 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
-      ! auto is spectral, the standard LDA+U construction; 'local' is opt-in (see hamiltonian%hubbard_radial_moments).
+      ! auto is local with a nonzero fixed U/J (resolved in hamiltonian) and spectral without U (see hamiltonian%hubbard_radial_moments).
       radial_mode_reason = 'n/a'
       radial_mode_source = 'explicit'
       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
          this%hamiltonian%hubbard_radial_moments = 'spectral'
          radial_mode_source = 'default'
-         radial_mode_reason = "auto resolves to spectral; 'local' must be requested explicitly"
+         radial_mode_reason = 'auto resolves to spectral without a nonzero fixed U/J'
+      else if (this%hamiltonian%hubbard_radial_defaulted) then
+         radial_mode_source = 'default'
+         radial_mode_reason = "auto resolves to local with a nonzero fixed U/J; 'spectral' must be requested explicitly"
       end if
       call this%mark_frozen_hosts()
       call this%validate_hubbard_mode_provenance()

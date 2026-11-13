@@ -135,14 +135,15 @@ module hamiltonian_mod
       !> Experimental spinor fixed U at nsp=2 (bulk RS and KS, spectral radial moments).
       logical :: hubbard_soc_experimental = .false.
       !> Route of the d-shell radial moments (c, q2) that the radial step takes from the Green function when fixed U is on.
-      !>   'spectral' ('auto' resolves to it): moments of the Green function of the full H = H_LDA + V_U, the
-      !>      standard LDA+U construction. Works with hoh, ccor_2c, impurities and surfaces. Not energy-routed.
-      !>   'local' (explicit, not the standard construction): moments of the LDA part only, with V_U's own
+      !>   'local' ('auto' resolves to it when a nonzero fixed U/J is given): moments of the LDA part only, with V_U's own
       !>      contribution removed (c - t/q0 with t = Tr(V P), q2 corrected), so the sphere sees the occupation
-      !>      change but not V_U's energy shift. Use it for clean-bulk nsp=1 first-order runs that need the routed
-      !>      total energy. It is not found in the LDA+U literature we could read; see
-      !>      docs/validation/fixed_ldau/LOCAL_MOMENTS.md for the derivation and the tests.
+      !>      change but not V_U's energy shift; the Hubbard energy of P_out is routed into the total energy
+      !>      (first order). See docs/validation/fixed_ldau/LOCAL_MOMENTS.md for the derivation and the tests.
+      !>   'spectral' (explicit): moments of the Green function of the full H = H_LDA + V_U. Not energy-routed.
+      !>   Without a nonzero fixed U/J 'auto' stays 'auto' here and resolves to 'spectral' in self (a no-op without U).
       character(len=16) :: hubbard_radial_moments = 'auto'
+      !> True when 'auto' was resolved to 'local' because fixed U/J was given.
+      logical :: hubbard_radial_defaulted = .false.
       !> Explicit A4 test-only d-shell operator selector: none, w1, or w2.
       character(len=16) :: hubbard_test_operator = 'none'
       !> A4 external test-potential scale in Ry; ignored when selector is none.

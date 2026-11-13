@@ -808,6 +808,13 @@ contains
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
       end if
 
+      ! 'auto' is local when a nonzero fixed U/J is given (the scope checks below then apply to it); otherwise it stays auto.
+      this%hubbard_radial_defaulted = .false.
+      if (this%hubbard_radial_moments == 'auto' .and. (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check)) then
+         this%hubbard_radial_moments = 'local'
+         this%hubbard_radial_defaulted = .true.
+      end if
+
       call validate_fixed_u_scope(this, has_hubbard_general, has_legacy_uj, has_impurity_uj)
 
       if (rank == 0) then
@@ -990,6 +997,7 @@ contains
       ! Resolve the omitted-option sentinel only after the self namelist tells
       ! us whether this calculation uses the reciprocal KS backend.
       this%hubbard_radial_moments = 'auto'
+      this%hubbard_radial_defaulted = .false.
       this%hubbard_test_operator = 'none'
       this%hubbard_test_lambda = 0.0_rp
       this%hubbard_test_spin = 0
