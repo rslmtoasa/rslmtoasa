@@ -378,6 +378,7 @@ contains
       lat_obj%atlist = 1
       lat_obj%iz = 1
       lat_obj%nn(1, :) = [3, 1, 1]
+      call allocate_finite_potential(lat_obj)
 
       ham_obj%lattice => lat_obj
       ham_obj%hoh = .false.
@@ -413,6 +414,21 @@ contains
       obj%hk_bulk = cmplx(7.0_rp, 0.0_rp, rp)
    end subroutine setup_one_site_model
 
+   !> build_kspace_hamiltonian checks every atom's potential parameters c, qpar and srdel for NaN.
+   subroutine allocate_finite_potential(lat_obj)
+      type(lattice), intent(inout) :: lat_obj
+      integer :: i
+
+      allocate(lat_obj%symbolic_atoms(lat_obj%ntype))
+      do i = 1, lat_obj%ntype
+         allocate(lat_obj%symbolic_atoms(i)%potential%c(0:2, 2), lat_obj%symbolic_atoms(i)%potential%qpar(0:2, 2), &
+                  lat_obj%symbolic_atoms(i)%potential%srdel(0:2, 2))
+         lat_obj%symbolic_atoms(i)%potential%c = 0.0_rp
+         lat_obj%symbolic_atoms(i)%potential%qpar = 0.0_rp
+         lat_obj%symbolic_atoms(i)%potential%srdel = 0.0_rp
+      end do
+   end subroutine allocate_finite_potential
+
    subroutine enable_second_order_terms(obj, ham_obj)
       type(reciprocal), intent(inout) :: obj
       type(hamiltonian), intent(inout) :: ham_obj
@@ -441,6 +457,7 @@ contains
       allocate(lat_obj%ib(2), lat_obj%atlist(2), lat_obj%iz(2), lat_obj%nn(2,2))
       lat_obj%ib = [1,2]; lat_obj%atlist = [1,2]; lat_obj%iz = [1,2]
       lat_obj%nn(1,:) = [2,2]; lat_obj%nn(2,:) = [2,1]
+      call allocate_finite_potential(lat_obj)
       ham_obj%lattice => lat_obj; ham_obj%hoh = .false.; ham_obj%ccor_2c = .false.
       ham_obj%operator_generation = 0; ham_obj%magnetic_representation = 'periodic_nc'
       allocate(ham_obj%ee(nb,nb,2,2), ham_obj%eeo(nb,nb,2,2))
