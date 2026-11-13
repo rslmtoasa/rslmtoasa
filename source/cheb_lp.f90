@@ -108,13 +108,14 @@ contains
       integer, intent(in) :: n_known
       integer, intent(out) :: n_rank, n_unstable
       real(rp), intent(out) :: lam_max, fit_res, imag_max, unstable_weight
-      integer :: nb, nb2, nch, p, nlo, n_ext, i, j, k, info, lwork
+      integer :: nb, nb2, nch, p, nlo, n_ext, nsteps, nkeep, q, i, j, k, info, lwork
       integer, allocatable :: ipiv(:)
-      real(rp) :: smax, ynorm, rnorm
+      real(rp) :: smax, ynorm, rnorm, mult
       real(rp), allocatable :: xr(:, :), tg(:, :), dd(:, :), gg(:, :), rr(:, :), rcopy(:, :), rv(:), ev(:), t(:), a(:)
-      real(rp), allocatable :: comp(:, :), wr(:), wi(:), vr(:, :), work(:), outc(:), amp(:)
+      real(rp), allocatable :: comp(:, :), wr(:), wi(:), vr(:, :), work(:), amp(:), dre(:, :), bst(:, :), ext(:, :)
       logical, allocatable :: unst(:)
-      complex(rp), allocatable :: vc(:, :), bm(:, :), lam(:), v1(:), lamk(:), cv(:), oc(:)
+      complex(rp), allocatable :: vc(:, :), bm(:, :), lam(:), v1(:), cv(:), oc(:)
+      complex(rp) :: lamk
       real(rp) :: dummy(1, 1)
 
       nb = size(mu, 1)
@@ -213,8 +214,10 @@ contains
       n_unstable = count(unst)
       where (unst) lam = (0.0_rp, 0.0_rp)
 
-      ! x(n_known-1+k) = Re [V lam^k V^-1 s]_1, s = [x(n_known-1), ..., x(n_known-p)].
-      allocate (v1(p), bm(p, nch), ipiv(p), lamk(p), cv(p), oc(nch), outc(nch))
+      ! x(n_known-1+k) = Re [V lam^k V^-1 s]_1, s = [x(n_known-1), ..., x(n_known-p)], i.e. Re sum_j v1_j lam_j^k bm_jc.
+      ! Dropped roots have lam = 0. A conjugate pair is folded into its member with Im lam > 0 (weight 2), and
+      ! Re(z b) = Re z Re b - Im z Im b makes the whole extension one real product over (modes) of steps x channels.
+      allocate (v1(p), bm(p, nch), ipiv(p), cv(p), oc(nch))
       v1 = vc(1, :)
       do i = 1, p
          bm(i, :) = cmplx(xr(n_known - i + 1, :), 0.0_rp, rp)
@@ -226,16 +229,32 @@ contains
          amp(i) = abs(v1(i))*sum(abs(bm(i, :)))
       end do
       unstable_weight = sum(amp, mask=unst)/sum(amp)
-      lamk = lam
-      imag_max = 0.0_rp
-      do k = 1, n_ext - n_known
-         cv = v1*lamk
-         call zgemv('T', p, nch, (1.0_rp, 0.0_rp), bm, p, cv, 1, (0.0_rp, 0.0_rp), oc, 1)
-         outc = real(oc, rp)
-         imag_max = max(imag_max, maxval(abs(aimag(oc))))
-         mu(:, :, n_known + k) = reshape(cmplx(outc(1:nb2), outc(nb2 + 1:nch), rp), [nb, nb])
-         lamk = lamk*lam
+      nsteps = n_ext - n_known
+      nkeep = count(lam /= (0.0_rp, 0.0_rp) .and. aimag(lam) >= 0.0_rp)
+      allocate (dre(2*nkeep, nsteps), bst(2*nkeep, nch), ext(nch, nsteps))
+      q = 0
+      do j = 1, p
+         if (lam(j) == (0.0_rp, 0.0_rp) .or. aimag(lam(j)) < 0.0_rp) cycle
+         q = q + 1
+         mult = merge(1.0_rp, 2.0_rp, aimag(lam(j)) == 0.0_rp)
+         lamk = lam(j)
+         do k = 1, nsteps
+            dre(q, k) = mult*real(v1(j)*lamk, rp)
+            dre(nkeep + q, k) = -mult*aimag(v1(j)*lamk)
+            lamk = lamk*lam(j)
+         end do
+         bst(q, :) = real(bm(j, :), rp)
+         bst(nkeep + q, :) = aimag(bm(j, :))
       end do
+      ext = 0.0_rp
+      if (nkeep > 0) call dgemm('T', 'N', nch, nsteps, 2*nkeep, 1.0_rp, bst, 2*nkeep, dre, 2*nkeep, 0.0_rp, ext, nch)
+      do k = 1, nsteps
+         mu(:, :, n_known + k) = reshape(cmplx(ext(1:nb2, k), ext(nb2 + 1:nch, k), rp), [nb, nb])
+      end do
+      ! imag_max: the imaginary part dropped by Re, evaluated for the last extrapolation step only (not the maximum over steps).
+      cv = v1*lam**nsteps
+      call zgemv('T', p, nch, (1.0_rp, 0.0_rp), bm, p, cv, 1, (0.0_rp, 0.0_rp), oc, 1)
+      imag_max = maxval(abs(aimag(oc)))
 
    contains
 
