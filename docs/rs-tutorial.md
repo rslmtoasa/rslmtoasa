@@ -1,6 +1,6 @@
 # RS-LMTO-ASA tutorial for ASP 2026
 
-**Draft · `main_rc` · two-core Codespaces · Fe, Si, NiMnSb, Co2FeSi, and UppASD export**
+## Fe, Si, NiMnSb, Co2FeSi, and UppASD export
 
 This tutorial covers the following tasks:
 
@@ -372,7 +372,7 @@ ls .
 The run directory contains only a `.cif` file, a crystal-structure description. To run `rslmto.x`, first process the CIF file with `rsutil` using this command:
 
 ```
-rsutil setup bulk --cif EntryWithCollCode221028.cif --empty_spheres
+rsutil setup bulk --cif EntryWithCollCode221028.cif --in-place
 ```
 
 Open the generated `input.nml` and `lattice.nml` and inspect them. If everything looks good, run the code to converge the system. *Hint: If slow, you can run a `use_kspace` enabled run to speed things up.*
