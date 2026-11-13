@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """LdaUImpurityNsp3: hubbard_radial_moments = 'local' at nsp = 3 on an impurity cluster (calctype I; B2FeCo impurity deck, block recursion, 4 steps,
-single thread, first order and hoh) embedded in a k-space Fe host written at the same nsp and hoh setting (U = 2 eV, J = 0), moments along +z. For a
+single thread, first order and hoh) embedded in a k-space Fe host written at the same nsp and hoh setting (U = 2 eV, J = 0, converged to conv_thr 1e-10; the impurity deck takes the host's E_F and
+energy window), moments along +z. For a
 collinear moment the nsp = 3 spinor correction (along the site axis, V by type) must reproduce the nsp = 1 scalar correction (with hoh: V_in captured at
 the enim insertion): the per-iteration Diff, Fermi energy and spin moment agree (tolerance of the first-order impurity soc0 rows). Bug caught: the
 correction missing, or taken in the wrong spin frame or with the wrong V, at nsp = 3 on a cluster.
@@ -26,14 +27,30 @@ TOL = rr.IMP_SOC0_TOL
 ENGAGED = 1.0e-2  # muB
 
 
+def converged(text: str) -> str:
+    """A frozen host must be converged (TESTING_POLICY.md); a k-space bcc Fe host takes 60 to 70 steps."""
+    return rr.set_nstep(text, 300).replace("&self\n", "&self\nconv_thr = 1.0e-10\n", 1)
+
+
+def match_host(text: str, host: Path) -> str:
+    """The impurity run keeps E_F fixed: it must be the converged host's E_F, with the host's energy window."""
+    hin = (host / "input.nml").read_text()
+    ef = re.findall(r"N\(E_F=\s*(-?\d+\.\d+)", rr.log_text(host))[-1]
+    for key, value in (("fermi", ef), *((k, re.search(rf"(?m)^{k}\s*=\s*(\S+)", hin).group(1)) for k in ("energy_min", "energy_max"))):
+        text = re.sub(rf"(?m)^{key}\s*=.*$", f"{key} = {value}", text)
+    return text
+
+
 def host_and_impurity(binary: Path, base: Path, tag: str, nsp: int, mode: str, hoh: bool = False, soc0: bool = False):
     keys = f"hubbard_radial_moments = '{mode}'\n" + ("hoh = .true.\n" if hoh else "")
-    host_edit = lambda t: (rr.soc_off if soc0 else str)(rr.add_u(rr.use_kspace(rr.set_nstep(t)), 2.0, 0.0, keys).replace("nsp = 1", f"nsp = {nsp}"))
+    host_edit = lambda t: (rr.soc_off if soc0 else str)(rr.add_u(rr.use_kspace(converged(t)), 2.0, 0.0, keys).replace("nsp = 1", f"nsp = {nsp}"))
     host = rr.prepare(rr.CASES / "k_space_scf/bccFe", base / f"{tag}_host", host_edit)
     if rr.run(binary, host) != 0:
         return f"{tag}: host run failed\n{rr.log_text(host)[-1200:]}"
-    imp_edit = lambda t: (rr.soc_off if soc0 else str)(rr.in_hamiltonian(rr.set_nstep(t).replace("nsp = 1", f"nsp = {nsp}").replace("hoh = false", "hoh = .true." if hoh else "hoh = false"),
-                                           f"hubbard_radial_moments = '{mode}'\n"))
+    if "Converged!" not in rr.log_text(host):
+        return f"{tag}: host did not converge in 300 steps\n{rr.log_text(host)[-600:]}"
+    imp_edit = lambda t: match_host((rr.soc_off if soc0 else str)(rr.in_hamiltonian(rr.set_nstep(t).replace("nsp = 1", f"nsp = {nsp}").replace("hoh = false", "hoh = .true." if hoh else "hoh = false"),
+                                           f"hubbard_radial_moments = '{mode}'\n")), host)
     d = rr.prepare(rr.CASES / "impurity/B2FeCo_nsp1", base / tag, imp_edit)
     shutil.copy2(host / "Fe_out.nml", d / "Fe.nml")
     shutil.copy2(host / "Fe_dm.nml", d / "Fe_dm.nml")
