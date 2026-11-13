@@ -20,6 +20,11 @@
 !>          of the mode amplitude at the last known moment.
 !>          U5: as U2 but with NON-Hermitian W_k = u v^H (u /= v), so the full-channel path is taken;
 !>          the closed form is compared to the same 1e-11 as U2.
+!>          U6: INEXACT data (damped poles plus a deterministic Hermitian perturbation of relative size
+!>          3e-2, pseudo-random, decaying like 0.95^n), so that the least-squares fit depends on the channel weights. The extension is compared
+!>          with an independent reference written here: explicit Hankel loops over all 2 nb^2 real channels,
+!>          dsyev with the same cutoff (1e-6 of the largest eigenvalue), and the plain recurrence
+!>          x(n) = -sum_i a_i x(n-i). It applies while no root is dropped (checked).
 !------------------------------------------------------------------------------
 program test_cheb_lp
    use precision_mod, only: rp
@@ -38,6 +43,7 @@ program test_cheb_lp
    call test_spectral(failed)
    call test_unstable(failed)
    call test_nonhermitian(failed)
+   call test_noisy(failed)
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -238,5 +244,107 @@ contains
 
       p = (1.0_rp - r*r)/(1.0_rp - 2.0_rp*r*cos(phi) + r*r)
    end function poisson
+
+   !> U6: catches wrong channel weights in the Hermitian reduction, a wrong window or a wrong cutoff.
+   subroutine test_noisy(bad)
+      logical, intent(inout) :: bad
+      integer, parameter :: nk = 3, nb = 2, nkn = 60, nex = 100, p = nkn/2, nlo = nkn/2, nch = 2*nb*nb
+      real(rp), parameter :: delta = 1.0e-6_rp
+      real(rp), parameter :: rho(nk) = [0.93_rp, 0.95_rp, 0.97_rp], th(nk) = [0.5_rp, 1.2_rp, 2.3_rp]
+      complex(rp) :: mu(nb, nb, nex), wk(nb, nb, nk), u(nb), v(nb), z
+      real(rp) :: x(0:nex - 1, nch), rr(p, p), rv(p), ev(p), tt(p), a(p), work(3*p), err, scale, lam_max, fit_res, imag_max, uw
+      integer :: n, k, l, m, c, i, j, kk, info, n_rank, n_unstable
+
+      do k = 1, nk
+         do l = 1, nb
+            u(l) = cmplx(cos(0.7_rp*l + 1.3_rp*k), sin(1.1_rp*l - 0.4_rp*k), rp)
+            v(l) = cmplx(sin(0.9_rp*l + 0.6_rp*k), cos(0.5_rp*l - 1.7_rp*k), rp)
+         end do
+         wk(:, :, k) = spread(u, 2, nb)*conjg(spread(u, 1, nb)) + 0.3_rp*spread(v, 2, nb)*conjg(spread(v, 1, nb))
+      end do
+      mu = (0.0_rp, 0.0_rp)
+      do n = 0, nkn - 1
+         do k = 1, nk
+            mu(:, :, n + 1) = mu(:, :, n + 1) + wk(:, :, k)*rho(k)**n*cos(n*th(k))
+         end do
+         do l = 1, nb
+            do m = l, nb
+               ! broadband deterministic pseudo-random perturbation (sine hash), decaying like 0.95^n
+               if (l == m) then
+                  z = cmplx(3.0e-2_rp*hash(n, l, m, 1), 0.0_rp, rp)*0.95_rp**n
+               else
+                  z = 3.0e-2_rp*cmplx(hash(n, l, m, 1), hash(n, l, m, 2), rp)*0.95_rp**n
+               end if
+               mu(l, m, n + 1) = mu(l, m, n + 1) + z
+               if (l /= m) mu(m, l, n + 1) = mu(m, l, n + 1) + conjg(z)
+            end do
+         end do
+      end do
+      ! Reference: channels c = (m-1)*nb + l real, + nb^2 imaginary; all 2 nb^2 channels, explicit loops.
+      do n = 0, nkn - 1
+         do m = 1, nb
+            do l = 1, nb
+               x(n, (m - 1)*nb + l) = real(mu(l, m, n + 1), rp)
+               x(n, nb*nb + (m - 1)*nb + l) = aimag(mu(l, m, n + 1))
+            end do
+         end do
+      end do
+      rr = 0.0_rp
+      rv = 0.0_rp
+      do c = 1, nch
+         do n = nlo, nkn - 1
+            do i = 1, p
+               rv(i) = rv(i) + x(n - i, c)*x(n, c)
+               do j = 1, p
+                  rr(i, j) = rr(i, j) + x(n - i, c)*x(n - j, c)
+               end do
+            end do
+         end do
+      end do
+      call dsyev('V', 'U', p, rr, p, ev, work, 3*p, info)
+      a = 0.0_rp
+      do kk = 1, p
+         if (ev(kk) > delta*ev(p)) then
+            a = a - rr(:, kk)*dot_product(rr(:, kk), rv)/ev(kk)
+         end if
+      end do
+      do n = nkn, nex - 1
+         do c = 1, nch
+            x(n, c) = 0.0_rp
+            do i = 1, p
+               x(n, c) = x(n, c) - a(i)*x(n - i, c)
+            end do
+         end do
+      end do
+      call cheb_lp_extend(mu, nkn, n_rank, n_unstable, lam_max, fit_res, imag_max, uw)
+      err = 0.0_rp
+      scale = maxval(abs(x(0:nkn - 1, :)))
+      do n = nkn, nex - 1
+         do m = 1, nb
+            do l = 1, nb
+               err = max(err, abs(real(mu(l, m, n + 1), rp) - x(n, (m - 1)*nb + l)), &
+                         abs(aimag(mu(l, m, n + 1)) - x(n, nb*nb + (m - 1)*nb + l)))
+            end do
+         end do
+      end do
+      err = err/scale
+      write (*, '(a,es10.3,a,i0,a,i0,a,f8.5)') 'U6 noisy block vs naive reference: max rel err = ', err, &
+         '  rank=', n_rank, '  unstable=', n_unstable, '  lam_max=', lam_max
+      if (n_unstable /= 0) then
+         write (*, '(a)') 'FAIL: U6 fixture must not drop roots (the reference recurrence keeps all of them)'
+         bad = .true.
+      else if (err > 1.0e-8_rp) then
+         write (*, '(a)') 'FAIL: U6 extension differs from the naive least-squares reference'
+         bad = .true.
+      end if
+   end subroutine test_noisy
+
+   pure function hash(n, l, m, c) result(h)
+      integer, intent(in) :: n, l, m, c
+      real(rp) :: h, y
+
+      y = sin(12.9898_rp*real(n, rp) + 78.233_rp*real(l, rp) + 37.719_rp*real(m, rp) + 4.581_rp*real(c, rp))*43758.5453_rp
+      h = y - floor(y) - 0.5_rp
+   end function hash
 
 end program test_cheb_lp
