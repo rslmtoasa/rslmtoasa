@@ -122,7 +122,8 @@ int rsrec_set_precision(rsrec_ctx *ctx, int prec);
  * GPU/GEMM port of chebyshev_green (bands.f90): for each local atom n
  *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) * gJ(i) c_i (-i) e^{-i(i-1)acos(x)}
  *                  / sqrt(a^2 - (E_ie - b)^2),   x = (E_ie - b)/a
- * with the Jackson kernel gJ in the exact bands.f90 convention and
+ * with the damping kernel g (Jackson gJ in the exact bands.f90 convention
+ * when kernel = NULL; otherwise the caller's vector) and
  * c_1 = 1, c_i = 2 otherwise. The transfer matrix F(i,ie) is built once;
  * the moment contraction is one strided-batched GEMM over atoms.
  *
@@ -133,12 +134,14 @@ int rsrec_set_precision(rsrec_ctx *ctx, int prec);
  *   g0      : (nb, nb, nv, natoms) complex(rp) out -- same layout as
  *             this%g0(:,:,1:nv, local atoms); DOS = -aimag(g0)/pi
  * a, b are the window coefficients, a = (emax-emin)/(2-0.3),
- * b = (emax+emin)/2, as in chebyshev_green. Precision follows
- * rsrec_set_precision (fp32 default ~1e-6, matching the moment engine;
- * fp64 bit-comparable with the Fortran triple loop).                       */
+ * b = (emax+emin)/2, as in chebyshev_green.
+ *   kernel  : host (n_moments) double, g(0:n_moments-1) (Lorentz, none, ...);
+ *             NULL selects the inline Jackson factor (default behaviour).
+ * Precision follows rsrec_set_precision (fp32 default ~1e-6, matching the
+ * moment engine; fp64 bit-comparable with the Fortran triple loop).        */
 int rsrec_chebyshev_dos(rsrec_ctx *ctx, const void *mu, int n_moments,
                         int natoms, const double *ene, int nv,
-                        double a, double b, void *g0);
+                        double a, double b, const double *kernel, void *g0);
 
 /* --- Chebyshev intersite Gij at the Fermi energy (exchange contour) -------
  * Same moment contraction as rsrec_chebyshev_dos, but F is supplied by the
