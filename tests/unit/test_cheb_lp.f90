@@ -8,7 +8,7 @@
 !>          Hermitian positive-semidefinite W_k. The closed forms are written
 !>          in this test; the extension is compared on n = N..N_ext-1 against
 !>          max|x| of the known part. Tolerance 1e-11: the Stage A toy study
-!>          measured 1.6e-15 (noise-free, same p and window) in numpy.
+!>          measured 3.6e-14 (noise-free, same p and window, N/2 and N/2) in numpy.
 !>          Hermiticity of the U2 extension holds by construction.
 !>          U3: the extended moments go through the production reconstruction
 !>          cheb_green_dp. The closed-form density is the Poisson-kernel sum

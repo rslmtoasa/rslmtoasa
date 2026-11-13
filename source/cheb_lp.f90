@@ -43,8 +43,9 @@ module cheb_lp_mod
       procedure :: constructor
    end interface cheb_lp
 
-   !> Order p = n_known/p_div and window start n_lo = n_known/nlo_div (Stage A toy study).
-   integer, parameter :: p_div = 4
+   !> Order p = n_known/p_div and window start n_lo = n_known/nlo_div. The training data are all
+   !> n_known moments (T = n_known) and p = T/2, the choice of Ganahl et al., PRB 90, 045144.
+   integer, parameter :: p_div = 2
    integer, parameter :: nlo_div = 2
    !> Pseudo-inverse cutoff, relative to the largest eigenvalue of the normal matrix.
    real(rp), parameter :: delta = 1.0e-12_rp
