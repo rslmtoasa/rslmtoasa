@@ -18,6 +18,7 @@ Table of Contents
    kspace_modes
    green_functions
    recursion_method
+   chebyshev_lp
    gpu_acceleration
    scf_cycle
    spin_dynamics
