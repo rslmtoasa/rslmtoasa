@@ -22,6 +22,12 @@ error). The CPU legacy run is not a pure fp64 oracle: the Chebyshev DOS
 reconstruction on the CPU is single precision (cheb_green_fast), which limits
 the agreement to about 5e-8 in etot, so --tol64 is not a tight bound.
 
+A third pass runs the damping-kernel variants (KERNEL_VARIANTS below): the same
+control keys on the CPU and on the GPU (fp32), compared directly with --tol. The
+GPU takes the kernel as a host-built vector (cheb_kernel = 'lorentz', or 'none'
+with cheb_lp). There is no intersite (eta) variant in this matrix, so the
+exchange route with a non-Jackson kernel is not covered here.
+
 Usage:
   run_gpu_matrix.py --binary build/bin/rslmto.x
 """
@@ -39,6 +45,14 @@ import f90nml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from manifest_defaults import apply_manifest_defaults
+
+
+# Non-Jackson damping kernels: label -> control keys given to both the CPU and the GPU run.
+# 'none' needs cheb_lp (control check_all); lambda is set away from its default of 3.0.
+KERNEL_VARIANTS = {
+    "lorentz": {"cheb_kernel": "lorentz", "cheb_kernel_lambda": 4.0},
+    "none+lp": {"cheb_kernel": "none", "cheb_lp": True},
+}
 
 
 def load_chebyshev_cases(cases_json: Path) -> list[dict]:
@@ -135,6 +149,20 @@ def main() -> int:
             failures += 1
         detail = ", ".join(f"{k}={v:.3e}" for k, v in diffs.items())
         rows.append((name, status, detail))
+
+        for label, keys in KERNEL_VARIANTS.items():
+            try:
+                cpu_k = run_variant(binary, cases_json.parent, case, scratch / f"{name}_cpu_{label}", gpu=False, **keys)
+                gpu_k = run_variant(binary, cases_json.parent, case, scratch / f"{name}_gpu_{label}", gpu=True, **keys)
+            except Exception as exc:  # noqa: BLE001 - report and continue the matrix
+                rows.append((f"{name} [{label}]", "ERROR", str(exc)))
+                failures += 1
+                continue
+            diffs_k = {k: abs(cpu_k[k] - gpu_k[k]) for k in ("etot", "ws_r", "vmad")}
+            status = "PASS" if max(diffs_k.values()) <= args.tol else "FAIL"
+            if status == "FAIL":
+                failures += 1
+            rows.append((f"{name} [{label}]", status, ", ".join(f"{k}={v:.3e}" for k, v in diffs_k.items())))
 
         try:
             cpu64 = run_variant(binary, cases_json.parent, case, scratch / f"{name}_cpu64", gpu=False, cheb_backend="legacy")
