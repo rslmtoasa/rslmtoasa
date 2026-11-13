@@ -624,6 +624,43 @@ cheb_backend
   the single-precision rounding breaks exact symmetries such as zero transverse moments.
 - The transport moments use ``transport_backend`` instead.
 
+cheb_lp
+-------
+
+**Type:** Logical
+
+**Purpose:** Extend the Chebyshev moments by linear prediction before the Jackson-damped reconstruction.
+
+**Default:** ``.false.``
+
+**Notes:**
+
+- Requires ``recur = 'chebyshev'`` (fatal otherwise). The moments of each recursion atom and, for the exchange route, of each pair slot (four per pair) are extended from ``2*lld+2`` to ``(2*lld+2)*cheb_lp_factor`` orders by ``x(n) = -sum_i a_i x(n-i)``, after Ganahl et al., PRB 90, 045144. One real coefficient vector per block is shared by the real and imaginary parts of all ``nb*nb`` elements.
+- Order ``p = N/2`` trained on all ``N`` known moments; pseudo-inverse cutoff 1e-6; roots with ``|lambda| >= 1`` are set to zero. These constants are module parameters in ``source/cheb_lp.f90``, not input keys.
+- ``mu_n`` and ``mu_ng`` take 32 bytes per element, ``nb*nb*N_ext`` per slot (about 12.5 MB at ``nb`` = 18, ``lld`` = 150, factor 4); the pair route has ``4*njij`` slots. The log gives one line ``Chebyshev moments: <n> orders x <slots> slots; mu_n+mu_ng = <x> MB`` and, per atom or pair slot, ``Chebyshev LP ...: p= rank= unstable=<n> (weight <w>) lam_max= fit_res= imag=``. ``weight`` is the share of the mode amplitude at the last known moment carried by the dropped roots.
+- The spectral positivity projection is unchanged; its count is logged (``local_blocks=``) when non-zero. Not covered: ``chebyshev_dos`` in ``density_of_states.f90``, the orbital moments (``mu_n_orb``) and the conductivity moments. The CUDA hooks compile but were not run on a GPU.
+- Limit (measured, bcc Fe, nsp=2): moments of successive open-boundary clusters agree to 1e-3 only up to n = 88 (5984 sites), 110 (9720) and 136 (16888); LP does not remove the boundary contamination beyond that. LP trained only on boundary-free moments did not predict a larger system's moments better than the smaller system's own moments (0 of 288 configurations). LP approximates a run with more moments on the same cluster, not a larger cluster.
+- One deck (bcc Fe bulk, 5984 sites, ``lld`` = 150, factor 4, ``channels_ldos`` = 2500) against a computed ``lld`` = 603 run on the same cluster: RMS DOS difference over the occupied band, up/down spin, 1.59/0.87 states/Ry (Jackson at 302 moments) and 0.67/0.52 (LP); within 0.1 Ry of E_F, 2.72/1.31 and 0.83/0.68; E_F -0.0683 (302 moments), -0.0743 (LP), -0.0695 (reference) Ry; 6480 local blocks projected with LP, 0 without; wall time 23.6 s (LP), 23.0 s, 77.8 s (reference). Exchange deck (1000-site periodic cluster, three shells): ``J_ij`` error against the ``lld`` = 603 reference +0.229/+0.013/-0.010 (302 moments) and +0.0206/+0.0074/-0.0074 (LP). ``cheb_backend = 'fast'`` against fp64: largest DOS difference 0.05 (302 moments) and 0.49 (LP) states/Ry for a peak of about 40. Two MPI ranks gave the same ``J_ij`` as the serial run.
+
+**Related code:** ``source/cheb_lp.f90``, ``source/recursion_chebyshev.f90``, ``source/recursion_transport.f90``, ``source/green_chebyshev.f90``; scripts ``tests/validation/val_cheb_lp.py``, ``tests/validation/val_cheb_lp_toy.py``; examples ``example/bulk/bccFe_chebyshev_lp``, ``example/exchange/bccFe_chebyshev_lp``
+
+cheb_lp_factor
+--------------
+
+**Type:** Integer
+
+**Purpose:** Extension factor of the linear prediction: the stored moment length is ``(2*lld+2)*cheb_lp_factor``.
+
+**Default:** 4
+
+**Allowed values:** 2 or larger (fatal otherwise)
+
+**Notes:**
+
+- Ignored unless ``cheb_lp`` is true.
+
+**Related code:** ``source/cheb_lp.f90``, ``source/control.f90``
+
 transport_backend
 -----------------
 

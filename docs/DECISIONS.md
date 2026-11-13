@@ -160,3 +160,9 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
 ## GBT k-space restart, from 2026-10-17
 
 - 2026-10-17 — GBT restart opened (spec `cleanup/gbt_kspace_restart_spec.md`, branch `fable_v4b_gbt`); old GBT tests, fixtures and analysis tools archived at tag `gbt-campaign-archive-2026-10`.
+
+## Chebyshev linear prediction, from 2026-11
+
+- 2026-11-13 — Chebyshev moment linear prediction opened (branch `feat/cheb-lp`, base `f016c6d`; the spec is a local untracked file and is not in the tree). In the tree: `source/cheb_lp.f90` with unit test `UnitChebyshevLP`; keys `cheb_lp` / `cheb_lp_factor`; hooks on the on-site and pair moment routes; Stage A toy study `tests/validation/val_cheb_lp_toy.py`; Stage C script `tests/validation/val_cheb_lp.py`; example decks `example/bulk/bccFe_chebyshev_lp` and `example/exchange/bccFe_chebyshev_lp`.
+  Measured on bcc Fe (5984 sites, lld=150, factor 4) against a computed lld=603 run on the same cluster: RMS DOS difference over the occupied band, up/down spin, 1.59/0.87 states/Ry (302 moments) vs 0.67/0.52 (LP); J_ij shells 1/2/3 error (triad exchange deck, 1000-site periodic cluster) +0.229/+0.013/-0.010 (302 moments) vs +0.0206/+0.0074/-0.0074 (LP). The paper recipe (training only on boundary-free moments) did not predict a larger system's moments better than the smaller system's own moments (0 of 288 configurations); moments of successive open clusters agree to 1e-3 only up to n = 88, 110, 136 for 5984, 9720, 16888 sites.
+  Open: Ni(001) deck comparison not yet reported; CUDA hooks never run on a GPU; Stage D (Haydock comparison) and the Lehmann comparison C2 not run; the tag `cheb-lp-campaign-2026-11` for the campaign scripts is not created yet (to be created when the campaign ends).
