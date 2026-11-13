@@ -33,7 +33,7 @@ module cheb_lp_mod
       !> Extend the Chebyshev moments before reconstruction.
       logical :: enabled = .false.
       !> Extension factor: n_total = factor*(2*lld+2).
-      integer :: factor = 4
+      integer :: factor = 2
    contains
       procedure :: n_total
       procedure :: apply
