@@ -15,14 +15,15 @@ minutes. No local compiler, Docker installation, or Python interface is needed.
 
 ## Edit inputs and run
 
-Setup copies the supplied bcc Fe example into `runs/bccFe`, leaving the original
-example intact. Click `runs/bccFe/input.nml` in the file explorer, edit it, and
-save with Ctrl+S (Cmd+S on macOS).
+Setup copies `tutorials/bccFe` into `runs/bccfe-scf`, leaving the original
+tutorial deck intact. Open `runs/bccfe-scf/input.nml` in the file explorer,
+follow the Fe input edits in the primary tutorial, and save with Ctrl+S
+(Cmd+S on macOS).
 
 Open **Terminal > New Terminal** and run from the repository root:
 
 ```bash
-cd runs/bccFe
+cd runs/bccfe-scf
 rslmto.x input.nml > run.log 2>&1
 ```
 
@@ -45,7 +46,7 @@ then click them in the file explorer to preview or download them. A graphical
 desktop or a Python interface to the Fortran code is not needed.
 
 After running the bcc Fe example, use its first two DOS columns as a plotting
-example (from `runs/bccFe`):
+example (from `runs/bccfe-scf`):
 
 ```bash
 python3 - <<'PYTHON'
@@ -186,7 +187,7 @@ If setup fails, inspect the creation log, then retry from the repository root:
 bash .devcontainer/setup.sh
 ```
 
-Setup preserves an existing `runs/bccFe` directory. To start another calculation,
+Setup preserves an existing `runs/bccfe-scf` directory. To start another calculation,
 copy an example into a new directory under `runs/` and run from that directory.
 
 The same configuration can be opened locally with VS Code's Dev Containers

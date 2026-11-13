@@ -21,12 +21,11 @@ cmake --build build-codespaces --parallel 2
 
 # Re-running setup must preserve students' inputs and results.
 mkdir -p runs
-if [ ! -e runs/bccFe ]; then
-    cp -r example/bulk/bccFe runs/bccFe
+if [ ! -e runs/bccfe-scf ]; then
+    cp -r tutorials/bccFe runs/bccfe-scf
 fi
 
-printf '\nReady. Open runs/bccFe/input.nml, then run:\n'
-printf '  cd runs/bccFe\n  rslmto.x input.nml > run.log 2>&1\n'
+printf '\nReady. Follow docs/rs-tutorial.md. Your Fe working deck is runs/bccfe-scf/input.nml.\n'
 
 # Install the release-prep wheel bundled with this tutorial branch.
 bash .devcontainer/install-rsutils.sh
