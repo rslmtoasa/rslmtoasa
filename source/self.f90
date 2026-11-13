@@ -862,16 +862,24 @@ contains
       class(self), intent(in) :: this
 
       eligible = .false.
-      ! U/J: explicit input for the bulk types, not the impurity-only form
-      if (.not. this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check) return
+      ! U/J: explicit input for the types; the impurity-only form only on an impurity or surface cluster
+      if (this%hamiltonian%hubbard_u_impurity_check) then
+         if (this%control%calctype /= 'I' .and. this%control%calctype /= 'S') return
+      else if (.not. this%hamiltonian%hubbard_u_general_check) then
+         return
+      end if
       ! Hamiltonian: Liechtenstein, lmax=2, collinear, first order, no constraints / SC-U / V
       if (.not. this%hamiltonian%fixed_u_local_scope(allow_noncollinear=.true.)) return
       ! spin: scalar nsp=1 without SOC, or bulk spinor U at nsp=2
       if (.not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
                  (this%control%nsp >= 2 .and. this%hamiltonian%hubbard_soc_experimental))) return
-      ! where: bulk without an embedded cluster
-      if (this%control%calctype /= 'B' .or. this%lattice%nbulk /= 0 .or. &
-          this%lattice%nrec /= this%lattice%ntype) return
+      ! where: bulk without an embedded cluster, or an impurity or surface cluster
+      ! (its recursion sites are the nrec types after the nbulk host types)
+      if (this%control%calctype == 'B') then
+         if (this%lattice%nbulk /= 0 .or. this%lattice%nrec /= this%lattice%ntype) return
+      else if (this%control%calctype /= 'I' .and. this%control%calctype /= 'S') then
+         return
+      end if
       ! test operator: only at zero strength
       if (this%hamiltonian%hubbard_test_operator_check .and. this%hamiltonian%hubbard_test_lambda /= 0.0_rp) return
       eligible = .true.
@@ -1091,7 +1099,8 @@ contains
       allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
                e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
       do isite = 1, this%lattice%nrec
-         itype = this%lattice%ib(isite)
+         ! ib(isite) is a cluster-site index, not the type, in impurity and surface runs
+         itype = this%lattice%nbulk + isite
          density = cmplx(0.0_rp, 0.0_rp, rp)
          potential = cmplx(0.0_rp, 0.0_rp, rp)
          do spin = 1, 2

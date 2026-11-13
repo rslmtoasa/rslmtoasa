@@ -379,6 +379,9 @@ if(RUN_UNIT_TESTS)
   rslmto_add_test(NAME LdaULocalEnergy TIER standard LABELS lda_u nsp34 TIMEOUT 1200
     COMMAND "${PY}" "${TestDIR}/ldau/test_local_energy_u.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/local_energy")
+  rslmto_add_test(NAME LdaUClusterEnergy TIER standard LABELS lda_u nsp34 TIMEOUT 1800
+    COMMAND "${PY}" "${TestDIR}/ldau/test_cluster_energy_u.py" "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/cluster_energy")
   rslmto_add_test(NAME LdaUImpurityNsp3 TIER standard LABELS lda_u nsp34 TIMEOUT 1200
     COMMAND "${PY}" "${TestDIR}/ldau/test_impurity_nsp3_u.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/impurity_nsp3")
