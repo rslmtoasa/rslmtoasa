@@ -11,7 +11,7 @@ This tutorial covers the following tasks:
 5. Generate RS-LMTO-ASA inputs from a Co2FeSi CIF file, automate exchange calculations, and export the results to UppASD.
 6. Set up and converge a material of your choice from a CIF file.
 
-[Launch the Codespace](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows).
+[Launch the Codespace](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/belem-26).
 
 ## Practical details
 
