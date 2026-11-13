@@ -104,7 +104,8 @@ Once the bcc Fe calculation has converged to an accepted residual, generate the 
 ```
 plot_dos.py
 ```
-and inspect the images created in the current folder. What does the total DOS look like? What about the spin-projected DOS?
+and inspect the PNG images in the `plots/` subdirectory. What does the total
+DOS look like? What about the spin-projected DOS?
 
 Next, copy the converged potential and input files to a new directory and move to that directory
 
