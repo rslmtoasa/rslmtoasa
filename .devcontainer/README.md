@@ -4,10 +4,10 @@ Follow the [primary tutorial](../docs/rs-tutorial.md) for the current Fe, Si,
 NiMnSb, and Co2FeSi exercises. The [alternative two-hour tutorial](../docs/tutorial-alternative-workflows.md)
 is retained as a reference for the older MnTe workshop workflow.
 
-[Open the tutorial in Codespaces](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows)
+[Open the tutorial in Codespaces](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/belem-26)
 
 Sign in with your own GitHub account. Check that the branch is
-`tutorial/alternative-workflows`, choose the 2-core machine, and create your codespace.
+`tutorial/belem-26`, choose the 2-core machine, and create your codespace.
 Each student gets an independent environment and uses their own available
 personal Codespaces allowance. Check the billing owner before creating it.
 Initial setup downloads the environment and compiles the code; allow several

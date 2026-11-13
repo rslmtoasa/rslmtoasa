@@ -11,7 +11,7 @@ This alternative follows five tasks: (1) bcc Fe SCF, (2) periodic Si with
 (3) Fe exchange from task 1, (4) Mn-only exchange in multisublattice MnTe,
 and (5) export to UppASD using RS-utils.
 
-[Launch the alternative Codespace](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows).
+[Launch the alternative Codespace](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/belem-26).
 The code basis is `main_rc` at `d11823829ac678e9c0a862c2e7099e54a8b4e11e`;
 this branch adds the environment and tutorial files. The original `main`-based
 tutorial remains separate. **KS below means reciprocal/k-space evaluation of
