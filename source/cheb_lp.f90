@@ -108,10 +108,10 @@ contains
       integer, intent(in) :: n_known
       integer, intent(out) :: n_rank, n_unstable
       real(rp), intent(out) :: lam_max, fit_res, imag_max, unstable_weight
-      integer :: nb, nb2, nch, p, nlo, nwin, n_ext, c, i, j, k, info, lwork
+      integer :: nb, nb2, nch, p, nlo, n_ext, i, j, k, info, lwork
       integer, allocatable :: ipiv(:)
       real(rp) :: smax, ynorm, rnorm
-      real(rp), allocatable :: xr(:, :), amat(:, :), yv(:), rr(:, :), rv(:), ev(:), t(:), a(:)
+      real(rp), allocatable :: xr(:, :), tg(:, :), dd(:, :), gg(:, :), rr(:, :), rcopy(:, :), rv(:), ev(:), t(:), a(:)
       real(rp), allocatable :: comp(:, :), wr(:), wi(:), vr(:, :), work(:), outc(:), amp(:)
       logical, allocatable :: unst(:)
       complex(rp), allocatable :: vc(:, :), bm(:, :), lam(:), v1(:), lamk(:), cv(:), oc(:)
@@ -123,7 +123,6 @@ contains
       n_ext = size(mu, 3)
       p = n_known/p_div
       nlo = n_known/nlo_div
-      nwin = n_known - nlo
       if (p < 2 .or. n_ext <= n_known .or. nlo < p) &
          call g_logger%fatal('cheb_lp_extend: need n_known >= 8 and size(mu,3) > n_known', __FILE__, __LINE__)
 
@@ -131,17 +130,32 @@ contains
       allocate (xr(n_known, nch))
       call load_channels()
 
-      ! Normal equations R a = -r accumulated over channels and window.
-      allocate (amat(nwin, p), yv(nwin), rr(p, p), rv(p), ev(p), t(p), a(p))
-      rr = 0.0_rp
-      rv = 0.0_rp
-      ynorm = 0.0_rp
-      do c = 1, nch
-         call fill_window(c)
-         call dsyrk('U', 'T', p, nwin, 1.0_rp, amat, nwin, 1.0_rp, rr, p)
-         call dgemv('T', nwin, p, 1.0_rp, amat, nwin, yv, 1, 1.0_rp, rv, 1)
-         ynorm = ynorm + sum(yv**2)
+      ! Normal equations R a = -r over all channels and the window, from the lag Gram matrix T(a,b) = sum_c x_c(a) x_c(b)
+      ! (positions a, b = 1..n_known). The window sums are differences along the diagonals of T:
+      !   G(i,j) = sum_c sum_{n=nlo+1}^{n_known} x_c(n-i) x_c(n-j) = D(n_known-i, n_known-j) - D(nlo-i, nlo-j),
+      !   D(a,b) = T(a,b) + D(a-1,b-1), D = 0 for a = 0 or b = 0.
+      ! Then R(i,j) = G(i,j), r(i) = G(i,0) (i,j = 1..p), |y|^2 = G(0,0), and the fit residual is |y|^2 + 2 a.r + a.R.a.
+      allocate (tg(n_known, n_known), dd(0:n_known, 0:n_known), gg(0:p, 0:p))
+      call dsyrk('U', 'N', n_known, nch, 1.0_rp, xr, n_known, 0.0_rp, tg, n_known)
+      dd = 0.0_rp
+      do j = 1, n_known
+         do i = 1, j
+            dd(i, j) = tg(i, j) + dd(i - 1, j - 1)
+         end do
       end do
+      do j = 0, p
+         do i = j, p
+            gg(i, j) = dd(n_known - i, n_known - j) - dd(nlo - i, nlo - j)
+            gg(j, i) = gg(i, j)
+         end do
+      end do
+      deallocate (tg, dd)
+      allocate (rr(p, p), rcopy(p, p), rv(p), ev(p), t(p), a(p))
+      rr = gg(1:p, 1:p)
+      rcopy = rr
+      rv = gg(1:p, 0)
+      ynorm = gg(0, 0)
+      deallocate (gg)
       if (ynorm == 0.0_rp) then
          mu(:, :, n_known + 1:) = (0.0_rp, 0.0_rp)
          n_rank = 0; n_unstable = 0; lam_max = 0.0_rp; fit_res = 0.0_rp; imag_max = 0.0_rp; unstable_weight = 0.0_rp
@@ -163,13 +177,9 @@ contains
       end where
       call dgemv('N', p, p, -1.0_rp, rr, p, t, 1, 0.0_rp, a, 1)
 
-      rnorm = 0.0_rp
-      do c = 1, nch
-         call fill_window(c)
-         call dgemv('N', nwin, p, 1.0_rp, amat, nwin, a, 1, 1.0_rp, yv, 1)
-         rnorm = rnorm + sum(yv**2)
-      end do
-      fit_res = sqrt(rnorm/ynorm)
+      call dgemv('N', p, p, 1.0_rp, rcopy, p, a, 1, 0.0_rp, t, 1)
+      rnorm = ynorm + 2.0_rp*dot_product(a, rv) + dot_product(a, t)
+      fit_res = sqrt(max(rnorm, 0.0_rp)/ynorm)
 
       ! Companion matrix, eigenpairs, stabilization (drop |lambda| >= 1).
       allocate (comp(p, p), wr(p), wi(p), vr(p, p), vc(p, p), lam(p))
@@ -238,16 +248,6 @@ contains
             end do
          end do
       end subroutine load_channels
-
-      !> Regressors x(n-i), i=1..p, and target x(n) for n = n_lo..n_known-1 of channel c.
-      subroutine fill_window(ch)
-         integer, intent(in) :: ch
-         integer :: ii
-         do ii = 1, p
-            amat(:, ii) = xr(nlo - ii + 1:n_known - ii, ch)
-         end do
-         yv = xr(nlo + 1:n_known, ch)
-      end subroutine fill_window
 
    end subroutine cheb_lp_extend
 
