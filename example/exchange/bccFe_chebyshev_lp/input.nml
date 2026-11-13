@@ -1,10 +1,11 @@
 ! bcc Fe exchange (J_ij) from the real-space Chebyshev pair moments with linear prediction (LP).
 ! Based on tests/regression/triad_bccFe_exchange, with a third neighbour shell added (pair 1,235).
 ! lld = 150 gives 302 computed moments per pair slot;
-! cheb_lp = .true. extends them to cheb_lp_factor*302 before the Jackson-damped reconstruction.
-! Memory: mu_n + mu_ng take about 12.5 MB per slot at factor 4, and there are 4 slots per pair
-! (the log prints the total). Compare with cheb_lp = .false. and with lld = 603 (the reference
-! of the same moment count).
+! cheb_lp = .true. extends them to cheb_lp_factor*302 = 604 before the Jackson-damped reconstruction.
+! Memory: mu_n + mu_ng take about 6.3 MB per slot at factor 2, and there are 4 slots per pair
+! (12 slots, about 75 MB in total; the log prints the real number).
+! Compare with cheb_lp = .false. and with lld = 301 (the reference of the same moment count:
+! 2*(150+1)-1 = 301 gives 604 moments).
 &calculation
 post_processing = 'exchange'
 gf_route = 'recursion'
@@ -49,7 +50,7 @@ nsp = 2
 lld = 150
 recur = 'chebyshev'
 cheb_lp = .true.
-cheb_lp_factor = 4
+cheb_lp_factor = 2
 /
 &mix
 beta = 0.1

@@ -1,7 +1,7 @@
 ! bcc Fe, real-space Chebyshev recursion with linear prediction (LP) of the moments.
 ! Same system as example/bulk/bccFe (block recursion). The Chebyshev window must cover the whole
 ! spectrum of H (energy_min/energy_max below), unlike the Haydock window of the block example.
-! lld = 150 gives 302 computed moments; cheb_lp = .true. extends them to cheb_lp_factor*302 = 1208
+! lld = 150 gives 302 computed moments; cheb_lp = .true. extends them to cheb_lp_factor*302 = 604
 ! before the Jackson-damped reconstruction. Set cheb_lp = .false. for the plain Chebyshev run.
 ! The log has one 'Chebyshev LP atom ...' line per atom (order p, rank, unstable roots with the
 ! share of mode amplitude they carry, largest |lambda|, fit residual) and the memory of the moments.
@@ -37,7 +37,7 @@ nsp = 2
 lld = 150
 recur = 'chebyshev'
 cheb_lp = .true.
-cheb_lp_factor = 4
+cheb_lp_factor = 2
 /
 &mix
 beta = 0.01
