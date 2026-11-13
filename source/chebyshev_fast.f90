@@ -1410,11 +1410,13 @@ contains
    !> per atom; Jackson kernel in the exact bands.f90 convention.
    !> mu : (nb, nb, n_mom, natoms) local slice; ene: (nv) inside the window
    !> g0 : (nb, nb, nv, natoms) out;  a, b from resolve_chebyshev_window
-   subroutine cheb_green_fast(mu, nb, n_mom, natoms, ene, nv, a, b, g0)
+   subroutine cheb_green_fast(mu, nb, n_mom, natoms, ene, nv, a, b, g0, damping)
       integer, intent(in) :: nb, n_mom, natoms, nv
       complex(rp), intent(in) :: mu(nb, nb, n_mom, natoms)
       real(rp), intent(in) :: ene(nv), a, b
       complex(rp), intent(out) :: g0(nb, nb, nv, natoms)
+      !> Damping kernel g_n (n = 0..n_mom-1) replacing the Jackson factor when present.
+      real(rp), intent(in), optional :: damping(:)
       complex(sp), allocatable :: F(:, :)
       complex(sp), allocatable :: mu_sp(:, :, :, :), g0_atom(:, :, :)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
@@ -1431,8 +1433,12 @@ contains
          pref = 1.0_rp/sqrt(a*a - (ene(ie) - b)**2)
          do i = 1, n_mom                       ! i-1 = Chebyshev order
             thl = pi*real(i - 1, rp)/(n_mom + 1.0_rp)
-            gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot) &
-                 /(n_mom + 1.0_rp)             ! Jackson, bands.f90 convention
+            if (present(damping)) then
+               gj = damping(i)
+            else
+               gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot) &
+                    /(n_mom + 1.0_rp)          ! Jackson, bands.f90 convention
+            end if
             cc = merge(1.0_rp, 2.0_rp, i == 1)
             ang = real(i - 1, rp)*th           ! (-i) e^{-i ang}
             F(i, ie) = cmplx(gj*cc*pref, 0.0_rp, sp)*cmplx(-sin(ang), -cos(ang), sp)
@@ -1449,11 +1455,13 @@ contains
    end subroutine cheb_green_fast
 
    !> Double-precision counterpart of cheb_green_fast: the same Jackson-damped sum, evaluated with zgemm.
-   subroutine cheb_green_dp(mu, nb, n_mom, natoms, ene, nv, a, b, g0)
+   subroutine cheb_green_dp(mu, nb, n_mom, natoms, ene, nv, a, b, g0, damping)
       integer, intent(in) :: nb, n_mom, natoms, nv
       complex(rp), intent(in) :: mu(nb, nb, n_mom, natoms)
       real(rp), intent(in) :: ene(nv), a, b
       complex(rp), intent(out) :: g0(nb, nb, nv, natoms)
+      !> Damping kernel g_n (n = 0..n_mom-1) replacing the Jackson factor when present.
+      real(rp), intent(in), optional :: damping(:)
       complex(rp), allocatable :: F(:, :)
       complex(rp), parameter :: cone = (1.0_rp, 0.0_rp), czero = (0.0_rp, 0.0_rp)
       real(rp) :: th, thl, gj, cc, pref, ang, cot
@@ -1467,8 +1475,12 @@ contains
          pref = 1.0_rp/sqrt(a*a - (ene(ie) - b)**2)
          do i = 1, n_mom                       ! i-1 = Chebyshev order
             thl = pi*real(i - 1, rp)/(n_mom + 1.0_rp)
-            gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot) &
-                 /(n_mom + 1.0_rp)             ! Jackson, bands.f90 convention
+            if (present(damping)) then
+               gj = damping(i)
+            else
+               gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot) &
+                    /(n_mom + 1.0_rp)          ! Jackson, bands.f90 convention
+            end if
             cc = merge(1.0_rp, 2.0_rp, i == 1)
             ang = real(i - 1, rp)*th           ! (-i) e^{-i ang}
             F(i, ie) = cmplx(gj*cc*pref, 0.0_rp, rp)*cmplx(-sin(ang), -cos(ang), rp)
@@ -1503,12 +1515,14 @@ contains
    !> @param[in] z Complex energy, normally with positive imaginary part.
    !> @param[in] a Scaling half-width and @param[in] b scaling center.
    !> @param[out] g Green-function block at z.
-   subroutine cheb_green_complex(mu, nb, n_mom, z, a, b, g)
+   subroutine cheb_green_complex(mu, nb, n_mom, z, a, b, g, damping)
       integer, intent(in) :: nb, n_mom
       complex(rp), intent(in) :: mu(nb, nb, n_mom)
       complex(rp), intent(in) :: z
       real(rp), intent(in) :: a, b
       complex(rp), intent(out) :: g(nb, nb)
+      !> Damping kernel g_n (n = 0..n_mom-1) replacing the Jackson kernel when present.
+      real(rp), intent(in), optional :: damping(:)
       real(rp), allocatable :: kernel(:)
       complex(rp) :: theta, denominator, coefficient
       integer :: i
@@ -1516,7 +1530,11 @@ contains
       if (n_mom < 1 .or. a <= 0.0_rp) error stop 'cheb_green_complex: invalid order or scaling'
 
       allocate(kernel(n_mom))
-      call jackson_kernel(n_mom, kernel)
+      if (present(damping)) then
+         kernel = damping
+      else
+         call jackson_kernel(n_mom, kernel)
+      end if
       g = (0.0_rp, 0.0_rp)
       theta = acos((z-cmplx(b, 0.0_rp, rp))/cmplx(a, 0.0_rp, rp))
       denominator = sqrt(cmplx(a*a, 0.0_rp, rp) - (z-cmplx(b, 0.0_rp, rp))**2)
