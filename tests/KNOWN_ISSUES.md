@@ -193,6 +193,11 @@ are not tracked here; see `docs/DECISIONS.md`.
   `build_gpu` binary. Not diagnosed; suspects: MKL threading of the CUDA build, and a library mismatch in that setup (binary linked to MKL 2026.2,
   `LD_LIBRARY_PATH` at 2026.1).
 
+### Stray double comma in the `USE_SAFE_ALLOC` branch of `recursion%restore_to_default` — 2026-11-11
+- **Read:** `source/recursion_core.f90`, `g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld,, this%lattice%nrec/))` has `,,`.
+- **Verified:** `USE_SAFE_ALLOC` is not defined by any CMake file in the repository (grep over `CMakeLists.txt`, `cmake/`, `source/CMakeLists.txt`), so the branch is not compiled in the standard build.
+- **Not verified:** that the branch fails to compile when the macro is defined (no such build was made).
+
 ## Layered (`calctype = 'L'`) and surface findings
 
 ### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap

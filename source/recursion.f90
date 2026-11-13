@@ -22,6 +22,7 @@
 module recursion_mod
 
    use hamiltonian_mod
+   use cheb_lp_mod, only: cheb_lp
    use chebyshev_fast_mod, only: cheb_moments_fast, cheb_moments_fast_batched, &
       cheb_moments_fast_mkl_batch, &
       cheb_moments_fast_mkl_sparse, cheb_fast_reset_cache, &
@@ -83,6 +84,8 @@ module recursion_mod
       complex(rp), dimension(:, :, :, :), allocatable :: ee_ccor_work, hall_ccor_work
       !> Chebyshev moments
       complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
+      !> Linear prediction of the Chebyshev moments
+      type(cheb_lp) :: lp
       complex(rp), dimension(:, :, :, :, :), allocatable :: mu_nm_stochastic
       complex(rp), allocatable :: cheb_mom_temp(:,:)
       !> Variable to save H|psi>

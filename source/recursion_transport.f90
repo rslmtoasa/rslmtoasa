@@ -1468,10 +1468,12 @@ contains
                   this%psi0(l, l, j) = bsign
                end do
                call this%gpu_backend%chebyshev_moments(this%psi0, llmax, a, b, &
-                  this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
+                  this%mu_n(:, :, 1:2*llmax + 2, ij_loc*4 - 4 + reci))
                if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
                   call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
                end if
+               call this%lp%apply(this%mu_n(:, :, :, ij_loc*4 - 4 + reci), 2*llmax + 2, &
+                  'pair '//int2str(i)//'-'//int2str(j)//' phase '//int2str(reci))
             end do
          end do
          return
@@ -1524,11 +1526,13 @@ contains
             ! Dispatch to the selected CPU backend (fast kernels or, for hoh /
             ! cheb_backend='legacy', the wrapped legacy recursion).
             call cheb_moments_cpu(this, this%psi0, llmax, a, b, &
-               this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
+               this%mu_n(:, :, 1:2*llmax + 2, ij_loc*4 - 4 + reci))
 
             if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
                call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
             end if
+            call this%lp%apply(this%mu_n(:, :, :, ij_loc*4 - 4 + reci), 2*llmax + 2, &
+               'pair '//int2str(i)//'-'//int2str(j)//' phase '//int2str(reci))
          end do
       end do
    end subroutine chebyshev_recur_ij
