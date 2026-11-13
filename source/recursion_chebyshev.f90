@@ -787,10 +787,10 @@ contains
             end do
             call this%gpu_backend%chebyshev_moments(this%psi0, this%control%lld, a, b, &
                this%mu_n(:, :, 1:llcheb, i_loc))
-            call this%lp%apply(this%mu_n(:, :, :, i_loc), llcheb, 'atom '//int2str(j))
             call g_logger%info('CUDA Chebyshev recursion done for atom '// &
                int2str(j), __FILE__, __LINE__)
          end do
+         call extend_moments()
          return
       end if
 
@@ -809,8 +809,23 @@ contains
          ! cheb_backend='legacy', the wrapped legacy recursion).
          call cheb_moments_cpu(this, this%psi0, this%control%lld, a, b, &
             this%mu_n(:, :, 1:llcheb, i_loc))
-         call this%lp%apply(this%mu_n(:, :, :, i_loc), llcheb, 'atom '//int2str(j))
       end do ! End loop on the number of atoms to be treat self-consistently
+      call extend_moments()
+
+   contains
+
+      !> Linear prediction of the moments of every local atom (independent blocks, one thread each).
+      subroutine extend_moments()
+         integer :: ia
+
+         if (.not. this%lp%enabled) return
+         !$omp parallel do schedule(dynamic) private(ia)
+         do ia = start_atom, end_atom
+            call this%lp%apply(this%mu_n(:, :, :, g2l_map(ia)), llcheb, 'atom '//int2str(this%lattice%irec(ia)))
+         end do
+         !$omp end parallel do
+      end subroutine extend_moments
+
    end subroutine chebyshev_recur
 
 end submodule recursion_chebyshev

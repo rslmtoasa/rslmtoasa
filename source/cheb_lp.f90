@@ -84,10 +84,12 @@ contains
 
       if (.not. this%enabled) return
       call cheb_lp_extend(mu, n_known, n_rank, n_unstable, lam_max, fit_res, imag_max, unstable_weight)
+      !$omp critical (cheb_lp_log)
       call g_logger%info('Chebyshev LP '//label//': p='//int2str(n_known/p_div)//' rank='//int2str(n_rank)// &
                          ' unstable='//int2str(n_unstable)//' (weight '//real2str(unstable_weight, '(f6.3)')//') lam_max='//real2str(lam_max, '(f9.6)')// &
                          ' fit_res='//real2str(fit_res, '(es9.2)')//' imag='//real2str(imag_max, '(es9.2)'), &
                          __FILE__, __LINE__)
+      !$omp end critical (cheb_lp_log)
    end subroutine apply
 
    !> @brief Extend the moments mu(:,:,n_known+1:) by linear prediction.

@@ -1472,10 +1472,9 @@ contains
                if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
                   call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
                end if
-               call this%lp%apply(this%mu_n(:, :, :, ij_loc*4 - 4 + reci), 2*llmax + 2, &
-                  'pair '//int2str(i)//'-'//int2str(j)//' phase '//int2str(reci))
             end do
          end do
+         call extend_moments()
          return
       end if
 
@@ -1531,10 +1530,30 @@ contains
             if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
                call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
             end if
-            call this%lp%apply(this%mu_n(:, :, :, ij_loc*4 - 4 + reci), 2*llmax + 2, &
-               'pair '//int2str(i)//'-'//int2str(j)//' phase '//int2str(reci))
          end do
       end do
+      call extend_moments()
+
+   contains
+
+      !> Linear prediction of the moments of every local pair slot (independent blocks, one thread each).
+      !> The self pairs (i == j) only fill the first of their four slots.
+      subroutine extend_moments()
+         integer :: ipair, ia, ib, ph
+
+         if (.not. this%lp%enabled) return
+         !$omp parallel do schedule(dynamic) private(ipair, ia, ib, ph)
+         do ipair = 0, 4*(end_atom - start_atom + 1) - 1
+            ia = start_atom + ipair/4
+            ph = mod(ipair, 4) + 1
+            if (this%lattice%ijpair(ia, 1) == this%lattice%ijpair(ia, 2) .and. ph > 1) cycle
+            ib = g2l_map(ia)*4 - 4 + ph
+            call this%lp%apply(this%mu_n(:, :, :, ib), 2*llmax + 2, 'pair '//int2str(this%lattice%ijpair(ia, 1))// &
+                               '-'//int2str(this%lattice%ijpair(ia, 2))//' phase '//int2str(ph))
+         end do
+         !$omp end parallel do
+      end subroutine extend_moments
+
    end subroutine chebyshev_recur_ij
 
    !> @brief Compute Chebyshev orbital-moment response data.

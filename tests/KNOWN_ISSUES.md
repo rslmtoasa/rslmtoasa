@@ -198,6 +198,17 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Verified:** `USE_SAFE_ALLOC` is not defined by any CMake file in the repository (grep over `CMakeLists.txt`, `cmake/`, `source/CMakeLists.txt`), so the branch is not compiled in the standard build.
 - **Not verified:** that the branch fails to compile when the macro is defined (no such build was made).
 
+### GPU branch of `chebyshev_green_core` indexes with the global atom range — 2026-11-13
+- **Read:** `source/green_chebyshev.f90`, `do_gpu` branch of `chebyshev_green_core`: `gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), ..., this%g0(:, :, 1:nv, start_atom:end_atom))` uses the global `start_atom:end_atom`, while every CPU route indexes `mu_n` and `g0` with `g2l_map` (local indices; `g0` is sized `atoms_per_process`).
+- **Verified:** the CPU branch passes `mu_n(:,:,:,1:n_local)`; the two agree for one rank.
+- **Not verified:** that the GPU call is wrong for MPI rank > 0 with the GPU plugin (no GPU in the test container; never run).
+- **Proposal:** use the local range; about 2 lines.
+
+### Persistent `mu_ng` removed; legacy readers remain — 2026-11-13
+- **Verified:** `recursion%mu_ng` is no longer allocated. The only readers are `density_of_states.f90` (the `chebyshev_dos` routines; no callers found by grep) and `bands.f90` `calculate_moments_chebgauss` (its only call in `calculation.f90` is commented out).
+- **Not verified:** nothing else was checked beyond the grep over `source/`.
+- **Proposal:** delete those two legacy routines in a separate task.
+
 ## Layered (`calctype = 'L'`) and surface findings
 
 ### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap

@@ -83,7 +83,9 @@ module recursion_mod
       !> Cached full first-order operator blocks for no-hoh fast/GPU CCOR paths
       complex(rp), dimension(:, :, :, :), allocatable :: ee_ccor_work, hall_ccor_work
       !> Chebyshev moments
-      complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
+      complex(rp), dimension(:, :, :, :), allocatable :: mu_n
+      !> Kernel-weighted moments of the legacy routines in density_of_states.f90 (no callers); never allocated.
+      complex(rp), dimension(:, :, :, :), allocatable :: mu_ng
       !> Linear prediction of the Chebyshev moments
       type(cheb_lp) :: lp
       complex(rp), dimension(:, :, :, :, :), allocatable :: mu_nm_stochastic
