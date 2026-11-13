@@ -112,30 +112,28 @@ C5 impurity radial-moment mode
 
 .. note::
 
-   ``hubbard_radial_moments='auto'`` now always resolves to ``spectral``, the standard LDA+U construction
-   (moments of the Green function of the full H = H_LDA + V_U), which also works with ``hoh``, ``ccor_2c``,
-   impurities and surfaces. ``local`` (moments of the LDA part only, V_U's own contribution removed; not the
-   standard construction) is an explicit opt-in: set ``hubbard_radial_moments = 'local'`` in ``&hamiltonian``.
-   It is the only route with the routed total energy, for the bulk and for impurity and surface clusters (cluster sites only, host types excluded), with or without ``hoh``.
-   The sections below that say ``auto`` selects ``local`` describe the rule before 2026-11-07; the same
-   scope and host-provenance conditions apply when ``local`` is requested explicitly.
+   ``hubbard_radial_moments='auto'`` (the default) resolves to ``local`` when a nonzero fixed U/J is given and ``local``
+   is implemented for the input, and to ``spectral`` otherwise (always without U, where the mode makes no difference).
+   ``local`` takes the moments of the LDA part only, with V_U's own contribution removed, and is the only route with the
+   routed total energy, for the bulk and for impurity and surface clusters (cluster sites only, host types excluded), with or
+   without ``hoh``. ``spectral`` takes the moments of the Green function of the full H = H_LDA + V_U. An explicit
+   ``spectral`` or ``local`` is never changed. Inputs that ``local`` does not implement (``lmax`` other than 2, a
+   non-Liechtenstein form, self-consistent U, intersite V, SOC at ``nsp=1`` or 3, ``hoh`` on a cluster outside the spinor
+   routes) run in ``spectral`` and the ``HUBBARD_RUN`` log line gives the reason in ``radial_reason``; an explicit ``local``
+   stops with that message.
 
-For fixed Liechtenstein U/J in the supported scalar-collinear d-shell scope,
-``hubbard_radial_moments='auto'`` selects ``local`` for an RS impurity only
-when every U-carrying frozen host potential records ``local`` mode. This
-applies to both an RS-local host feeding an RS impurity and a KS-local bulk
-host feeding an RS impurity. Impurity U/J may be supplied through the general
-``hubbard_u_general``/``hubbard_j_general`` fields or through the
-``hubbard_u_impurity``/``hubbard_j_impurity`` override fields. The selected
-radial mode is independent of the host's electronic-structure backend.
+   A potential or frozen host written in the other mode is accepted: its density matrix is reset (the first Green
+   function provides it) and a warning is logged, so a run can move from ``spectral`` to ``local`` and back. A frozen host
+   reset this way is not self-consistent in the run mode: regenerate it for quantitative results. A host without a recorded
+   mode is accepted as is, with a warning.
 
-If any U-carrying frozen host records ``spectral`` mode, or lacks mode
-provenance, ``auto`` selects ``spectral`` and logs the reason. A legacy host
-without ``hubbard_radial_moments`` has unknown mode; it is treated as
-``spectral`` and emits a warning asking the user to restart the host once with
-the current version so its mode is recorded. Updated impurity potentials are
-written with the run's selected mode and backend. A forced explicit
-``spectral`` choice remains spectral.
+For an RS impurity, ``hubbard_radial_moments='auto'`` follows the rule above: ``local`` with a nonzero fixed U/J where
+it is implemented. Impurity U/J may be supplied through the general ``hubbard_u_general``/``hubbard_j_general`` fields or
+through the ``hubbard_u_impurity``/``hubbard_j_impurity`` override fields. The selected radial mode is independent of the
+host's electronic-structure backend. A frozen host that records the other mode has its density matrix reset with a
+warning; a legacy host without ``hubbard_radial_moments`` has unknown mode and is accepted as is, with a warning asking
+the user to restart the host once with the current version so its mode is recorded. Updated impurity potentials are
+written with the run's selected mode and backend.
 
 For impurity decks, copy a working deck, then set ``fermi`` and the energy
 window to the host endpoint values before launch. The C5.4 preflight compares
@@ -156,14 +154,10 @@ through one complete iteration. See the C5 records in
 C6 surface density-only mode
 -----------------------------
 
-For ``calctype='S'`` in the same supported fixed Liechtenstein, scalar-collinear
-d-shell scope, ``hubbard_radial_moments='auto'`` selects ``local`` when every
-U-carrying frozen host potential records ``local`` mode. This applies to an
-RS-local or KS-local bulk host. The surface recursion layers remain the active
-surface density sites; the host mode is resolved from the frozen-host ownership
-map. A legacy U-carrying host with missing mode provenance is treated as
-``spectral`` and does not qualify for automatic local mode. Explicit
-``spectral`` remains available.
+For ``calctype='S'``, ``hubbard_radial_moments='auto'`` follows the same rule: ``local`` with a nonzero fixed U/J where it is
+implemented, ``spectral`` otherwise. The surface recursion layers remain the active surface density sites; the host mode is
+resolved from the frozen-host ownership map, and a host that records the other mode is handled as for an impurity.
+Explicit ``spectral`` remains available.
 
 To prepare a surface deck, copy an existing surface fixture. Replace only the
 frozen host potential with the accepted local host potential, set U/J, and set

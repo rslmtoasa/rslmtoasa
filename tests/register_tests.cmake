@@ -388,6 +388,9 @@ if(RUN_UNIT_TESTS)
   rslmto_add_test(NAME LdaUHohEnergy TIER standard LABELS lda_u nsp34 TIMEOUT 1800
     COMMAND "${PY}" "${TestDIR}/ldau/test_hoh_energy_u.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/hoh_energy")
+  rslmto_add_test(NAME LdaUDefaultRadial TIER standard LABELS lda_u nsp34 TIMEOUT 1200
+    COMMAND "${PY}" "${TestDIR}/ldau/test_default_radial_u.py" "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/default_radial")
   rslmto_add_test(NAME LdaUImpurityNsp3 TIER standard LABELS lda_u nsp34 TIMEOUT 1200
     COMMAND "${PY}" "${TestDIR}/ldau/test_impurity_nsp3_u.py" "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/impurity_nsp3")

@@ -140,13 +140,10 @@ Located in ``example/`` directory:
 ``example/impurity/`` - Single impurity in bulk host
 
 
-C5 status: impurity radial mode selection remains explicit; ``auto`` has not
-been adopted for impurity runs. Selecting ``local`` for an impurity affects
-local-moment evaluation only. The impurity energy does not currently route an
-added Hubbard term. RD2 failed, and RD4 has no measured energy derivative, so
-no energy-routing or default change is supported. The RD5 no-U RS/KS byte
-identity checks passed; explicit-spectral identity and ``auto`` checks remain
-unrun. See
+C5 status: ``hubbard_radial_moments='auto'`` resolves to ``local`` for an impurity with a nonzero fixed U/J where ``local`` is
+implemented (see ``docs/source/theory/lda_u_workflow.rst``); an explicit ``spectral`` or ``local`` is never changed. A frozen
+host written in the other mode has its density matrix reset with a warning. The RD5 no-U RS/KS byte identity checks passed;
+the impurity energy routing is described in the same page. See
 ``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md``.
 
 **Exchange interactions:**
