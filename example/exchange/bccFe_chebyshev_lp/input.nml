@@ -1,0 +1,57 @@
+! bcc Fe exchange (J_ij) from the real-space Chebyshev pair moments with linear prediction (LP).
+! Based on tests/regression/triad_bccFe_exchange, with a third neighbour shell added (pair 1,235).
+! lld = 150 gives 302 computed moments per pair slot;
+! cheb_lp = .true. extends them to cheb_lp_factor*302 before the Jackson-damped reconstruction.
+! Memory: mu_n + mu_ng take about 12.5 MB per slot at factor 4, and there are 4 slots per pair
+! (the log prints the total). Compare with cheb_lp = .false. and with lld = 603 (the reference
+! of the same moment count).
+&calculation
+post_processing = 'exchange'
+gf_route = 'recursion'
+verbose = T
+/
+&lattice
+ndim = 50000
+rc = 080
+alat = 2.86120
+crystal_sym = 'bcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+! First, second and third neighbour shells of atom 1 at (0,0,0): atom 335 at a distance of 0.866 a,
+! atom 336 at 1.0 a and atom 235 at 1.414 a.
+njij = 3
+ijpair(1, :) = 1, 335
+ijpair(2, :) = 1, 336
+ijpair(3, :) = 1, 235
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&energy
+fermi = -0.069291
+energy_min = -1.2
+energy_max = 1.2
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 2
+lld = 150
+recur = 'chebyshev'
+cheb_lp = .true.
+cheb_lp_factor = 4
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
