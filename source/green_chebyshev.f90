@@ -390,6 +390,12 @@ contains
    !> Work in each orbital's spin block so the total DOS, spin-resolved DOS,
    !> and the charge/moment integrations all consume the same physical density.
    !> Eta-shifted and intersite Green functions are intentionally excluded.
+   !> With cheb_lp the clipped weight is taken out again: each atom, orbital and
+   !> spin channel is rescaled so that its integrated weight equals the weight
+   !> before the projection (the coherence by the geometric mean of the two
+   !> factors, which keeps the 2x2 block positive semidefinite). The extended
+   !> moments fix the zeroth moment, so the clipping would otherwise add charge
+   !> and move the Fermi level.
    subroutine enforce_chebyshev_spectral_positivity(this, nv)
       class(green), intent(inout) :: this
       integer, intent(in) :: nv
@@ -397,11 +403,18 @@ contains
       real(rp) :: a_uu, a_dd, a_uu_before, a_dd_before, max_adjustment
       complex(rp) :: a_ud, a_ud_before, guu, gdd, gud, gdu, h_ud
       logical :: corrected
+      real(rp), dimension(norb) :: dq_uu, dq_dd, q_uu, q_dd, s_uu, s_dd
+      real(rp) :: s_ud, max_rescale
 
       corrections = 0
       max_adjustment = 0.0_rp
+      max_rescale = 0.0_rp
       do n_glob = start_atom, end_atom
          n = g2l_map(n_glob)
+         dq_uu = 0.0_rp
+         dq_dd = 0.0_rp
+         q_uu = 0.0_rp
+         q_dd = 0.0_rp
          do ie = 1, nv
             do orbital = 1, norb
                guu = this%g0(orbital, orbital, ie, n)
@@ -416,8 +429,12 @@ contains
                a_dd_before = a_dd
                a_ud_before = a_ud
                call project_spectral_density_2x2(a_uu, a_ud, a_dd, corrected)
+               q_uu(orbital) = q_uu(orbital) + a_uu
+               q_dd(orbital) = q_dd(orbital) + a_dd
                if (.not. corrected) cycle
 
+               dq_uu(orbital) = dq_uu(orbital) + a_uu - a_uu_before
+               dq_dd(orbital) = dq_dd(orbital) + a_dd - a_dd_before
                corrections = corrections + 1
                max_adjustment = max(max_adjustment, abs(a_uu - a_uu_before), &
                                     abs(a_dd - a_dd_before), abs(a_ud - a_ud_before))
@@ -432,11 +449,37 @@ contains
                this%g0(orbital + spin_off, orbital, ie, n) = conjg(h_ud) - i_unit*pi*conjg(a_ud)
             end do
          end do
+
+         if (this%recursion%lp%enabled) then
+            s_uu = 1.0_rp
+            s_dd = 1.0_rp
+            do orbital = 1, norb
+               if (q_uu(orbital) > 0.0_rp) s_uu(orbital) = 1.0_rp - dq_uu(orbital)/q_uu(orbital)
+               if (q_dd(orbital) > 0.0_rp) s_dd(orbital) = 1.0_rp - dq_dd(orbital)/q_dd(orbital)
+            end do
+            max_rescale = max(max_rescale, maxval(abs(1.0_rp - s_uu)), maxval(abs(1.0_rp - s_dd)))
+            do ie = 1, nv
+               do orbital = 1, norb
+                  s_ud = sqrt(s_uu(orbital)*s_dd(orbital))
+                  guu = this%g0(orbital, orbital, ie, n)
+                  gdd = this%g0(orbital + spin_off, orbital + spin_off, ie, n)
+                  gud = this%g0(orbital, orbital + spin_off, ie, n)
+                  gdu = this%g0(orbital + spin_off, orbital, ie, n)
+                  h_ud = 0.5_rp*(gud + conjg(gdu))
+                  this%g0(orbital, orbital, ie, n) = cmplx(real(guu, rp), s_uu(orbital)*aimag(guu), rp)
+                  this%g0(orbital + spin_off, orbital + spin_off, ie, n) = cmplx(real(gdd, rp), s_dd(orbital)*aimag(gdd), rp)
+                  this%g0(orbital, orbital + spin_off, ie, n) = h_ud + s_ud*(gud - h_ud)
+                  this%g0(orbital + spin_off, orbital, ie, n) = conjg(h_ud) + s_ud*(gdu - conjg(h_ud))
+               end do
+            end do
+         end if
       end do
 
       if (corrections > 0) then
          call g_logger%info('Chebyshev spectral positivity projection: local_blocks='// &
             fmt('i0', corrections)//' max_adjustment='//fmt('e12.4', max_adjustment), __FILE__, __LINE__)
+         if (this%recursion%lp%enabled) call g_logger%info('Chebyshev LP charge-conserving rescale: max|1-s|='// &
+            fmt('e12.4', max_rescale), __FILE__, __LINE__)
       end if
    end subroutine enforce_chebyshev_spectral_positivity
 
