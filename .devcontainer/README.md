@@ -1,6 +1,8 @@
-# Run the alternative RS-LMTO-ASA tutorial in Codespaces
+# Start the RS-LMTO-ASA tutorial in Codespaces
 
-See the [alternative two-hour tutorial](../docs/tutorial-alternative-workflows.md) for Fe, Si, MnTe pair selection, and UppASD export.
+Follow the [primary tutorial](../docs/rs-tutorial.md) for the current Fe, Si,
+NiMnSb, and Co2FeSi exercises. The [alternative two-hour tutorial](../docs/tutorial-alternative-workflows.md)
+is retained as a reference for the older MnTe workshop workflow.
 
 [Open the tutorial in Codespaces](https://codespaces.new/rslmtoasa/rslmtoasa/tree/tutorial/alternative-workflows)
 

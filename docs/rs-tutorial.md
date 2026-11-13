@@ -36,7 +36,8 @@ exists, choose a new filename with, for example,
 Click a file in the Codespaces explorer to open its text editor. Change the
 entries **inside their existing namelist sections**, then save with **Ctrl+S**
 (**Cmd+S** on macOS). Add missing entries before that section's terminating
-`/`. Do not append a second `&self`, `&control`, or `&lattice` section.
+`/`. If a namelist section is missing, add it once. Do not duplicate an
+existing `&self`, `&control`, `&lattice`, or `&reciprocal` section.
 
 The lesson uses the editor for all input changes. Terminal commands copy
 working files, run the solver, and invoke plotting or other tools.
@@ -136,21 +137,42 @@ If you want, you can test several different choices of `lld` or even the cluster
 
 ### A) Convergence to self-consistent solution
 
-Copy the starting fixture into a working directory and move into it.
+Copy the supplied Si tutorial deck into a working directory and move into it.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 mkdir -p runs/silicon
-cp -r tests/scf/cases/bulk/diamondSi runs/silicon/scf
+cp -r tutorials/diamondSi runs/silicon/scf
 cd runs/silicon/scf
 ```
 
-Open **`runs/silicon/scf/input.nml`** and investigate the inputs. 
-What looks different from bcc Fe?
+Open **`runs/silicon/scf/input.nml`** and investigate the inputs. What looks
+different from bcc Fe? The tutorial deck uses Chebyshev recursion with
+`lld = 200` and `nstep = 20`.
 
-This system uses the Chebyshev method instead of block recursion since we expect Si to be non-metallic. The Chebyshev method needs a larger number of recursion levels `lld`. 
+This system uses the Chebyshev method instead of block recursion because Si is
+non-metallic. Chebyshev calculations need more recursion levels (`lld`).
 
-Converge the system as you did for bcc Fe. How many iterations were needed?
+In the existing `&self` section, set `conv_thr = 5.0d-8` and keep `nstep = 20`
+as the iteration cap. Save a copy of the input before running:
+
+```bash
+cp input.nml input.initial.nml
+rslmto.x input.nml > run.log 2>&1
+```
+
+Inspect `run.log`, `report.out`, and the generated `Si1_out.nml` and
+`Si2_out.nml` checkpoint files. As for Fe, accept the run only if the log explicitly says
+`Converged!` with a residual below `5e-8`; reaching the iteration cap or
+returning exit code zero is not sufficient. If it has not converged, allow one
+further block from the saved checkpoint by rerunning:
+
+```bash
+rslmto.x input.nml > restart.log 2>&1
+```
+
+Check the convergence criterion again before continuing. How many iterations
+were needed?
 
 
 ### B) Effect of number of Chebyshev polynomials
@@ -165,23 +187,56 @@ cp Si2_out.nml ../dos-comparison/Si2.nml
 cd ../dos-comparison
 ```
 
+In the copied `input.nml`, set `nstep = 1` and change `lld` to compare the
+number of Chebyshev polynomials while holding the converged potentials fixed.
 Investigate the effect `lld` has on the DOS for Si.
 
 ### C) Comparison with k-space DOS
 
-Copy the starting Si files to a new directory:
+Copy the supplied Si tutorial deck to a new directory:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 mkdir -p runs/kspace-si
-cp -r tests/scf/cases/bulk/diamondSi runs/kspace-si/scf
+cp -r tutorials/diamondSi runs/kspace-si/scf
 cd runs/kspace-si/scf
 ```
 
-and open `input.nml` in the new directory. In the `%self` namelist, add the line `use_kspace = .true.` and change `nstep` to `100`. Then run the calculation and generate the DOS plots. 
+Open `input.nml` in the new directory. In `&self`, add
+`use_kspace = .true.`, set `nstep = 20`, and set `conv_thr = 5.0d-8`. Add the
+following `&reciprocal` section, or edit the existing section if one is already
+present:
+
+```fortran
+&reciprocal
+nk1 = 12
+nk2 = 12
+nk3 = 12
+use_symmetry_reduction = .false.
+use_time_reversal = .true.
+use_shift = .false.
+n_energy_points = 1000
+dos_method = 'tetrahedron'
+kspace_ham_order = 'first'
+/
+```
+
+This fixes the mesh at 12 × 12 × 12 and uses the linear tetrahedron method. Save `input.nml` and perform the calculation.
+
+```bash
+rslmto.x input.nml > run.log 2>&1
+```
+
+Check for `Converged!` below the `5e-8` residual threshold, as in the Si
+Chebyshev run. If needed, allow one restart block from the saved checkpoint:
+
+```bash
+rslmto.x input.nml > restart.log 2>&1
+```
+
+Once converged, generate the DOS with `plot_dos.py`.
 
 How does the DOS differ from the Chebyshev DOS?
-
 
 ## 3. Fe exchange interactions
 
@@ -229,12 +284,13 @@ Check the results in the `jijso.out` file. Here, columns 1–2 are symbolic-type
 From the run directory, plot the actual exchange output:
 
 ```bash
-plot_exchange.py jijso.out
+plot_exchange.py jijso.out --csv jijso_selected.csv
 ```
 
-The plot shows J in meV versus distance/a, grouped by **directed symbolic-type
-pair**. CSV retains the seven source columns, including J in **mRy** and
-Cartesian displacement/a. 
+The plot shows J in **mRy** versus distance/a, grouped by **directed
+symbolic-type pair**. This command also writes `jijso_selected.csv`, which
+retains the seven source columns, including J in **mRy** and Cartesian
+displacement/a.
 
 ### Automated Jij-setup with `rsutils`
 
@@ -359,7 +415,6 @@ Now you are ready to run the code on your own. Choose a CIF file from an online 
 
 ### End of tutorial
 
-References: 
-The pinned RS-LMTO source/fixtures; RS-utils `0.11.0rc1` supplied
-source, `docs/export_submodule.rst`, `docs/notes/UppASD_format.md`, and
-`rsutil/export/uppasd.py`; [RS-utils manual](https://aibergman.github.io/RS-utils/).
+References: the RS-LMTO tutorial decks in `tutorials/`; the bundled RS-utils
+release-prep wheels ([package notes](../vendor/rsutils/README.md)); and the
+[RS-utils manual](https://aibergman.github.io/RS-utils/).

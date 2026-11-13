@@ -1,5 +1,5 @@
 {
-  "name": "RS-LMTO-ASA alternative tutorial",
+  "name": "RS-LMTO-ASA tutorial",
   "build": { "dockerfile": "Dockerfile" },
   "remoteUser": "vscode",
   "hostRequirements": { "cpus": 2, "memory": "8gb" },
@@ -16,6 +16,6 @@
     "vscode": {
       "settings": { "files.associations": { "*.nml": "fortran" } }
     },
-    "codespaces": { "openFiles": [".devcontainer/README.md"] }
+    "codespaces": { "openFiles": ["docs/rs-tutorial.md"] }
   }
 }

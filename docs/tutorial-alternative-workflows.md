@@ -1,4 +1,8 @@
-# Alternative two-hour tutorial: electronic structure to a spin model
+# Alternative reference: two-hour electronic-structure-to-spin-model workshop
+
+For the current tutorial entry point, see [RS-LMTO-ASA tutorial](rs-tutorial.md).
+This document describes the older MnTe workshop workflow and is kept as an
+alternative/reference.
 
 **Draft · `main_rc` · two-core Codespaces · Fe, Si, MnTe, and UppASD export**
 
@@ -419,7 +423,7 @@ python3 tools/tutorial/plot_exchange.py runs/alternative-fe-jij/jij.out \
     --csv runs/alternative-fe-jij/exchange.csv
 ```
 
-The plot shows J in meV versus distance/a, grouped by **directed symbolic-type
+The plot shows J in **mRy** versus distance/a, grouped by **directed symbolic-type
 pair**. CSV retains the seven source columns, including J in **mRy** and
 Cartesian displacement/a. Both endpoints must match `--types`; the script
 prints selected/excluded counts. It checks finite values, integer types, and
