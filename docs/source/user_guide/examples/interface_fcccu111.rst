@@ -475,8 +475,7 @@ This is not a surface calculation
 For the one-sided ``vacuum | active | bulk`` geometry, use
 ``pre_processing = 'buildsurf'`` (:doc:`surface_fcccu001`). ``buildsurf`` is
 untouched by the interface work and remains the permanent regression oracle
-for the surface case. ``example/surface/fccCu111/Single`` is the direct
-one-sided counterpart of the examples on this page.
+for the surface case. The (001) surface example is :doc:`surface_fcccu001`.
 
 Running the examples
 ====================

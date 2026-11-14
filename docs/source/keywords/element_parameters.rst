@@ -185,8 +185,7 @@ included in the LMTO basis.
 - These quantum numbers define which radial functions are used in the
   LMTO expansion and therefore which energy levels are included in the basis.
 - Incorrect quantum numbers give wrong band centres and potential parameters.
-- When in doubt, consult the ``source/element_data/`` directory for
-  pre-defined database values.
+- When in doubt, start from the ``example/`` deck of a similar element.
 
 Multiple Element Blocks
 =======================

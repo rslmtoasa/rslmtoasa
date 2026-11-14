@@ -195,7 +195,7 @@ select-case near line 641) writes files in the same format
 `build_from_paoflow_opt` reads — `export='python'` produces
 `<base>_paoham.dat` in exactly the legacy7 layout. This is how
 `tests/postproc/cases/paoflow/*/paoham.dat` were generated (see
-`tests/postproc/README.md` for provenance).
+`tests/postproc/README.md` at tag `archive/fable_v4b-2026-11-05` for provenance).
 
 ---
 
@@ -400,8 +400,8 @@ Every test has exactly one tier label (`quick`, `standard`, `validation`); see `
 | GBT: antiparallel cell, commensurate equivalence, symmetry relations, constrained spiral SCF and its guards | `standard`, one `quick` (`gbt;kspace`) | `tests/gbt/test_kspace_*.py` |
 | Validation scripts | `validation` | `tests/validation/*.py` |
 
-**Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for
-the full case-file format. Short version: add an `input.nml` (+ any
+**Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` (at tag
+`archive/fable_v4b-2026-11-05`) for the full case-file format. Short version: add an `input.nml` (+ any
 supporting data files) under `cases/<workflow>/<system>/`, add an entry to
 the suite's `cases.json`, generate its reference with
 `tests/generate_references.py --case <TestName>`, commit both.

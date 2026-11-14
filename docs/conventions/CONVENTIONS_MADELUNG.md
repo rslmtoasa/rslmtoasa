@@ -269,7 +269,7 @@ to exactly zero, `EXPP*ERFCP` vanishes and the general branch reduces to
 `EXF = EXPM*ERFCM`, `EXH = −EXPM*ERFCM = −EXF`. **Fixed in `6e87860`.**
 
 **Measured impact on B6: none.** Instrumenting a real dipole run
-(`example/surface/fccCu001/Test`, `dipole_electrostatics = .true.`): the guard
+(`example/surface/fccCu001/Test`, no longer in the tree, `dipole_electrostatics = .true.`): the guard
 trips **24 276 times across 703 layer pairs**, but `exh` decays monotonically
 *before* the guard engages. The largest `|exh|` carried into a pair's **first**
 guarded iteration is **1.6e-25**, against a `SUM1G` accumulator of exactly

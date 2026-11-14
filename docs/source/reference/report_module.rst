@@ -424,9 +424,9 @@ Provenance
 **Implementation:**
 
 - ``source/report.f90`` - Main report module (1100+ lines)
-- ``source/timer_mod.f90`` - Timing integration
-- ``source/logger_mod.f90`` - Output integration
-- ``source/string_mod.f90`` - String utilities for formatting
+- ``source/timer.f90`` - Timing integration
+- ``source/logger.f90`` - Output integration
+- ``source/string.f90`` - String utilities for formatting
 
 **Dependencies:**
 

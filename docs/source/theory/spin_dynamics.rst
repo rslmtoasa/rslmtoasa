@@ -287,8 +287,8 @@ Provenance
 
 - ``source/spin_dynamics.f90`` - Main ASD module
 - ``source/exchange.f90`` - Exchange parameter calculation
-- ``source/Depondt.f90`` - Depondt-Mertens integrator (if present)
-- ``source/RandomNumbers.f90`` - Thermal noise generation (if present)
+- ``source/include_codes/abspinlib/depondt.f90`` - Depondt-Mertens integrator
+- ``source/include_codes/abspinlib/randomnumbers.f90`` - Thermal noise generation
 
 **Theory references:**
 
