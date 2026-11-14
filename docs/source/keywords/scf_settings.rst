@@ -90,7 +90,7 @@ beta (in ``&mix``)
 - For 'linear' mixing: critical parameter for convergence speed
 - For 'broyden' mixing: less critical (auto-adjusted somewhat)
 
-**Related code:** ``source/mix.f90::mix_charge()``
+**Related code:** ``source/mix.f90::mixpq()``
 
 SCF Convergence Behavior
 ========================
@@ -421,9 +421,8 @@ Provenance
 SCF parameters defined in:
 
 - **Type definition:** ``source/self.f90::type self``
-- **Mixing:** ``source/mix.f90::type mix``, ``mix.f90::mix_charge()``
-- **SCF loop:** ``source/self.f90::process()``
-- **Convergence check:** ``source/self.f90::converge_scf()``
+- **Mixing:** ``source/mix.f90::type mix``, ``mix.f90::mixpq()``
+- **SCF loop and convergence check:** ``source/self.f90::run()``
 
 See Also
 ========

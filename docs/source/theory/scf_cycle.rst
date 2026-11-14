@@ -91,12 +91,11 @@ Implementation in RS-LMTO
    type :: self
       ! ... pointers to other modules (lattice, charge, control, etc.)
    contains
-      procedure :: iterate       ! Single SCF iteration
-      procedure :: process       ! Full SCF loop
-      procedure :: converge_scf  ! Check convergence
+      procedure :: run           ! SCF loop (the convergence test is inside it)
+      procedure :: report        ! Final report
    end type self
 
-**Typical SCF loop (pseudocode from ``self.f90::process``):**
+**Typical SCF loop (simplified pseudocode of ``self.f90::run``):**
 
 .. code-block:: fortran
 
@@ -116,13 +115,13 @@ Implementation in RS-LMTO
       
       ! 5. Update charge and potential
       call charge%calculate_density(dos, ...)
-      call charge%calculate_potential(...)
+      call charge%bulkpot()
       
       ! 6. Mix charge densities
-      call mix%mix_charge(charge, ...)
+      call mix%mixpq(...)
       
       ! 7. Check convergence
-      if (converge_scf()) exit
+      if (mix%delta < conv_thr) exit    ! 'Converged!' in the log
       
    end do
 
@@ -187,11 +186,10 @@ where:
 .. code-block:: fortran
 
    type :: mix
-      character(len=sl) :: mixing_type  ! 'linear' or 'broyden'
-      real(rp) :: alpha                 ! Mixing parameter
-      integer :: n_history              ! History length for Broyden
+      character(len=7) :: mixtype       ! 'linear' or 'broyden'
+      real(rp) :: beta                  ! Mixing parameter
    contains
-      procedure :: mix_charge           ! Apply mixing
+      procedure :: mixpq                ! Mix the Q and P moments
    end type mix
 
 **Control Parameters:**
@@ -244,7 +242,7 @@ For each atom type and spin:
 
 **Implementation:**
 
-``energy.f90::find_fermi()`` performs energy mesh and searches for correct $E_F$.
+``bands.f90::calculate_fermi()`` searches for the correct $E_F$.
 
 Temperature Effects
 ===================
@@ -361,12 +359,10 @@ Provenance
 
 Main code locations:
 
-- **SCF loop:** ``source/self.f90::process()``
-- **Single iteration:** ``source/self.f90::iterate()``
-- **Convergence check:** ``source/self.f90::converge_scf()``
+- **SCF loop and convergence check:** ``source/self.f90::run()``
 - **Charge integration:** ``source/density_of_states.f90::density()``
 - **Density mixing:** ``source/mix.f90``
-- **Potential update:** ``source/charge.f90::calculate_potential()``
+- **Potential update:** ``source/charge.f90::bulkpot()``
 
 Key SCF parameters: ``source/self.f90`` (``nstep``, ``conv_thr``)
 

@@ -74,7 +74,7 @@ See :ref:`keywords/control_parameters` for complete listing.
 Major procedures:
 
 - ``build_from_file(fname)`` - Load structure
-- ``setup_cluster()`` - Generate cluster geometry
+- ``build_clusup()`` - Generate cluster geometry
 - ``print_state()`` - Display structure info
 
 Key members:

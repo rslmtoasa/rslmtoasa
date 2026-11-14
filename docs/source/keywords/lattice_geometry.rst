@@ -131,7 +131,7 @@ r2
 - r2 = 15.13 Å² ≈ distance to second neighbors
 - Use "5 th neighs." as comment suggests (code note) for bulk limit
 
-**Related code:** ``source/lattice.f90::setup_cluster()``
+**Related code:** ``source/lattice_cluster.f90::build_clusup()``
 
 **See also:** :doc:`../code_structure` for details on cluster construction
 
@@ -295,7 +295,7 @@ Lattice parameters defined and used in:
 
 - **Definition:** ``source/lattice.f90::type lattice``
 - **Reading:** ``source/lattice.f90::build_from_file()``
-- **Cluster setup:** ``source/lattice.f90::setup_cluster()``
+- **Cluster setup:** ``source/lattice_cluster.f90::build_clusup()``
 - **Geometry utilities:** ``source/math.f90`` (distance, angles)
 
 See Also

@@ -272,7 +272,7 @@ This section documents:
 
 - **Usage context:**
   
-  - ``source/self.f90::scf_iteration()`` - Calls Green's function in SCF loop
+  - ``source/self.f90::run()`` - Calls Green's function in SCF loop
   - ``source/bands.f90`` - Band structure from Green's functions
   - ``source/conductivity.f90`` - Transport from Green's functions
 

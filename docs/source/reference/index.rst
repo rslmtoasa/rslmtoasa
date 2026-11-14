@@ -78,8 +78,7 @@ Key Procedures by Topic
 **SCF Loop:**
 
 - ``self::process()`` - Main SCF iteration loop
-- ``self::iterate()`` - Single SCF iteration
-- ``self::converge_scf()`` - Check convergence
+- ``self::run()`` - SCF loop, including the convergence check
 
 **Hamiltonian Construction:**
 
@@ -107,7 +106,7 @@ Quick Code Navigation
 
 **To understand SCF:**
 
-Start with ``source/self.f90::process()`` -> calls ``calculation.f90``, ``hamiltonian.f90``, 
+Start with ``source/self.f90::run()`` -> calls ``calculation.f90``, ``hamiltonian.f90``, 
 ``recursion.f90``, ``green.f90``, ``density_of_states.f90``, ``mix.f90``.
 
 **To understand recursion:**

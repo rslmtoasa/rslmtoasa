@@ -45,14 +45,13 @@ The self-consistent field cycle is the core of RS-LMTO.
 
 **Implementation:**
 
-- ``source/self.f90::process()`` - Main loop
-- ``source/self.f90::iterate()`` - One iteration
+- ``source/self.f90::run()`` - Main loop (one pass per iteration, with the convergence test)
 - ``source/hamiltonian.f90::build_bulkham()`` - Step 1
 - ``source/recursion.f90::recur()`` - Step 2
 - ``source/green.f90::bgreen()`` - Step 3
 - ``source/density_of_states.f90::density()`` - Step 4
-- ``source/charge.f90::calculate_potential()`` - Step 5
-- ``source/mix.f90::mix_charge()`` - Step 6
+- ``source/charge.f90::bulkpot()`` - Step 5
+- ``source/mix.f90::mixpq()`` - Step 6
 
 Lanczos Recursion
 =================
@@ -180,7 +179,7 @@ Convert DOS to charge density by integrating below Fermi level.
 
 .. code-block:: text
 
-   E_F = find_fermi(ρ(E), N_target, T)
+   E_F = calculate_fermi(ρ(E), N_target, T)
        ! Binary search or Newton-Raphson
        do while |n(E_F) - N_target| > tolerance
            dEdq ← dN/dE_F from DOS derivative
@@ -189,7 +188,7 @@ Convert DOS to charge density by integrating below Fermi level.
 **Implementation:**
 
 - ``source/density_of_states.f90::density()`` - Integration
-- ``source/energy.f90::find_fermi()`` - Fermi level search
+- ``source/bands.f90::calculate_fermi()`` - Fermi level search
 
 Density Mixing
 ==============
@@ -227,7 +226,7 @@ Density Mixing
 
 **Implementation:**
 
-- ``source/mix.f90::mix_charge()`` - Main routine
+- ``source/mix.f90::mixpq()`` - Main routine
 
 Exchange Interaction Calculation
 =================================
@@ -283,7 +282,7 @@ Compute conductivity tensor using Kubo-Greenwood formula.
 **Implementation:**
 
 - ``source/conductivity.f90::calculate()`` - Main routine
-- ``source/hamiltonian.f90::build_velocity_operators()`` - Velocity ops
+- ``source/hamiltonian.f90::build_realspace_velocity_operators()`` - Velocity ops
 
 Cluster Geometry Construction
 =============================
@@ -313,7 +312,7 @@ Build atomic cluster from lattice parameters.
 
 **Implementation:**
 
-- ``source/lattice.f90::setup_cluster()`` - Cluster generation
+- ``source/lattice_cluster.f90::build_clusup()`` - Cluster generation
 - ``source/math.f90`` - Distance/geometry utilities
 
 Hamiltonian Construction

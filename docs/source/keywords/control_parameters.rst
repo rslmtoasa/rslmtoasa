@@ -59,7 +59,7 @@ spin-density channels even when ``nsp=1``.
 
    nsp = 1  ! Scalar relativistic, collinear global mode
 
-**Related code:** ``source/control.f90``, ``source/self.f90::process()``
+**Related code:** ``source/control.f90``, ``source/self.f90::run()``
 
 **See also:** :ref:`theory/lmto_asa_overview` for theory
 
@@ -865,7 +865,7 @@ Control parameters defined and used in:
 - **Usage:**
   
   - Calculation driver: ``source/calculation.f90::process()``
-  - SCF loop: ``source/self.f90::process()``
+  - SCF loop: ``source/self.f90::run()``
   - Recursion: ``source/recursion.f90::recur()``
   - Output: ``source/density_of_states.f90``
 
