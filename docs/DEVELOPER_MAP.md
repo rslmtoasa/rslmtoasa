@@ -11,7 +11,7 @@ atomic LMTO region, test taxonomy, fixture vocabulary, and the Phase-I gate
 record, start with [the decision log](DECISIONS.md).
 This map then provides the detailed workflow-level entry points and kernels.
 
-For B1 frozen magnons, VAL-17 ([GBT harmonic and Goldstone report](validation/VAL-17_GBT_HARMONIC_GOLDSTONE.md))
+For B1 frozen magnons, VAL-17 (GBT harmonic and Goldstone report, `docs/validation/` at tag `archive/fable_v4b_gbt-2026-11-05`)
 records the current reciprocal FeCo route: a gapless, in-phase Gamma candidate
 on the current deck, the reciprocal same-q collinear gauge reference used for
 finite-q probes, and the open small-q stiffness mesh-convergence limitation.

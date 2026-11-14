@@ -277,9 +277,8 @@ a broadening-defined (not recursion-matching) estimator.
 - ``0.02`` Ry is the accepted working point from gate **G-B2-2**
   (signed 2026-07-16): documented as giving ~1% k-mesh convergence of
   J_ij at a 16³ mesh. Supersedes an earlier ``0.01`` Ry placeholder from
-  gate G-B2-1. See ``docs/validation/B2_GATE_G-B2-2.md`` and
-  ``docs/validation/reciprocal_green_convergence.md`` for the convergence study
-  behind this number.
+  gate G-B2-1. See ``docs/validation/reciprocal_green_convergence.md`` for the convergence study
+  behind this number (the gate record G-B2-2 is at tag ``archive/fable_v4b-2026-11-05``).
 - The :math:`\eta \to 0`, :math:`N_k \to \infty` limit is deliberately not
   the shipped default — it is expensive and currently gated by the
   backend-E full-unreduced-BZ requirement (no symmetry reduction / k-mesh
