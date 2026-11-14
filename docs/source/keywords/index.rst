@@ -87,7 +87,7 @@ Most commonly used parameters:
    * - nsp
      - int
      - 1 (scalar-rel), 2 (collinear)
-   * - max_iterations
+   * - nstep
      - int
      - 50-100
    * - llsp
@@ -99,15 +99,15 @@ Most commonly used parameters:
    * - alat
      - real
      - system-dependent (Å)
-   * - dq_tol
+   * - conv_thr
      - real
-     - 1e-5 to 1e-4
-   * - mixing
+     - 1e-9 to 1e-5
+   * - mixtype
      - str
      - 'linear' or 'broyden'
-   * - alpha
+   * - beta
      - real
-     - 0.3-0.5
+     - 0.05-0.5
    * - channels_ldos
      - int
      - 300-500
@@ -117,12 +117,7 @@ Alphabetical Listing (All Parameters)
 
 **A**
 
-- ``alpha`` - Mixing parameter (density mixing)
 - ``alat`` - Lattice constant
-
-**B**
-
-- ``broyden_history`` - Number of previous densities to keep (Broyden mixing)
 
 **A**
 
@@ -132,9 +127,9 @@ Alphabetical Listing (All Parameters)
 
 **B**
 
+- ``beta`` - Density mixing parameter (``&mix``)
 - ``bias`` - Applied bias hook for interface potential step, B7 §6 (plumbing only, not yet wired)
 - ``blockrec`` - Block recursion flag
-- ``broyden_history`` - Number of previous densities to keep (Broyden mixing)
 - ``b_stochastic`` - Stochastic field array (ASD)
 
 **C**
@@ -167,7 +162,6 @@ Alphabetical Listing (All Parameters)
 - ``do_cochg`` - Enable co-charge correction
 - ``do_comom`` - Enable co-moment correction
 - ``do_damping`` - Enable Gilbert-damping evaluation in exchange post-processing (B5)
-- ``dq_tol`` - Charge density convergence tolerance
 - ``dt`` - ASD time step
 
 **E**
@@ -211,9 +205,9 @@ Alphabetical Listing (All Parameters)
 **M**
 
 - ``magnetic_mixing`` - Separate magnetic mixing in SCF
-- ``max_iterations`` - Maximum SCF iterations
 - ``mix_all`` - Mix all potential components together
 - ``mixmag`` - Per-atom magnetic mixing parameter
+- ``mixtype`` - Density mixing type, 'linear' or 'broyden' (``&mix``)
 - ``mixmag_all`` - Apply same magnetic mixing to all atoms
 - ``mixing`` - Density mixing type
 
@@ -286,11 +280,11 @@ See Full Reference Pages
 
 For detailed descriptions, constraints, and examples, see:
 
-- :ref:`keywords/control_parameters` - Calculation control (nsp, max_iterations, etc.)
+- :ref:`keywords/control_parameters` - Calculation control (nsp, lld, etc.)
 - :ref:`keywords/lattice_geometry` - Structure (alat, lattice type, cluster size)
 - :ref:`keywords/basis_parameters` - LMTO basis (lmax, center_band, width_band)
 - :ref:`keywords/energy_mesh` - Energy integration (channels_ldos, energy range)
-- :ref:`keywords/scf_settings` - SCF convergence (mixing, dq_tol, max_iterations)
+- :ref:`keywords/scf_settings` - SCF convergence (nstep, conv_thr, mixtype, beta)
 - :ref:`keywords/exchange_correlation` - XC functional (txc)
 - :ref:`keywords/output_options` - Output control (post_processing, idos)
 - :ref:`keywords/constraints` - Constraining fields (constraints_enable, constraints_i_cons, etc.)

@@ -191,7 +191,7 @@ Monitor SCF convergence:
    
    scf_report = report('SCF Convergence')
    
-   do iteration = 1, max_iterations
+   do iteration = 1, nstep
       ! Do SCF iteration
       call scf_report%add_value('Iteration', real(iteration))
       call scf_report%add_value('ΔQ', charge_diff)

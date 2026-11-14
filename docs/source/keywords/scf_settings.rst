@@ -8,13 +8,14 @@ Overview
 ========
 
 The ``&self`` namelist controls self-consistent field (SCF) loop settings,
-including density mixing, convergence criteria, and iteration limits.
+including the iteration limit, the convergence threshold and magnetic mixing.
+The density mixing parameters ``mixtype`` and ``beta`` are in the ``&mix`` namelist.
 
 Parameters
 ==========
 
-mixing
-------
+mixtype (in ``&mix``)
+---------------------
 
 **Type:** Character string
 
@@ -28,7 +29,7 @@ mixing
 
 .. code-block:: fortran
 
-   mixing = 'broyden'
+   mixtype = 'broyden'
 
 **Linear Mixing:**
 
@@ -55,22 +56,22 @@ Much faster convergence in most cases.
 
 **See also:** :ref:`theory/scf_cycle`
 
-alpha
------
+beta (in ``&mix``)
+------------------
 
 **Type:** Real
 
-**Purpose:** Density mixing parameter
+**Purpose:** Density mixing parameter (written α in the formulas below)
 
-**Typical range:** 0.1-0.8
+**Typical range:** 0.01-0.8
 
-**Default:** 0.5
+**Default:** 0.1
 
 **Example:**
 
 .. code-block:: fortran
 
-   alpha = 0.3  ! Conservative
+   beta = 0.3  ! Conservative
 
 **Meaning:**
 
@@ -90,98 +91,6 @@ alpha
 - For 'broyden' mixing: less critical (auto-adjusted somewhat)
 
 **Related code:** ``source/mix.f90::mix_charge()``
-
-broyden_history
----------------
-
-**Type:** Integer
-
-**Purpose:** Number of previous densities kept for Broyden mixing
-
-**Typical range:** 3-20
-
-**Default:** 10
-
-**Example:**
-
-.. code-block:: fortran
-
-   broyden_history = 8
-
-**Meaning:**
-
-- Higher number: uses more history -> better prediction
-- Lower number: faster but less information
-
-**Guidance:**
-
-- Start with 10 (reasonable balance)
-- If convergence stalls: increase to 15-20
-- If very slow: reduce to 5-8
-
-**Notes:**
-
-- Only used if ``mixing = 'broyden'``
-- Increases memory usage (~10% for large systems)
-- Significant impact on convergence rate
-
-**Related code:** ``source/mix.f90``
-
-max_iterations (also in &control)
-----------------------------------
-
-**Type:** Integer
-
-**Purpose:** Maximum number of SCF iterations
-
-**Typical range:** 50-200
-
-**Default:** 100
-
-**Example:**
-
-.. code-block:: fortran
-
-   max_iterations = 80
-
-**Notes:**
-
-- Can be in &control or &self (check your version)
-- Calculation stops when either iteration limit or convergence reached
-
-dq_tol (also in &control)
---------------------------
-
-**Type:** Real (Ry)
-
-**Purpose:** Charge density convergence tolerance
-
-**Typical range:** 1e-6 to 1e-4
-
-**Default:** 1e-5
-
-**Example:**
-
-.. code-block:: fortran
-
-   dq_tol = 1.0e-5
-
-**Meaning:**
-
-.. math::
-
-   \sum_i |q_i^{(n+1)} - q_i^{(n)}| < \text{dq\_tol}
-
-**Guidance:**
-
-- 1e-5 or better: Production quality
-- 1e-4: Reasonable for most purposes
-- 1e-6+: Overkill; diminishing returns
-
-**Notes:**
-
-- Smaller tolerance = more iterations needed
-- Check in &control; may override &self value
 
 SCF Convergence Behavior
 ========================
@@ -240,13 +149,12 @@ Solutions:
 Solutions:
 - Reduce α significantly (0.2-0.3)
 - Use 'linear' mixing (more stable)
-- Increase Broyden history (if using Broyden)
 
 **Problem: Energy or forces unphysical**
 
 This usually indicates non-convergent SCF.
 Solutions:
-- Ensure dq_tol is tight enough
+- Ensure conv_thr is tight enough
 - Check Hamiltonian parameters
 - Verify cluster size adequate (increase r2 or nx,ny,nz)
 
@@ -293,15 +201,9 @@ conv_thr
 
 **Type:** Real
 
-**Default:** ``1.0e-5``
+**Default:** ``0.5e-8``
 
-**Purpose:** SCF convergence threshold used internally by the ``&self`` module
-(analogous to ``dq_tol`` in ``&control``)
-
-**Notes:**
-
-- In most input files only ``dq_tol`` (in ``&control``) needs to be set.
-- If both are present, the more stringent one governs convergence.
+**Purpose:** SCF convergence threshold: the iteration stops with "Converged!" when the printed ``Diff`` is below it.
 
 soc_scale
 ---------
@@ -377,7 +279,7 @@ mixmag
 **Type:** Real array (one value per inequivalent atom)
 
 **Purpose:** Per-atom mixing parameter for the magnetic potential.  Overrides
-the global ``alpha`` for the magnetic channel on a per-site basis.
+the global ``beta`` for the magnetic channel on a per-site basis.
 
 **Example:**
 
@@ -449,8 +351,9 @@ nstep
 
 **Type:** Integer
 
-**Purpose:** Number of SCF steps to perform (alternative to ``max_iterations``
-in ``&control``).  If both are set, the minimum is used.
+**Default:** ``1``
+
+**Purpose:** Maximum number of SCF steps; the loop ends earlier when ``Diff`` is below ``conv_thr``.
 
 init
 ----

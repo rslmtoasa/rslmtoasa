@@ -42,12 +42,10 @@ control
    type :: control
       integer :: nsp                         ! 1=SR, 2=FR, 3=NC-SR, 4=NC-FR
       integer :: llsp, lld                   ! Recursion cutoffs
-      integer :: max_iterations              ! SCF iteration limit
       integer :: idos                        ! LDOS output type
       integer :: nlim, npold                 ! Cluster/history settings
       integer :: mext                        ! Spin acceleration
       logical :: lrot, incorb                ! Rotation settings
-      real(rp) :: dq_tol                     ! Convergence tolerance
       logical :: verbose                     ! Verbose output
    end type control
 

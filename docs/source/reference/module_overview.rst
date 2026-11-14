@@ -54,8 +54,7 @@ Major parameters:
 
 - ``nsp`` - Relativistic type (1=SR, 2=FR, 3=NC-SR, 4=NC-FR)
 - ``llsp, lld`` - Recursion cutoffs
-- ``max_iterations`` - SCF limit
-- ``dq_tol`` - Convergence tolerance
+- the SCF limit and tolerance are ``nstep`` and ``conv_thr`` in the ``self`` module
 - ``idos`` - LDOS output flag
 - ``verbose`` - Verbosity flag
 

@@ -29,8 +29,6 @@ Example:
 
    &control
       nsp = 1,
-      max_iterations = 50,
-      dq_tol = 0.000100,
       ...
    /
 

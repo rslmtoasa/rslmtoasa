@@ -100,7 +100,7 @@ Implementation in RS-LMTO
 
 .. code-block:: fortran
 
-   do iteration = 1, max_iterations
+   do iteration = 1, nstep
       
       ! 1. Build Hamiltonian with current potential
       call hamiltonian%build_bulkham(lattice, charge, ...)
@@ -137,7 +137,7 @@ SCF Convergence Criteria
 
       \Delta q = \sum_i |q_i^{(i+1)} - q_i^{(i)}| < \text{tolerance}
 
-   Control: ``control%dq_tol`` (default: $10^{-5}$)
+   Input: ``conv_thr`` in ``&self`` (default $0.5\times 10^{-8}$), compared with the printed ``Diff``
 
 2. **Potential difference:**
    
@@ -198,9 +198,8 @@ where:
 
 See :ref:`keywords/scf_settings` for input keywords:
 
-- ``mixing`` - Mixing type
-- ``alpha`` - Mixing parameter
-- ``broyden_history`` - Number of previous iterations to keep
+- ``mixtype`` - Mixing type (``&mix``)
+- ``beta`` - Mixing parameter (``&mix``)
 
 Convergence Acceleration
 ========================
@@ -369,7 +368,7 @@ Main code locations:
 - **Density mixing:** ``source/mix.f90``
 - **Potential update:** ``source/charge.f90::calculate_potential()``
 
-Key control parameters: ``source/control.f90`` (max_iterations, convergence tolerances, etc.)
+Key SCF parameters: ``source/self.f90`` (``nstep``, ``conv_thr``)
 
 See Also
 ========

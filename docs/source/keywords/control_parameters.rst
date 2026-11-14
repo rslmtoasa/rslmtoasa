@@ -122,70 +122,11 @@ lld
 
 **Related code:** ``source/recursion.f90``
 
-max_iterations
---------------
+Iteration limit and convergence
+-------------------------------
 
-**Type:** Integer
-
-**Purpose:** Maximum number of SCF iterations
-
-**Typical range:** 30-150
-
-**Default:** 100
-
-**Meaning:**
-
-- If SCF doesn't converge by this iteration, calculation stops
-- Set higher for difficult systems
-- Set lower for quick preliminary runs
-
-**Example:**
-
-.. code-block:: fortran
-
-   max_iterations = 50  ! Quick calculation
-
-**Notes:**
-
-- Typical convergence: 10-30 iterations for well-behaved systems
-- Very stubborn systems: 100-200 iterations needed
-- Monitor ``scf_convergence.dat`` to see if trend is toward convergence
-
-**Related code:** ``source/self.f90::process()``
-
-dq_tol
-------
-
-**Type:** Real (Ry)
-
-**Purpose:** SCF convergence criterion (charge density)
-
-**Typical range:** 1e-6 to 1e-4
-
-**Default:** 1e-5
-
-**Meaning:**
-
-.. math::
-
-   \sum_i |q_i^{(n+1)} - q_i^{(n)}| < \text{dq\_tol}
-
-- Calculation converges when charge density change is below this value
-- Smaller value = better convergence but may take more iterations
-
-**Example:**
-
-.. code-block:: fortran
-
-   dq_tol = 1.0e-5  ! Reasonable accuracy
-
-**Notes:**
-
-- For production calculations: 1e-5 or better
-- For quick tests: can relax to 1e-4
-- If very small (1e-7+), may have numerical issues
-
-**Related code:** ``source/self.f90::converge_scf()``
+The SCF iteration limit and convergence threshold are ``nstep`` and ``conv_thr`` in the ``&self`` namelist (not in
+``&control``); see :ref:`keywords/scf_settings`.
 
 verbose
 -------
@@ -387,7 +328,7 @@ npold
 
 **Notes:**
 
-- Related to ``broyden_history`` in SCF mixing
+- Related to the Broyden mixing selected by ``mixtype`` in ``&mix``
 - Allows Broyden mixing to use multiple previous iterations
 - More history -> better convergence but more memory
 
@@ -931,7 +872,7 @@ Control parameters defined and used in:
 See Also
 ========
 
-- :ref:`keywords/scf_settings` - Related SCF parameters (mixing, dq_tol)
+- :ref:`keywords/scf_settings` - Related SCF parameters (nstep, conv_thr, mixtype, beta)
 - :ref:`keywords/energy_mesh` - Related energy parameters
 - :ref:`theory/scf_cycle` - Understanding SCF convergence
 - :ref:`theory/recursion_method` - Understanding recursion cutoffs

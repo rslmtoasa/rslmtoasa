@@ -38,7 +38,6 @@ Example
 .. code-block:: fortran
 
    &control
-      max_iterations = 100,
       nsp = 1,          ! Collinear scalar-relativistic
       verbose = .true.
    /
@@ -71,14 +70,14 @@ Essential Parameters
 - ``nbulk`` - Number of bulk atoms in cluster
 - ``alat`` - Lattice constant (Å)
 - ``nsp`` - Type of calculation (1=SR collinear, 2=collinear FR, 3=NC SR, 4=NC FR)
-- ``max_iterations`` - Maximum SCF iterations
+- ``nstep`` (``&self``) - Maximum SCF iterations
 
 **Recommended to specify:**
 
-- ``dq_tol`` - SCF convergence criterion
+- ``conv_thr`` (``&self``) - SCF convergence criterion
 - ``llsp`` - Recursion cutoff for sp electrons
 - ``lld`` - Recursion cutoff for d electrons
-- ``mixing`` and ``alpha`` - Density mixing parameters
+- ``mixtype`` and ``beta`` (``&mix``) - Density mixing parameters
 
 Running a Calculation
 =====================
@@ -192,7 +191,6 @@ Create a simple `test.nml` file for a new system:
       nsp = 1,
       llsp = 60,
       lld = 60,
-      max_iterations = 50,
       verbose = .true.
    /
 
@@ -203,8 +201,13 @@ Create a simple `test.nml` file for a new system:
    /
 
    &self
-      mixing = 'broyden',
-      alpha = 0.5
+      nstep = 50,
+      conv_thr = 1.0e-6
+   /
+
+   &mix
+      mixtype = 'broyden',
+      beta = 0.5
    /
 
 Common Pitfalls

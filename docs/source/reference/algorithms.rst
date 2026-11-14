@@ -14,7 +14,7 @@ The self-consistent field cycle is the core of RS-LMTO.
 .. code-block:: text
 
    function scf_loop(control, lattice, hamiltonian, charge, mixing)
-       for iteration = 1 to max_iterations
+       for iteration = 1 to nstep
            ! 1. Build Hamiltonian with current potential
            H ← build_hamiltonian(lattice, charge, control)
            
@@ -38,7 +38,7 @@ The self-consistent field cycle is the core of RS-LMTO.
            
            ! 7. Check convergence
            ΔQ ← || charge - charge_old ||
-           if ΔQ < dq_tol
+           if ΔQ < conv_thr
                return success
            
        return failure (max iterations reached)
