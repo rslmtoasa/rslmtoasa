@@ -164,3 +164,7 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
 ## LDA+U, from 2026-11-05
 
 - 2026-11-14 — `hubbard_radial_moments` default is `local` with a nonzero fixed U/J where `local` is implemented, `spectral` otherwise; a radial-mode mismatch of a potential or frozen host resets its density matrix with a warning; the Hubbard energy is routed in `local` mode for bulk, impurity and surface runs, with and without hoh; FeO is not used as a comparison target. Measurements, open items and the full-tier result are in `docs/LDAU_STATUS.md`.
+
+## Documentation cleanup
+
+- 2026-11-14 — `docs/dev/` (branch status and merge-plan snapshots, `v4c` slimming notes and delete manifest) and the retired validation documents `VAL-02`, `VAL-04`, `VAL-16`, `VAL-17`, `B5.3` and the two `B2` gate records were removed. The validation documents are at the `archive/fable_v4b*-2026-11-05` tags (`VAL-04`: an older version); `docs/dev/` and the last `VAL-04` are in commit `c78fa2a` (no tag was created for it).
