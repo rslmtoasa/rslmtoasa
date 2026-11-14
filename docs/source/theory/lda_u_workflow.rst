@@ -88,10 +88,8 @@ Implementation status
 =====================
 
 - ``liechtenstein`` potential path:
-  the ordinary on-site U/J potential is wired and is the validated scope of
-  [VAL-04]. Validated scope: KS and RS bulk energies for fixed d-shell U/J;
-  RS impurity density only. Surfaces are experimental. The Dudarev validation
-  limit is ``J=0`` with ``U``; this does not validate arbitrary J.
+  the ordinary on-site U/J potential is wired; the scope and the measured agreement of the tests are in
+  ``docs/LDAU_STATUS.md``. The finite-difference check of the energy against U is exact in the ``J=0`` limit only.
   Chebyshev recursion with fixed U is validated for collinear bulk and impurity runs: the
   on-site Green function and occupation matrices are deterministic; a bcc Fe block-versus-Chebyshev
   comparison at U=2 eV gave an E_F difference of 9.75e-4 Ry (limit 1.84e-3) and an E_Hub relative
@@ -107,8 +105,8 @@ Implementation status
   :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active and must not be
   described as a validated inter-site DFT+U+V implementation.
 
-C5 impurity radial-moment mode
-------------------------------
+Impurity radial-moment mode
+---------------------------
 
 .. note::
 
@@ -145,15 +143,12 @@ difference of the energy with U off by 9.7% against 7.75% (``tests/KNOWN_ISSUES.
 With ``hubbard_radial_moments='local'`` at first order, ``E_Hub`` of the cluster sites' P_out
 (host types excluded) is added to ``physical_total_energy`` as in the bulk
 (``tests/ldau/test_cluster_energy_u.py``: ``nsp=3`` against ``nsp=1``); with ``spectral`` impurity energies
-exclude the Hubbard term; with ``hoh`` the same energy is routed (``tests/ldau/test_hoh_energy_u.py``). The energy formula is unchanged. C5's numerical
-KS-host-to-RS-impurity equivalence for Ni remains unvalidated, and RD4 has no
-energy measurement: its optimized Release diagnostic has only been checked
-through one complete iteration. See the C5 records in
-``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`` and
-``C5_10_RESULTS.md``.
+exclude the Hubbard term; with ``hoh`` the same energy is routed (``tests/ldau/test_hoh_energy_u.py``). The energy formula is unchanged. The numerical
+KS-host-to-RS-impurity equivalence for Ni was not shown (``tests/KNOWN_ISSUES.md``). The earlier campaign records are
+summarized in ``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md``; the reports are at tag ``archive/fable_v4b_u-2026-11-05``.
 
-C6 surface density-only mode
------------------------------
+Surface radial-moment mode
+--------------------------
 
 For ``calctype='S'``, ``hubbard_radial_moments='auto'`` follows the same rule: ``local`` with a nonzero fixed U/J where it is
 implemented, ``spectral`` otherwise. The surface recursion layers remain the active surface density sites; the host mode is
@@ -512,9 +507,8 @@ Notes and constraints
   shifts derived from local occupations. Treat ``+V`` as a proxy/experimental correction
   until inter-site :math:`n^{JI,\sigma}_{m' m}` integration is wired from inter-site Green functions.
 
-See `VAL-04 developer record <../../dev/VAL-04_LDA_U.md>`_ for the material response envelope,
-occupation-matrix checks, convergence result, and the explicit RS/KS,
-noncollinear, and SOC support classification.
+See ``docs/LDAU_STATUS.md`` for the measured agreement of the tests and the open items, and
+``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`` for the earlier campaign measurements.
 
 
 Restart density-matrix files
