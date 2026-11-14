@@ -85,6 +85,7 @@ module green_mod
       procedure :: chebyshev_green_ij_gpu
       procedure :: chebyshev_green_ij_eta
       procedure :: chebyshev_dos_dispatch
+      procedure :: cheb_damping
       procedure :: restore_to_default
       procedure :: auxiliary_gij
       procedure :: transform_auxiliary_gij
@@ -185,6 +186,14 @@ module green_mod
       complex(rp), dimension(nb, nb, atoms_per_process), intent(inout), optional :: g_ef
       logical, intent(in), optional :: use_gpu
    end subroutine chebyshev_green_core
+
+   !> Optional damping argument of the Chebyshev reconstruction for control%cheb_kernel: left
+   !> unallocated for the default Jackson kernel (the reconstruction then builds it inline).
+   module subroutine cheb_damping(this, n, damping)
+      class(green), intent(in) :: this
+      integer, intent(in) :: n
+      real(rp), allocatable, intent(out) :: damping(:)
+   end subroutine cheb_damping
 
    ! Recursive continued-fraction Green-function implementations.
    module subroutine block_green_ij_eta(this, istart, eta, fermi_point, g_ef)

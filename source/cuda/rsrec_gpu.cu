@@ -2928,7 +2928,10 @@ extern "C" int rsrec_orbital_moments(rsrec_ctx *c, const void *left,
  * chebyshev_green in bands.f90; identical math and Jackson convention).
  *
  *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) F(i,ie),
- *   F(i,ie) = g_J(i) c_i (-i) e^{-i(i-1)acos(x_ie)} / sqrt(a^2-(E_ie-b)^2)
+ *   F(i,ie) = g(i) c_i (-i) e^{-i(i-1)acos(x_ie)} / sqrt(a^2-(E_ie-b)^2)
+ *
+ * g(i) is the Jackson kernel g_J(i) built inline when the caller passes no
+ * kernel vector, otherwise the host-built vector (Lorentz, none, ...).
  *
  * F is built by one kernel; the contraction over moments is ONE
  * cublas[Z|C]gemmStridedBatched over the local atoms (strideB = 0 -- all
@@ -2937,8 +2940,10 @@ extern "C" int rsrec_orbital_moments(rsrec_ctx *c, const void *left,
  * (bit-comparable with the Fortran loop). Atom chunking keeps device
  * memory bounded for large nv/lld.
  * ------------------------------------------------------------------------ */
+template <bool HAS_K>
 __global__ void k_build_F64(int N, int nv, const double *__restrict__ ene,
-                            double a, double b, zc *__restrict__ F) {
+                            double a, double b, const double *__restrict__ kern,
+                            zc *__restrict__ F) {
     size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= (size_t)N * nv) return;
     const double PI = 3.14159265358979323846;
@@ -2948,7 +2953,9 @@ __global__ void k_build_F64(int N, int nv, const double *__restrict__ ene,
     double pref = rsqrt(a * a - (ene[ie] - b) * (ene[ie] - b));
     double thl = PI * i / (N + 1.0);
     double cot = cos(PI / (N + 1.0)) / sin(PI / (N + 1.0));
-    double gj = ((N - i + 1) * cos(thl) + sin(thl) * cot) / (N + 1.0);
+    double gj;
+    if (HAS_K) gj = kern[i];                   /* host-built kernel vector  */
+    else gj = ((N - i + 1) * cos(thl) + sin(thl) * cot) / (N + 1.0);
     double cc = (i == 0) ? 1.0 : 2.0;
     double ang = i * th;                       /* (-i) e^{-i ang}           */
     F[idx] = make_cuDoubleComplex(-gj * cc * pref * sin(ang),
@@ -3033,7 +3040,8 @@ static int cheb_gemm_engine(rsrec_ctx *c, const cplx *mu, int n_mom,
 
 extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
                                    int natoms, const double *ene, int nv,
-                                   double a, double b, void *g0_) {
+                                   double a, double b, const double *kernel,
+                                   void *g0_) {
     if (n_mom < 1 || natoms < 1 || nv < 1) FAIL("chebyshev_dos: bad sizes");
     const cplx *mu = (const cplx *)mu_;
     cplx *g0 = (cplx *)g0_;
@@ -3045,13 +3053,23 @@ extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
     CUCHK(cudaMemcpy(d_ene, ene, nv * sizeof(double), cudaMemcpyHostToDevice));
     size_t nF = (size_t)n_mom * nv;
     CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
-    k_build_F64<<<(int)((nF + tpb - 1) / tpb), tpb>>>(n_mom, nv, d_ene,
-                                                      a, b, d_F64);
+    double *d_kern = nullptr;       /* kernel g(0:n_mom-1); NULL = Jackson    */
+    if (kernel) {
+        CUCHK(cudaMalloc(&d_kern, n_mom * sizeof(double)));
+        CUCHK(cudaMemcpy(d_kern, kernel, n_mom * sizeof(double),
+                         cudaMemcpyHostToDevice));
+        k_build_F64<true><<<(int)((nF + tpb - 1) / tpb), tpb>>>(
+            n_mom, nv, d_ene, a, b, d_kern, d_F64);
+    } else {
+        k_build_F64<false><<<(int)((nF + tpb - 1) / tpb), tpb>>>(
+            n_mom, nv, d_ene, a, b, nullptr, d_F64);
+    }
     CUCHK(cudaGetLastError());
 
     int rc = cheb_gemm_engine(c, mu, n_mom, natoms, d_F64, nv, g0);
     cudaFree(d_ene);
     cudaFree(d_F64);
+    if (d_kern) cudaFree(d_kern);
     return rc;
 }
 

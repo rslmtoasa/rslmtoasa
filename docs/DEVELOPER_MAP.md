@@ -99,7 +99,7 @@ calculation%pre_processing_bravais / _buildsurf / _newclubulk / _newclusurf
                         (chebyshev_recur_ij does the same for the four slots of every pair)
        -> green.f90               (sgreen / block_green / chebyshev_dos_dispatch per recur)
             -> green_chebyshev.f90: chebyshev_green_core -> cheb_green_dp / cheb_green_fast / GPU chebyshev_dos,
-               damping kernel from control%cheb_kernel, then
+               damping kernel from control%cheb_kernel (cheb_damping), then
                enforce_chebyshev_spectral_positivity (+ charge-conserving rescale with cheb_lp)
        -> charge.f90 / mix.f90    (charge transfer, mixing, convergence check)
 ```
@@ -403,7 +403,7 @@ Every test has exactly one tier label (`quick`, `standard`, `validation`); see `
 | MKL kernels | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` (skip, exit 77, without MKL) | regression case `diamondSi_sp_chebyshev_mkl_batch` |
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | manual |
 | Unit oracles (core, Green function, electrostatics, structure constants, K-point workset, ...) | `quick` (`unit`) | `tests/unit/test_*.f90` |
-| Chebyshev linear prediction: closed-form and naive-reference kernel tests (`UnitChebyshevLP`), no-kernel density (`UnitChebyshevKernel`) | `quick` (`chebyshev;lp`) | `tests/unit/test_cheb_lp.f90`, `test_cheb_kernel.f90`, `test_chebyshev_green_precision.f90` |
+| Chebyshev linear prediction: closed-form and naive-reference kernel tests (`UnitChebyshevLP`), no-kernel density (`UnitChebyshevKernel`), kernel vector (`UnitChebyshevDamping`) | `quick` (`chebyshev;lp`) | `tests/unit/test_cheb_lp.f90`, `test_cheb_kernel.f90`, `test_cheb_damping.f90` |
 | Chebyshev LP campaign scripts (toy study, production check on frozen potentials) | archived at tag `cheb-lp-campaign-2026-11`, not in the tree | `tests/validation/val_cheb_lp_toy.py`, `val_cheb_lp.py` at the tag |
 | XC: three executables (`UnitXcKernels`, `UnitXcGuards`, `UnitXcLibxc`) with sub-cases | `quick` (`xc`) | `tests/unit/test_xc_*.f90` |
 | LDA+U: tensor, spinor functional, local-moment kernels, projector frozen-H oracles | `quick` (`lda_u`) | `tests/unit/test_lda_u_tensor.f90`, `test_hubbard_spinor.f90`, `test_ldau_*.f90`; data and oracle generators in `tests/ldau/` |

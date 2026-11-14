@@ -103,7 +103,8 @@ int rsrec_cuda_stochastic_profile(rsrec_cuda_ctx *ctx, double *h2d_seconds,
 int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec);
 int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu, int n_moments,
                              int natoms, const double *ene, int nv,
-                             double a, double b, void *g0);
+                             double a, double b, const double *kernel,
+                             void *g0);
 int rsrec_cuda_chebyshev_gf_eta(rsrec_cuda_ctx *ctx, const void *mu,
                                 int n_moments, int natoms, const void *F,
                                 int n_eta, void *g0);

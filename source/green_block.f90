@@ -351,11 +351,13 @@ contains
       case ('chebyshev')
          block
             real(rp) :: a, b, emin_win, emax_win
+            real(rp), allocatable :: damp(:)
             call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
             a = (emax_win - emin_win)/(2 - 0.3_rp)
             b = (emax_win + emin_win)/2.0_rp
+            call cheb_damping(this, size(this%recursion%mu_n, 3), damp)
             call gpu_backend%chebyshev_gf_eta(this%recursion%mu_n(:, :, :, 1:natoms), &
-                                              this%en%ene(fermi_point), eta_list, a, b, g0_ef_all)
+                                              this%en%ene(fermi_point), eta_list, a, b, g0_ef_all, damp)
          end block
       end select
 

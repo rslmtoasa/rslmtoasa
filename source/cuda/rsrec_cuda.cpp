@@ -413,13 +413,14 @@ extern "C" int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec) {
 extern "C" int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu,
                                         int n_moments, int natoms,
                                         const double *ene, int nv, double a,
-                                        double b, void *g0) {
+                                        double b, const double *kernel,
+                                        void *g0) {
     if (!ctx) {
         set_error("rsrec_cuda_chebyshev_dos: null ctx");
         return 1;
     }
-    const int status =
-        rsrec_chebyshev_dos(ctx->inner, mu, n_moments, natoms, ene, nv, a, b, g0);
+    const int status = rsrec_chebyshev_dos(ctx->inner, mu, n_moments, natoms,
+                                           ene, nv, a, b, kernel, g0);
     if (status != 0) {
         set_error(std::string("rsrec_cuda_chebyshev_dos: ") + rsrec_last_error());
     }
