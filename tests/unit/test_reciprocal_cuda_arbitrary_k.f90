@@ -8,6 +8,7 @@ program test_reciprocal_cuda_arbitrary_k
    use reciprocal_mod, only: reciprocal
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
+   use control_mod, only: control
    use logger_mod, only: g_logger
    use mpi_mod, only: parallel_context, g_parallel_context, ierr
 #ifdef USE_MPI
@@ -26,6 +27,7 @@ program test_reciprocal_cuda_arbitrary_k
    type(reciprocal) :: recip
    type(hamiltonian), target :: ham
    type(lattice), target :: lat
+   type(control), target :: ctl
    real(rp), parameter :: points(3,4) = reshape([ &
       0.125_rp, 0.0_rp, 0.0_rp, &
       0.371_rp, -0.217_rp, 0.083_rp, &
@@ -150,9 +152,19 @@ contains
       integer :: i
 
       call obj%restore_to_default()
+      obj%control => ctl   ! make_reciprocal_assembler reads control%constraints_enable
       lat_obj%nrec = 1; lat_obj%ntype = 1; lat_obj%nn_max = 3; lat_obj%kk = 1
       allocate(lat_obj%ib(1), lat_obj%atlist(1), lat_obj%iz(1), lat_obj%nn(1,3))
       lat_obj%ib = 1; lat_obj%atlist = 1; lat_obj%iz = 1; lat_obj%nn(1,:) = [3,1,1]
+      ! build_kspace_hamiltonian checks every atom's potential parameters c, qpar and srdel for NaN.
+      allocate(lat_obj%symbolic_atoms(lat_obj%ntype))
+      do i = 1, lat_obj%ntype
+         allocate(lat_obj%symbolic_atoms(i)%potential%c(0:2, 2), lat_obj%symbolic_atoms(i)%potential%qpar(0:2, 2), &
+                  lat_obj%symbolic_atoms(i)%potential%srdel(0:2, 2))
+         lat_obj%symbolic_atoms(i)%potential%c = 0.0_rp
+         lat_obj%symbolic_atoms(i)%potential%qpar = 0.0_rp
+         lat_obj%symbolic_atoms(i)%potential%srdel = 0.0_rp
+      end do
       ham_obj%lattice => lat_obj; ham_obj%hoh = .false.; ham_obj%ccor_2c = .false.
       allocate(ham_obj%ee(nb,nb,3,1)); ham_obj%ee = (0.0_rp,0.0_rp)
       do i = 1, nb
