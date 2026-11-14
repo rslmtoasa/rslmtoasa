@@ -136,10 +136,11 @@ the user to restart the host once with the current version so its mode is record
 written with the run's selected mode and backend.
 
 For impurity decks, copy a working deck, then set ``fermi`` and the energy
-window to the host endpoint values before launch. The C5.4 preflight compares
-the deck Fermi value with the host run output's endpoint ``E_F`` and requires
-a difference no greater than ``1e-6 Ry``. It records the host output path and
-value, and rejects a mismatch before the solver starts.
+window to the host endpoint values before launch. Nothing in the code checks that they agree: an impurity run
+whose deck ``fermi`` differs from the host's runs without a message. Measured for a B2FeCo impurity in a k-space Fe host
+with ``fermi`` 43 mRy above the host's: cluster charge 17.023 e against 17.004 e with the host's value, and the finite
+difference of the energy with U off by 9.7% against 7.75% (``tests/KNOWN_ISSUES.md``). The test fixture
+(``host_and_impurity`` in ``tests/ldau/test_impurity_nsp3_u.py``) converges the host and copies its ``E_F`` and energy window.
 
 With ``hubbard_radial_moments='local'`` at first order, ``E_Hub`` of the cluster sites' P_out
 (host types excluded) is added to ``physical_total_energy`` as in the bulk
@@ -161,11 +162,11 @@ Explicit ``spectral`` remains available.
 
 To prepare a surface deck, copy an existing surface fixture. Replace only the
 frozen host potential with the accepted local host potential, set U/J, and set
-``fermi`` and the energy window to the host endpoint values. Run the host-E_F
-preflight before launch. Use the same deck for RS and KS surface calculations;
+``fermi`` and the energy window to the host endpoint values and check that they agree
+(nothing in the code does). Use the same deck for RS and KS surface calculations;
 the local density mode is independent of the host's backend.
 
-Surface Hubbard support is density-only. With ``hubbard_radial_moments='local'`` at first order the surface energy includes ``E_Hub`` of the
+With ``hubbard_radial_moments='local'`` at first order the surface energy includes ``E_Hub`` of the
 surface-layer P_out (host types excluded; ``tests/ldau/test_cluster_energy_u.py``); with ``spectral`` it excludes the Hubbard term; with ``hoh`` the same energy is routed (``tests/ldau/test_hoh_energy_u.py``). Surface density support is experimental. A Ni(001) probe showed a narrow-window
 non-finite/NaN projected-DOS observation; widening the energy window did not
 remove it. See the C6 records in
