@@ -183,7 +183,7 @@ energies come from the spinor functional, and the radial moments use the spinor 
 ``local``). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` (candidate b). The former
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
-Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, self-consistent U, intersite V, HOH with
+Restrictions (each stops with a fatal): self-consistent U, intersite V, HOH with
 k-space ``kspace_ham_order='first'``, onsite U with ``kspace_ham_order='orthogonal'``, with HOH for ``calctype`` other than ``B`` outside ``nsp=1`` without SOC and the ``nsp=2``, ``3`` and ``4`` spinor routes,
 at ``nsp=2`` correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear axes: use nsp=3 or 4"),
 and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
