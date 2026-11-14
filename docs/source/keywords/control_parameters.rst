@@ -671,7 +671,7 @@ cheb_kernel
 
 **Type:** Character string
 
-**Purpose:** Damping kernel g_n applied to the Chebyshev moments in the DOS and Green-function reconstruction (CPU routes).
+**Purpose:** Damping kernel g_n applied to the Chebyshev moments in the DOS and Green-function reconstruction (CPU routes and the GPU plugin; the GPU path is implemented but has not been run on a GPU).
 
 **Allowed values:** ``'jackson'``, ``'lorentz'``, ``'none'``
 
@@ -682,9 +682,9 @@ cheb_kernel
 - ``'jackson'`` is the kernel of all earlier versions; the default results are unchanged. ``'lorentz'`` uses ``g_n = sinh(lambda (1 - n/N)) / sinh(lambda)`` with ``cheb_kernel_lambda``. ``'none'`` uses ``g_n = 1``.
 - ``'none'`` requires ``cheb_lp = .true.``: a hard cutoff of computed moments rings. Ganahl et al., PRB 90, 045144, apply no kernel to their linear-prediction moments; they predict 10^4 to 10^5 moments of a smooth spectrum whose added moments decay exponentially. The moments of the cluster Green functions here do not decay that way (bcc Fe: diagonal moments of order 0.1 at n = 1200).
 - Measured (cheb_lp, factor 2, ``lld`` = 200 against plain Jackson at ``lld`` = 400, Si example deck ``tests/scf``, real_space_chebyshev): RMS DOS difference 0.31 with Jackson, 0.59 with Lorentz (lambda = 3), 1.00 with no kernel, 0.85 for plain ``lld`` = 200. On bcc Fe (factor 2, computed 604-moment reference, no positivity projection) the no-kernel reconstruction had 473 negative-DOS points and RMS errors of 1.0, 2.1, 0.4 and 0.6 states/Ry against 0.14, 0.13, 0.14, 0.14 with Jackson. A small imaginary shift (1e-5, as in the paper) did not change this. Si deck at factor 4 (``lld`` = 200, reference plain ``lld`` = 803): RMS DOS difference 1.28 (Jackson), 1.39 (Lorentz, lambda = 3), 1.36 (no kernel), i.e. the three are within 0.11 of each other; no kernel choice improved on the others for these moments.
-- Requires ``recur = 'chebyshev'``. Fatal with ``gpu_plugin = .true.`` for any value other than ``'jackson'``: the GPU reconstruction builds the Jackson kernel inside the CUDA code. The orbital moments (``mu_n_orb``) and the conductivity moments keep their own kernels.
+- Requires ``recur = 'chebyshev'``. With ``gpu_plugin = .true.`` the damping vector is built on the host and passed to the CUDA reconstruction (the real-axis DOS and the intersite eta route); without it the CUDA code builds the Jackson factor itself, so ``'jackson'`` takes the previous code path. This GPU path is implemented but not yet run on a GPU: neither the Jackson bit-identity nor the fp32 behaviour of the other kernels has been measured there. The orbital moments (``mu_n_orb``) and the conductivity moments keep their own kernels.
 
-**Related code:** ``source/chebyshev_fast.f90`` (optional ``damping`` argument of ``cheb_green_fast``, ``cheb_green_dp``, ``cheb_green_complex``), ``source/green_chebyshev.f90``, ``source/math.f90`` (``jackson_kernel``, ``lorentz_kernel``)
+**Related code:** ``source/chebyshev_fast.f90`` (optional ``damping`` argument of ``cheb_green_fast``, ``cheb_green_dp``, ``cheb_green_complex``), ``source/green_chebyshev.f90`` (``cheb_damping``), ``source/rsrec_cuda_plugin.f90`` and ``source/cuda/rsrec_gpu.cu`` (optional ``kernel`` argument of ``rsrec_chebyshev_dos``), ``source/math.f90`` (``jackson_kernel``, ``lorentz_kernel``)
 
 cheb_kernel_lambda
 ------------------

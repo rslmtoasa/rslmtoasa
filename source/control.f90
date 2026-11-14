@@ -849,9 +849,6 @@ contains
       if (this%cheb_kernel == 'lorentz' .and. this%cheb_kernel_lambda <= 0.0_rp) then
          call g_logger%fatal('control%cheb_kernel_lambda must be > 0 for the Lorentz kernel.', __FILE__, __LINE__)
       end if
-      if (this%cheb_kernel /= 'jackson' .and. this%gpu_plugin) then
-         call g_logger%fatal('control%cheb_kernel /= ''jackson'' is not implemented for the GPU plugin (the kernel is built into the CUDA code).', __FILE__, __LINE__)
-      end if
       if (this%transport_backend /= 'legacy' &
           .and. this%transport_backend /= 'fast_sp' &
           .and. this%transport_backend /= 'gpu') then

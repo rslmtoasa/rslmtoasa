@@ -218,10 +218,10 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_set_precision
       end function rsrec_cuda_set_precision
 
-      function rsrec_cuda_chebyshev_dos(ctx, mu, n_mom, natoms, ene, nv, a, b, g0) &
+      function rsrec_cuda_chebyshev_dos(ctx, mu, n_mom, natoms, ene, nv, a, b, kernel, g0) &
          bind(C, name='rsrec_cuda_chebyshev_dos')
          import :: c_double, c_int, c_ptr
-         type(c_ptr), value :: ctx, mu, ene, g0
+         type(c_ptr), value :: ctx, mu, ene, kernel, g0
          integer(c_int), value :: n_mom, natoms, nv
          real(c_double), value :: a, b
          integer(c_int) :: rsrec_cuda_chebyshev_dos
@@ -492,27 +492,38 @@ contains
 #endif
    end subroutine set_precision
 
-   subroutine chebyshev_dos(this, mu_n, ene, a, b, g0)
+   !> kernel(i) is the damping g_n of Chebyshev order n = i-1, size n_mom; absent selects the Jackson factor built on the device.
+   subroutine chebyshev_dos(this, mu_n, ene, a, b, g0, kernel)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: mu_n(:, :, :, :)
       real(rp), target, contiguous, intent(in) :: ene(:)
       real(rp), intent(in) :: a, b
       complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+      real(rp), target, contiguous, intent(in), optional :: kernel(:)
 #ifdef USE_CUDA_PLUGIN
+      type(c_ptr) :: kernel_ptr
       integer(c_int) :: status
+
+      kernel_ptr = c_null_ptr
+      if (present(kernel)) then
+         if (size(kernel) /= size(mu_n, 3)) error stop 'chebyshev_dos: kernel must have one entry per moment'
+         kernel_ptr = c_loc(kernel)
+      end if
       status = rsrec_cuda_chebyshev_dos(this%ctx, c_loc(mu_n), int(size(mu_n, 3), c_int), &
          int(size(mu_n, 4), c_int), c_loc(ene), int(size(ene), c_int), &
-         real(a, c_double), real(b, c_double), c_loc(g0))
+         real(a, c_double), real(b, c_double), kernel_ptr, c_loc(g0))
       call check_status(status, 'rsrec_cuda_chebyshev_dos')
 #endif
    end subroutine chebyshev_dos
 
-   subroutine chebyshev_gf_eta(this, mu_n, ef, etas, a, b, g0)
+   !> kernel(i) is the damping g_n of Chebyshev order n = i-1, size n_mom; absent selects the Jackson factor.
+   subroutine chebyshev_gf_eta(this, mu_n, ef, etas, a, b, g0, kernel)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: mu_n(:, :, :, :)
       real(rp), intent(in) :: ef, a, b
       complex(rp), intent(in) :: etas(:)
       complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+      real(rp), intent(in), optional :: kernel(:)
 #ifdef USE_CUDA_PLUGIN
       complex(rp), allocatable, target :: f(:, :)
       complex(rp) :: ze, z, th, pref
@@ -523,6 +534,9 @@ contains
       n_mom = int(size(mu_n, 3), c_int)
       natoms = int(size(mu_n, 4), c_int)
       n_eta = int(size(etas), c_int)
+      if (present(kernel)) then
+         if (size(kernel) /= size(mu_n, 3)) error stop 'chebyshev_gf_eta: kernel must have one entry per moment'
+      end if
 
       allocate (f(n_mom, n_eta))
       cot = cos(acos(-1.0_rp)/(n_mom + 1.0_rp))/sin(acos(-1.0_rp)/(n_mom + 1.0_rp))
@@ -534,6 +548,7 @@ contains
          do i = 1, n_mom
             thl = acos(-1.0_rp)*real(i - 1, rp)/(n_mom + 1.0_rp)
             gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot)/(n_mom + 1.0_rp)
+            if (present(kernel)) gj = kernel(i)
             cc = merge(1.0_rp, 2.0_rp, i == 1)
             f(i, k) = gj*cc*pref*(-cmplx(0.0_rp, 1.0_rp, kind=rp))* &
                       exp(-cmplx(0.0_rp, 1.0_rp, kind=rp)*real(i - 1, rp)*th)

@@ -218,13 +218,9 @@ Limits
 Not tested
 ==========
 
-* **GPU.** The LP hooks on the CUDA paths (Fortran code that runs on the host
-  after the device moments are back) were never run on a GPU. Only a single GPU
-  has been available. ``cheb_kernel`` other than ``'jackson'`` is refused with
-  ``gpu_plugin``, because the Jackson kernel is built into the CUDA
-  reconstruction; an implementation of the other kernels for the CUDA
-  reconstruction exists on the branch ``feat/cheb-lp`` and at the tag
-  ``cheb-lp-campaign-2026-11``, never compiled with ``nvcc``. The CUDA
+* **GPU.** The LP hooks on the CUDA paths and the kernel selection
+  (``cheb_kernel``) through the CUDA reconstruction were never compiled with
+  ``nvcc`` or run on a GPU. Only a single GPU has been available. The CUDA
   reconstruction call in ``chebyshev_green_core`` indexes with the global atom
   range (``tests/KNOWN_ISSUES.md``); it was never run with more than one MPI
   rank on a GPU.
@@ -252,7 +248,7 @@ Related code and tests
 ``source/cheb_lp.f90`` (kernel and ``type cheb_lp``), ``source/recursion_chebyshev.f90``,
 ``source/recursion_transport.f90``, ``source/green_chebyshev.f90`` (reconstruction,
 projection and rescale, kernel selection), ``source/chebyshev_fast.f90``;
-tests ``UnitChebyshevLP``, ``UnitChebyshevKernel``, ``UnitChebyshevGreenPrecision``.
-The campaign scripts (toy study and production check on frozen potentials) are
-archived at the tag ``cheb-lp-campaign-2026-11`` (``tests/validation/val_cheb_lp_toy.py``,
-``tests/validation/val_cheb_lp.py``) and are not in the tree.
+tests ``UnitChebyshevLP``, ``UnitChebyshevKernel``, ``UnitChebyshevGreenPrecision``,
+``UnitChebyshevDamping``. The campaign scripts (toy study and production check on
+frozen potentials) are archived at the tag ``cheb-lp-campaign-2026-11``
+(``tests/validation/val_cheb_lp_toy.py``, ``tests/validation/val_cheb_lp.py``) and are not in the tree.
