@@ -113,7 +113,7 @@ where:
 - No explicit density matrix needed
 
 Spectral positivity
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 The real-axis on-site Chebyshev reconstruction is regularized before DOS,
 Fermi-level, and radial charge/moment integrations. Each orbital's 2x2 spin

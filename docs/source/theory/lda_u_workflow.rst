@@ -108,7 +108,7 @@ Implementation status
   described as a validated inter-site DFT+U+V implementation.
 
 C5 impurity radial-moment mode
------------------------------
+------------------------------
 
 .. note::
 
@@ -272,7 +272,7 @@ spectral candidate misses by 53, 42 (KS) and 30 (RS) allowances. The RS J deriva
 functional's W1 derivative residual (-0.14% KS, -0.16% RS) bounds the claim, as at nsp=1.
 
 SOC+U for impurities and surfaces (nsp=2, calctype I and S)
-----------------------------------------------------------
+-----------------------------------------------------------
 
 Impurity (``calctype='I'``) and surface (``'S'``) runs with U accept ``nsp=2``. The density is spinor as in the bulk;
 with ``local`` at first order the impurity and surface energies include ``E_Hub`` of the cluster sites' P_out as at nsp=1; otherwise they exclude the Hubbard term.
@@ -300,7 +300,7 @@ U-carrying frozen host written at ``nsp=2`` in local mode with the spinor ``_dm`
 ``ldm_beta=0.3``, and the energy window checked against the U-shifted d band. The empty sphere carries no U. ``auto`` resolves to ``local``
 under the impurity host rule; ``nsp=3/4`` with U was not run for surfaces, and KS surfaces are not supported. Seed a surface from the converged
 ``nsp=1`` surface (zero spin coherences) or, for SOC on, expect the spin-orbit transient: a host converged without SOC moves when SOC is
-switched on (``ni_host_soc`` in ``decks` (archive tag `archive/fable_v4b_u-2026-11-05`)`).
+switched on (``ni_host_soc`` in ``decks`` (archive tag ``archive/fable_v4b_u-2026-11-05``)).
 
 Surface energies exclude the Hubbard term, so U enters them only through the density.
 

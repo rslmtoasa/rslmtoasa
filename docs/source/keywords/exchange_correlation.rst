@@ -56,12 +56,7 @@ txc Parameter
 
 The selector namespace is intentionally separate from native libXC IDs.  Values
 ``1-99`` remain historical RS-LMTO selectors, ``100-199`` are predefined libXC
-XC bundles, and ``1000+ID`` requests exactly native libXC ID ``ID``.  The complete
-mapping table, equivalence classifications, and backend diagnostics are in
-:download:`the XC selector and libXC mapping contract <../../XC_SELECTOR_AND_LIBXC_MAPPING.md>`.
-
-For the full capability and spin-channel contract, see
-:download:`XC semantics and capabilities <../../XC_SEMANTICS_AND_CAPABILITIES.md>`.
+XC bundles, and ``1000+ID`` requests exactly native libXC ID ``ID``.
 
 **Example:**
 
