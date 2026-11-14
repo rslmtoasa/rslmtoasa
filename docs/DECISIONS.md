@@ -160,3 +160,7 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
 ## GBT k-space restart, from 2026-10-17
 
 - 2026-10-17 — GBT restart opened (spec `cleanup/gbt_kspace_restart_spec.md`, branch `fable_v4b_gbt`); old GBT tests, fixtures and analysis tools archived at tag `gbt-campaign-archive-2026-10`.
+
+## LDA+U, from 2026-11-05
+
+- 2026-11-14 — `hubbard_radial_moments` default is `local` with a nonzero fixed U/J where `local` is implemented, `spectral` otherwise; a radial-mode mismatch of a potential or frozen host resets its density matrix with a warning; the Hubbard energy is routed in `local` mode for bulk, impurity and surface runs, with and without hoh; FeO is not used as a comparison target. Measurements, open items and the full-tier result are in `docs/LDAU_STATUS.md`.
