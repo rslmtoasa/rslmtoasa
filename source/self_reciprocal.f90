@@ -115,7 +115,7 @@ contains
       do ik = 1, this%lattice%nrec
          moment = moment + this%symbolic_atom(this%lattice%nbulk + ik)%potential%mtot
       end do
-      kT = max(this%reciprocal_scf_cache%temperature*6.3336814e-6_rp, 1.0e-10_rp)
+      kT = max(this%reciprocal_scf_cache%temperature*kB_Ry_per_K, 1.0e-10_rp)
       allocate(occupations(nbands), density_matrix(nbasis, nbasis))
 
       state_source = 'accepted_kspace_scf'
@@ -314,7 +314,6 @@ contains
       real(rp) :: wk, occ, e, kT, farg
       complex(rp) :: u, d, ud
       real(rp) :: mxs, mys, mzs
-      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
       site_mom(:, :) = 0.0_rp
       kT = reciprocal_obj%temperature*kB_Ry_per_K

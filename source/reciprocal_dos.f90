@@ -38,7 +38,6 @@ contains
       character(len=100) :: filename
       character(len=360) :: energy_message
       real(rp) :: canonical_eband, dos_eband, projected_eband, dos_electrons, kT
-      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
       call root_info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
 
@@ -1132,7 +1131,6 @@ module function find_fermi_level_from_dos(this, total_electrons) result(fermi_le
    real(rp) :: e_min, e_max, e_mid, electrons_at_e
    real(rp) :: q1, q2, e1, e2, step
    real(rp), parameter :: eV_to_Ry = 0.073498618_rp
-   real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
    call root_info('find_fermi_level_from_dos: Finding Fermi level for ' // &
                   trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
@@ -1448,7 +1446,6 @@ end function integrate_dos_up_to_energy
 
       integer :: ie
       real(rp) :: e1, e2, f1, f2, kT, arg1, arg2, delta_e
-      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
       eband = 0.0_rp
       if (.not. allocated(this%total_dos) .or. .not. allocated(this%dos_energy_grid)) return

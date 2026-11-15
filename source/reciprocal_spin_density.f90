@@ -58,7 +58,6 @@ contains
       real(rp) :: wk, occ, e, kT, farg, epow
       complex(rp) :: u, d
       complex(rp) :: blk(2, 2)
-      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 #ifdef USE_MPI
       real(rp), allocatable :: rho_comm(:)
       integer :: nflat

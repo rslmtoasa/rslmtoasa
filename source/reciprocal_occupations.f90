@@ -4,7 +4,6 @@ submodule (reciprocal_mod) reciprocal_occupations
 #endif
    implicit none
 
-   real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
    real(rp), parameter :: occupation_kT_floor = 1.0e-10_rp
 
 contains
