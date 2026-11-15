@@ -1774,14 +1774,11 @@ contains
           .and. post_processing /= 'fermi_surface' &
           .and. post_processing /= 'spin_response' &
           .and. post_processing /= 'kspace_green' &
-          .and. post_processing /= 'frozen_magnon' &
-          .and. post_processing /= 'exchange_q' &
-          .and. post_processing /= 'linear_response' &
-          .and. post_processing /= 'pauli_projection') then
+          .and. post_processing /= 'frozen_magnon') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon', 'exchange_q', 'linear_response', 'pauli_projection'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 
