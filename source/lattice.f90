@@ -424,7 +424,6 @@ module lattice_mod
       procedure, private :: structb_strux_local
       procedure, private :: init_strux_storage
       procedure, private :: build_strux_inputs
-      procedure, private :: strux_mode
       procedure, private :: default_screening_alpha
       procedure, private :: build_hcr
       procedure, private :: build_rmt
@@ -733,15 +732,6 @@ module lattice_mod
       integer :: i
 
    end function default_screening_alpha
-
-   !> @brief Convert the screening string to a strux-library mode code.
-   !> @param[in] this Lattice object containing the screening option.
-   !> @return STRUX_LMTO47_IALPHA_* selector used by strux_compute.
-   module integer function strux_mode(this)
-      class(lattice), intent(in) :: this
-      character(len=:), allocatable :: screening_mode
-
-   end function strux_mode
 
    !> @brief Load symbolic-atom data needed by strux helpers.
    !> @details Lazily populates this%symbolic_atoms from the control input when

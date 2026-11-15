@@ -156,26 +156,6 @@ contains
       end do
    end function default_screening_alpha
 
-   !> @brief Convert the screening string to a strux-library mode code.
-   !> @param[in] this Lattice object containing the screening option.
-   !> @return STRUX_LMTO47_IALPHA_* selector used by strux_compute.
-   module integer function strux_mode(this)
-      class(lattice), intent(in) :: this
-      character(len=:), allocatable :: screening_mode
-
-      screening_mode = trim(lower(this%screening))
-      select case (screening_mode)
-      case ('manual', 'default')
-         strux_mode = STRUX_LMTO47_IALPHA_MANUAL
-      case ('sigma')
-         strux_mode = STRUX_LMTO47_IALPHA_SIGMA
-      case ('fitted')
-         strux_mode = STRUX_LMTO47_IALPHA_FITD
-      case default
-         call g_logger%fatal('Unsupported lattice.screening='//trim(this%screening), __FILE__, __LINE__)
-      end select
-   end function strux_mode
-
    !> @brief Load symbolic-atom data needed by strux helpers.
    !> @details Lazily populates this%symbolic_atoms from the control input when
    !>          muffin-tin radii or species labels are required.
