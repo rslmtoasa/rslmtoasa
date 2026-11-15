@@ -261,10 +261,6 @@ module charge_mod
          integer :: ireg
       end function fermi_pinned_region
 
-      module pure subroutine lower_case(s)
-         character(len=*), intent(inout) :: s
-      end subroutine lower_case
-
       module subroutine compensation_sites(this, ideep_lo, ideep_hi, nef_lo, nef_hi)
          class(charge), intent(inout) :: this
          integer, intent(out) :: ideep_lo, ideep_hi

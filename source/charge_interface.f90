@@ -478,10 +478,10 @@ contains
       if (len_trim(this%fix_fermi_to_region) == 0) return
 
       want = this%fix_fermi_to_region
-      call lower_case(want)
+      want = lower(want)
       do ir = 1, this%regions%nregion
          have = this%regions%region(ir)%name
-         call lower_case(have)
+         have = lower(have)
          if (trim(have) == trim(want)) then
             ireg = ir
             return
@@ -492,21 +492,6 @@ contains
          '" does not name any region in the registry. Leave it empty for the default '// &
          'free Fermi level from cluster neutrality (B7 §1.3).', __FILE__, __LINE__)
    end function fermi_pinned_region
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Lower-case a string in place, for case-insensitive region-name matching.
-   !---------------------------------------------------------------------------
-   module pure subroutine lower_case(s)
-      character(len=*), intent(inout) :: s
-      integer :: i, ic
-
-      do i = 1, len(s)
-         ic = iachar(s(i:i))
-         if (ic >= iachar('A') .and. ic <= iachar('Z')) s(i:i) = achar(ic + 32)
-      end do
-   end subroutine lower_case
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
