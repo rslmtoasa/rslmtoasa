@@ -35,7 +35,6 @@ module rsrec_cuda_plugin_mod
       procedure :: set_backend
       procedure :: set_periodic_lattice
       procedure :: set_hamiltonian
-      procedure :: set_velocity
       procedure :: upload_bsr
       procedure :: set_precision
       procedure :: chebyshev_dos
@@ -46,14 +45,8 @@ module rsrec_cuda_plugin_mod
       procedure :: orbital_moments
       procedure :: block_lanczos
       procedure :: scalar_lanczos
-      procedure :: stochastic_moments
-      procedure :: stochastic_moments_resident
-      procedure :: stochastic_moments_resident_batch
-      procedure :: clear_resident_moments
       procedure :: resident_moments_available
-      procedure :: resident_moment_bytes
       procedure :: reconstruct_conductivity
-      procedure :: stochastic_profile
    end type rsrec_cuda_backend
 
    type(rsrec_cuda_backend), target, save :: shared_gpu_context
@@ -103,12 +96,6 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_set_hamiltonian
       end function rsrec_cuda_set_hamiltonian
 
-      function rsrec_cuda_set_velocity(ctx, v_a, v_b, vo_a, vo_b) bind(C, name='rsrec_cuda_set_velocity')
-         import :: c_int, c_ptr
-         type(c_ptr), value :: ctx, v_a, v_b, vo_a, vo_b
-         integer(c_int) :: rsrec_cuda_set_velocity
-      end function rsrec_cuda_set_velocity
-
       function rsrec_cuda_orbital_moments(ctx, left, psiref, lld, a, b, mu) bind(C, name='rsrec_cuda_orbital_moments')
          import :: c_double, c_int, c_ptr
          type(c_ptr), value :: ctx, left, psiref, mu
@@ -141,51 +128,12 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_scalar_lanczos
       end function rsrec_cuda_scalar_lanczos
 
-      function rsrec_cuda_stochastic_moments(ctx, psiref, lld, a, b, mu_nm) bind(C, name='rsrec_cuda_stochastic_moments')
-         import :: c_double, c_int, c_ptr
-         type(c_ptr), value :: ctx, psiref, mu_nm
-         integer(c_int), value :: lld
-         real(c_double), value :: a, b
-         integer(c_int) :: rsrec_cuda_stochastic_moments
-      end function rsrec_cuda_stochastic_moments
-
-      function rsrec_cuda_stochastic_moments_resident(ctx, psiref, lld, a, b, trace_index, download_host, mu_nm) &
-         bind(C, name='rsrec_cuda_stochastic_moments_resident')
-         import :: c_double, c_int, c_ptr
-         type(c_ptr), value :: ctx, psiref, mu_nm
-         integer(c_int), value :: lld, trace_index, download_host
-         real(c_double), value :: a, b
-         integer(c_int) :: rsrec_cuda_stochastic_moments_resident
-      end function rsrec_cuda_stochastic_moments_resident
-
-      function rsrec_cuda_stochastic_moments_resident_batch(ctx, psiref, nstates, lld, a, b, trace_index, download_host, mu_nm) &
-         bind(C, name='rsrec_cuda_stochastic_moments_resident_batch')
-         import :: c_double, c_int, c_ptr
-         type(c_ptr), value :: ctx, psiref, mu_nm
-         integer(c_int), value :: nstates, lld, trace_index, download_host
-         real(c_double), value :: a, b
-         integer(c_int) :: rsrec_cuda_stochastic_moments_resident_batch
-      end function rsrec_cuda_stochastic_moments_resident_batch
-
-      function rsrec_cuda_clear_resident_moments(ctx) bind(C, name='rsrec_cuda_clear_resident_moments')
-         import :: c_int, c_ptr
-         type(c_ptr), value :: ctx
-         integer(c_int) :: rsrec_cuda_clear_resident_moments
-      end function rsrec_cuda_clear_resident_moments
-
       function rsrec_cuda_resident_count(ctx, count) bind(C, name='rsrec_cuda_resident_count')
          import :: c_int, c_ptr
          type(c_ptr), value :: ctx
          integer(c_int), intent(out) :: count
          integer(c_int) :: rsrec_cuda_resident_count
       end function rsrec_cuda_resident_count
-
-      function rsrec_cuda_resident_bytes(ctx, bytes) bind(C, name='rsrec_cuda_resident_bytes')
-         import :: c_int, c_long_long, c_ptr
-         type(c_ptr), value :: ctx
-         integer(c_long_long), intent(out) :: bytes
-         integer(c_int) :: rsrec_cuda_resident_bytes
-      end function rsrec_cuda_resident_bytes
 
       function rsrec_cuda_reconstruct_conductivity(ctx, energy, n_energy, moments, a, b, factor, ntrace, energy_block, c_out, &
          gamma_seconds, gamma_basis_seconds, gamma_fill_seconds, gemm_seconds, result_d2h_seconds, gamma_h2d_bytes, &
@@ -200,16 +148,6 @@ module rsrec_cuda_plugin_mod
          integer(c_int), intent(out) :: actual_energy_block
          integer(c_int) :: rsrec_cuda_reconstruct_conductivity
       end function rsrec_cuda_reconstruct_conductivity
-
-      function rsrec_cuda_stochastic_profile(ctx, h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, &
-         mu_pack_seconds, h2d_bytes, d2h_bytes, mu_pack_bytes) &
-         bind(C, name='rsrec_cuda_stochastic_profile')
-         import :: c_double, c_int, c_long_long, c_ptr
-         type(c_ptr), value :: ctx
-         real(c_double), intent(out) :: h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, mu_pack_seconds
-         integer(c_long_long), intent(out) :: h2d_bytes, d2h_bytes, mu_pack_bytes
-         integer(c_int) :: rsrec_cuda_stochastic_profile
-      end function rsrec_cuda_stochastic_profile
 
       function rsrec_cuda_set_precision(ctx, prec) bind(C, name='rsrec_cuda_set_precision')
          import :: c_int, c_ptr
@@ -433,26 +371,6 @@ contains
 #endif
    end subroutine set_hamiltonian
 
-   subroutine set_velocity(this, v_a, v_b, vo_a, vo_b)
-      class(rsrec_cuda_backend), intent(inout) :: this
-      complex(rp), target, contiguous, intent(in) :: v_a(:, :, :, :)
-      complex(rp), target, contiguous, intent(in) :: v_b(:, :, :, :)
-      complex(rp), target, contiguous, intent(in), optional :: vo_a(:, :, :, :)
-      complex(rp), target, contiguous, intent(in), optional :: vo_b(:, :, :, :)
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      type(c_ptr) :: voa_ptr, vob_ptr
-      voa_ptr = c_null_ptr
-      vob_ptr = c_null_ptr
-      if (present(vo_a)) voa_ptr = c_loc(vo_a)
-      if (present(vo_b)) vob_ptr = c_loc(vo_b)
-      status = rsrec_cuda_set_velocity(this%ctx, c_loc(v_a), c_loc(v_b), voa_ptr, vob_ptr)
-      call check_status(status, 'rsrec_cuda_set_velocity')
-#else
-      if (present(vo_a) .or. present(vo_b)) continue
-#endif
-   end subroutine set_velocity
-
    subroutine orbital_moments(this, left, psiref, lld, a, b, mu)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: left(:, :, :)
@@ -656,71 +574,6 @@ contains
 #endif
    end subroutine scalar_lanczos
 
-   subroutine stochastic_moments(this, psiref, lld, a, b, mu_nm)
-      class(rsrec_cuda_backend), intent(inout) :: this
-      complex(rp), target, contiguous, intent(in) :: psiref(:, :, :)
-      integer, intent(in) :: lld
-      real(rp), intent(in) :: a, b
-      complex(rp), target, contiguous, intent(out) :: mu_nm(:, :, :, :)
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      status = rsrec_cuda_stochastic_moments(this%ctx, c_loc(psiref), int(lld, c_int), &
-         real(a, c_double), real(b, c_double), c_loc(mu_nm))
-      call check_status(status, 'rsrec_cuda_stochastic_moments')
-#endif
-   end subroutine stochastic_moments
-
-   subroutine stochastic_moments_resident(this, psiref, lld, a, b, trace_index, download_host, mu_nm)
-      class(rsrec_cuda_backend), intent(inout) :: this
-      complex(rp), target, contiguous, intent(in) :: psiref(:, :, :)
-      integer, intent(in) :: lld, trace_index
-      real(rp), intent(in) :: a, b
-      logical, intent(in) :: download_host
-      complex(rp), target, contiguous, intent(inout), optional :: mu_nm(:, :, :, :)
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      type(c_ptr) :: mu_ptr
-      mu_ptr = c_null_ptr
-      if (present(mu_nm)) mu_ptr = c_loc(mu_nm)
-      status = rsrec_cuda_stochastic_moments_resident(this%ctx, c_loc(psiref), int(lld, c_int), &
-         real(a, c_double), real(b, c_double), int(trace_index, c_int), &
-         merge(1_c_int, 0_c_int, download_host), mu_ptr)
-      call check_status(status, 'rsrec_cuda_stochastic_moments_resident')
-#else
-      if (present(mu_nm)) mu_nm = (0.0_rp, 0.0_rp)
-#endif
-   end subroutine stochastic_moments_resident
-
-   subroutine stochastic_moments_resident_batch(this, psiref, nstates, lld, a, b, trace_index, download_host, mu_nm)
-      class(rsrec_cuda_backend), intent(inout) :: this
-      complex(rp), target, contiguous, intent(in) :: psiref(:, :, :, :)
-      integer, intent(in) :: nstates, lld, trace_index
-      real(rp), intent(in) :: a, b
-      logical, intent(in) :: download_host
-      complex(rp), target, contiguous, intent(inout), optional :: mu_nm(:, :, :, :, :)
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      type(c_ptr) :: mu_ptr
-      mu_ptr = c_null_ptr
-      if (present(mu_nm)) mu_ptr = c_loc(mu_nm)
-      status = rsrec_cuda_stochastic_moments_resident_batch(this%ctx, c_loc(psiref), int(nstates, c_int), &
-         int(lld, c_int), real(a, c_double), real(b, c_double), int(trace_index, c_int), &
-         merge(1_c_int, 0_c_int, download_host), mu_ptr)
-      call check_status(status, 'rsrec_cuda_stochastic_moments_resident_batch')
-#else
-      if (present(mu_nm)) mu_nm = (0.0_rp, 0.0_rp)
-#endif
-   end subroutine stochastic_moments_resident_batch
-
-   subroutine clear_resident_moments(this)
-      class(rsrec_cuda_backend), intent(inout) :: this
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      status = rsrec_cuda_clear_resident_moments(this%ctx)
-      call check_status(status, 'rsrec_cuda_clear_resident_moments')
-#endif
-   end subroutine clear_resident_moments
-
    logical function resident_moments_available(this, ntrace)
       class(rsrec_cuda_backend), intent(in) :: this
       integer, intent(in), optional :: ntrace
@@ -739,23 +592,6 @@ contains
       resident_moments_available = .false.
 #endif
    end function resident_moments_available
-
-   integer(int64) function resident_moment_bytes(this)
-      class(rsrec_cuda_backend), intent(in) :: this
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      integer(c_long_long) :: bytes
-      bytes = 0_c_long_long
-      status = rsrec_cuda_resident_bytes(this%ctx, bytes)
-      if (status /= 0_c_int) then
-         resident_moment_bytes = 0_int64
-      else
-         resident_moment_bytes = int(bytes, int64)
-      end if
-#else
-      resident_moment_bytes = 0_int64
-#endif
-   end function resident_moment_bytes
 
    subroutine reconstruct_conductivity(this, energy, a, b, factor, moments, ntrace, energy_block, c_out, &
                                         gamma_seconds, gamma_basis_seconds, gamma_fill_seconds, gemm_seconds, &
@@ -805,28 +641,6 @@ contains
       c_out = (0.0_rp, 0.0_rp)
 #endif
    end subroutine reconstruct_conductivity
-
-   subroutine stochastic_profile(this, h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, mu_pack_seconds, &
-                                h2d_bytes, d2h_bytes, mu_pack_bytes)
-      class(rsrec_cuda_backend), intent(inout) :: this
-      real(rp), intent(out) :: h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, mu_pack_seconds
-      integer(c_long_long), intent(out) :: h2d_bytes, d2h_bytes, mu_pack_bytes
-#ifdef USE_CUDA_PLUGIN
-      integer(c_int) :: status
-      status = rsrec_cuda_stochastic_profile(this%ctx, h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, &
-         mu_pack_seconds, h2d_bytes, d2h_bytes, mu_pack_bytes)
-      call check_status(status, 'rsrec_cuda_stochastic_profile')
-#else
-      h2d_seconds = 0.0_rp
-      cheb_seconds = 0.0_rp
-      d2h_seconds = 0.0_rp
-      conversion_seconds = 0.0_rp
-      mu_pack_seconds = 0.0_rp
-      h2d_bytes = 0
-      d2h_bytes = 0
-      mu_pack_bytes = 0
-#endif
-   end subroutine stochastic_profile
 
 #ifdef USE_CUDA_PLUGIN
    subroutine check_status(status, where)
