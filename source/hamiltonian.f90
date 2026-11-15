@@ -477,24 +477,6 @@ module hamiltonian_mod
 
    end subroutine validate_ccor_inputs
 
-   !> @brief Build one scalar-relativistic CCOR pair block.
-   !> @details Computes the two-centre combined-correction hopping contribution
-   !>          between atom sites ia/ja and types it/jt for neighbor index m.
-   !> @param[in] this Hamiltonian object containing potentials and CCOR settings.
-   !> @param[in] ia Site index of the source atom.
-   !> @param[in] ja Site index of the neighbor atom.
-   !> @param[in] it Atom type of ia.
-   !> @param[in] jt Atom type of ja.
-   !> @param[in] ino Bravais/type index used by the target Hamiltonian layout.
-   !> @param[in] m Neighbor-shell index.
-   !> @param[out] hcc CCOR block in spin-orbital basis.
-   module subroutine build_ccor_pair_block_scalar(this, ia, ja, it, jt, ino, m, hcc)
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia, ja, it, jt, ino, m
-      complex(rp), dimension(nb, nb), intent(out) :: hcc
-
-   end subroutine build_ccor_pair_block_scalar
-
    !> Build a GBT CCOR block by linking primitive directed S and Sdot first.
    module subroutine build_ccor_pair_block_gbt(this, ia, ja, it, jt, m, link, &
                                                 sign_i, sign_j, s_block, sdot_block, hcc)
