@@ -250,15 +250,6 @@ contains
    subroutine vacuum_lead_restore_to_default(this)
       class(vacuum_lead), intent(inout) :: this
 
-      if (allocated(this%pnu)) deallocate (this%pnu)
-      if (allocated(this%dnu)) deallocate (this%dnu)
-      if (allocated(this%enu)) deallocate (this%enu)
-      if (allocated(this%c)) deallocate (this%c)
-      if (allocated(this%vl)) deallocate (this%vl)
-      if (allocated(this%srdel)) deallocate (this%srdel)
-      if (allocated(this%qpar)) deallocate (this%qpar)
-      if (allocated(this%ppar)) deallocate (this%ppar)
-
       this%lmax = 2
       this%ws_r = 0.0_rp
       this%v0 = 0.0_rp
@@ -372,14 +363,13 @@ contains
    !> @param[in] a       Log-mesh parameter. Optional; defaults to 0.02,
    !>                     the value the atomic path uses.
    !---------------------------------------------------------------------------
-   subroutine vacuum_lead_generate(this, solver, ws_r, v0, lmax, pnu, a)
+   subroutine vacuum_lead_generate(this, solver, ws_r, v0, lmax, pnu)
       class(vacuum_lead), intent(inout) :: this
       type(self), intent(inout) :: solver
       real(rp), intent(in) :: ws_r
       real(rp), intent(in) :: v0
       integer, intent(in), optional :: lmax
       real(rp), dimension(0:), intent(in), optional :: pnu
-      real(rp), intent(in), optional :: a
 
       type(symbolic_atom) :: es
       real(rp), dimension(:, :), allocatable :: v
@@ -398,7 +388,6 @@ contains
       this%ws_r = ws_r
       this%v0 = v0
       this%a = 0.02_rp
-      if (present(a)) this%a = a
 
       ! Linearization point. A node-free propagating state in a constant
       ! potential requires dnu < l, with dnu = l exactly at the band

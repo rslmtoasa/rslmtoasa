@@ -570,7 +570,7 @@ contains
    !> exactly as vacuum/bulk are in `build_from_buildsurf` -- the charge loop
    !> in `interfacepot` only ever touches sites the registry marks active.
    !>
-   !> `fermi_a`/`fermi_b` are OPTIONAL: passing a value <= `fermi_sentinel`
+   !> `fermi_a`/`fermi_b` are OPTIONAL: passing a value >= huge(1.0_rp)/2
    !> (the huge() default `charge%fermi_a`/`fermi_b` restore to) means ″not
    !> supplied″, exactly as CONTRACT_FROZEN_REGION.md §2 requires -- E_F is
    !> the one quantity a frozen region may legitimately omit, and
@@ -586,15 +586,11 @@ contains
    !> @param[in] reference_type  Per-site frozen-reference class index,
    !>                    dimension(nbas) (lattice%chargetrf_type). Optional.
    !> @param[in] fermi_a      Region A source E_F (Ry). Optional; a value
-   !>                    <= fermi_sentinel means ″not supplied″.
+   !>                    >= huge(1.0_rp)/2 means ″not supplied″.
    !> @param[in] fermi_b      Region B source E_F (Ry). Same convention.
-   !> @param[in] fermi_sentinel  Threshold below which fermi_a/fermi_b count
-   !>                    as supplied. Optional, default huge(1.0_rp)/2 (any
-   !>                    ordinary Ry value is far below it; only the exact
-   !>                    huge() default sentinel is excluded).
    !---------------------------------------------------------------------------
    subroutine region_registry_build_from_interface(this, nbas, nlay_a, nlay_active, z, w, &
-                                                     reference_type, fermi_a, fermi_b, fermi_sentinel, &
+                                                     reference_type, fermi_a, fermi_b, &
                                                      kind_b)
       class(region_registry), intent(inout) :: this
       integer, intent(in) :: nbas
@@ -605,7 +601,6 @@ contains
       integer, dimension(:), intent(in), optional :: reference_type
       real(rp), intent(in), optional :: fermi_a
       real(rp), intent(in), optional :: fermi_b
-      real(rp), intent(in), optional :: fermi_sentinel
       !> Region B’s kind. Optional; defaults to `region_kind_lead_b` (the
       !> metallic A | B geometry). Pass `region_kind_vacuum` for A | vacuum
       !> (B7.6): that is what makes `gauge_anchor` skip region B when choosing
@@ -621,7 +616,6 @@ contains
       integer, parameter :: reg_b = 3
 
       sentinel_ = huge(1.0_rp)/2.0_rp
-      if (present(fermi_sentinel)) sentinel_ = fermi_sentinel
 
       kind_b_ = region_kind_lead_b
       if (present(kind_b)) kind_b_ = kind_b
