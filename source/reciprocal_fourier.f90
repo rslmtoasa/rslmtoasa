@@ -1153,7 +1153,7 @@ module subroutine check_multisite_hamiltonian_diagonal(this)
       call g_logger%warning('reciprocal%check_multisite_hamiltonian_diagonal: H(k) dimensions do not match the active site layout; diagnostic skipped.', __FILE__, __LINE__)
       return
    end if
-   if (bdg_mode .or. site_block /= nb .or. site_block /= 2*norb .or. spin_offset /= norb) then
+   if (site_block /= nb .or. site_block /= 2*norb .or. spin_offset /= norb) then
       call g_logger%warning('reciprocal%check_multisite_hamiltonian_diagonal: unsupported non-normal spin/site layout; diagnostic skipped.', __FILE__, __LINE__)
       return
    end if

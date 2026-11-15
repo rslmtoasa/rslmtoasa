@@ -191,7 +191,7 @@ contains
       write(unit_bin, iostat=ios) aimag(eigenvectors_global)
 
       if (this%write_eigenpair_projections) then
-         if (.not. bdg_mode .and. nsites > 0) then
+         if (nsites > 0) then
             if (mod(nmat, nsites) == 0 .and. mod(nmat/nsites, 2) == 0) then
                call make_export_projection_weights(this, eigenvectors_global, projection_weights)
                write(unit_bin, iostat=ios) projection_weights
@@ -337,10 +337,6 @@ contains
 
       if (this%has_nonzero_q_gbt()) then
          call g_logger%fatal('write_spin_resolved_payload: pure global spin sectors are undefined for a finite-q GBT spiral.', &
-                             __FILE__, __LINE__)
-      end if
-      if (bdg_mode) then
-         call g_logger%fatal('write_spin_resolved_payload: BdG/Nambu eigenpairs cannot be exported as ordinary up/down sectors.', &
                              __FILE__, __LINE__)
       end if
       if (.not. associated(this%control)) then

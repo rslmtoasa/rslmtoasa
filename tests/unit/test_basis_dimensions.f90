@@ -10,7 +10,7 @@
 !>          silently pass through the unit suite.
 !------------------------------------------------------------------------------
 program test_basis_dimensions
-   use basis_mod, only: basis_init, lmax_basis, norb, spin_off, nb, bdg_mode
+   use basis_mod, only: basis_init, lmax_basis, norb, spin_off, nb
    implicit none
 
    logical :: failed
@@ -40,7 +40,6 @@ contains
       call require(norb == expected_norb, trim(label)//' norb')
       call require(spin_off == expected_spin_off, trim(label)//' spin offset')
       call require(nb == expected_nb, trim(label)//' normal spinor block dimension')
-      call require(.not. bdg_mode, trim(label)//' normal-mode flag')
    end subroutine check_basis
 
    subroutine test_reinitialization()

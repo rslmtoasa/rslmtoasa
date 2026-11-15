@@ -47,7 +47,7 @@ module reciprocal_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
-   use basis_mod, only: bdg_mode, lmax_basis, nb, norb, spin_off
+   use basis_mod, only: lmax_basis, nb, norb, spin_off
    use spin_density_mod, only: spin_density
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context, get_cuda_device_override
    use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset

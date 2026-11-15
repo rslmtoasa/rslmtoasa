@@ -48,16 +48,12 @@ module basis_mod
    !> Number of orbitals per spin channel: norb = (lmax_basis + 1)**2
    integer, public, protected :: norb = 9
 
-   !> Full spinor block size: nb = 2*norb in normal mode, 4*norb in BdG mode.
+   !> Full spinor block size: nb = 2*norb.
    integer, public, protected :: nb = 18
 
    !> Spin-down block offset within the nb×nb spinor block.
-   !> In normal mode spin_off = norb (spin-down block starts at index norb+1).
+   !> spin_off = norb (spin-down block starts at index norb+1).
    integer, public, protected :: spin_off = 9
-
-   !> BdG / Nambu-spinor mode flag.
-   !> When .true., nb = 4*norb and the Hamiltonian lives in Nambu space.
-   logical, public, protected :: bdg_mode = .false.
 
    public :: basis_init
 
@@ -72,17 +68,10 @@ contains
    !> control%build_from_file.
    !>
    !> @param[in] lmax   Maximum angular momentum (1=sp, 2=spd, 3=spdf)
-   !> @param[in] bdg    (optional) Enable Nambu/BdG mode (default .false.)
    !---------------------------------------------------------------------------
-   subroutine basis_init(lmax, bdg)
+   subroutine basis_init(lmax)
       use mpi_mod
       integer, intent(in) :: lmax
-      logical, intent(in), optional :: bdg
-
-      logical :: bdg_
-
-      bdg_ = .false.
-      if (present(bdg)) bdg_ = bdg
 
       if (lmax < 1 .or. lmax > 3) then
          write (*, '(a,i0)') 'basis_init: unsupported lmax = ', lmax
@@ -92,14 +81,7 @@ contains
       lmax_basis = lmax
       norb       = (lmax + 1)**2
       spin_off   = norb
-
-      if (bdg_) then
-         nb       = 4*norb
-         bdg_mode = .true.
-      else
-         nb       = 2*norb
-         bdg_mode = .false.
-      end if
+      nb         = 2*norb
 
       if (rank==0) then
          call g_logger%info('Basis initialised: lmax=' // int2str(lmax_basis) // &
@@ -107,7 +89,7 @@ contains
             '  norb=' // int2str(norb) // &
             '  nb=' // int2str(nb) // &
             '  spin_off=' // int2str(spin_off) // &
-            '  bdg=' // merge('T', 'F', bdg_mode), __FILE__, __LINE__)
+            '  bdg=F', __FILE__, __LINE__)
       end if
 
    end subroutine basis_init
