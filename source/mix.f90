@@ -457,7 +457,7 @@ contains
       character(len=*), intent(in) :: whereto
       integer, intent(in), optional :: iteration
       logical, intent(in), optional :: guard_collinear
-      integer :: it, I, lcount, qcols, spin
+      integer :: it, I, lcount, spin
       integer :: iteration_value
       logical :: guard_active
 
@@ -475,7 +475,6 @@ contains
          this%qia_new = 0.0_rp
          do it = 1, this%lattice%nrec
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-            qcols = size(this%qia_new, 2)
             do I = 1, lcount
                if (guard_active) then
                   do spin = 1, 2
@@ -484,12 +483,12 @@ contains
                         this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(2, I - 1, spin))
                   end do
                end if
-               if (I              <= qcols) this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               if (I +     lcount <= qcols) this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               if (I + 2 * lcount <= qcols) this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               if (I + 3 * lcount <= qcols) this%qia_new(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               if (I + 4 * lcount <= qcols) this%qia_new(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               if (I + 5 * lcount <= qcols) this%qia_new(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               this%qia_new(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qia_new(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               this%qia_new(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                   if (any(this%qia_new(it, :) /= this%qia_new(it, :)) .or. maxval(abs(this%qia_new(it, :))) > 1.0e6_rp) then
@@ -502,14 +501,13 @@ contains
          this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-            qcols = size(this%qia_old, 2)
             do I = 1, lcount
-               if (I              <= qcols) this%qia_old(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               if (I +     lcount <= qcols) this%qia_old(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               if (I + 2 * lcount <= qcols) this%qia_old(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               if (I + 3 * lcount <= qcols) this%qia_old(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               if (I + 4 * lcount <= qcols) this%qia_old(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               if (I + 5 * lcount <= qcols) this%qia_old(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               this%qia_old(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               this%qia_old(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               this%qia_old(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               this%qia_old(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qia_old(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               this%qia_old(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                if (any(this%qia_old(it, :) /= this%qia_old(it, :)) .or. maxval(abs(this%qia_old(it, :))) > 1.0e6_rp) then
@@ -521,14 +519,13 @@ contains
          this%qiaprev = 0.0_rp
          do it = 1, this%lattice%nrec
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-            qcols = size(this%qiaprev, 2)
             do I = 1, lcount
-               if (I              <= qcols) this%qiaprev(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               if (I +     lcount <= qcols) this%qiaprev(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               if (I + 2 * lcount <= qcols) this%qiaprev(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               if (I + 3 * lcount <= qcols) this%qiaprev(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               if (I + 4 * lcount <= qcols) this%qiaprev(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               if (I + 5 * lcount <= qcols) this%qiaprev(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               this%qiaprev(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               this%qiaprev(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               this%qiaprev(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               this%qiaprev(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qiaprev(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               this%qiaprev(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                if (any(this%qiaprev(it, :) /= this%qiaprev(it, :)) .or. maxval(abs(this%qiaprev(it, :))) > 1.0e6_rp) then
@@ -540,14 +537,13 @@ contains
       case ('current')
          do it = 1, this%lattice%nrec
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-            qcols = size(this%qia, 2)
             do I = 1, lcount
-               if (I              <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I             )
-               if (I +     lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I +     lcount)
-               if (I + 2 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 2 * lcount)
-               if (I + 3 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + 3 * lcount)
-               if (I + 4 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)    = this%qia(it, I + 4 * lcount)
-               if (I + 5 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)    = this%qia(it, I + 5 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I             )
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I +     lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 2 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + 3 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)    = this%qia(it, I + 4 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)    = this%qia(it, I + 5 * lcount)
             end do
          end do
       end select
@@ -587,11 +583,6 @@ contains
             if (rank == 0) call g_logger%info('Spin moment at atom '//fmt('i4', (ia))//' is being considered induced', __FILE__, __LINE__)
          end if
          ! Defensive checks on magbeta
-         if (.not. allocated(this%magbeta)) then
-            if (rank == 0) call g_logger%warning('magbeta not allocated — resetting to 1.0 for all atoms', __FILE__, __LINE__)
-            allocate(this%magbeta(this%lattice%nrec))
-            this%magbeta(:) = 1.0d0
-         end if
          if (this%magbeta(ia) /= this%magbeta(ia) .or. this%magbeta(ia) < 0.0d0 .or. this%magbeta(ia) > 1.0e6_rp) then
             if (rank == 0) call g_logger%warning('Suspicious magbeta at atom '//fmt('i4', ia)//' -> resetting to 1.0', __FILE__, __LINE__)
             this%magbeta(ia) = 1.0d0
@@ -638,7 +629,6 @@ contains
       logical :: reset
       real(rp) :: Bnorm
       integer :: nb_slice, lcount, occ_cols, packed_cols
-      integer :: ncols
       real(rp) :: denom
       integer :: broy_width
       integer :: iteration_value
@@ -649,12 +639,6 @@ contains
       if (present(iteration)) iteration_value = iteration
       if (present(guard_collinear)) guard_active = guard_collinear
 
-      if (size(qia_old, 1) /= this%lattice%nrec .or. size(qia_new, 1) /= this%lattice%nrec) then
-         call g_logger%fatal('mixpq received qia arrays with inconsistent atom count', __FILE__, __LINE__)
-      end if
-      if (size(qia_old, 2) /= size(qia_new, 2) .or. size(qia_old, 2) /= size(this%qia, 2)) then
-         call g_logger%fatal('mixpq received qia arrays with inconsistent packed widths', __FILE__, __LINE__)
-      end if
       broy_width = this%lattice%nrec*size(qia_old, 2)
 
       if (guard_active) then
@@ -724,7 +708,7 @@ contains
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
          lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
-         occ_cols = min(2*lcount, size(this%qia, 2))
+         occ_cols = 2*lcount
          this%charge%trq = 0.0d0
          this%charge%cht = 0.0d0
          this%charge%cht = sum(this%qia_new(ia, 1:occ_cols)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
@@ -740,13 +724,12 @@ contains
 
       do ia = 1, this%lattice%nrec
          lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
-         packed_cols = min(6*lcount, size(qia_old, 2))
+         packed_cols = 6*lcount
          denom = max(1.0_rp, real(packed_cols)/2.0_rp)
          delta_atom = sqrt(sum((this%qia_old(ia, 1:packed_cols) - this%qia_new(ia, 1:packed_cols))**2))/denom
          if (rank == 0) call g_logger%info('Moment diff for atom:'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', delta_atom), __FILE__, __LINE__)
       end do
-      ncols = size(qia_old, 2)
-      nb_slice = min(6*(lmax_basis + 1), ncols)
+      nb_slice = 6*(lmax_basis + 1)
       denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
@@ -756,31 +739,24 @@ contains
       real(rp), intent(in) :: values(:, :)
       integer, intent(in) :: iteration
       character(len=*), intent(in) :: stage
-      integer :: it, lcount, l, spin, q0_col, q2_col, pl_col, qcols
+      integer :: it, lcount, l, spin, q0_col, q2_col, pl_col
       character(len=48) :: field
 
       do it = 1, this%lattice%nrec
          lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-         qcols = size(values, 2)
          do spin = 1, 2
             do l = 0, lcount - 1
                q0_col = l + 1 + (spin - 1)*lcount
                q2_col = l + 1 + (spin + 1)*lcount
                pl_col = l + 1 + (spin + 3)*lcount
-               if (q0_col <= qcols) then
-                  call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
-                     it, l, spin, iteration, values(it, q0_col))
-               end if
-               if (q2_col <= qcols) then
-                  field = trim(stage)//' q2'
-                  call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
-                     it, l, spin, trim(field), iteration, values(it, q2_col))
-               end if
-               if (pl_col <= qcols) then
-                  field = trim(stage)//' PL'
-                  call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
-                     it, l, spin, trim(field), iteration, values(it, pl_col))
-               end if
+               call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                  it, l, spin, iteration, values(it, q0_col))
+               field = trim(stage)//' q2'
+               call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                  it, l, spin, trim(field), iteration, values(it, q2_col))
+               field = trim(stage)//' PL'
+               call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                  it, l, spin, trim(field), iteration, values(it, pl_col))
             end do
          end do
       end do
@@ -840,19 +816,15 @@ contains
 
    subroutine mix_ldm_linear(this)
       class(mix), intent(inout) :: this
-      real(rp) :: beta_loc
 
-      beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
-      this%ldm_mix(:, :, :, :) = (1.0_rp - beta_loc)*this%ldm_old(:, :, :, :) + beta_loc*this%ldm_new(:, :, :, :)
+      this%ldm_mix(:, :, :, :) = (1.0_rp - this%ldm_beta)*this%ldm_old(:, :, :, :) + this%ldm_beta*this%ldm_new(:, :, :, :)
    end subroutine mix_ldm_linear
    !> Linear mixing of the spinor d-shell P with ldm_beta: P_mix = beta*P_out + (1-beta)*P_prev. The history
    !> starts from the mixed collinear ldm with zero spin coherences. P_out (ldm_spinor) is left unchanged.
    subroutine mix_ldm_spinor_linear(this)
       class(mix), intent(inout) :: this
-      real(rp) :: beta_loc
       integer :: it, na, s, i, j
 
-      beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
       do it = 1, this%lattice%nrec
          na = this%lattice%nbulk + it
          if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor)) cycle
@@ -868,8 +840,8 @@ contains
                end do
             end do
          end if
-         this%symbolic_atom(na)%potential%ldm_spinor_mix = (1.0_rp - beta_loc)*this%symbolic_atom(na)%potential%ldm_spinor_mix &
-                                                           + beta_loc*this%symbolic_atom(na)%potential%ldm_spinor
+         this%symbolic_atom(na)%potential%ldm_spinor_mix = (1.0_rp - this%ldm_beta)*this%symbolic_atom(na)%potential%ldm_spinor_mix &
+                                                           + this%ldm_beta*this%symbolic_atom(na)%potential%ldm_spinor
       end do
    end subroutine mix_ldm_spinor_linear
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
