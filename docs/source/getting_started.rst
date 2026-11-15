@@ -20,7 +20,7 @@ Prerequisites
 **Required:**
 
 - Fortran 2008 compiler (Intel ifort, GNU gfortran, or equivalent)
-- CMake 3.5 or later
+- CMake 3.19 or later
 - Make
 
 **Optional:**
