@@ -1803,7 +1803,7 @@ contains
    module subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji, u_type
+      integer :: ino, nr, nlim, m, i, j, ja, ji, u_type
       integer :: rd1_status
 
       if (this%hubbard_u_general_check) then
@@ -2006,7 +2006,7 @@ contains
       real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
       real(rp), dimension(3) :: vet
       real(rp), dimension(norb, norb) :: hhh
-      integer :: i, j, k, l, m, n, it, jt, jj, nn_max_loc
+      integer :: m, it, jt, jj, nn_max_loc
       integer :: ni, mdir
       integer :: kk ! Clust size number
       real(rp), dimension(:, :), allocatable :: ham_vec

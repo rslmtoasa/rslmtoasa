@@ -331,7 +331,7 @@ contains
       complex(rp), intent(in), optional :: eecc_in(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in), optional :: hallcc_in(nb_in, nb_in, nnmax_in, *)
       complex(sp), pointer, intent(out), optional :: cee_out(:, :, :, :), cha_out(:, :, :, :)
-      integer :: t_in, k_in, l_in
+      integer :: t_in, l_in
       logical :: valid, with_cc
 
       with_cc = present(eecc_in) .and. present(hallcc_in)
@@ -536,7 +536,6 @@ contains
       complex(sp), pointer, intent(out) :: fvee(:, :, :, :), fvha(:, :, :, :)
       complex(sp), pointer, intent(out) :: fveeo(:, :, :, :), fvhao(:, :, :, :)
       logical :: valid
-      integer :: t_in
 
       valid = this%vel%valid &
          .and. this%vel%nb == nb_in &

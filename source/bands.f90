@@ -272,7 +272,7 @@ contains
       integer :: ia_glob, ia_loc, itype
       integer :: l, l_index, m1, m2, m3, m4, mmax, ispin, ispin2
       integer :: i0, i1, iorb, jorb, m1_val, m2_val, m3_val, m4_val
-      integer :: i, n_enabled, n_conv
+      integer :: n_enabled, n_conv
       logical, save :: slater_diag_printed = .false.
       real(rp) :: f0, f2, f4, f6, den_u, den_j, uval, jval
       real(rp) :: result
@@ -882,7 +882,6 @@ contains
       real(rp) :: sgef, pmef, smef, isgn, sums, sump, sumd, mnorm
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(this%en%channels_ldos + 10) :: y_imag
-      real(rp), dimension(nb) :: chebmom(nb), chebmom1(nb), chebmom2(nb)
       real(rp), dimension(this%lattice%nrec, 2*(lmax_basis + 1)) :: occ
       integer :: nchan, nchan_spin
 

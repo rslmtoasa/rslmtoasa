@@ -293,7 +293,7 @@ contains
       integer :: iostatus, funit
 
       ! Local variables
-      integer :: i, l, is, file_lmax, lsrc
+      integer :: l, is, file_lmax, lsrc
 
       include 'include_codes/namelists/potential.f90'
 

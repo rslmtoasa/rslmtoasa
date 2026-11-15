@@ -616,7 +616,7 @@ contains
    module subroutine generate_mp_mesh(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ik, ix, iy, iz, nk_irred
+      integer :: ik, ix, iy, iz
       real(rp) :: kx, ky, kz
       real(rp), parameter :: tol = 1.0e-8_rp
       integer :: shift(3), nfull
@@ -695,7 +695,6 @@ contains
       class(reciprocal), intent(inout) :: this
       ! Local variables
       integer :: ntype
-      character(len=10) :: basis_type
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.basis_size', this%basis_size, [this%lattice%ntype])

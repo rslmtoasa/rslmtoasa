@@ -119,7 +119,7 @@ contains
 
    module subroutine calculate_intersite_gf_twoindex(this)
       use mpi_mod
-   use basis_mod, only: nb, norb, spin_off
+   use basis_mod, only: norb
       implicit none
       class(green), intent(inout) :: this
       integer :: i, j, k, l1, l2, k0, j0, ia_glob, ia

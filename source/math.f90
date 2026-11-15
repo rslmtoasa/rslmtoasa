@@ -1362,7 +1362,7 @@ contains
       character(len=*), intent(in) :: transformation
       complex(rp), dimension(:, :), intent(inout) :: ham
       ! local variables
-      integer :: i, ii, j, jj, n
+      integer :: ii, n
       complex(rp) :: const, cone
       complex(rp), allocatable :: hesf(:, :), hcart(:, :), v(:, :), vc(:, :), htmp(:, :)
 

@@ -210,7 +210,7 @@ contains
    !> @param[inout] this Reciprocal object providing Hamiltonian and lattice state.
    module subroutine diagonalize_hall_experimental(this)
       class(reciprocal), intent(inout) :: this
-      integer :: nsites, site_block, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
+      integer :: nsites, site_block, n, jsite, isite, ineigh, ia, ja, nr, info, lwork
       integer :: i_start, i_end, j_start, j_end
       complex(rp), allocatable :: hall_mat(:, :), work(:)
       real(rp), allocatable :: evals(:), rwork(:)

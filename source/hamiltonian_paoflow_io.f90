@@ -18,7 +18,6 @@ contains
       integer :: ntype, iostat1, iostat2, iostatus
       real(rp), dimension(3) :: vet, vetpao, idx
       real(rp), dimension(3, 3) :: a_inv
-      complex(rp), dimension(nb, nb) :: dum
       n_atoms = this%charge%lattice%ntype
       max_orbital = norb
 

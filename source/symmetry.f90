@@ -414,7 +414,7 @@ contains
       ! Local variables
       real(rp), dimension(:, :), allocatable :: hs_kpoints
       character(len=10), dimension(:), allocatable :: hs_labels
-      integer :: nhs, nseg, total_pts, i, j, k, idx
+      integer :: nhs, nseg, total_pts, i, j, idx
       character(len=256) :: hs_list
       integer :: il
       integer, dimension(:), allocatable :: path

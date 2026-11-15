@@ -496,7 +496,7 @@ contains
       ! Input
       class(conductivity), intent(inout) :: this
       ! Local variables
-      integer :: i, m, n, l1, l2, ntype, loop_over, ne, m_cond, k_cond
+      integer :: i, l2, ntype, loop_over, ne, m_cond, k_cond
       complex(rp), dimension(:, :, :), allocatable :: integrand
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
       complex(rp), dimension(:, :), allocatable :: mu_diag, gamma_mu

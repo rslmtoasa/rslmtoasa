@@ -20,9 +20,6 @@ contains
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
-      real(rp) :: t_structb_start, t_cluster_ready, t_nnmap_start, t_nnmap_end
-      real(rp) :: t_remd_start, t_remd_end, t_nm_store_start, t_nm_store_end
-      real(rp) :: t_outmap_start, t_outmap_end, t_str_stage_end
 
       call g_timer%start('structb')
 
@@ -282,7 +279,7 @@ contains
       logical :: finite_cluster
       integer, allocatable :: ips(:), lmxb(:), orb_map(:), species_labels(:)
       real(rp) :: pair_cutoff, solve_cutoff, pair_cutoff_bohr, solve_cutoff_bohr, alat_bohr, wav_bohr
-      real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end, t_inputs_start, t_inputs_end, t_store_start, t_store_end, t_remap_end
+      real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end
       real(rp) :: alpha_debug(4)
       character(len=16) :: effective_screening
       real(rp) :: vec_target(3)
@@ -933,7 +930,7 @@ contains
       real(rp), intent(in) :: r2, wav
       real(rp), dimension(3, ndi), intent(in) :: crd
       ! Local Scalars
-      integer :: i, j, k, m, na, nrl, nt, jclus_dbg
+      integer :: i, j, m, na, nrl, nt, jclus_dbg
       real(rp), dimension(:), allocatable :: bet, wk
       real(rp), dimension(:), allocatable :: a
       real(rp), dimension(:, :), allocatable :: cr

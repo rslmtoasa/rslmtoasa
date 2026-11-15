@@ -181,7 +181,7 @@ contains
       real(rp), allocatable :: n_sr(:, :), n_pauli(:, :), delta_n(:, :)
       real(rp), allocatable :: m_sr(:), m_pauli(:), delta_m(:), charge_sr(:), charge_pauli(:), delta_charge(:)
       real(rp), allocatable :: abs_m_weight(:)
-      real(rp) :: wk, occ, energy, farg, kT, delta_energy, amplitude, radial_amplitude
+      real(rp) :: wk, occ, energy, kT, delta_energy, amplitude, radial_amplitude
       real(rp) :: integrated_sr(2), integrated_pauli(2), delta_number(2), integrated_m_sr, integrated_m_pauli, delta_moment
       real(rp) :: norm_m_sr, norm_delta_m, norm_charge_sr, norm_delta_charge
       real(rp) :: region_m_sr, region_delta_m, region_charge_sr, region_delta_charge

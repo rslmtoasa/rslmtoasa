@@ -400,7 +400,7 @@ contains
       class(lattice), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, natoms, nsurf, nlay_tot, ilay, itype_a, itype_b
-      integer :: nbulk_a, nbulk_b, maxType, ireccount
+      integer :: nbulk_a, nbulk_b, maxType
       real(rp), dimension(:, :), allocatable :: crsurf
       real(rp), dimension(:), allocatable :: crh, z
       integer, dimension(:), allocatable :: atomType, crystalType, typesurf, crystalsurf

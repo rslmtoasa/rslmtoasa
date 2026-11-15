@@ -613,8 +613,8 @@ contains
       logical :: with_soc
       integer :: nrhs
       ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
+      integer :: ineigh, ih, k, nr, hblocksize, nat, nnmap, nlimplus1
+      complex(rp), dimension(nb, nb) :: locham
       hblocksize = nb
       nat = this%lattice%kk
       with_soc = .true.
@@ -1571,7 +1571,6 @@ contains
       ! Local variables
       integer :: atom_neighbor, ih, i, j, k, nr, ll, m, n, l, hblocksize, ntype, nnmap, nlimplus1, llcheb, lmax, nv, ie, random, iz, ia
       complex(rp), dimension(nb, nb) :: dum, dum1, dum2
-      complex(rp), dimension(nb, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, left_vec1, left_vec2
       complex(rp), dimension(:, :, :), allocatable :: mu_n_orb, mu_tmp
@@ -1584,7 +1583,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale, lzi
       real(rp), dimension(3) :: rij, crossrij
       
-      real(rp) :: a, b, start, finish, rng, emin_win, emax_win
+      real(rp) :: a, b, emin_win, emax_win
       ! External functions
       complex(rp), external :: zdotc
 

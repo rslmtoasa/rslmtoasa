@@ -203,7 +203,6 @@ contains
    module subroutine cheb_0th_mom(this, psiref)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(nb, nb, this%lattice%kk), intent(in) :: psiref
-      complex(rp), dimension(nb, nb) :: dum
       integer :: nat, hblocksize, nlimplus1, k
 
       hblocksize = nb
@@ -455,7 +454,7 @@ contains
       integer, intent(in) :: ll
       real(rp), intent(in) :: a, b
       ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      integer :: ineigh, ih, k, nr, n, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(nb, nb) :: dum1, dum2, locham
 
       hblocksize = nb
@@ -580,7 +579,7 @@ contains
       integer, intent(in) :: ll
       real(rp), intent(in) :: a, b
       ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      integer :: ineigh, ih, k, nr, n, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(nb, nb) :: dum1, dum2, locham
 
       hblocksize = nb
@@ -750,13 +749,11 @@ contains
       use mpi_mod
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: ineigh, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, nlimplus1, llcheb
+      integer :: i, j, l, hblocksize, nat, nlimplus1, llcheb
       integer, dimension(0:this%lattice%kk) :: idumll
       !complex(rp) :: cone = (1.0d0, 0.0d0)
-      complex(rp), dimension(nb, nb) :: dum, dum1, dum2
-      complex(rp), dimension(nb, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
-      real(rp) :: a, b, start, finish, emin_win, emax_win
+      real(rp) :: a, b, emin_win, emax_win
       ! External functions
       complex(rp), external :: zdotc
 

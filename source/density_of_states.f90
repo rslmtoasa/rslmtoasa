@@ -104,7 +104,7 @@ contains
       real(rp), dimension(this%control%lld*2 + 2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
+      real(rp) :: eps, a, b, emin_win, emax_win
       integer :: i, j, k, l, m, n
       eps = 0.0001d0
       ! Defining rescaling coeficients
@@ -177,7 +177,7 @@ contains
       real(rp), dimension(this%control%lld) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
+      real(rp) :: eps, a, b, emin_win, emax_win
       real(rp), dimension(this%control%lld*2 + 2, 5) :: mu_dum
       complex(rp), dimension(this%lattice%nrec, nb, nb, this%en%channels_ldos + 10) :: green
       integer :: i, j, k, l, m, n
@@ -257,12 +257,11 @@ contains
       ! Output
       real(rp), dimension(nb, this%en%channels_ldos + 10), intent(out) :: tdens
       ! Local variables
-      integer :: icode, iii, k, l, ll1, inb, nbp1, nl, nt, eidx, ne, nq, ll_in, ifail, npts, nw
+      integer :: k, l, ll1, inb, nbp1, nl, eidx, ll_in, ifail, npts, nw
       real(rp) :: a1, a2, dens, emax, emin, eps, err, e_shift, e_canon, prefac
       complex(rp) :: dens_i
 
       integer, dimension(nb) :: nb2
-      integer, dimension(nb) :: jc
       integer, dimension(10*this%lattice%ntype*this%control%lld) :: iwk
       integer, dimension(nb) :: ll_fail
       real(rp), dimension(this%control%lld) :: aa, am, bb, bm, sqbb

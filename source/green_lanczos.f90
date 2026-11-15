@@ -32,14 +32,12 @@ contains
       integer :: ia, ja, mdir, nw, ll_t, ie, j, i
       real(rp), dimension(this%en%channels_ldos + 10, this%lattice%ntype) :: dx, dy, dz
       real(rp), dimension(nb, this%en%channels_ldos + 10) :: doso
-      real(rp), dimension(nb, this%en%channels_ldos + 10) :: dmag, dnmag
       complex(rp) :: dfac, sfac, impi
       complex(rp), dimension(4) :: gspinor
       complex(rp), dimension(3) :: gmask, lmask
       complex(rp), dimension(2, 3) :: gfac
       integer, dimension(4, 3) :: goff
       real(rp), dimension(this%control%lld, this%control%lld)  :: Sm
-      real(rp), dimension(nb)  :: q_int
       real(rp) :: e_start, e_stop
 
       integer :: ia_glob
@@ -145,7 +143,7 @@ contains
       integer, dimension(nb) :: ipiv
       complex(rp) :: etop, ebot, ea, eb
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
-      complex(rp), dimension(nb, nb) :: Q, Qp, Q2p, Z, one, W, B2z, Qt, P
+      complex(rp), dimension(nb, nb) :: Q, Z, one, W, B2z, P
       complex(rp) :: zoff, cone, czero, ze, zterm, det, im
       complex(rp) :: coff
       complex(rp), dimension(nb*nb) :: work

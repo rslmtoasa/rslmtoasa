@@ -425,14 +425,12 @@ contains
       integer :: nm1 ! LL-1
       integer :: nat ! Clust size
       integer :: hblocksize ! Hamiltonian size (18)
-      complex(rp), dimension(nb, nb) :: sum_b, sum_a
-      complex(rp), dimension(nb, nb) :: dum, b, b_i, u, lam, lam_i, u_ls, u_rs
+      complex(rp), dimension(nb, nb) :: sum_b
+      complex(rp), dimension(nb, nb) :: dum, b, b_i, u, lam, lam_i
 !    complex(rp), dimension(nb, nb,this%lattice%kk) :: psi_t
       complex(rp), dimension(:, :, :), allocatable :: psi_t
       real(rp), dimension(nb) :: ev
-      complex(rp), dimension(nb) :: zev
       real(rp), dimension(3*nb - 2) ::rwork
-      complex(rp), dimension(3*nb - 2) ::zwork
       logical :: halt_divide_by_zero
 
       allocate (psi_t(nb, nb, this%lattice%kk))
@@ -545,7 +543,7 @@ contains
       real(rp), dimension(nb) :: ev
       real(rp), dimension(3*nb - 2) ::rwork
       complex(rp), dimension(nb*nb) ::zwork
-      complex(rp), dimension(nb, nb) :: B2t, U, DUM, lam
+      complex(rp), dimension(nb, nb) :: U, DUM, lam
       logical :: halt_divide_by_zero
 
       if (this%b2_b_is_sqrt) return
@@ -615,7 +613,7 @@ contains
       real(rp), dimension(np), intent(out) :: beta_inf
       !
       !.. Local Scalars ..
-      integer :: icode, iii, k, l, ll1, ineigh, nbp1, nl, nt, eidx, ne, nq, ifail
+      integer :: icode, l, ll1, nbp1, nl, ifail
       real(rp) :: a1, a2, emax, emin, eps, err, e_shift, pi
       complex(rp) :: g_e
       !

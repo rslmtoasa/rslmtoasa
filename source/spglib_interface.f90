@@ -739,7 +739,6 @@ contains
 
 #ifdef USE_SPGLIB
       type(c_ptr) :: dataset_ptr
-      integer :: spg_num
 #endif
 
       success = .false.

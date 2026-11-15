@@ -1130,7 +1130,6 @@ module function find_fermi_level_from_dos(this, total_electrons) result(fermi_le
    real(rp) :: energy, kT
    real(rp) :: e_min, e_max, e_mid, electrons_at_e
    real(rp) :: q1, q2, e1, e2, step
-   real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
    call root_info('find_fermi_level_from_dos: Finding Fermi level for ' // &
                   trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
@@ -1247,7 +1246,6 @@ module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
 
    integer :: ie
    real(rp) :: e, fermi_weight, fermi_weight_next, delta_e, x, x_next
-   real(rp), parameter :: eV_to_Ry = 0.073498618_rp
    real(rp), parameter :: exp_limit = 700.0_rp
 
    integral = 0.0_rp
@@ -1305,7 +1303,6 @@ end function integrate_dos_up_to_energy
       ! Local variables
       integer :: unit, i_energy, isite, iorb, ispin
       character(len=256) :: proj_filename
-      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
       if (rank /= 0) return
 

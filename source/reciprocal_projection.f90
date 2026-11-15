@@ -28,13 +28,12 @@ contains
 !> @param[inout] this Reciprocal object receiving projected DOS arrays.
 module subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
-   integer :: ik, ik_global, ib, ie, iorb, i, isite
-   integer :: n_orb_per_spin, orb_start, site_orb_start, n_orb_site
+   integer :: ik, ik_global, ib, ie, iorb, isite
+   integer :: n_orb_per_spin, site_orb_start, n_orb_site
    integer :: lstart(4), lend(4)
    real(rp) :: weight, orbital_char, energy
    real(rp) :: gaussian_weight, sigma_squared, sigma_use
-   complex(rp) :: psi_element
-   real(rp) :: dos_integral, norm_factor
+   real(rp) :: norm_factor
    integer :: nbands
    ! Additional locals for projected DOS integration/normalization
    real(rp) :: proj_integral, e_low, e_high
@@ -342,7 +341,7 @@ end subroutine project_dos_orbitals_gaussian
       ! Local variables
       integer :: i_energy, i_tet, i_corner, i_band, iorb, isite
       integer :: i_start, i_end
-      integer :: n_orb_per_spin, orb_start, site_orb_start, ik, n_orb_site
+      integer :: n_orb_per_spin, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
       integer :: tet_start, tet_end, tet_count
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char, de

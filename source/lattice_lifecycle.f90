@@ -1207,7 +1207,7 @@ contains
       integer(8), intent(inout) :: key(:)
       integer, intent(inout) :: perm(:)
       integer, intent(in) :: n
-      integer :: i, start, bottom
+      integer :: start, bottom
       integer(8) :: tkey
       integer :: tperm
 

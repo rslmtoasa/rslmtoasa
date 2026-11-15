@@ -721,7 +721,7 @@ contains
    module subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ik, ik_global, nk, ntype, tile_first, tile_last, tile_length
+      integer :: ik, nk, ntype, tile_first, tile_last, tile_length
       character(len=200) :: debug_msg
       logical :: using_kpath, distribute_mesh, backend_assembly_available
       integer :: i, j
@@ -1080,7 +1080,7 @@ contains
    !> @param[inout] this Reciprocal object receiving sk_overlap arrays.
    module subroutine build_kspace_overlap(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik, ik_global, nk, tile_first, tile_last, tile_length
+      integer :: nk, tile_first, tile_last, tile_length
       logical :: using_kpath
       type(reciprocal_assembler) :: assembler
 
