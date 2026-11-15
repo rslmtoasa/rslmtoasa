@@ -329,11 +329,14 @@ message(STATUS "--------------------------------------------")
 ##############################################################################################
 # Tell where to install the executable
 ##############################################################################################
-IF(WIN32)
-   SET(CMAKE_INSTALL_PREFIX "C:/Program Files")
-ELSE()
-   SET(CMAKE_INSTALL_PREFIX /usr/local)
-ENDIF(WIN32)
+# Only replace CMake's default; a user-supplied -DCMAKE_INSTALL_PREFIX is kept.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+   if(WIN32)
+      set(CMAKE_INSTALL_PREFIX "C:/Program Files" CACHE PATH "Install prefix" FORCE)
+   else()
+      set(CMAKE_INSTALL_PREFIX /usr/local CACHE PATH "Install prefix" FORCE)
+   endif()
+endif()
 # Convert to native path (optional, but useful if you do further path manipulations)
 file(TO_NATIVE_PATH "${CMAKE_INSTALL_PREFIX}" CMAKE_INSTALL_PREFIX_NATIVE)
 message(STATUS "Install prefix (native): ${CMAKE_INSTALL_PREFIX_NATIVE}")
