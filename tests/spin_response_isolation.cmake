@@ -2,7 +2,7 @@
 # linear-response code (tag lr-campaign-archive-2026-10).
 # Run as: cmake -DSOURCE_DIR=<repo root> -P spin_response_isolation.cmake
 
-set(_archived "(radial_ground_state|pauli_ground_state_projection|lmto_radial_augmentation|lmto_magnetic_tangent)(_mod)?")
+set(_archived "(radial_ground_state|lmto_magnetic_tangent)(_mod)?")
 set(_use_regex "(^|\n)[ \t]*use[ \t]*(,[^:\n]*::)?[ \t]*(${_archived})([^a-z0-9_]|$)")
 
 file(GLOB _files "${SOURCE_DIR}/source/spin_response*")
