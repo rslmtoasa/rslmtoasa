@@ -593,18 +593,6 @@ contains
          mag_mix(ia, :) = (1.d0 - this%magbeta(ia))*mag_old(ia, :) + this%magbeta(ia)*mag_new(ia, :)
       end do
 
-      ! Quick diagnostic printout for the first few atoms to help debug mixing
-      ! if (rank == 0) then
-      !    do ia = 1, min(3, this%lattice%nrec)
-      !       call g_logger%info(’mix diagnostics atom ’//fmt(’i4’, ia)//″: magbeta=’″//fmt(’f6.3’, this%magbeta(ia)) &
-      !            //’ mag_old=’//fmt(’f10.6’, mag_old(ia,1))//’ ’//fmt(’f10.6’, mag_old(ia,2))//’ ’//fmt(’f10.6’, mag_old(ia,3)) &
-      !            , __FILE__, __LINE__)
-      !       call g_logger%info(’mix diagnostics atom ’//fmt(’i4’, ia)//″: mag_new=’″//fmt(’f10.6’, mag_new(ia,1))//’ ’//fmt(’f10.6’, mag_new(ia,2))//’ ’//fmt(’f10.6’, mag_new(ia,3)) &
-      !            , __FILE__, __LINE__)
-      !       call g_logger%info(’mix diagnostics atom ’//fmt(’i4’, ia)//″: mag_mix=’″//fmt(’f10.6’, mag_mix(ia,1))//’ ’//fmt(’f10.6’, mag_mix(ia,2))//’ ’//fmt(’f10.6’, mag_mix(ia,3)) &
-      !            , __FILE__, __LINE__)
-      !    end do
-      ! end if
    end subroutine mix_magnetic_moments
 
    !---------------------------------------------------------------------------
@@ -669,31 +657,6 @@ contains
          this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
       end if
 
-      ! Debug: print first atoms qia slices for inspection (up to 6 cols)
-      ! if (rank == 0) then
-      !    do ia = 1, min(3, this%lattice%nrec)
-      !       nprint = min(6, size(qia_old, 2))
-      !       msg = ’’
-      !       do k = 1, nprint
-      !          msg = msg // ’ ’ // fmt(’f10.6’, qia_old(ia, k))
-      !       end do
-      !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_old=’//trim(msg), __FILE__, __LINE__)
-
-      !       nprint = min(6, size(qia_new, 2))
-      !       msg = ’’
-      !       do k = 1, nprint
-      !          msg = msg // ’ ’ // fmt(’f10.6’, qia_new(ia, k))
-      !       end do
-      !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_new=’//trim(msg), __FILE__, __LINE__)
-
-      !       nprint = min(6, size(this%qia, 2))
-      !       msg = ’’
-      !       do k = 1, nprint
-      !          msg = msg // ’ ’ // fmt(’f10.6’, this%qia(ia, k))
-      !       end do
-      !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_mixed=’//trim(msg), __FILE__, __LINE__)
-      !    end do
-      ! end if
       ! Also project mixer output, protecting against accumulated roundoff.
       ! Packed layout: six blocks of lcount columns, spin pairs (up, down) = (1,2), (3,4), (5,6).
       do ia = 1, this%lattice%nrec
