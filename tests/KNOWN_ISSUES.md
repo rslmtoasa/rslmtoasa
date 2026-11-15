@@ -457,3 +457,37 @@ the archive tags.
 - **Changed 2026-11-13:** `host_and_impurity` in `tests/ldau/test_impurity_nsp3_u.py` (used by `LdaUImpurityNsp3`, `LdaUClusterEnergy`, `LdaULocalNsp4Workflows`) now converges the k-space host (conv_thr 1e-10, 60 to 80 steps, about 30 s) and sets the impurity deck's `fermi` and energy window from it. Measured with the new fixture: `LdaUImpurityNsp3` nsp = 3 against nsp = 1 max |delta| 1.5e-9 (hoh 0), `LdaUClusterEnergy` impurity max |dE_Hub| 4.8e-10 Ry, `LdaULocalNsp4Workflows` all differences 0; local against spectral |dm| 1.6 muB (hoh 2.5) where it was 0.43 (0.18). Still on the old fixture (deck E_F -0.041385, 4-step host): `tests/ldau/test_impurity_hoh_u.py` (own `host_and_impurity`) and the stored-reference impurity rows of `reference_rows.py` (not changed: stored references are not re-baselined).
 - **Measured, same finite difference for an Fe impurity in an Fe host (first order, hoh off, nsp = 1, block recursion, rc = 80, host = converged bulk at U = 2, E_F fixed at the bulk's -0.083263 Ry, `hubbard_u_general(2,3)` varied on the impurity, U = 1.8, 2.0, 2.2, 25 to 74 steps, Diff 1.2e-9 to 1.6e-9; bulk at the same rc and settings for comparison):** bulk FD 0.05424312 against E_Hub/U 0.05442266, relative -3.3e-3 (as at the other settings); impurity FD 0.05383704 against 0.05442260, relative -1.08e-2. At U = 2 the impurity state equals the bulk one (|dE_Hub| 1.2e-7 Ry, |dm| 8e-6 muB, |dN| 3.7e-6), so the embedding itself reproduces the bulk. The cluster charge still changes with U (dN/dU = -0.01685 e/eV); adding E_F dN/dU (+1.40e-3 Ry/eV) moves the prediction away from the FD (relative -3.7e-2), so the term that reduced the B2FeCo gap does not help here. The Fe-in-Fe gap is 3 times the bulk one and 7 times smaller than the B2FeCo one.
 - **Not verified:** why B2FeCo (+7.75e-2 raw with the host E_F) differs from Fe in Fe (-1.08e-2). Untested guesses: an energy term between the two inequivalent cluster types (charge transfer, electrostatics) that is not stationary; the Co site's non-U response. `hoh` was not run on a cluster; on bulk bcc Fe it is routed and its finite difference is -2.5e-3 (U = 1.8/2.2), see `docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`. The first-order bulk at rc = 20 stops at iteration 1 in the s-occupation guard (q0 = 1.89, capacity 1), so the equals-bulk test's rc = 20 deck needs hoh.
+
+## Input reading and output findings
+
+Found during the main_rc release-candidate review (2026-11-15), by reading the code; none of these was run.
+
+### `control%print_state` writes uninitialised values — 2026-11-15
+- **Read:** `source/control.f90` `print_state` copies the object into the namelist locals before `write(nml=control)` but never copies `recur`, `lmax`, `random_vec_num`, `cond_ll`, `cond_calctype`, `linear_in` or `linear_out`; it also calls `close(newunit)` at the end on the `unit=` and stdout paths, where `newunit` was never opened. `print_state_formatted` omits the same keys.
+- **Verified:** no caller of `control%print_state` exists in `source/` or `tests/` (latent).
+- **Proposal:** copy the missing keys and drop the final `close`; about 10 lines.
+
+### `cond_calctype` is never validated — 2026-11-15
+- **Read:** `check_all` in `source/control.f90` does not check `cond_calctype`; the `select case` blocks in `source/recursion_transport.f90` (`loop_over`, about line 963) and `source/conductivity.f90` (about line 562) have no `case default`, so a value other than `'per_type'` or `'random_vec'` leaves `loop_over` undefined and the run continues.
+- **Proposal:** a fatal check in `check_all`; about 4 lines.
+
+### `&reciprocal total_electrons` is read and discarded — 2026-11-15
+- **Read:** `source/reciprocal_lifecycle.f90` `build_from_file` lists `total_electrons` in the namelist but neither seeds the local from the object before the read nor copies it back; the constructor always recomputes it from the valence charges. A value given in a deck is ignored.
+- **Proposal:** either wire it through (changes behaviour for decks that set it) or remove the key.
+
+### A read error in `&reciprocal` or `&kpath` falls back to defaults silently — 2026-11-15
+- **Read:** `source/reciprocal_lifecycle.f90` (about lines 352-363) logs "namelist not found ... using defaults" for any non-EOF `iostat`, so a misspelt key does not stop the run. The documented example in `docs/source/theory/kspace_modes.rst` (about line 305) sets `kspace_diagnostics`, which is not a key.
+- **Not verified:** whether keys read before the bad one keep their values (compiler-dependent).
+- **Proposal:** make a non-EOF error fatal, as in `&frozen_magnon` and `&spin_response`; fix the doc example.
+
+### `explicit_texture` moment directions are frozen after the first build — 2026-11-15
+- **Read:** `prepare_explicit_texture_moments` in `source/hamiltonian_build.f90` returns early once `texture_moments` is allocated with at least `kk` columns; the array is only deallocated in the destructor and `restore_to_default`. Later SCF updates of `potential%mom` do not reach the Hamiltonian or CCOR in this mode.
+- **Verified:** no deck in `example/` or `tests/` sets `magnetic_representation = 'explicit_texture'`.
+
+### `debug_hamiltonian_lsham.txt` is written unconditionally for an f basis — 2026-11-15
+- **Read:** `source/hamiltonian_build.f90` (about line 1174) opens `debug_hamiltonian_lsham.txt` with `status='replace'` whenever `norb == 16`, inside the loop over types, so every run with an f basis writes the file and only the last type survives.
+- **Proposal:** remove the debug dump (changes the output files) or put it behind a flag.
+
+### `example/bulk/B2Fe/input.nml` cannot run — 2026-11-15
+- **Read:** the deck sets `hubbard_orb(1) = 'spd'` in `&hamiltonian`; `hubbard_orb` is not a key, and a bad `&hamiltonian` read is fatal (`source/hamiltonian_build.f90`, about line 495).
+- **Proposal:** use the current Hubbard keys or remove the example.
