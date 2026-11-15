@@ -554,14 +554,11 @@ module reciprocal_mod
       procedure :: calculate_band_structure
       procedure :: calculate_density_of_states
       procedure :: calculate_dos_tetrahedron
-      procedure :: calculate_dos_tetrahedron_with_symmetry
       procedure :: expand_eigenvalues_to_full_mesh
       procedure :: calculate_dos_gaussian
       procedure :: calculate_dos_blochl
       procedure :: setup_dos_energy_grid
       procedure :: setup_tetrahedra
-      procedure :: tetrahedron_dos_contribution
-      procedure :: blochl_dos_contribution
       procedure :: get_kpoint_index
       procedure :: project_dos_orbitals
       procedure :: project_dos_orbitals_gaussian
@@ -569,7 +566,6 @@ module reciprocal_mod
       procedure :: calculate_band_moments
       procedure :: accumulate_spin_density_kspace
       procedure :: fill_band_moments_from_spin_density
-      procedure :: print_total_and_spin_dos
       procedure :: evaluate_eigenvalue_occupations
       procedure :: find_fermi_level_from_eigenvalues
       procedure :: calculate_canonical_band_energy
@@ -580,7 +576,6 @@ module reciprocal_mod
       procedure :: calculate_ldm_from_projected_dos
       procedure :: calculate_spinor_dm
       procedure :: integrate_dos_up_to_energy
-      procedure :: calculate_gaussian_weight_single
       procedure :: write_dos_to_file
       procedure :: restore_to_default
       procedure :: invalidate_spectral_cache
@@ -1702,56 +1697,6 @@ end subroutine print_hamiltonian_structure
 
    end subroutine calculate_dos_tetrahedron
 
-   !> @brief Evaluate linear-tetrahedron DOS contribution at one energy.
-   !> @param[in] this Reciprocal object providing method context.
-   !> @param[in] energy Energy where the contribution is evaluated.
-   !> @param[in] e_sorted Sorted tetrahedron corner energies.
-   !> @return DOS contribution for one tetrahedron.
-   module function tetrahedron_dos_contribution(this, energy, e_sorted) result(dos)
-      class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: energy
-      real(rp), dimension(4), intent(in) :: e_sorted
-      real(rp) :: dos
-
-      ! Local variables
-      real(rp) :: e1, e2, e3, e4, vol_factor
-      real(rp), parameter :: eps = 1.0e-12_rp
-
-      ! Tetrahedron volume factor (adjusted for correct normalization)
-   end function tetrahedron_dos_contribution
-
-   !> @brief Evaluate Bloechl-corrected tetrahedron DOS contribution.
-   !> @param[in] this Reciprocal object providing method context.
-   !> @param[in] energy Energy where the contribution is evaluated.
-   !> @param[in] e_sorted Sorted tetrahedron corner energies.
-   !> @return Corrected DOS contribution for one tetrahedron.
-   module function blochl_dos_contribution(this, energy, e_sorted) result(dos)
-      class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: energy
-      real(rp), dimension(4), intent(in) :: e_sorted
-      real(rp) :: dos
-
-      ! Local variables
-      real(rp) :: e1, e2, e3, e4, C
-      real(rp), parameter :: TOL = 1.0e-10_rp
-
-   end function blochl_dos_contribution
-
-   !> @brief Sort a real array while tracking original indices.
-   !> @param[in] arr Values to sort.
-   !> @param[out] sorted Sorted values.
-   !> @param[out] indices Original indices corresponding to sorted values.
-   module subroutine sort_real_array(arr, sorted, indices)
-      real(rp), dimension(:), intent(in) :: arr
-      real(rp), dimension(:), intent(out) :: sorted
-      integer, dimension(:), intent(out) :: indices
-
-      ! Local variables
-      integer :: i, j, n, temp_idx
-      real(rp) :: temp_val
-
-   end subroutine sort_real_array
-
    !> @brief Sort four real values in ascending order.
    !> @param[in] arr_in Four input values.
    !> @param[out] arr_out Sorted output values.
@@ -1845,13 +1790,6 @@ end subroutine calculate_dos_gaussian
       integer :: nrow_evec, nband_evec, nk_evec
       
    end subroutine expand_eigenvalues_to_full_mesh
-
-   !> @brief Calculate tetrahedron DOS using symmetry-aware mesh handling.
-   !> @param[inout] this Reciprocal object receiving total DOS on the chosen backend.
-   module subroutine calculate_dos_tetrahedron_with_symmetry(this)
-      class(reciprocal), intent(inout) :: this
-      
-   end subroutine calculate_dos_tetrahedron_with_symmetry
 
    !> @brief Convert 3D mesh coordinates to a periodic flat k-point index.
    !> @param[in] this Reciprocal object providing helper context.
@@ -2050,21 +1988,6 @@ module subroutine fill_band_moments_from_spin_density(this, policy, reference, a
    real(rp), dimension(:, :), intent(out) :: axis_out
 end subroutine fill_band_moments_from_spin_density
 
-   !> @brief Print total and spin-resolved DOS occupation diagnostics.
-   !> @param[in] this Reciprocal object containing DOS and projected DOS arrays.
-   module subroutine print_total_and_spin_dos(this)
-      class(reciprocal), intent(in) :: this
-
-      integer :: ie, n_energy, isite, iorb, ispin
-      real(rp), allocatable :: fermi_dist(:)
-      real(rp), allocatable :: energy_grid(:)
-      real(rp), allocatable :: integrand_up(:), integrand_dn(:)
-      real(rp) :: kT, fermi_arg
-      real(rp) :: electrons_up, electrons_dn, electrons_total
-      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
-
-   end subroutine print_total_and_spin_dos
-
 !> @brief Evaluate normalized Fermi-Dirac electron count and eigenvalue EBAND.
 !> @details Each rank accumulates only its owned eigenvalues.  The three raw
 !>          sums (weight, occupation, energy) are reduced together exactly once
@@ -2155,38 +2078,6 @@ end function integrate_dos_up_to_energy
       class(reciprocal), intent(in) :: this
       real(rp) :: eband
    end function calculate_band_energy_from_total_dos
-
-   !> @brief Evaluate one normalized Gaussian smearing weight.
-   !> @param[in] this Reciprocal object containing gaussian_sigma/adaptive settings.
-   !> @param[in] grid_energy Energy-grid point.
-   !> @param[in] eigenvalue Eigenvalue to smear.
-   !> @return Gaussian weight at grid_energy.
-   module function calculate_gaussian_weight_single(this, grid_energy, eigenvalue) result(weight)
-      class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: grid_energy, eigenvalue
-      real(rp) :: weight
-
-      ! Gaussian smearing: weight = exp(-(E_grid - E_eigen)²/(2σ²)) / (σ√(2π))
-      real(rp) :: prefactor, exponent, delta_e
-
-   end function calculate_gaussian_weight_single
-
-   !> @brief Sort four tetrahedron eigenvalues and return their permutation.
-   !> @param[in] e_in Input corner eigenvalues.
-   !> @param[out] e_sorted Sorted corner eigenvalues.
-   !> @param[out] sort_idx Original indices corresponding to sorted values.
-   module pure subroutine sort_eigenvalues(e_in, e_sorted, sort_idx)
-      real(rp), dimension(4), intent(in) :: e_in
-      real(rp), dimension(4), intent(out) :: e_sorted
-      integer, dimension(4), intent(out) :: sort_idx
-      
-      ! Local variables
-      integer :: i, j, min_idx
-      real(rp) :: temp_e
-      integer :: temp_idx
-      
-      ! Initialize
-   end subroutine sort_eigenvalues
 
    !> @brief Reconstruct lattice local density matrices from projected DOS moments.
    !> @param[inout] this Reciprocal object containing projected DOS/moments.
