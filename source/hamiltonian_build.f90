@@ -1493,13 +1493,7 @@ contains
          call g_logger%fatal("gbt_single_q requires strux_backend='strux_lib'; the legacy backend is unsupported.", &
                              __FILE__, __LINE__)
       end if
-      if (this%ccor_2c) then
-         if (.not. allocated(this%lattice%sdot) .or. .not. this%lattice%strux_want_sdot) then
-            call g_logger%fatal('gbt_single_q with CCOR requires generated Sdot and strux_want_sdot=.true.', &
-                                __FILE__, __LINE__)
-         end if
-         call validate_ccor_inputs(this)
-      end if
+      if (this%ccor_2c) call validate_ccor_inputs(this)
       if (this%hubbard_v_check) then
          ! calculate_hubbard_v_potential is a real diagonal-occupation proxy
          ! (hamiltonian_hubbard.f90) with no primitive directed-bond factor at
