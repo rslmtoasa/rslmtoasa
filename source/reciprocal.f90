@@ -1031,7 +1031,6 @@ module reciprocal_mod
    module subroutine root_info(message, file_name, line_no)
       character(len=*), intent(in) :: message, file_name
       integer, intent(in) :: line_no
-
    end subroutine root_info
 
    !> @brief Construct a reciprocal-space object from an initialized Hamiltonian.
@@ -1042,7 +1041,6 @@ module reciprocal_mod
    module function constructor(hamiltonian_obj) result(obj)
       type(reciprocal) :: obj
       type(hamiltonian), target, intent(in) :: hamiltonian_obj
-
    end function constructor
 
    !> @brief Finalize a reciprocal-space object.
@@ -1059,8 +1057,6 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object to reset.
    module subroutine restore_to_default(this)
       class(reciprocal), intent(inout) :: this
-
-      ! Default k-point mesh settings
    end subroutine restore_to_default
 
    !> @brief Read the &reciprocal namelist and install reciprocal-space options.
@@ -1070,11 +1066,6 @@ module reciprocal_mod
    !> @note This is an input boundary and may raise fatal diagnostics for invalid options.
    module subroutine build_from_file(this)
       class(reciprocal), intent(inout) :: this
-
-      ! Reading process variables
-      integer :: iostatus, funit
-
-      ! Include namelist declarations for reciprocal module
    end subroutine build_from_file
 
    !> @brief Generate reciprocal lattice vectors from the real-space lattice.
@@ -1083,12 +1074,6 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object receiving reciprocal_vectors and volume.
    module subroutine generate_reciprocal_vectors(this)
       class(reciprocal), intent(inout) :: this
-      ! Local variables
-      real(rp), dimension(3, 3) :: real_vectors
-      real(rp) :: det
-      integer :: i
-
-      ! Get real-space lattice vectors from lattice%a
    end subroutine generate_reciprocal_vectors
 
    !> @brief Generate the configured Monkhorst-Pack k-point mesh.
@@ -1097,13 +1082,6 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object receiving k_points/k_weights state.
    module subroutine generate_mp_mesh(this)
       class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ik, ix, iy, iz, nk_irred
-      real(rp) :: kx, ky, kz
-      real(rp), parameter :: tol = 1.0e-8_rp
-      integer :: shift(3), nfull
-      real(rp), allocatable :: kpoints_full(:,:)
-
    end subroutine generate_mp_mesh
 
    !> @brief Determine per-type basis sizes for reciprocal matrices.
@@ -1112,10 +1090,6 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object whose basis_size/max_orbs are updated.
    module subroutine set_basis_sizes(this)
       class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ntype
-      character(len=10) :: basis_type
-
    end subroutine set_basis_sizes
 
    !> @brief Build real-space neighbor vectors used by Fourier transforms.
@@ -1124,11 +1098,6 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object receiving ham_vec_type arrays.
    module subroutine build_neighbor_vectors(this)
       class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ntype, ia, nr, nn_max_loc, kk
-      real(rp) :: r2
-      real(rp), dimension(3, this%lattice%kk) :: cralat
-
    end subroutine build_neighbor_vectors
 
    !> @brief Calculate exp(i k.R) factors for each neighbor/type.
@@ -1139,12 +1108,6 @@ module reciprocal_mod
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: structure_factors  ! (nr_max, ntype)
-      ! Local variables
-      integer :: ntype, ineigh, ia, nr
-      real(rp) :: k_dot_r
-      real(rp), dimension(3) :: r_vec
-
-      ! Loop over all atom types
    end subroutine calculate_structure_factors
 
    !> @brief Fourier transform first-order real-space Hamiltonian blocks.
@@ -1157,7 +1120,6 @@ module reciprocal_mod
       class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
-
       ! First-order k-space Hamiltonian: H(k) = h(k) = Sum_R ee(R) exp(i*k·R).
       ! NOTE: This deliberately reproduces the historical first-order behaviour.
       !       The on-site E_nu (enim) and spin-orbit (lsham) terms are NOT added
@@ -1177,12 +1139,6 @@ module reciprocal_mod
       complex(rp), dimension(:, :, :, :), intent(in) :: array4d  ! (nb,nb,neigh,ntype)
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: mk_result  ! (n_orb*n_sites, n_orb*n_sites)
-      ! Local variables
-      integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr
-      integer :: i_start, i_end, j_start, j_end
-      integer :: n_orb, n_sites
-      complex(rp), dimension(:, :), allocatable :: structure_factors  ! (nr_max, ntype)
-
    end subroutine fourier_transform_array
 
    !> @brief Fourier transform the second-order ASA k-space Hamiltonian.
@@ -1195,11 +1151,6 @@ module reciprocal_mod
       class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
-      ! Local variables
-      integer :: isite, ntype_i, i_start, i_end
-      integer :: n_orb, n_sites, ndim
-      complex(rp), dimension(:, :), allocatable :: hk, eeok, hohk, hcck
-
    end subroutine fourier_transform_hamiltonian_second_order
 
    !> @brief Fourier transform overlap blocks into S(k).
@@ -1212,12 +1163,6 @@ module reciprocal_mod
       class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: sk_result
-      integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr, iorb
-      integer :: i_start, i_end, j_start, j_end
-      integer :: n_orb, n_sites
-      complex(rp), dimension(:, :), allocatable :: structure_factors
-      complex(rp), dimension(:, :), allocatable :: overlap_block
-
    end subroutine fourier_transform_overlap
 
    !> @brief Fold a fractional reciprocal-space point into [-1/2,1/2).
@@ -1275,9 +1220,6 @@ module reciprocal_mod
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: nk_global
       logical, intent(in) :: enable_distribution
-      integer :: local_count
-      integer :: ik
-
    end subroutine setup_k_mesh_distribution
 
    !> @brief Convert a local k-point index to a global k-point index.
@@ -1287,7 +1229,6 @@ module reciprocal_mod
    module integer function local_k_index_to_global(this, ik_local) result(ik_global)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik_local
-
    end function local_k_index_to_global
 
    !> @brief Build H(k) for every active mesh or path k-point.
@@ -1296,14 +1237,6 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object receiving k-space Hamiltonian arrays.
    module subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ik, ik_global, nk, ntype
-      character(len=200) :: debug_msg
-      logical :: using_kpath, distribute_mesh
-      logical :: use_second_order
-      integer :: i, j
-
-      ! Determine which k-point set to use
    end subroutine build_kspace_hamiltonian
 
    !> @brief Assemble and solve the active reciprocal mesh one tile at a time.
@@ -1320,20 +1253,12 @@ module reciprocal_mod
    !> @param[inout] this Reciprocal object receiving sk_overlap arrays.
    module subroutine build_kspace_overlap(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik, ik_global, nk
-      logical :: using_kpath
-
    end subroutine build_kspace_overlap
 
 !> @brief Diagnose onsite spin-diagonal blocks for multisite Hamiltonians.
 !> @param[in] this Reciprocal object containing hk_total or hk_bulk data.
 module subroutine check_multisite_hamiltonian_diagonal(this)
    class(reciprocal), intent(in) :: this
-   integer :: isite, iorb, ispin
-   complex(rp) :: h_avg_site1_up, h_avg_site1_dn, h_avg_site2_up, h_avg_site2_dn
-   integer :: n_sites, idx_up, idx_dn
-   character(len=256) :: msg
-   
 end subroutine check_multisite_hamiltonian_diagonal
 
    !> @brief Diagonalize the active k-space Hamiltonians.
@@ -1342,18 +1267,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    !> @param[inout] this Reciprocal object receiving eigenvalue/eigenvector arrays.
    module subroutine diagonalize_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
-      
-      ! Local variables
-      integer :: nk, ik, nmat, lwork, info, mode_fail_count
-      complex(rp), dimension(:, :), allocatable :: h_k_copy
-      complex(rp), dimension(:, :), allocatable :: s_k_copy
-      real(rp), dimension(:), allocatable :: eigenvals
-      complex(rp), dimension(:), allocatable :: work_complex
-      real(rp), dimension(:), allocatable :: rwork
-      character(len=100) :: info_msg
-      logical :: use_generalized
-
-      ! Check prerequisites
    end subroutine diagonalize_hamiltonian
 
    !> @brief Return whether the legacy reciprocal GBT path has a finite q vector.
@@ -1390,18 +1303,12 @@ end subroutine check_multisite_hamiltonian_diagonal
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik
       complex(rp), dimension(:, :), intent(in) :: s_k
-      integer :: i, j, n
-      real(rp) :: max_herm
    end subroutine check_overlap_properties
 
    !> @brief Run H(Gamma) spectral-bound diagnostics.
    !> @param[inout] this Reciprocal object used to build and bound the Gamma matrix.
    module subroutine run_gamma_bounds_diagnostics(this)
       class(reciprocal), intent(inout) :: this
-      complex(rp), allocatable :: h_gamma(:, :)
-      real(rp) :: egmin, egmax
-      type(bounds) :: bnd
-
    end subroutine run_gamma_bounds_diagnostics
 
    !> @brief Diagonalize the experimental real-space HALL matrix.
@@ -1410,11 +1317,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    !> @param[inout] this Reciprocal object providing Hamiltonian and lattice state.
    module subroutine diagonalize_hall_experimental(this)
       class(reciprocal), intent(inout) :: this
-      integer :: nsites, n_orb, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
-      integer :: i_start, i_end, j_start, j_end
-      complex(rp), allocatable :: hall_mat(:, :), work(:)
-      real(rp), allocatable :: evals(:), rwork(:)
-
    end subroutine diagonalize_hall_experimental
 
    !> @brief Calculate and write a band structure along a crystal-specific path.
@@ -1429,11 +1331,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       character(len=*), intent(in) :: crystal_type
       integer, intent(in) :: npts_per_segment
       character(len=*), intent(in), optional :: output_file
-      ! Local variables
-      character(len=256) :: filename
-      integer :: unit, i, j, nmat
-      character(len=100) :: fmt_str
-
    end subroutine calculate_band_structure
 
    !> @brief Calculate and write a symmetry-derived band structure.
@@ -1448,13 +1345,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       class(hamiltonian), intent(in) :: ham
       integer, intent(in), optional :: npts_per_segment
       character(len=*), intent(in), optional :: output_file
-      
-      ! Local variables
-      integer :: npts
-      character(len=256) :: filename
-      integer :: unit, i, j, nmat
-      character(len=100) :: fmt_str
-
    end subroutine calculate_band_structure_auto
 
    !> @brief Generate a symmetry-reduced k-point mesh.
@@ -1467,13 +1357,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: mesh_dims(3)
       logical, intent(in), optional :: use_shift
-      integer :: shift(3)
-      integer :: num_ir_kpoints
-      logical :: do_shift, effective_time_reversal
-      real(rp), allocatable :: kpoints_frac(:,:), weights(:)
-      integer :: i
-      integer, allocatable :: full_to_irred(:), irred_to_full(:)
-
    end subroutine generate_reduced_kpoint_mesh
 
    !> @brief Calculate reciprocal-space density of states.
@@ -1502,10 +1385,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(in), optional :: total_electrons
       logical, intent(in), optional :: auto_find_fermi
       character(len=*), intent(in), optional :: output_file
-
-      ! Local variables
-      character(len=100) :: filename
-
    end subroutine calculate_density_of_states
 
    !> @brief Invalidate eigensystem, DOS, projection, and canonical-energy state.
@@ -1531,10 +1410,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine validate_symmetry_kmap(this, context_tag)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context_tag
-      integer :: nk_full_expected, nk_irred, i, idx
-      integer, allocatable :: counts(:)
-      real(rp) :: wsum
-
    end subroutine validate_symmetry_kmap
 
    !> @brief Write symmetry k-point maps for diagnostics.
@@ -1543,8 +1418,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine write_symmetry_kmap_dump(this, filename)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: filename
-      integer :: u, i, nk_full_expected
-
    end subroutine write_symmetry_kmap_dump
 
    !> @brief Ensure the configured tetrahedron symmetry backend is usable.
@@ -1553,9 +1426,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    !> @param[inout] this Reciprocal object whose mesh/backend state may be updated.
    module subroutine ensure_tetra_symmetry_backend(this)
       class(reciprocal), intent(inout) :: this
-      integer :: nk_full_expected
-      logical :: need_full
-
    end subroutine ensure_tetra_symmetry_backend
 
    !> @brief Ensure spinor integrations operate on a full k-mesh.
@@ -1564,8 +1434,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine ensure_full_mesh_for_spinor_integrations(this, context_tag)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context_tag
-      integer :: nk_full_expected
-
    end subroutine ensure_full_mesh_for_spinor_integrations
 
    !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
@@ -1578,14 +1446,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       integer, allocatable, intent(out) :: tet_ir(:, :)
       integer, allocatable, intent(out) :: tet_mult(:)
       integer, intent(out) :: n_tet_ir
-      integer :: nk1, nk2, nk3, i, j, k, it, ic, idx
-      integer :: n_tet_per_cube, tet_full_count, key_pos
-      integer :: nk_full_expected
-      integer, dimension(3, 4, 6) :: tetra_cut
-      integer, dimension(4) :: key_sorted
-      integer, allocatable :: keys(:, :), mult_tmp(:)
-      logical :: found
-
    end subroutine build_irreducible_tetrahedra
 
    !> @brief Select tetrahedron corner offsets for the current mesh geometry.
@@ -1594,23 +1454,12 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine get_tetra_cut_offsets(this, tetra_cut)
       class(reciprocal), intent(in) :: this
       integer, intent(out) :: tetra_cut(3, 4, 6)
-
-      integer :: base_cut(3, 4, 6), test_cut(3, 4, 6)
-      integer :: lx, ly, it, ic, jc, best_lx, best_ly
-      real(rp) :: qvec(3, 3), p(3, 4), dp(3)
-      real(rp) :: edge2, max_edge2, best_max_edge2
-
    end subroutine get_tetra_cut_offsets
 
    !> @brief Build the DOS energy grid from the configured range and size.
    !> @param[inout] this Reciprocal object receiving dos_energy_grid.
    module subroutine setup_dos_energy_grid(this)
       class(reciprocal), intent(inout) :: this
-
-      ! Local variables
-      integer :: i
-      real(rp) :: energy_min, energy_max, delta_energy
-
    end subroutine setup_dos_energy_grid
 
    !> @brief Calculate total DOS using the tetrahedron method.
@@ -1619,17 +1468,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    !> @param[inout] this Reciprocal object receiving total_dos and total_nos.
    module subroutine calculate_dos_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
-
-      ! Local variables
-      integer :: i_tet, i_corner, i_band, nbands
-      real(rp), dimension(4) :: e_corners
-      integer, allocatable :: tet_ir(:, :), tet_mult(:)
-      integer :: n_tet_ir
-      real(rp) :: tet_weight, dos_integral, nos_integral
-      real(rp) :: fermi_count, fermi_error
-      real(rp), allocatable :: local_dos(:), local_nos(:)
-      integer :: nk_full_expected, tet_start, tet_end, tet_count
-
    end subroutine calculate_dos_tetrahedron
 
    !> @brief Sort four real values in ascending order.
@@ -1638,8 +1476,6 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine sort4(arr_in, arr_out)
       real(rp), dimension(4), intent(in) :: arr_in
       real(rp), dimension(4), intent(out) :: arr_out
-      real(rp) :: a1, a2, a3, a4, tmp
-
    end subroutine sort4
 
    !> @brief Add one tetrahedron’s integrated-state contribution to a grid.
@@ -1653,12 +1489,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
       integer, intent(in) :: npts
       real(rp), intent(inout) :: nos(npts)
-
-      integer :: i, i0(4), m
-      real(rp) :: ecorn(4), de, e1, e2, e3, e4
-      real(rp) :: c0, c1, c2, c3, x, x0
-      real(rp), parameter :: tol = 1.0e-12_rp
-
    end subroutine tetra_add_nos
 
    !> @brief Add one tetrahedron’s DOS contribution to a grid.
@@ -1672,12 +1502,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
       integer, intent(in) :: npts
       real(rp), intent(inout) :: dos(npts)
-
-      integer :: i, i0(4), m
-      real(rp) :: ecorn(4), de, e1, e2, e3, e4
-      real(rp) :: c1, c2, c3, x
-      real(rp), parameter :: tol = 1.0e-12_rp
-
    end subroutine tetra_add_dos
 
 !> @brief Calculate total DOS with Gaussian broadening.
@@ -1686,44 +1510,24 @@ end subroutine check_multisite_hamiltonian_diagonal
 !> @param[inout] this Reciprocal object receiving total_dos.
 module subroutine calculate_dos_gaussian(this)
    class(reciprocal), intent(inout) :: this
-
-   integer :: i_energy, i_k, i_band, i_k_global
-   real(rp) :: energy, weight, gaussian_factor
-   real(rp) :: sigma_squared, sigma_use
-   real(rp) :: local_sum, dos_integral, norm_factor, kweight_sum
-   integer :: nbands
-
-   ! Debug: Check eigenvalue range
 end subroutine calculate_dos_gaussian
 
    !> @brief Calculate total DOS with the Bloechl tetrahedron method.
    !> @param[inout] this Reciprocal object receiving total_dos.
    module subroutine calculate_dos_blochl(this)
       class(reciprocal), intent(inout) :: this
-
    end subroutine calculate_dos_blochl
 
    !> @brief Build full-mesh tetrahedron connectivity.
    !> @param[inout] this Reciprocal object receiving tetrahedra and volumes.
    module subroutine setup_tetrahedra(this)
       class(reciprocal), intent(inout) :: this
-
-      ! Local variables
-      integer :: nk1, nk2, nk3, n_tet_per_cube, i, j, k, tet_idx
-      integer :: it, ic, idx
-      integer, dimension(3, 4, 6) :: tetra_cut
-
    end subroutine setup_tetrahedra
 
    !> @brief Expand irreducible-k eigenvalues/eigenvectors to the full mesh.
    !> @param[inout] this Reciprocal object whose eigen arrays are expanded.
    module subroutine expand_eigenvalues_to_full_mesh(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik_full, nk_full, nk_irred, nbands, ik_irred
-      real(rp), dimension(:, :), allocatable :: eigenvalues_full
-      complex(rp), dimension(:, :, :), allocatable :: eigenvectors_full
-      integer :: nrow_evec, nband_evec, nk_evec
-      
    end subroutine expand_eigenvalues_to_full_mesh
 
    !> @brief Convert 3D mesh coordinates to a periodic flat k-point index.
@@ -1739,8 +1543,6 @@ end subroutine calculate_dos_gaussian
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: i, j, k, nk1, nk2, nk3
       integer :: idx, ii, jj, kk
-
-      ! Apply periodic boundary conditions
    end function get_kpoint_index
 
    !> @brief Estimate a Gaussian DOS broadening from k-point density.
@@ -1749,17 +1551,12 @@ end subroutine calculate_dos_gaussian
    module function calculate_adaptive_sigma(this) result(sigma)
       class(reciprocal), intent(in) :: this
       real(rp) :: sigma
-      real(rp) :: bz_volume, k_density, typical_spacing
-      integer :: nk_total
-      
-      ! Calculate Brillouin zone k-point density
    end function calculate_adaptive_sigma
 
    !> @brief Dispatch projected-DOS calculation for the active DOS method.
    !> @param[inout] this Reciprocal object receiving projected DOS arrays.
    module subroutine project_dos_orbitals(this)
       class(reciprocal), intent(inout) :: this
-
    end subroutine project_dos_orbitals
 
 !> @brief Calculate orbital- and spin-projected DOS with Gaussian broadening.
@@ -1768,22 +1565,6 @@ end subroutine calculate_dos_gaussian
 !> @param[inout] this Reciprocal object receiving projected DOS arrays.
 module subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
-   integer :: ik, ik_global, ib, ie, iorb, i, isite
-   integer :: n_orb_per_spin, orb_start, site_orb_start, n_orb_site
-   integer :: lstart(4), lend(4)
-   real(rp) :: weight, orbital_char, energy
-   real(rp) :: gaussian_weight, sigma_squared, sigma_use
-   complex(rp) :: psi_element
-   real(rp) :: dos_integral, norm_factor
-   integer :: nbands
-   ! Additional locals for projected DOS integration/normalization
-   real(rp) :: proj_integral, e_low, e_high
-   integer :: iei
-   ! Per-site orbital offsets for mixed atom types
-   integer, dimension(:), allocatable :: site_orb_offset
-   real(rp) :: mx_char, my_char, mz_char, local_char
-   real(rp) :: axis(3)
-
 end subroutine project_dos_orbitals_gaussian
 
    !> @brief Return the local spin axis for a projected-DOS site.
@@ -1794,9 +1575,6 @@ end subroutine project_dos_orbitals_gaussian
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: isite
       real(rp), intent(out) :: axis(3)
-      integer :: atom_idx
-      real(rp) :: axis_norm
-
    end subroutine get_site_spin_axis
 
    !> @brief Synchronize lattice local-density-matrix data across MPI ranks.
@@ -1804,10 +1582,6 @@ end subroutine project_dos_orbitals_gaussian
    module subroutine sync_lattice_ldm(lattice_obj)
       use lattice_mod
       type(lattice), intent(inout) :: lattice_obj
-      real(rp), allocatable :: ldm_comm(:, :, :, :)
-      integer :: max_flat_ldm, local_flat
-      integer :: na_glob, plusbulk, lcount_ldm, l, ispin
-
    end subroutine sync_lattice_ldm
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
@@ -1827,11 +1601,6 @@ end subroutine project_dos_orbitals_gaussian
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik, ib, site_orb_start, n_orb_per_spin, i_first, i_last
       real(rp), intent(out) :: total_char, mx_char, my_char, mz_char
-
-      integer :: i, idx_up, idx_dn
-      real(rp) :: up_w, dn_w
-      complex(rp) :: u, d, ud
-
    end subroutine compute_spinor_block_projection
 
    !> @brief Calculate projected DOS with tetrahedron integration.
@@ -1840,32 +1609,6 @@ end subroutine project_dos_orbitals_gaussian
    !> @param[inout] this Reciprocal object receiving projected DOS arrays.
    module subroutine project_dos_orbitals_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
-
-      ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band, iorb, isite
-      integer :: i_start, i_end
-      integer :: n_orb_per_spin, orb_start, site_orb_start, ik, n_orb_site
-      integer :: ie, nbands
-      integer :: tet_start, tet_end, tet_count
-      real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char, de
-      real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
-      real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
-      real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
-      integer :: lstart(4), lend(4)
-      real(rp) :: e1, e2, e3, e4, x, C
-      real(rp) :: tet_weight
-      real(rp), parameter :: TOL = 1.0e-10_rp
-      integer :: n_tet_ir
-      ! Per-site orbital offsets for mixed atom types
-      integer, dimension(:), allocatable :: site_orb_offset
-      real(rp) :: mx_char_avg, my_char_avg, mz_char_avg, local_char
-      real(rp) :: axis(3)
-      real(rp), allocatable :: site_axes(:, :)
-      real(rp), allocatable :: dos_line(:)
-      real(rp), allocatable :: local_projected_dos(:, :, :, :)
-      real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
-      real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
-
    end subroutine project_dos_orbitals_tetrahedron
 
    !> @brief Integrate tabulated data with the trapezoidal rule.
@@ -1875,11 +1618,6 @@ end subroutine project_dos_orbitals_gaussian
    module function trapezoidal_integral(x, y) result(integral)
       real(rp), dimension(:), intent(in) :: x, y
       real(rp) :: integral
-
-      ! Local variables
-      integer :: n, i
-      real(rp) :: dx
-
    end function trapezoidal_integral
 
    !> @brief Linearly interpolate a tabulated grid value.
@@ -1892,9 +1630,6 @@ end subroutine project_dos_orbitals_gaussian
       integer, intent(in) :: n
       real(rp), intent(in) :: x(n), y(n), x0
       real(rp) :: y0
-      integer :: i
-      real(rp) :: dx
-
    end function interpolate_grid_value
 
 !> @brief Calculate zeroth, first, and second DOS band moments.
@@ -1958,14 +1693,6 @@ module function find_fermi_level_from_dos(this, total_electrons) result(fermi_le
    class(reciprocal), intent(in) :: this
    real(rp), intent(in) :: total_electrons
    real(rp) :: fermi_level
-
-   integer :: ie, max_iter
-   real(rp) :: energy, kT
-   real(rp) :: e_min, e_max, e_mid, electrons_at_e
-   real(rp) :: q1, q2, e1, e2, step
-   real(rp), parameter :: eV_to_Ry = 0.073498618_rp
-   real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
-
 end function find_fermi_level_from_dos
 
 !> @brief Integrate DOS occupation up to an energy with Fermi weighting.
@@ -1977,11 +1704,6 @@ module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
    class(reciprocal), intent(in) :: this
    real(rp), intent(in) :: energy, kT
    real(rp) :: integral
-
-   integer :: ie
-   real(rp) :: e, fermi_weight, fermi_weight_next, delta_e
-   real(rp), parameter :: eV_to_Ry = 0.073498618_rp
-
 end function integrate_dos_up_to_energy
 
    !> @brief Write total and projected DOS data to output files.
@@ -1990,12 +1712,6 @@ end function integrate_dos_up_to_energy
    module subroutine write_dos_to_file(this, filename)
       class(reciprocal), intent(in) :: this
       character(len=*), intent(in) :: filename
-
-      ! Local variables
-      integer :: unit, i_energy, isite, iorb, ispin
-      character(len=256) :: proj_filename
-      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
-
    end subroutine write_dos_to_file
 
    !> @brief Calculate band energy from integrated DOS moments.
@@ -2004,8 +1720,6 @@ end function integrate_dos_up_to_energy
    module function calculate_band_energy_from_moments(this) result(eband)
       class(reciprocal), intent(in) :: this
       real(rp) :: eband
-      integer :: isite, iorb, ispin
-      
    end function calculate_band_energy_from_moments
 
    !> @brief Diagnostic integral of E*D_total(E)*f(E) on the configured DOS grid.
@@ -2024,13 +1738,6 @@ end function integrate_dos_up_to_energy
       logical, intent(in), optional :: fixed_liechtenstein
       complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
       logical, intent(in), optional :: m1_only
-      
-      ! Local variables
-      integer :: isite
-      
-      ! Orbital indexing: 
-      ! iorb = 1 (s, 1 orbital), iorb = 2 (p, 3 orbitals), iorb = 3 (d, 5 orbitals)
-      
    end subroutine calculate_ldm_from_projected_dos
 
    !> @brief Reconstruct lattice local density matrices directly from eigenvectors.
@@ -2045,17 +1752,6 @@ end function integrate_dos_up_to_energy
       logical, intent(in), optional :: fixed_liechtenstein
       complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
       logical, intent(in), optional :: m1_only
-      
-      ! Local variables
-      integer :: ik, ik_global, ib, isite, alpha, beta, iorb, norb_l
-      integer :: ispin, basis_offset, site_offset, n_orb_site, n_orb_per_spin
-      real(rp) :: kweight, fermi_occ
-      complex(rp), allocatable :: DM(:,:)
-      complex(rp) :: psi_a, psi_b
-      integer :: nbands, nsites, i
-      real(rp) :: trace_tot, trace_up, trace_dn, max_imag
-      integer :: idx_a, idx_b
-
    end subroutine calculate_ldm_from_eigenvectors
 
    !> Full spinor d-shell P and M1 per site from the current eigenpairs (diagnostic, nsp>=2).
