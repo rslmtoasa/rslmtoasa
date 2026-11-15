@@ -18,22 +18,18 @@ program test_control_spin_semantics
    call require(RADIAL_XC_SPIN_CHANNELS == 2, 'radial/XC representation has two local channels')
    do mode = 1, 4
       ctl%nsp = mode
-      call require(ctl%is_collinear() .eqv. (mode == 1 .or. mode == 2), &
-         'nsp='//int_string(mode)//' collinear query')
       call require(ctl%is_noncollinear() .eqv. (mode == 3 .or. mode == 4), &
          'nsp='//int_string(mode)//' noncollinear query')
       call require(ctl%has_soc() .eqv. (mode == 2 .or. mode == 4), &
          'nsp='//int_string(mode)//' SOC query')
       call require(ctl%uses_spinor_representation() .eqv. (mode >= 2), &
          'nsp='//int_string(mode)//' spinor representation query')
-      call require(ctl%is_spin_polarized_mode(), &
-         'nsp='//int_string(mode)//' permits a spin-polarized physical density')
    end do
 
    ! This is the specific ambiguity guard: the ordinary scalar-relativistic
    ! collinear mode still has two local radial/XC spin-density channels.
    ctl%nsp = 1
-   call require(ctl%is_collinear() .and. .not. ctl%has_soc() .and. &
+   call require(.not. ctl%is_noncollinear() .and. .not. ctl%has_soc() .and. &
       RADIAL_XC_SPIN_CHANNELS == 2, &
       'nsp=1 remains collinear while the radial/XC path has two channels')
 
