@@ -21,34 +21,6 @@ submodule (green_mod) green_chebyshev
 
 contains
 
-   module subroutine chebyshev_green_complex_ij(this, istart, z, g_out)
-      class(green), intent(inout) :: this
-      real(rp), allocatable :: damp(:)
-      integer, intent(in) :: istart
-      complex(rp), intent(in) :: z
-      complex(rp), intent(out) :: g_out(:, :, :)
-      real(rp) :: a, b, emin_win, emax_win
-      integer :: n, n_mom
-
-      if (size(g_out, 1) /= nb .or. size(g_out, 2) /= nb .or. size(g_out, 3) /= 4) then
-         error stop 'chebyshev_green_complex_ij: output must have shape (nb,nb,4)'
-      end if
-      if (.not. allocated(this%recursion%mu_n) .or. istart < 1 .or. &
-          istart + 3 > size(this%recursion%mu_n, 4)) then
-         error stop 'chebyshev_green_complex_ij: requested pair moments are unavailable'
-      end if
-
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-      n_mom = size(this%recursion%mu_n, 3)
-      g_out = cmplx(0.0_rp, 0.0_rp, rp)
-      call cheb_damping(this, n_mom, damp)
-      do n = 1, 4
-         call cheb_green_complex(this%recursion%mu_n(:, :, :, istart + n - 1), nb, n_mom, z, a, b, g_out(:, :, n), damp)
-      end do
-   end subroutine chebyshev_green_complex_ij
-
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -180,28 +152,6 @@ contains
             nb, size(this%recursion%mu_n, 3), cmplx(this%en%ene(fermi_point), 0.0_rp, rp) + eta, a, b, g_ef(:, :, n), damp)
       end do  ! End loop on n
    end subroutine chebyshev_green_ij_eta
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Uses the moments form the Chebyshev recursions to calculate the onsite GF
-   !---------------------------------------------------------------------------
-   module subroutine chebyshev_green(this)
-      class(green), intent(inout) :: this
-
-      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
-      call chebyshev_green_core(this, use_gpu=this%control%gpu_plugin)
-   end subroutine chebyshev_green
-
-   !---------------------------------------------------------------------------
-   !> @brief Deprecated wrapper; use chebyshev_green_core(this, use_gpu=.true.).
-   !---------------------------------------------------------------------------
-   module subroutine chebyshev_green_gpu(this)
-      class(green), intent(inout) :: this
-
-      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
-      call chebyshev_green_core(this, use_gpu=.true.)
-   end subroutine chebyshev_green_gpu
 
    !---------------------------------------------------------------------------
    !> @brief Dispatcher for the on-site Chebyshev Green’s-function/DOS

@@ -68,7 +68,6 @@ module green_mod
       procedure :: bgreen
       procedure :: bgreen_complex
       procedure :: block_green
-      procedure :: block_green_gpu
       procedure :: block_green_eta
       procedure :: block_green_ij
       procedure :: block_green_ij_gpu
@@ -77,11 +76,8 @@ module green_mod
       procedure :: calculate_intersite_gf_twoindex
       procedure :: calculate_intersite_gf_eta
       procedure :: calculate_intersite_gf_eta_gpu
-      procedure :: chebyshev_green
-      procedure :: chebyshev_green_gpu
       procedure :: chebyshev_green_eta
       procedure :: chebyshev_green_ij
-      procedure :: chebyshev_green_complex_ij
       procedure :: chebyshev_green_ij_gpu
       procedure :: chebyshev_green_ij_eta
       procedure :: chebyshev_dos_dispatch
@@ -135,16 +131,6 @@ module green_mod
       integer, intent(in) :: istart
    end subroutine chebyshev_green_ij
 
-   !> Evaluate the four native Chebyshev coefficient-GF blocks at one arbitrary
-   !> complex energy, using the same moments and scaling window as the existing
-   !> real-axis Chebyshev reconstruction.
-   module subroutine chebyshev_green_complex_ij(this, istart, z, g_out)
-      class(green), intent(inout) :: this
-      integer, intent(in) :: istart
-      complex(rp), intent(in) :: z
-      complex(rp), intent(out) :: g_out(:, :, :)
-   end subroutine chebyshev_green_complex_ij
-
    module subroutine chebyshev_green_ij_gpu(this, istart)
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
@@ -157,14 +143,6 @@ module green_mod
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
    end subroutine chebyshev_green_ij_eta
-
-   module subroutine chebyshev_green(this)
-      class(green), intent(inout) :: this
-   end subroutine chebyshev_green
-
-   module subroutine chebyshev_green_gpu(this)
-      class(green), intent(inout) :: this
-   end subroutine chebyshev_green_gpu
 
    module subroutine chebyshev_dos_dispatch(this)
       class(green), intent(inout) :: this
@@ -246,10 +224,6 @@ module green_mod
    module subroutine block_green(this)
       class(green), intent(inout) :: this
    end subroutine block_green
-
-   module subroutine block_green_gpu(this)
-      class(green), intent(inout) :: this
-   end subroutine block_green_gpu
 
    module subroutine block_green_core(this, eta, fermi_point, g_ef)
       use mpi_mod, only: atoms_per_process

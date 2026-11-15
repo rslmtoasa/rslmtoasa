@@ -408,13 +408,6 @@ contains
       call block_green_core(this)
    end subroutine block_green
 
-   module subroutine block_green_gpu(this)
-      class(green), intent(inout) :: this
-
-      ! Deprecated wrapper retained for type-bound callers; use block_green_core.
-      call block_green_core(this)
-   end subroutine block_green_gpu
-
    module subroutine block_green_core(this, eta, fermi_point, g_ef)
       use mpi_mod
       implicit none
