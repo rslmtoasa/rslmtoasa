@@ -491,3 +491,14 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### `example/bulk/B2Fe/input.nml` cannot run — 2026-11-15
 - **Read:** the deck sets `hubbard_orb(1) = 'spd'` in `&hamiltonian`; `hubbard_orb` is not a key, and a bad `&hamiltonian` read is fatal (`source/hamiltonian_build.f90`, about line 495).
 - **Proposal:** use the current Hubbard keys or remove the example.
+
+### `calculate_magnetic_torques` assumes an spd basis — 2026-11-15
+- **Measured:** Debug build (`-fcheck=all`), quick test `Example_si_chebyshev_kspace_dos_equivalence`, real-space Chebyshev route on sp Si: `Index '10' of dimension 2 of array 'this%green%_data%g0' above upper bound of 8`, in `bands_mod::calculate_magnetic_torques` called from `self%report`. Same failure at `origin/main_rc` (8d68cafb). Release builds pass the test.
+- **Read:** `source/bands.f90`, `calculate_magnetic_torques`, indexes the spin-down block as `g0(m + 9, ...)`, which is correct only for 9 orbitals per spin.
+- **Not checked:** what Release reads out of bounds there, and whether the printed torques of sp/spdf runs are affected.
+- **Proposal:** use the basis orbital count for the offset (a few lines).
+
+### Quick-tier k-space and DOS examples fail with `ENABLE_SPGLIB=OFF` — 2026-11-15
+- **Measured:** Release, MPI ON, `-DENABLE_SPGLIB=OFF`: 13 quick tests fail (`Example_k_space_scf_*`, `Example_density_of_states_bccFe*`), for example `Example_k_space_scf_bccFe`: 9 of 18 values out of tolerance. Same 13 failures and counts at `origin/main_rc` (8d68cafb).
+- **Not checked:** whether the difference is only the k-mesh reduction without spglib (references were made with spglib) or a defect.
+- **Proposal:** decide whether these tests require spglib (skip them when it is off) or need spglib-off references; the developer owns that choice.
