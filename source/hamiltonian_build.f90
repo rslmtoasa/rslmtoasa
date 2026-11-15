@@ -2124,23 +2124,6 @@ contains
       !end do
    end subroutine hmfind
 
-   module subroutine set_texture_moments(this, moments)
-      class(hamiltonian), intent(inout) :: this
-      real(rp), intent(in) :: moments(:, :)
-
-      if (size(moments, 1) /= 3) then
-         call g_logger%fatal('set_texture_moments expects shape (3,nsite).', __FILE__, __LINE__)
-      end if
-      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
-      allocate(this%texture_moments(3, size(moments, 2)))
-      this%texture_moments = moments
-   end subroutine set_texture_moments
-
-   module subroutine clear_texture_moments(this)
-      class(hamiltonian), intent(inout) :: this
-      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
-   end subroutine clear_texture_moments
-
    module subroutine prepare_explicit_texture_moments(this)
       class(hamiltonian), intent(inout) :: this
       integer :: ia, it

@@ -206,8 +206,6 @@ module hamiltonian_mod
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
-      procedure :: set_texture_moments
-      procedure :: clear_texture_moments
       procedure :: prepare_explicit_texture_moments
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -867,15 +865,6 @@ module hamiltonian_mod
       integer :: i, ilm, jlm
 
    end subroutine hmfind
-
-   module subroutine set_texture_moments(this, moments)
-      class(hamiltonian), intent(inout) :: this
-      real(rp), intent(in) :: moments(:, :)
-   end subroutine set_texture_moments
-
-   module subroutine clear_texture_moments(this)
-      class(hamiltonian), intent(inout) :: this
-   end subroutine clear_texture_moments
 
    module subroutine prepare_explicit_texture_moments(this)
       class(hamiltonian), intent(inout) :: this
