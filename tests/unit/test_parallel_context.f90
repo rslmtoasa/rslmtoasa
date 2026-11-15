@@ -2,7 +2,7 @@
 ! RF-02 -- deterministic parallel context, range splitting, and device mapping
 !------------------------------------------------------------------------------
 program test_parallel_context
-   use mpi_mod, only: parallel_context, assignment(=), rank, numprocs, ierr, get_mpi_range, &
+   use mpi_mod, only: parallel_context, rank, numprocs, ierr, get_mpi_range, &
       split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
 #ifdef USE_MPI
    use mpi

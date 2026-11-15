@@ -14,7 +14,7 @@ subroutine projector_multisite_frozen_h
       correct_d_shell_moments, extract_hubbard_d_shell_potential
    use logger_mod, only: g_logger
    use mpi_mod, only: rank, numprocs, ierr, atoms_per_process, start_atom, end_atom, g2l_map, &
-                      get_mpi_variables, parallel_context, assignment(=)
+                      get_mpi_variables, parallel_context
    use control_mod, only: control
    use lattice_mod, only: lattice
    use symbolic_atom_mod, only: symbolic_atom

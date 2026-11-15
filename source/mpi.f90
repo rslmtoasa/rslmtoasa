@@ -30,11 +30,6 @@ module mpi_mod
       integer :: local_rank = 0
       integer :: local_size = 1
       logical :: mpi_enabled = .false.
-#ifdef USE_MPI
-      ! Keep this independent of MPI constants: module/type initialization may
-      ! occur before MPI_Init on some MPI implementations.
-      integer :: local_comm = -1
-#endif
    contains
       procedure :: is_root
       procedure :: owns_work
@@ -52,13 +47,8 @@ module mpi_mod
       procedure :: constructor
    end interface parallel_context
 
-   interface assignment(=)
-      module procedure assign_parallel_context
-   end interface assignment(=)
-
    public :: get_mpi_range, get_mpi_variables, get_mpi_mapping
    public :: split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
-   public :: assignment(=)
 
 contains
 
@@ -70,48 +60,12 @@ contains
       call obj%initialize()
    end function constructor
 
-   !> @brief Copy a context without sharing ownership of its local communicator.
-   !> @details Function-result assignment finalizes the temporary immediately
-   !> afterwards.  Duplicate the communicator here so that the temporary and
-   !> destination can independently release their owned handles.
-   subroutine assign_parallel_context(lhs, rhs)
-      type(parallel_context), intent(out) :: lhs
-      type(parallel_context), intent(in) :: rhs
-#ifdef USE_MPI
-      logical :: mpi_is_initialized, mpi_is_finalized
-      ! Open MPI 5 exposes TYPE(MPI_Status) from `use mpi`; do not reuse
-      ! that case-insensitive name for an integer error code.
-      integer :: mpi_ierr
-#endif
-
-      lhs%rank = rhs%rank
-      lhs%size = rhs%size
-      lhs%local_rank = rhs%local_rank
-      lhs%local_size = rhs%local_size
-      lhs%mpi_enabled = rhs%mpi_enabled
-#ifdef USE_MPI
-      lhs%local_comm = -1
-      if (rhs%local_comm == -1) return
-
-      call MPI_Initialized(mpi_is_initialized, mpi_ierr)
-      if (.not. mpi_is_initialized .or. mpi_ierr /= MPI_SUCCESS) return
-      call MPI_Finalized(mpi_is_finalized, mpi_ierr)
-      if (mpi_is_finalized .or. mpi_ierr /= MPI_SUCCESS) return
-
-      call MPI_Comm_dup(rhs%local_comm, lhs%local_comm, mpi_ierr)
-      if (mpi_ierr /= MPI_SUCCESS) then
-         lhs%local_comm = -1
-         call g_logger%warning('MPI_Comm_dup failed while copying parallel context; local communicator disabled.', __FILE__, __LINE__)
-      end if
-#endif
-   end subroutine assign_parallel_context
-
    !> @brief Initialize from MPI_COMM_WORLD and its shared-memory subcommunicator.
    subroutine initialize(this)
       class(parallel_context), intent(inout) :: this
 #ifdef USE_MPI
       logical :: mpi_is_initialized
-      integer :: mpi_ierr
+      integer :: mpi_ierr, local_comm
 
       call MPI_Initialized(mpi_is_initialized, mpi_ierr)
       if (.not. mpi_is_initialized .or. mpi_ierr /= MPI_SUCCESS) return
@@ -122,16 +76,16 @@ contains
       if (mpi_ierr /= MPI_SUCCESS) return
 
       this%mpi_enabled = .true.
-      call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, this%rank, MPI_INFO_NULL, this%local_comm, mpi_ierr)
+      call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, this%rank, MPI_INFO_NULL, local_comm, mpi_ierr)
       if (mpi_ierr == MPI_SUCCESS) then
-         call MPI_Comm_rank(this%local_comm, this%local_rank, mpi_ierr)
-         call MPI_Comm_size(this%local_comm, this%local_size, mpi_ierr)
+         call MPI_Comm_rank(local_comm, this%local_rank, mpi_ierr)
+         call MPI_Comm_size(local_comm, this%local_size, mpi_ierr)
+         call MPI_Comm_free(local_comm, mpi_ierr)
       else
          ! A usable world context is still preferable to aborting solely because
          ! node-local identity is unavailable on an older MPI implementation.
          this%local_rank = this%rank
          this%local_size = this%size
-         this%local_comm = -1
          call g_logger%warning('MPI_Comm_split_type(MPI_COMM_TYPE_SHARED) failed; using world-local identity.', __FILE__, __LINE__)
       end if
 #endif
@@ -172,23 +126,10 @@ contains
 #endif
    end subroutine barrier
 
-   !> @brief Reset this context and release only its owned local communicator.
+   !> @brief Reset this context to the serial defaults.
    subroutine restore_to_default(this)
       class(parallel_context), intent(inout) :: this
-#ifdef USE_MPI
-      logical :: mpi_is_initialized, mpi_is_finalized
-      integer :: mpi_ierr, communicator
 
-      communicator = this%local_comm
-      call MPI_Initialized(mpi_is_initialized, mpi_ierr)
-      if (mpi_is_initialized .and. mpi_ierr == MPI_SUCCESS) then
-         call MPI_Finalized(mpi_is_finalized, mpi_ierr)
-         if (.not. mpi_is_finalized .and. communicator /= -1) then
-            call MPI_Comm_free(communicator, mpi_ierr)
-         end if
-      end if
-      this%local_comm = -1
-#endif
       this%rank = 0
       this%size = 1
       this%local_rank = 0
@@ -196,7 +137,7 @@ contains
       this%mpi_enabled = .false.
    end subroutine restore_to_default
 
-   !> @brief Release context-owned communicators; MPI_Finalize remains program-owned.
+   !> @brief Finalize the context; MPI_Finalize remains program-owned.
    subroutine destructor(this)
       type(parallel_context), intent(inout) :: this
       call this%restore_to_default()
