@@ -24,9 +24,7 @@ module cfd
    !> primitive rotating frame for gbt_single_q.
    type, public :: constraint_diagnostics
       integer :: iteration = 0
-      integer :: nsite = 0
       real(dblprec) :: convergence_metric = 0.0_dblprec
-      real(dblprec) :: max_angular_error = 0.0_dblprec
       !> Instantaneous residual merit assembled by the selected controller.
       !> This is a numerical penalty/merit quantity, not a DFT total energy.
       real(dblprec) :: controller_penalty_energy = 0.0_dblprec
@@ -34,10 +32,6 @@ module cfd
       !> sum_i B_con(i) dot m(i).  This is a band/eigenvalue bookkeeping
       !> diagnostic only; it is not added to the physical DFT energy.
       real(dblprec) :: field_coupling_energy = 0.0_dblprec
-      !> The controller does not implement the variational cDFT Lagrange
-      !> functional.  Keep this explicit so callers cannot infer one from
-      !> controller_penalty_energy.
-      logical :: lagrange_functional_represented = .false.
       real(dblprec), allocatable :: target(:, :)
       real(dblprec), allocatable :: actual(:, :)
       real(dblprec), allocatable :: moment_magnitude(:)
@@ -58,7 +52,7 @@ module cfd
    !
    private
    !
-   public :: initialize_cfd, constrain, set_constraint_diagnostics, set_constraint_controller_parameters
+   public :: initialize_cfd, constrain
    !
 contains
    !
@@ -104,24 +98,6 @@ contains
       !
    end subroutine initialize_cfd
 
-   !> Enable or disable the verbose legacy controller trace.  Structured
-   !> diagnostics returned by constrain() are independent of this switch.
-   subroutine set_constraint_diagnostics(enabled)
-      logical, intent(in) :: enabled
-
-      diagnostics_enabled = enabled
-   end subroutine set_constraint_diagnostics
-
-   !> Set the controller nominal penalty/gain strength.  This is primarily
-   !> an audit and experiment hook; it never changes the physical-energy
-   !> bookkeeping.  A subsequent initialize_cfd call starts lambda_t from it.
-   subroutine set_constraint_controller_parameters(lambda_in)
-      real(dblprec), intent(in) :: lambda_in
-
-      if (lambda_in <= 0.0_dblprec) error stop 'constraint controller strength must be positive'
-      lambda = lambda_in
-      if (allocated(d_delta)) lambda_t = lambda
-   end subroutine set_constraint_controller_parameters
    !
    subroutine constrain(mom_in, mom_ref, bfield, ndim, etcon_out, update_lambda, diagnostics_out)
       !
@@ -159,7 +135,6 @@ contains
       if (present(diagnostics_out)) then
          call diagnostics_out%clear()
          diagnostics_out%iteration = b_constr_iter + 1
-         diagnostics_out%nsite = ndim
          allocate(diagnostics_out%target(3, ndim), diagnostics_out%actual(3, ndim), &
                   diagnostics_out%moment_magnitude(ndim), diagnostics_out%angular_error(ndim), &
                   diagnostics_out%transverse_residual(3, ndim), diagnostics_out%bfield(3, ndim), &
@@ -412,10 +387,8 @@ contains
       field_coupling = sum(bfield*mom_in)
       if (present(diagnostics_out)) then
          diagnostics_out%convergence_metric = sqrt(metric_sum/real(max(1, ndim), dblprec))
-         diagnostics_out%max_angular_error = maxval(diagnostics_out%angular_error)
          diagnostics_out%controller_penalty_energy = etcon
          diagnostics_out%field_coupling_energy = field_coupling
-         diagnostics_out%lagrange_functional_represented = .false.
       end if
 
       if (.not. update_lambda_) then
@@ -468,12 +441,9 @@ contains
       if (allocated(this%bfield_longitudinal)) deallocate(this%bfield_longitudinal)
       if (allocated(this%torque)) deallocate(this%torque)
       this%iteration = 0
-      this%nsite = 0
       this%convergence_metric = 0.0_dblprec
-      this%max_angular_error = 0.0_dblprec
       this%controller_penalty_energy = 0.0_dblprec
       this%field_coupling_energy = 0.0_dblprec
-      this%lagrange_functional_represented = .false.
    end subroutine clear_constraint_diagnostics
 
    pure function cross3(a, b) result(c)
