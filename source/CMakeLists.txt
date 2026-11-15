@@ -64,7 +64,6 @@ add_library(${PROJECT_NAME} STATIC
     precision.f90
     scf_guard.f90
     kpm_profile.f90
-    scf_benchmark_profile.f90
     kpoint_workset.f90
     reciprocal.f90
     reciprocal_backend.f90

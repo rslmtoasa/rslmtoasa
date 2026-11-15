@@ -50,7 +50,6 @@ module self_mod
    use precision_mod, only: rp
    use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
    use timer_mod, only: g_timer
-   use scf_benchmark_profile_mod, only: g_scf_benchmark_profile
    use scf_guard_mod, only: guard_q0_capacity
    use namelist_generator_mod, only: namelist_generator
       use cfd
@@ -2558,29 +2557,20 @@ contains
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
       complex(rp), allocatable :: fixed_u_vin(:, :, :)
-      real(rp) :: total_energy, magnetic_moment
 
       call this%initialize_fixed_u_trace()
    
       !===========================================================================
       !                              BEGIN SCF LOOP
       !===========================================================================
-      if (.not. g_scf_benchmark_profile%enabled) then
-         call g_scf_benchmark_profile%configure_from_environment()
-      end if
       niter = 0
       do i = 1, this%nstep
-         call g_scf_benchmark_profile%start_iteration(i)
          call this%set_magnetic_seed_state(i)
          if (this%cold .and. i==1) then
             if (this%use_kspace) then
-               call g_scf_benchmark_profile%start_stage('P_hamiltonian_prepare')
                call run_scf(this)
-               call g_scf_benchmark_profile%stop_stage('P_hamiltonian_prepare')
             else
-               call g_scf_benchmark_profile%start_stage('P_rs_hamiltonian_prepare')
                call run_scf(this)
-               call g_scf_benchmark_profile%stop_stage('P_rs_hamiltonian_prepare')
             end if
          end if
          !=========================================================================
@@ -2662,7 +2652,6 @@ contains
          !                   MIX OLD AND NEW CALCULATED PL AND QL
          !=========================================================================
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
-         call g_scf_benchmark_profile%start_stage('P_mixing')
          call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new, iteration=i, &
                              guard_collinear=this%control%nsp == 1) ! Mix qia_new with qia_old
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
@@ -2673,12 +2662,10 @@ contains
          else if (this%hamiltonian%hubbard_test_operator_check) then
             call this%mix%save_ldm_to('new') ! W1 at U=J=0: P_out for the logged Tr(W P) only.
          end if
-         call g_scf_benchmark_profile%stop_stage('P_mixing')
    
          !=========================================================================
          !         CALCULATE THE MADELUNG POTENTIAL (BULK ONLY IMPLEMENTED)
          !=========================================================================
-         call g_scf_benchmark_profile%start_stage('P_potential_update')
          select case (this%control%calctype)
          case ('B')
             call this%charge%bulkpot()
@@ -2703,12 +2690,10 @@ contains
          !                       MAKE SFC ATOMIC SPHERE
          !=========================================================================
          call run_scf(this)
-         call g_scf_benchmark_profile%stop_stage('P_potential_update')
    
          !=========================================================================
          !             UPDATE FILES AND INFORMATION IN THE DIRECTORY
          !=========================================================================
-         call g_scf_benchmark_profile%start_stage('P_scf_io')
          if (rank == 0) call update_fermi_in_input(this%en%fermi, this%control%fname)
          if (rank == 0) then
             do k = 1, size(this%lattice%symbolic_atoms)
@@ -2721,16 +2706,12 @@ contains
             end do
          end if
          if (rank == 0) call save_state_scf(this%lattice%symbolic_atoms(:))
-         call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
          this%physical_total_energy = this%physical_total_energy + this%fixed_hubbard_energy_pout()
          call this%write_fixed_u_total_energy()
          call this%write_hubbard_moment_energy_diagnostics()
          call this%write_gbt_scf_diagnostics(i)
-         total_energy = this%physical_total_energy
-         magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
-         call g_scf_benchmark_profile%finish_iteration(this%mix%delta, total_energy, this%en%fermi, magnetic_moment)
 
          !=========================================================================
          !                TEST IF THE CALCULATION IS CONVERGED
@@ -2883,12 +2864,6 @@ contains
       if (rank == 0) call g_logger%info('Perform recursion at step '//int2str(iter), __FILE__, __LINE__)
       call g_timer%start('recursion')
 
-      if (this%use_kspace) then
-         call g_scf_benchmark_profile%start_stage('P_hamiltonian_prepare')
-      else
-         call g_scf_benchmark_profile%start_stage('P_rs_hamiltonian_prepare')
-      end if
-
       if (this%control%calctype == 'I' .or. this%control%calctype == 'S') then
          call this%hamiltonian%begin_rd1_vin_capture(iter, enable_rs_capture=.not. this%use_kspace)
       end if
@@ -2925,17 +2900,10 @@ contains
          if (this%control%has_soc()) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
       end select
-
-      if (this%use_kspace) then
-         call g_scf_benchmark_profile%stop_stage('P_hamiltonian_prepare')
-      else
-         call g_scf_benchmark_profile%stop_stage('P_rs_hamiltonian_prepare')
-      end if
    
       if (this%use_kspace) then
          if (rank == 0) call g_logger%info('run_recursion: use_kspace=.true., skipping recursion solver stage (Hamiltonian build kept).', __FILE__, __LINE__)
       else
-         call g_scf_benchmark_profile%start_stage('P_rs_solver_kernel')
          select case (this%control%recur)
          case ('lanczos')
             call this%recursion%recur()
@@ -2944,7 +2912,6 @@ contains
          case ('block')
             call this%recursion%recur_b()
          end select
-         call g_scf_benchmark_profile%stop_stage('P_rs_solver_kernel')
       end if
    
       call g_timer%stop('recursion')
@@ -2961,7 +2928,6 @@ contains
       integer :: ia, l, lmax_site, li, iorb, plusbulk
       integer :: iteration_value, spin_check, l_check
       real(rp) :: q_up, q_dn, mz, mtot
-      real(rp) :: reciprocal_h2d, reciprocal_solver, reciprocal_d2h, reciprocal_total
       real(rp), allocatable :: kspace_spin_mom(:,:)
       complex(rp), allocatable :: local_m1(:, :, :, :, :)
       complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
@@ -3002,34 +2968,12 @@ contains
                call this%reciprocal_scf_cache%generate_mp_mesh()
             end if
          end if
-         call g_scf_benchmark_profile%start_stage('P_hk_assembly')
          call this%reciprocal_scf_cache%build_kspace_hamiltonian()
          call this%write_fixed_u_kspace_trace(.false.)
-         call g_scf_benchmark_profile%stop_stage('P_hk_assembly')
          call g_timer%stop('calculation-of-DOS')
          call g_timer%start('diagonalization')
-         call g_scf_benchmark_profile%start_stage('P_eigensolver')
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
-         call g_scf_benchmark_profile%stop_stage('P_eigensolver')
          call g_timer%stop('diagonalization')
-
-         reciprocal_h2d = 0.0_rp
-         reciprocal_solver = 0.0_rp
-         reciprocal_d2h = 0.0_rp
-         reciprocal_total = 0.0_rp
-         if (allocated(this%reciprocal_scf_cache%execution_backend)) then
-            select type (backend => this%reciprocal_scf_cache%execution_backend)
-            type is (cuda_reciprocal_backend)
-               reciprocal_h2d = backend%h2d_seconds
-               reciprocal_solver = backend%gpu_solve_seconds
-               reciprocal_d2h = backend%d2h_seconds
-               reciprocal_total = backend%total_reciprocal_seconds
-            class default
-               continue
-            end select
-         end if
-         call g_scf_benchmark_profile%set_reciprocal_details( &
-            reciprocal_h2d, reciprocal_solver, reciprocal_d2h, reciprocal_total)
          call g_timer%start('calculation-of-DOS')
          call this%reciprocal_scf_cache%calculate_density_of_states( &
             this%hamiltonian, &
@@ -3057,9 +3001,7 @@ contains
          end if
          if (this%control%uses_spinor_representation()) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
-            call g_scf_benchmark_profile%start_stage('P_charge_spin_accumulate')
             call this%compute_kspace_spin_moments_spinor(this%reciprocal_scf_cache, kspace_spin_mom)
-            call g_scf_benchmark_profile%stop_stage('P_charge_spin_accumulate')
          end if
 
          ! The opt-in local-moment route needs same-eigensystem P and M1
@@ -3079,7 +3021,6 @@ contains
          end if
 
          ! Map reciprocal projected-DOS moments onto SCF quantities expected by mix/save_to.
-         call g_scf_benchmark_profile%start_stage('P_density_build')
          do ia = 1, this%lattice%nrec
             lmax_site = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax
             do l = 0, lmax_site
@@ -3219,7 +3160,6 @@ contains
             call this%bands%calculate_pl(iteration=iteration_value)
          end if
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
-         call g_scf_benchmark_profile%stop_stage('P_density_build')
 
          if ((this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. &
               this%hamiltonian%hubbard_v_check .or. this%hamiltonian%hubbard_test_operator_check) &
@@ -3262,32 +3202,22 @@ contains
    
       select case (this%control%recur)
       case ('lanczos')
-         call g_scf_benchmark_profile%start_stage('P_rs_green_function')
          call this%green%sgreen()
-         call g_scf_benchmark_profile%stop_stage('P_rs_green_function')
       case ('chebyshev')
-         call g_scf_benchmark_profile%start_stage('P_rs_spectral_reconstruct')
          call this%green%chebyshev_dos_dispatch()  ! Dispatches to GPU/C++/legacy based on control flags
-         call g_scf_benchmark_profile%stop_stage('P_rs_spectral_reconstruct')
       case ('block')
-         call g_scf_benchmark_profile%start_stage('P_rs_green_function')
          call this%recursion%zsqr()
          call this%green%block_green()
-         call g_scf_benchmark_profile%stop_stage('P_rs_green_function')
       end select
    
-      call g_scf_benchmark_profile%start_stage('P_rs_fermi')
       call this%bands%calculate_fermi() ! Calculate the Fermi energy
       if (this%hamiltonian%hubbard_u_sc_check) then
          call this%bands%calculate_hubbard_u_sc()
       end if
-      call g_scf_benchmark_profile%stop_stage('P_rs_fermi')
       !=========================================================================
       !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
       !=========================================================================
-      call g_scf_benchmark_profile%start_stage('P_rs_charge_spin_accumulate')
       call this%bands%calculate_magnetic_moments()
-      call g_scf_benchmark_profile%stop_stage('P_rs_charge_spin_accumulate')
    
       do ia = 1, this%lattice%nrec
          this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
@@ -3304,13 +3234,11 @@ contains
       !=========================================================================
       !                  CALCULATE THE NEW BAND MOMENTS QL
       !=========================================================================
-      call g_scf_benchmark_profile%start_stage('P_rs_density_build')
       if (present(m1_out) .or. present(pl_diag_out)) then
          call this%bands%calculate_moments(m1_out=m1_out, pl_diag_out=pl_diag_out, iteration=iteration_value)
       else
          call this%bands%calculate_moments(iteration=iteration_value)
       end if
-      call g_scf_benchmark_profile%stop_stage('P_rs_density_build')
       call this%mix%save_to('new', iteration=iteration_value, guard_collinear=this%control%nsp == 1)
 
       !=========================================================================
