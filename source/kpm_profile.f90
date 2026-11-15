@@ -103,7 +103,6 @@ module kpm_profile_mod
       real(rp) :: closure_error = 0.0_rp
       real(rp) :: child_error = 0.0_rp
       character(len=8) :: status = 'UNKNOWN'
-      logical :: benchmark_no_write = .false.
    contains
       procedure :: reset => kpm_profile_reset
       procedure :: configure => kpm_profile_configure
@@ -115,7 +114,6 @@ module kpm_profile_mod
       procedure :: set_moment_memory => kpm_profile_set_moment_memory
       procedure :: note_trace_batch => kpm_profile_note_trace_batch
       procedure :: set_gpu_energy_block => kpm_profile_set_gpu_energy_block
-      procedure :: output_suppressed => kpm_profile_output_suppressed
       procedure :: emit => kpm_profile_emit
    end type kpm_profile
 
@@ -166,7 +164,6 @@ contains
       this%closure_error = 0.0_rp
       this%child_error = 0.0_rp
       this%status = 'UNKNOWN'
-      this%benchmark_no_write = benchmark_no_write_enabled()
    end subroutine kpm_profile_reset
 
    subroutine kpm_profile_configure(this, moment_backend, moment_precision, reconstruction_backend, &
@@ -389,14 +386,8 @@ contains
       class(kpm_profile), intent(inout) :: this
       real(rp) :: exclusive_sum, raw_other, total, tolerance
       real(rp) :: moment_children, reconstruction_children, gamma_children
-      character(len=24) :: output_mode
 
       if (.not. this%configured) return
-      if (this%benchmark_no_write) then
-         output_mode = 'benchmark_no_write'
-      else
-         output_mode = 'production'
-      end if
       do while (any(this%phase_active) .or. any(this%detail_active) .or. this%transport_total_active)
          call close_active_timer(this)
       end do
@@ -451,7 +442,7 @@ contains
          'full_moment_d2h_bytes= ', this%bytes_full_moment_d2h, &
          'reduced_result_d2h_bytes= ', this%bytes_result_d2h, &
          'gpu_energy_block= ', this%gpu_energy_block, &
-         'output_mode='//trim(output_mode)//' ', &
+         'output_mode=production ', &
          'P_operator_setup= ', this%phase_seconds(phase_operator_setup), &
          'P_trace_setup= ', this%phase_seconds(phase_trace_setup), &
          'P_moments_total= ', this%phase_seconds(phase_moments_total), &
@@ -494,12 +485,6 @@ contains
          'PROFILE_STATUS='//trim(this%status)
    end subroutine kpm_profile_emit
 
-   logical function kpm_profile_output_suppressed(this)
-      class(kpm_profile), intent(in) :: this
-
-      kpm_profile_output_suppressed = this%benchmark_no_write
-   end function kpm_profile_output_suppressed
-
    subroutine close_active_timer(this)
       class(kpm_profile), intent(inout) :: this
       integer :: i
@@ -532,12 +517,5 @@ contains
       call get_environment_variable(trim(name), buffer, length=length, status=status)
       if (status == 0 .and. length > 0) value = buffer(1:min(length, len(value)))
    end function environment_value
-
-   logical function benchmark_no_write_enabled()
-      character(len=32) :: value
-
-      value = environment_value('RSLMTO_KPM_BENCHMARK_NO_WRITE')
-      benchmark_no_write_enabled = trim(value) == '1' .or. trim(value) == 'true' .or. trim(value) == 'TRUE'
-   end function benchmark_no_write_enabled
 
 end module kpm_profile_mod

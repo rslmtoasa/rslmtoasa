@@ -517,7 +517,7 @@ contains
       integer(c_long_long) :: gpu_gamma_h2d_bytes, gpu_gamma_block_bytes, gpu_result_d2h_bytes
       integer :: gpu_energy_block
       integer(int64) :: gpu_complex_bytes
-      logical :: use_gpu_reconstruction, no_write
+      logical :: use_gpu_reconstruction
       logical :: use_cpu_fp32_reconstruction
       character(len=48), allocatable :: output_debug(:), output_total(:), output_type(:,:)
       character(len=304), allocatable :: output_orb_real(:), output_orb_im(:)
@@ -568,7 +568,6 @@ contains
       case('random_vec')
          loop_over = this%control%random_vec_num
       end select  
-      no_write = g_kpm_profile%output_suppressed()
 
       use_gpu_reconstruction = .false.
       if (associated(this%recursion%gpu_backend)) then
@@ -746,41 +745,39 @@ contains
       call g_kpm_profile%stop('P_output_prepare')
 
       call g_kpm_profile%start('P_output_io')
-      if (.not. no_write) then
-         open(unit=3, file=fname_cond_total, status='replace', action='write')
-         open(unit=32, file=fname_cond_orb_real, status='replace', action='write')
-         open(unit=33, file=fname_cond_orb_im, status='replace', action='write')
-         do i = 1, ne
-            write(123, '(A)') output_debug(i)
-            write(3, '(A)') output_total(i)
-            write(32, '(A)') output_orb_real(i)
-            write(33, '(A)') output_orb_im(i)
-         end do
-         close(3)
-         close(32)
-         close(33)
+      open(unit=3, file=fname_cond_total, status='replace', action='write')
+      open(unit=32, file=fname_cond_orb_real, status='replace', action='write')
+      open(unit=33, file=fname_cond_orb_im, status='replace', action='write')
+      do i = 1, ne
+         write(123, '(A)') output_debug(i)
+         write(3, '(A)') output_total(i)
+         write(32, '(A)') output_orb_real(i)
+         write(33, '(A)') output_orb_im(i)
+      end do
+      close(3)
+      close(32)
+      close(33)
 
-         if (this%control%cond_calctype == 'per_type') then
-            do ntype = 1, loop_over
-               fname_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond.out'
-               fname_orb_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond_orb_real.out'
-               fname_orb_i = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond_orb_im.out'
-               open(unit=100+ntype, file=fname_r, status='replace', action='write')
-               open(unit=300+ntype, file=fname_orb_r, status='replace', action='write')
-               open(unit=400+ntype, file=fname_orb_i, status='replace', action='write')
-               do i = 1, ne
-                  write(100+ntype, '(A)') output_type(i, ntype)
-                  write(300+ntype, '(A)') output_type_orb_real(i, ntype)
-                  write(400+ntype, '(A)') output_type_orb_im(i, ntype)
-               end do
-               close(100+ntype)
-               close(300+ntype)
-               close(400+ntype)
+      if (this%control%cond_calctype == 'per_type') then
+         do ntype = 1, loop_over
+            fname_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond.out'
+            fname_orb_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond_orb_real.out'
+            fname_orb_i = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond_orb_im.out'
+            open(unit=100+ntype, file=fname_r, status='replace', action='write')
+            open(unit=300+ntype, file=fname_orb_r, status='replace', action='write')
+            open(unit=400+ntype, file=fname_orb_i, status='replace', action='write')
+            do i = 1, ne
+               write(100+ntype, '(A)') output_type(i, ntype)
+               write(300+ntype, '(A)') output_type_orb_real(i, ntype)
+               write(400+ntype, '(A)') output_type_orb_im(i, ntype)
             end do
-         end if
-         ! Convert the same integrated traces to labeled physical units after the raw output is written.
-         call this%write_physical_response(integrand, integrand_at, wscale, a, b)
+            close(100+ntype)
+            close(300+ntype)
+            close(400+ntype)
+         end do
       end if
+      ! Convert the same integrated traces to labeled physical units after the raw output is written.
+      call this%write_physical_response(integrand, integrand_at, wscale, a, b)
       call g_kpm_profile%stop('P_output_io')
 
       deallocate(integrand, integrand_tot_real, integrand_tot_im, raw_integrand_tot_real, raw_integrand_tot_im, &
