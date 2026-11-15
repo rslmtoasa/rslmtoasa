@@ -72,8 +72,6 @@ module recursion_mod
       !> Atom list in hopping region
       integer, dimension(:), allocatable :: izero, idum, irlist, nzero, mzero, ndum, mdum
       integer :: irnum !< Atoms within recursion shells
-      !> Atom list in hopping region as a function of recursion step
-      integer, dimension(:, :), allocatable :: izeroll
       !> Wave functions for recursion hopping (Lanczos)
       complex(rp), dimension(:, :), allocatable :: psi, pmn
       !> Wave functions for block recursion hopping (Lanczos)
@@ -116,7 +114,6 @@ module recursion_mod
       procedure :: get_terminf
       procedure :: get_cinf
       procedure :: emami
-      procedure :: create_ll_map
       procedure :: cheb_0th_mom
       procedure :: cheb_1st_mom
       procedure :: cheb_1st_mom_hoh
@@ -195,9 +192,7 @@ module recursion_mod
       integer :: k, ll
 
       ! Rebuild the initial lightcone from the support of psi0. The leaf
-      ! routines propagate it dynamically through this%izero/this%idum, so the
-      ! izeroll/create_ll_map bookkeeping of the old inline drivers is not
-      ! needed (those arrays are never read by the leaf routines).
+      ! routines propagate it dynamically through this%izero/this%idum.
    end subroutine cheb_moments_legacy
 
    !> @brief Return the energy window used to scale Chebyshev Hamiltonians.
@@ -854,19 +849,6 @@ module recursion_mod
       integer :: i_loc
 
    end subroutine chebyshev_recur
-
-   !> @brief Precompute light-cone support maps for Chebyshev recursion levels.
-   !> @details Propagates the active-site mask one neighbor shell per level and
-   !>          stores the result in izeroll(:,ll). Legacy Chebyshev routines use
-   !>          this map to avoid visiting sites outside the reachable support.
-   !> @param[inout] this Recursion object; fills izeroll.
-   module subroutine create_ll_map(this)
-      class(recursion), intent(inout) :: this
-      ! Local variables
-      integer :: i, j, k, nr, nnmap, ll
-      integer, dimension(0:this%lattice%kk) :: idumll
-
-   end subroutine create_ll_map
 
    !> @brief Apply one scalar Lanczos Hamiltonian hop.
    !> @details Forms H|psi_ll> over the current light cone, accumulates the scalar

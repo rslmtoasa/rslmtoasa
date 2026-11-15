@@ -305,7 +305,6 @@ contains
       if (allocated(this%a)) call g_safe_alloc%deallocate('recursion.a', this%a)
       if (allocated(this%b2)) call g_safe_alloc%deallocate('recursion.b2', this%b2)
       if (allocated(this%izero)) call g_safe_alloc%deallocate('recursion.izero', this%izero)
-      if (allocated(this%izeroll)) call g_safe_alloc%deallocate('recursion.izeroll', this%izeroll)
       if (allocated(this%irlist)) call g_safe_alloc%deallocate('recursion.irlist', this%irlist)
       if (allocated(this%psi)) call g_safe_alloc%deallocate('recursion.psi', this%psi)
       if (allocated(this%psi1)) call g_safe_alloc%deallocate('recursion.psi1', this%psi1)
@@ -337,7 +336,6 @@ contains
       if (allocated(this%a)) deallocate (this%a)
       if (allocated(this%b2)) deallocate (this%b2)
       if (allocated(this%izero)) deallocate (this%izero)
-      if (allocated(this%izeroll)) deallocate (this%izeroll)
       if (allocated(this%irlist)) deallocate (this%irlist)
       if (allocated(this%psi)) deallocate (this%psi)
       if (allocated(this%psi1)) deallocate (this%psi1)
@@ -392,9 +390,8 @@ contains
       call g_safe_alloc%allocate('recursion.atemp', this%atemp, max(this%lattice%control%llsp, this%lattice%control%lld))
       call g_safe_alloc%allocate('recursion.b2temp', this%b2temp, max(this%lattice%control%llsp, this%lattice%control%lld))
       call g_safe_alloc%allocate('recursion.b2', this%b2, (/max(this%lattice%control%llsp, this%lattice%control%lld), nb, this%lattice%nrec, 3/))
-      allocate (this%izero(0:this%lattice%kk), this%izeroll(0:this%lattice%kk, this%lattice%control%lld + 1), this%idum(0:this%lattice%kk))
+      allocate (this%izero(0:this%lattice%kk), this%idum(0:this%lattice%kk))
       call g_safe_alloc%report_allocate('recursion.izero', this%izero)
-      call g_safe_alloc%report_allocate('recursion.izeroll', this%izeroll)
       call g_safe_alloc%report_allocate('recursion.idum', this%idum)
       allocate (this%irlist(0:this%lattice%kk))
       call g_safe_alloc%report_allocate('recursion.irlist', this%irlist)
@@ -430,7 +427,7 @@ contains
       allocate (this%b2temp(max(this%lattice%control%llsp, this%lattice%control%lld)))
       allocate (this%b2(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &nb, this%lattice%nrec, 3))
-      allocate (this%izero(0:this%lattice%kk), this%idum(0:this%lattice%kk), this%izeroll(0:this%lattice%kk, this%lattice%control%lld + 1))
+      allocate (this%izero(0:this%lattice%kk), this%idum(0:this%lattice%kk))
       allocate (this%irlist(0:this%lattice%kk))
 
       allocate (this%psi(nb, this%lattice%kk), this%pmn(nb, this%lattice%kk))
@@ -467,7 +464,6 @@ contains
                             __FILE__, __LINE__)
       this%izero(:) = 0
       this%idum(:) = 0
-      this%izeroll(:, :) = 0
       this%irlist(:) = 0
       this%a(:, :, :, :) = 0.0d0
       this%b2(:, :, :, :) = 0.0d0

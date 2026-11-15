@@ -755,39 +755,6 @@ contains
       end do
    end subroutine get_terminf
 
-   !> @brief Precompute light-cone support maps for Chebyshev recursion levels.
-   !> @details Propagates the active-site mask one neighbor shell per level and
-   !>          stores the result in izeroll(:,ll). Legacy Chebyshev routines use
-   !>          this map to avoid visiting sites outside the reachable support.
-   !> @param[inout] this Recursion object; fills izeroll.
-   module subroutine create_ll_map(this)
-      class(recursion), intent(inout) :: this
-      ! Local variables
-      integer :: i, j, k, nr, nnmap, ll
-      integer, dimension(0:this%lattice%kk) :: idumll
-
-      idumll(:) = 0
-
-      do ll = 1, this%lattice%control%lld
-         idumll(:) = 0
-         do i = 1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-            idumll(i) = this%izeroll(i, ll)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours
-            if (nr >= 2) then
-               do j = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, j)
-                  if (nnmap /= 0) then
-                     if (this%izeroll(nnmap, ll) /= 0) then
-                        idumll(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do
-         this%izeroll(:, ll + 1) = idumll(:)
-      end do
-   end subroutine create_ll_map
-
    !> @brief Apply one scalar Lanczos Hamiltonian hop.
    !> @details Forms H|psi_ll> over the current light cone, accumulates the scalar
    !>          alpha coefficient for each orbital channel, and prepares pmn for

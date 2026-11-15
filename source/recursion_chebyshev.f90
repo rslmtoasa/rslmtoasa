@@ -127,9 +127,7 @@ contains
       integer :: k, ll
 
       ! Rebuild the initial lightcone from the support of psi0. The leaf
-      ! routines propagate it dynamically through this%izero/this%idum, so the
-      ! izeroll/create_ll_map bookkeeping of the old inline drivers is not
-      ! needed (those arrays are never read by the leaf routines).
+      ! routines propagate it dynamically through this%izero/this%idum.
       this%izero(:) = 0
       do k = 1, this%lattice%kk
          if (any(psi0(:, :, k) /= (0.0_rp, 0.0_rp))) this%izero(k) = 1
