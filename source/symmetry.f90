@@ -57,7 +57,6 @@ module symmetry_mod
    contains
       ! Initialization and cleanup
       procedure :: initialize => initialize_symmetry
-      procedure :: finalize => finalize_symmetry
       
       ! Crystal structure analysis
       procedure :: determine_crystal_structure
@@ -72,7 +71,6 @@ module symmetry_mod
       procedure :: generate_automatic_kpath
       
       ! Utility procedures
-      procedure :: set_lattice_reference
    end type symmetry
 
 contains
@@ -139,44 +137,6 @@ contains
 #endif
       
    end subroutine initialize_symmetry
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Finalize symmetry analysis
-   !---------------------------------------------------------------------------
-   subroutine finalize_symmetry(this)
-      class(symmetry), intent(inout) :: this
-      
-      ! Deallocate arrays
-      if (allocated(this%k_path)) deallocate(this%k_path)
-      if (allocated(this%k_labels)) deallocate(this%k_labels)
-      if (allocated(this%k_distances)) deallocate(this%k_distances)
-      
-      ! Reset values
-      this%crystal_system = ''
-      this%space_group_symbol = ''
-      this%space_group_number = 0
-      this%num_symmetry_operations = 0
-      this%nk_path = 0
-      
-      ! Clear lattice reference
-      this%lattice => null()
-      
-   end subroutine finalize_symmetry
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Set lattice reference
-   !---------------------------------------------------------------------------
-   subroutine set_lattice_reference(this, lattice_ref)
-      class(symmetry), intent(inout) :: this
-      type(lattice), target, intent(in) :: lattice_ref
-      
-      this%lattice => lattice_ref
-      
-   end subroutine set_lattice_reference
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
