@@ -2555,7 +2555,7 @@ contains
          na_loc = g2l_map(na)
 
          I_loc = 0.0_rp
-         lmax = min(this%symbolic_atom(plusbulk)%potential%lmax, 2)
+         lmax = min(this%symbolic_atom(plusbulk)%potential%lmax, 2, lmax_basis)
 
          do l = 0, lmax
             spin_dos_l = 0.0_rp
@@ -2565,14 +2565,14 @@ contains
             do ie = 1, this%en%channels_ldos + 10
                do m = first_orbital, last_orbital
                   spin_dos_l(ie, 1) = spin_dos_l(ie, 1) &
-                     - aimag(this%green%g0(m, m + 9, ie, na_loc) &
-                              + this%green%g0(m + 9, m, ie, na_loc))/pi
+                     - aimag(this%green%g0(m, m + spin_off, ie, na_loc) &
+                              + this%green%g0(m + spin_off, m, ie, na_loc))/pi
                   spin_dos_l(ie, 2) = spin_dos_l(ie, 2) &
-                     - aimag(i_unit*this%green%g0(m, m + 9, ie, na_loc) &
-                              - i_unit*this%green%g0(m + 9, m, ie, na_loc))/pi
+                     - aimag(i_unit*this%green%g0(m, m + spin_off, ie, na_loc) &
+                              - i_unit*this%green%g0(m + spin_off, m, ie, na_loc))/pi
                   spin_dos_l(ie, 3) = spin_dos_l(ie, 3) &
                      - aimag(this%green%g0(m, m, ie, na_loc) &
-                              - this%green%g0(m + 9, m + 9, ie, na_loc))/pi
+                              - this%green%g0(m + spin_off, m + spin_off, ie, na_loc))/pi
                end do
             end do
 
