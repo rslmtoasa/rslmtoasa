@@ -110,8 +110,6 @@ module region_registry_mod
       procedure :: build_from_buildsurf => region_registry_build_from_buildsurf
       procedure :: build_from_interface => region_registry_build_from_interface
       procedure :: dump => region_registry_dump
-      procedure :: is_active => region_registry_is_active
-      procedure :: region_of => region_registry_region_of
       !> B7.4 alignment solver (B7 §1.3). See the procedure headers.
       procedure :: gauge_anchor => alignment_gauge_anchor
       procedure :: initial_guess => alignment_initial_guess
@@ -124,11 +122,6 @@ module region_registry_mod
    interface region_registry
       procedure :: region_registry_constructor
    end interface region_registry
-
-   public :: alignment_gauge_anchor
-   public :: alignment_initial_guess
-   public :: alignment_update
-   public :: alignment_consistency_check
 
 contains
 
@@ -697,29 +690,6 @@ contains
          this%layer_index(i) = 0
       end do
    end subroutine region_registry_build_from_interface
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Whether site i is active (relaxes self-consistently).
-   !---------------------------------------------------------------------------
-   pure logical function region_registry_is_active(this, i) result(res)
-      class(region_registry), intent(in) :: this
-      integer, intent(in) :: i
-      res = this%active(i)
-   end function region_registry_is_active
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Region descriptor for site i.
-   !---------------------------------------------------------------------------
-   pure function region_registry_region_of(this, i) result(res)
-      class(region_registry), intent(in) :: this
-      integer, intent(in) :: i
-      type(region_descriptor) :: res
-      res = this%region(this%region_id(i))
-   end function region_registry_region_of
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

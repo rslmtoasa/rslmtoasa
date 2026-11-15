@@ -32,7 +32,7 @@ module charge_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
-   use region_registry_mod, only: region_registry, region_descriptor, region_kind_vacuum, &
+   use region_registry_mod, only: region_registry, region_kind_vacuum, &
                                   region_kind_lead_b
    implicit none
 

@@ -635,15 +635,13 @@ contains
       integer, intent(in) :: isite
       real(rp) :: nef
       integer :: ia
-      type(region_descriptor) :: desc
 
       nef = 0.0d0
       if (isite < 1 .or. isite > this%lattice%nbas) return
 
       ! A vacuum region carries no states at E_F by construction.
       if (this%regions%nsite == this%lattice%nbas) then
-         desc = this%regions%region_of(isite)
-         if (desc%kind == region_kind_vacuum) return
+         if (this%regions%region(this%regions%region_id(isite))%kind == region_kind_vacuum) return
       end if
 
       ! Otherwise use the site’s valence as a stand-in density of states scale.
