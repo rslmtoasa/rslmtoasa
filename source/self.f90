@@ -392,7 +392,6 @@ module self_mod
       procedure :: finalize_kspace_scf_state
       procedure :: write_kspace_scf_state_artifact
       procedure :: report
-      procedure :: quantify_pauli_projection
       procedure :: lmtst
       procedure :: is_converged
       procedure, private :: initialize_constraint_state
@@ -462,9 +461,6 @@ module self_mod
    end type self
 
    interface
-      module subroutine quantify_pauli_projection(this)
-         class(self), intent(inout) :: this
-      end subroutine quantify_pauli_projection
 
       module subroutine write_kspace_scf_dos_outputs(this, reciprocal_obj)
          class(self), intent(inout) :: this

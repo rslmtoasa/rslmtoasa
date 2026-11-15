@@ -36,8 +36,6 @@ add_library(${PROJECT_NAME} STATIC
     gbt_structure.f90
     gbt_kspace.f90
     lmto_magnetic_tangent.f90
-    lmto_radial_augmentation.f90
-    pauli_ground_state_projection.f90
     spin_density.f90
     spin_response.f90
     alsda_radial.f90
