@@ -67,7 +67,7 @@ endif()
 # OFF: generic baseline (-mtune=generic), for binaries run on other machines.
 # macOS always uses -mtune=native (tuning only, no host ISA extensions).
 #########################################################
-option(ENABLE_MARCH_NATIVE "Optimize for native CPU architecture (-march=native)" ON)
+option(ENABLE_MARCH_NATIVE "Optimize for native CPU architecture (-march=native)" OFF)
 string(REGEX REPLACE " *(-xHost|-march=native|-mtune=native|-mtune=generic|-ta=host|/QxHost)" ""
        RSLMTO_FLAGS_NO_ARCH "${CMAKE_Fortran_FLAGS}")
 set(CMAKE_Fortran_FLAGS "${RSLMTO_FLAGS_NO_ARCH}" CACHE STRING "Set the CMAKE_Fortran_FLAGS flags" FORCE)

@@ -88,7 +88,7 @@ Key CMake Options
    +-------------------------+---------------------------------------------+-------------------+
    | ENABLE_MPI              | Enable MPI parallelization                  | OFF               |
    +-------------------------+---------------------------------------------+-------------------+
-   | ENABLE_MARCH_NATIVE     | Optimize for the build host's CPU           | ON                |
+   | ENABLE_MARCH_NATIVE     | Optimize for the build host's CPU           | OFF               |
    +-------------------------+---------------------------------------------+-------------------+
    | ENABLE_LIBXC            | Use libXC exchange-correlation functionals  | OFF               |
    +-------------------------+---------------------------------------------+-------------------+

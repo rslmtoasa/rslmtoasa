@@ -105,7 +105,7 @@ Use a separate build directory when changing compilers or MPI implementations.
 | `CMAKE_BUILD_TYPE` | `Release` | `Release`, `Debug`, or `Testing` |
 | `ENABLE_OPENMP` | `ON` | Enable OpenMP when detected |
 | `ENABLE_MPI` | `OFF` | Enable MPI; requires an MPI toolchain |
-| `ENABLE_MARCH_NATIVE` | `ON` | Request host CPU optimization |
+| `ENABLE_MARCH_NATIVE` | `OFF` | Request host CPU optimization |
 | `ENABLE_SPGLIB` | `ON` | Use spglib for symmetry and k-paths; requires spglib (`libsymspg-dev`) |
 | `ENABLE_LIBXC` | `OFF` | Use libXC exchange-correlation functionals (see below) |
 | `ENABLE_MKL_KERNELS` | `OFF` | Build MKL Chebyshev kernels (batched and sparse); requires oneMKL |
@@ -118,7 +118,7 @@ Use a separate build directory when changing compilers or MPI implementations.
 | `RUN_REG_TESTS` | `OFF` | Register the legacy recursion regression tests |
 | `RUN_UNIT_TESTS` | `OFF` | Build and register the standalone Fortran unit tests |
 
-For GNU builds targeting another CPU, set `-DENABLE_MARCH_NATIVE=OFF`. CPU flag selection is compiler-dependent; check the resolved flags when preparing portable binaries.
+The default build uses a generic CPU baseline and runs on other machines of the same architecture. To optimize for the build host, set `-DENABLE_MARCH_NATIVE=ON`; that binary may not run on other CPUs. CPU flag selection is compiler-dependent; check the resolved flags in the configure output.
 
 For installation after building:
 
