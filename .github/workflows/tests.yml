@@ -279,9 +279,8 @@ jobs:
           exit 1
 
   # ---------------------------------------------------------------------------
-  # MKL: builds from source with ENABLE_MKL_KERNELS=ON and runs only the MKL
-  # regression cases plus one MKL example case — the first time mkl_batch/
-  # mkl_sparse actually execute in CI rather than silently skipping.
+  # MKL: builds from source with ENABLE_MKL_KERNELS=ON and runs the one
+  # mkl_batch regression case. No mkl_sparse case runs in CI.
   # ---------------------------------------------------------------------------
   mkl:
     name: MKL kernels (Ubuntu)
@@ -331,7 +330,7 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
-      - name: Run MKL regression + example cases
+      - name: Run MKL regression case
         run: |
           ctest --test-dir build \
             -R "mkl_batch" \

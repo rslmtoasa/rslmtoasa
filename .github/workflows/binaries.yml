@@ -104,7 +104,7 @@ jobs:
       - name: Build binaries ${{ matrix.icon}}
         run: |
              if [ "$RUNNER_OS" = "Windows" ]; then
-               # Keep Windows build conservative: enable core HCP dependencies (OpenBLAS/LAPACK/FFTW)
+               # Keep Windows build conservative: enable core HPC dependencies (OpenBLAS/LAPACK)
                # while avoiding MPI toolchain/runtime coupling issues on MSYS2.
                cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=OFF -DENABLE_MPI=OFF -DENABLE_MARCH_NATIVE=OFF
              elif [ "$RUNNER_OS" = "macOS" ]; then
