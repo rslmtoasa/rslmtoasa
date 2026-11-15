@@ -375,8 +375,7 @@ direct coordinates is Cartesian in 2 pi / a); the Stage 2 and 3a records are at 
 **Where to add:** a 2 x 2 spin structure per channel enlarges kappa and the vertex builder
 in `accumulate_chi0`. New kernels follow the
 plain-array pattern above, so analytic tests can call them. The radial module
-`radial_ground_state` is read only through `alsda_radial.f90`;
-`lmto_radial_augmentation` is not used.
+`radial_ground_state` is read only through `alsda_radial.f90`.
 
 ### Lehmann-representation Green's functions
 Implemented (B2): `reciprocal_green.f90` provides `reciprocal%fill_green`
