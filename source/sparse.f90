@@ -32,11 +32,7 @@ module sparse_mod
    !> Public interface for sparse type construction
    public :: sparse
    !> Public types for direct access when needed
-   public :: bsr_matrix, csr_matrix, coo_matrix, bsr_matrix_c_handle
-
-   !> Public utility routines
-   public :: block_to_sparse_from_arrays, export_bsr_to_c_format
-   public :: validate_bsr
+   public :: bsr_matrix, bsr_matrix_c_handle
 
    !---------------------------------------------------------------------------
    ! TYPE DEFINITIONS (must come before usage)
@@ -47,32 +43,13 @@ module sparse_mod
       integer :: nblocks, nrows, ncols, blocksize
       complex(rp), allocatable :: values(:,:,:)
       integer, allocatable :: col_indices(:), row_ptr(:)
-   contains
-      procedure :: print_info_bsr => bsr_print_info
    end type bsr_matrix
-
-   !> CSR matrix (Compressed Sparse Row format)
-   type :: csr_matrix
-      integer :: m, n, nnz
-      complex(rp), allocatable :: values(:)
-      integer, allocatable :: col_indices(:), row_ptr(:)
-   end type csr_matrix
-
-   !> COO matrix (Coordinate format)
-   type :: coo_matrix
-      integer :: m, n, nnz
-      integer, allocatable :: row_indices(:), col_indices(:)
-      complex(rp), allocatable :: values(:)
-   end type coo_matrix
 
    !> C-compatible BSR handle for GPU/Python libraries
    type :: bsr_matrix_c_handle
       integer(c_int), allocatable :: row_ptr_c(:), col_idx_c(:)
-      complex(c_double_complex), allocatable :: vals_c(:,:,:), vals_c_flat(:)
+      complex(c_double_complex), allocatable :: vals_c(:,:,:)
       integer(c_int) :: nrows, ncols, nblocks, blocksize
-      character(len=1) :: block_order = 'F'
-      type(c_ptr) :: onemkl_handle = c_null_ptr
-      type(c_ptr) :: cusparse_handle = c_null_ptr
       logical :: is_initialized = .false.
    end type bsr_matrix_c_handle
 
@@ -84,15 +61,10 @@ module sparse_mod
       type(hamiltonian), pointer :: hamiltonian => null()
       type(bsr_matrix) :: h_bsr
       type(bsr_matrix_c_handle) :: h_c_gpu
-      type(bsr_matrix_c_handle) :: h_c_python
    contains
       procedure :: build_bsr
       procedure :: build_bsr_from_operator
-      procedure :: export_gpu_onemkl
       procedure :: export_gpu_cusparse
-      procedure :: export_python_scipy
-      procedure :: export_python_torch
-      procedure :: print_info
       procedure :: restore_to_default
    end type sparse
 
@@ -149,7 +121,6 @@ contains
       this%h_bsr%blocksize = nb
 
       this%h_c_gpu%is_initialized = .false.
-      this%h_c_python%is_initialized = .false.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -184,57 +155,14 @@ contains
           this%hamiltonian%lattice%kk, this%hamiltonian%lattice%nmax, nb)
 
       this%h_c_gpu%is_initialized = .false.
-      this%h_c_python%is_initialized = .false.
    end subroutine build_bsr_from_operator
-
-   !---------------------------------------------------------------------------
-   ! EXPORT ROUTINES
-   !---------------------------------------------------------------------------
-   subroutine export_gpu_onemkl(this, is_valid)
-      class(sparse), intent(inout) :: this
-      logical, intent(out) :: is_valid
-      if (this%h_bsr%nblocks == 0) call this%build_bsr()
-      call export_bsr_to_c_format(this%h_bsr, this%h_c_gpu, 'F', is_valid)
-   end subroutine export_gpu_onemkl
 
    subroutine export_gpu_cusparse(this, is_valid)
       class(sparse), intent(inout) :: this
       logical, intent(out) :: is_valid
       if (this%h_bsr%nblocks == 0) call this%build_bsr()
-      call export_bsr_to_c_format(this%h_bsr, this%h_c_gpu, 'F', is_valid)
+      call export_bsr_to_c_format(this%h_bsr, this%h_c_gpu, is_valid)
    end subroutine export_gpu_cusparse
-
-   subroutine export_python_scipy(this, is_valid)
-      class(sparse), intent(inout) :: this
-      logical, intent(out) :: is_valid
-      if (this%h_bsr%nblocks == 0) call this%build_bsr()
-      call export_bsr_to_c_format(this%h_bsr, this%h_c_python, 'C', is_valid)
-   end subroutine export_python_scipy
-
-   subroutine export_python_torch(this, is_valid)
-      class(sparse), intent(inout) :: this
-      logical, intent(out) :: is_valid
-      if (this%h_bsr%nblocks == 0) call this%build_bsr()
-      call export_bsr_to_c_format(this%h_bsr, this%h_c_python, 'C', is_valid)
-   end subroutine export_python_torch
-
-   !---------------------------------------------------------------------------
-   ! PRINT INFO
-   !---------------------------------------------------------------------------
-   subroutine print_info(this)
-      class(sparse), intent(in) :: this
-      print '(A)', '=================================================='
-      print '(A)', 'Sparse Matrix (BSR) Structure'
-      print '(A)', '=================================================='
-      if (this%h_bsr%nblocks == 0) then
-         print '(A)', '(not built yet - call build_bsr())'
-      else
-         print '(A,I0,A,I0,A,I0)', 'BSR: ', this%h_bsr%nblocks, ' blocks, ', &
-            this%h_bsr%nrows, ' block-rows, blocksize=', this%h_bsr%blocksize
-         print '(A,I0)', 'Total elements: ', this%h_bsr%nblocks * this%h_bsr%blocksize * this%h_bsr%blocksize
-      end if
-      print '(A)', '=================================================='
-   end subroutine print_info
 
    !---------------------------------------------------------------------------
    ! UTILITY SUBROUTINES
@@ -254,13 +182,6 @@ contains
       bsr%col_indices = 0
       bsr%row_ptr = 0
    end subroutine allocate_bsr
-
-   subroutine bsr_print_info(this)
-      class(bsr_matrix), intent(in) :: this
-      print '(A,I0,A,I0,A,I0)', 'BSR: ', this%nblocks, ' blocks, ', &
-         this%nrows, ' block-rows, blocksize=', this%blocksize
-      print '(A,I0)', 'Total elements: ', this%nblocks * this%blocksize * this%blocksize
-   end subroutine bsr_print_info
 
    function validate_bsr(bsr) result(is_valid)
       type(bsr_matrix), intent(in) :: bsr
@@ -333,12 +254,11 @@ contains
       bsr%row_ptr(kk + 1) = nblocks + 1
    end subroutine block_to_sparse_from_arrays
 
-   subroutine export_bsr_to_c_format(bsr_f, bsr_c, block_order, is_valid)
+   subroutine export_bsr_to_c_format(bsr_f, bsr_c, is_valid)
       type(bsr_matrix), intent(in) :: bsr_f
       type(bsr_matrix_c_handle), intent(out) :: bsr_c
-      character(len=1), intent(in) :: block_order
       logical, intent(out) :: is_valid
-      integer :: k, bi, bj, idx
+      integer :: k
 
       is_valid = validate_bsr(bsr_f)
       if (.not. is_valid) return
@@ -347,7 +267,6 @@ contains
       bsr_c%ncols = int(bsr_f%ncols, c_int)
       bsr_c%nblocks = int(bsr_f%nblocks, c_int)
       bsr_c%blocksize = int(bsr_f%blocksize, c_int)
-      bsr_c%block_order = block_order
 
       allocate(bsr_c%row_ptr_c(bsr_f%nrows + 1))
       allocate(bsr_c%col_idx_c(bsr_f%nblocks))
@@ -359,27 +278,10 @@ contains
          bsr_c%col_idx_c(k) = int(bsr_f%col_indices(k) - 1, c_int)
       end do
 
-      if (block_order == 'F') then
-         allocate(bsr_c%vals_c(bsr_f%blocksize, bsr_f%blocksize, bsr_f%nblocks))
-         do k = 1, bsr_f%nblocks
-            bsr_c%vals_c(:, :, k) = cmplx(bsr_f%values(:, :, k), kind=c_double_complex)
-         end do
-      else if (block_order == 'C') then
-         allocate(bsr_c%vals_c_flat(bsr_f%nblocks * bsr_f%blocksize * bsr_f%blocksize))
-         idx = 1
-         do k = 1, bsr_f%nblocks
-            do bi = 1, bsr_f%blocksize
-               do bj = 1, bsr_f%blocksize
-                  bsr_c%vals_c_flat(idx) = cmplx(bsr_f%values(bi, bj, k), kind=c_double_complex)
-                  idx = idx + 1
-               end do
-            end do
-         end do
-      else
-         print *, 'ERROR: block_order must be "F" or "C"'
-         is_valid = .false.
-         return
-      end if
+      allocate(bsr_c%vals_c(bsr_f%blocksize, bsr_f%blocksize, bsr_f%nblocks))
+      do k = 1, bsr_f%nblocks
+         bsr_c%vals_c(:, :, k) = cmplx(bsr_f%values(:, :, k), kind=c_double_complex)
+      end do
 
       bsr_c%is_initialized = .true.
    end subroutine export_bsr_to_c_format
