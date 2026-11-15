@@ -108,18 +108,17 @@ contains
       logical :: dipole_on
 
       nsite = this%lattice%nbas
+      if (this%regions%nsite /= nsite) then
+         call g_logger%fatal('interfacepot: no interface region registry for this cluster; calctype=''L'' '// &
+                             'requires pre_processing=''buildinterface''.', __FILE__, __LINE__)
+      end if
       wsms = this%sws*this%lattice%alat*ang2au
       dipole_on = this%lattice%control%dipole_electrostatics
 
       ! Registry supplies z and w as data (B7 §2.10: relaxed-z is then a
       ! parameter change, not a rewrite).
-      if (this%regions%nsite == nsite) then
-         zsite(1:nsite) = this%regions%z(1:nsite)
-         wsite(1:nsite) = this%regions%w(1:nsite)
-      else
-         zsite(1:nsite) = this%qz(1:nsite)
-         wsite(1:nsite) = this%wssurf(1:nsite)
-      end if
+      zsite(1:nsite) = this%regions%z(1:nsite)
+      wsite(1:nsite) = this%regions%w(1:nsite)
 
       tdq(:) = 0.0d0
       tq10(:) = 0.0d0
@@ -250,7 +249,7 @@ contains
       v_ref = v_lo
       iref = this%fermi_pinned_region()
       if (iref < 1) iref = this%regions%gauge_anchor()
-      if (this%regions%nsite == nsite .and. iref >= 1) then
+      if (iref >= 1) then
          iprobe = this%regions%deep_probe_site(iref)
          if (iprobe >= 1 .and. iprobe <= nsite) v_ref = vm(iprobe)
       end if
@@ -275,8 +274,7 @@ contains
             ! (vm, region_id). The active zone starts at row nlay_a+1.
             irow = this%nlay_a + atomrec
             if (irow > nsite) exit
-            ireg = 1
-            if (this%regions%nsite == nsite) ireg = this%regions%region_id(irow)
+            ireg = this%regions%region_id(irow)
 
             ! Region reference on-site Madelung potential, per site type.
             vmad_ref = 0.0d0
@@ -368,7 +366,6 @@ contains
       logical :: checked
       real(rp), dimension(:), allocatable :: probe
 
-      if (this%regions%nsite /= nsite) return
       if (this%regions%nregion < 1) return
       if (.not. allocated(this%region_shift)) return
 
@@ -521,7 +518,6 @@ contains
       integer :: i, ianchor, idrift
       real(rp) :: drift
 
-      if (this%regions%nsite /= nsite) return
       ! Same anchor as align_regions -- the drift being watched is the drift of
       ! the region the gauge is pinned to.
       ianchor = this%fermi_pinned_region()
@@ -587,19 +583,17 @@ contains
       ideep_lo = 1
       ideep_hi = nsite
 
-      if (this%regions%nsite == nsite) then
-         ! Innermost frozen site on each side: the last frozen row before the
-         ! active zone (low z) and the first frozen row after it (high z).
-         do i = 1, nsite
-            if (this%regions%active(i)) exit
-            ideep_lo = i
-         end do
-         ideep_hi = nsite
-         do i = nsite, 1, -1
-            if (this%regions%active(i)) exit
-            ideep_hi = i
-         end do
-      end if
+      ! Innermost frozen site on each side: the last frozen row before the
+      ! active zone (low z) and the first frozen row after it (high z).
+      do i = 1, nsite
+         if (this%regions%active(i)) exit
+         ideep_lo = i
+      end do
+      ideep_hi = nsite
+      do i = nsite, 1, -1
+         if (this%regions%active(i)) exit
+         ideep_hi = i
+      end do
 
       ! Side-resolved N(E_F) of the boundary buffer layers. Recursion provides
       ! these for free; until that plumbing lands, fall back to the vacuum test
@@ -625,9 +619,7 @@ contains
       if (isite < 1 .or. isite > this%lattice%nbas) return
 
       ! A vacuum region carries no states at E_F by construction.
-      if (this%regions%nsite == this%lattice%nbas) then
-         if (this%regions%region(this%regions%region_id(isite))%kind == region_kind_vacuum) return
-      end if
+      if (this%regions%region(this%regions%region_id(isite))%kind == region_kind_vacuum) return
 
       ! Otherwise use the site’s valence as a stand-in density of states scale.
       ! B7.7 replaces this with the recursion-supplied N(E_F) of the boundary
@@ -643,9 +635,7 @@ contains
       ! not perturb the work function, it SETS it″). Frozen boundary rows carry
       ! a REFERENCE TYPE instead, which the registry records per site.
       ia = 0
-      if (this%regions%nsite == this%lattice%nbas) then
-         if (allocated(this%regions%reference_type)) ia = this%regions%reference_type(isite)
-      end if
+      if (allocated(this%regions%reference_type)) ia = this%regions%reference_type(isite)
       if (ia >= 1 .and. ia <= size(this%symbolic_atom)) then
          nef = max(this%symbolic_atom(ia)%element%valence, 0.0d0)
       end if
