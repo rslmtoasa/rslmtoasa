@@ -920,47 +920,9 @@ contains
          if (do_hoh) then
             call apply_step_hoh(x1, x0, y, alpha, beta, wt)
          else
-            call apply_step(x1, x0, y, alpha, beta, ld_apply, nb_apply)
+            call hsweep_sp(hee, hha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, alpha, beta, 1.0_sp, 0.0_sp)
          end if
       end subroutine apply_step_selected
-
-      !> y = alpha*(Ht x1) + beta*x0, one fused sweep (site-major arrays)
-      subroutine apply_step(x1, x0, y, alpha, beta, ld_apply, nb_apply)
-         integer, intent(in) :: ld_apply, nb_apply
-         complex(sp), intent(in), target :: x1(ld_apply, nb_apply), x0(ld_apply, nb_apply)
-         complex(sp), intent(out) :: y(ld_apply, nb_apply)
-         real(sp), intent(in) :: alpha, beta
-         complex(sp) :: acc(nb, nb)
-         integer :: kk_, t_, s_, nbr, nr, r0
-         !$omp parallel do private(kk_, t_, s_, nbr, nr, r0, acc) schedule(dynamic, 32)
-         do kk_ = 1, kk
-            acc = (0.0_sp, 0.0_sp)
-            nr = nn(kk_, 1)
-            do s_ = 1, nr
-               if (s_ == 1) then
-                  nbr = kk_
-               else
-                  nbr = nn(kk_, s_)
-                  if (nbr == 0) cycle
-               end if
-               r0 = nb*(nbr - 1)
-               if (kk_ <= nmax) then
-                  ! acc += hha(:,:,s_,kk_) * x1_block(nbr)
-                  call cgemm('N', 'N', nb, nb, nb, cone, hha(:, :, s_, kk_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
-               else
-                  t_ = iz(kk_)
-                  call cgemm('N', 'N', nb, nb, nb, cone, hee(:, :, s_, t_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
-               end if
-            end do
-            r0 = nb*(kk_ - 1)
-            if (beta /= 0.0_sp) then
-               y(r0 + 1:r0 + nb, :) = alpha*acc + beta*x0(r0 + 1:r0 + nb, :)
-            else
-               y(r0 + 1:r0 + nb, :) = alpha*acc
-            end if
-         end do
-         !$omp end parallel do
-      end subroutine apply_step
 
       !> Two-sweep hoh apply, mirroring ham_hoh_vec_matmul (recursion.f90):
       !>   sweep A:  t   = (h/a) * x1                  (bee/bha, into wt)
