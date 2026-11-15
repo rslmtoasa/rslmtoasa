@@ -390,7 +390,6 @@ module self_mod
       procedure :: reset_constraint_for_fixed_potential
       procedure :: potential_checksum
       procedure :: finalize_kspace_scf_state
-      procedure :: write_kspace_scf_state_artifact
       procedure :: report
       procedure :: lmtst
       procedure :: is_converged
@@ -476,11 +475,6 @@ module self_mod
       module subroutine finalize_kspace_scf_state(this)
          class(self), intent(inout) :: this
       end subroutine finalize_kspace_scf_state
-
-      module subroutine write_kspace_scf_state_artifact(this, filename)
-         class(self), intent(in) :: this
-         character(len=*), intent(in) :: filename
-      end subroutine write_kspace_scf_state_artifact
 
       module subroutine initialize_fixed_u_trace(this)
          class(self), intent(inout) :: this
