@@ -1521,10 +1521,7 @@ contains
       call this%add_hubbard_test_operator()
       this%ee = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%ccor_2c) this%eecc = cmplx(0.0_rp, 0.0_rp, rp)
-      if (this%hoh) then
-         this%eeo = cmplx(0.0_rp, 0.0_rp, rp)
-         this%eeoee = cmplx(0.0_rp, 0.0_rp, rp)
-      end if
+      if (this%hoh) this%eeo = cmplx(0.0_rp, 0.0_rp, rp)
       eye2 = cmplx(0.0_rp, 0.0_rp, rp)
       eye2(1, 1) = cmplx(1.0_rp, 0.0_rp, rp)
       eye2(2, 2) = eye2(1, 1)
@@ -1658,9 +1655,6 @@ contains
          !
          !   eeo_ij = ee_ij obarm_j,
          !   (eeo h)_ik = sum_j ee_ij obarm_j ee_jk = (h o h)_ik.
-         !
-         ! eeoee is only the historical same-bond diagnostic composite; it is
-         ! not the global HOH operator consumed by either solver.
          call this%build_obarm()
          call this%build_enim()
          ! V_U is an additive onsite term in the same rotating frame as enim: H = h - h o h + enim + V_U.
@@ -1679,8 +1673,6 @@ contains
                if (ji <= 0 .or. ji > this%lattice%ntype) cycle
                call zgemm('n', 'n', nb, nb, nb, cone, this%ee(:, :, m, ntype), nb, &
                           this%obarm(:, :, ji), nb, czero, this%eeo(:, :, m, ntype), nb)
-               call zgemm('n', 'c', nb, nb, nb, cone, this%eeo(:, :, m, ntype), nb, &
-                          this%ee(:, :, m, ntype), nb, czero, this%eeoee(:, :, m, ntype), nb)
             end do
          end do
       end if
