@@ -159,7 +159,6 @@ module xc_mod
       ! least one active component is GGA.  Unsupported families never reach
       ! this state because construction fails first.
       integer :: libxc_family = -1
-      logical :: libxc_has_lda = .false.
       logical :: libxc_has_gga = .false.
       integer, dimension(:), allocatable :: libxc_component_family
       integer, dimension(:), allocatable :: libxc_component_kind
@@ -167,7 +166,6 @@ module xc_mod
       integer :: libxc_n_exchange = 0
       integer :: libxc_n_correlation = 0
       integer :: libxc_n_xc_combined = 0
-      integer :: libxc_n_kinetic = 0
       logical :: libxc_requires_gradients = .false.
       character(len=24) :: libxc_composition_status = 'OK'
       logical :: libxc_explicit_composition = .false.
@@ -195,7 +193,6 @@ module xc_mod
       procedure :: composition_classification
       procedure :: route_description
       procedure :: is_predefined_bundle
-      procedure :: validate_libxc_compatibility
       procedure :: is_libxc_functional
       final :: destructor
    end type xc
@@ -1549,8 +1546,6 @@ contains
       this%libxc_n_exchange = 0
       this%libxc_n_correlation = 0
       this%libxc_n_xc_combined = 0
-      this%libxc_n_kinetic = 0
-      this%libxc_has_lda = .false.
       this%libxc_has_gga = .false.
       this%libxc_requires_gradients = .false.
       functional_names = ''
@@ -1561,7 +1556,6 @@ contains
          call enforce_libxc_component_compatibility(this%libxc_components(i))
          this%libxc_component_family(i) = this%libxc_components(i)%family
          this%libxc_component_kind(i) = this%libxc_components(i)%kind
-         if (this%libxc_components(i)%family == LIBXC_FAMILY_LDA) this%libxc_has_lda = .true.
          if (this%libxc_components(i)%family == LIBXC_FAMILY_GGA) then
             this%libxc_has_gga = .true.
             this%libxc_requires_gradients = .true.
@@ -1570,7 +1564,6 @@ contains
          case (LIBXC_KIND_EXCHANGE); this%libxc_n_exchange = this%libxc_n_exchange + 1
          case (LIBXC_KIND_CORRELATION); this%libxc_n_correlation = this%libxc_n_correlation + 1
          case (LIBXC_KIND_EXCHANGE_CORRELATION); this%libxc_n_xc_combined = this%libxc_n_xc_combined + 1
-         case (LIBXC_KIND_KINETIC); this%libxc_n_kinetic = this%libxc_n_kinetic + 1
          end select
          if (i == 1) then
             functional_names = trim(this%libxc_components(i)%name)
@@ -1746,12 +1739,10 @@ contains
       if (allocated(this%libxc_components)) deallocate(this%libxc_components)
       this%use_libxc = .false.
       this%libxc_family = -1
-      this%libxc_has_lda = .false.
       this%libxc_has_gga = .false.
       this%libxc_n_exchange = 0
       this%libxc_n_correlation = 0
       this%libxc_n_xc_combined = 0
-      this%libxc_n_kinetic = 0
       this%libxc_requires_gradients = .false.
       this%libxc_composition_status = 'OK'
       this%libxc_explicit_composition = .false.
@@ -1849,31 +1840,6 @@ contains
       this%mapping_quality = 'NO_EQUIVALENT'
       call this%initialize_libxc_components()
    end subroutine set_libxc_component_ids
-
-   !>--------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Validate that libXC functional is compatible with ASA (LDA/GGA only)
-   !> Returns .true. if compatible, .false. otherwise
-   !>--------------------------------------------------------------------------
-   function validate_libxc_compatibility(this, libxc_id) result(is_compatible)
-      class(xc), intent(in) :: this
-      integer, intent(in) :: libxc_id
-      logical :: is_compatible
-      
-#ifdef HAVE_LIBXC
-      type(xc_component_descriptor) :: component
-      
-      is_compatible = .false.
-      call fetch_libxc_component_metadata(libxc_id, component)
-      call enforce_libxc_component_compatibility(component)
-      is_compatible = .true.
-#else
-      is_compatible = .false.
-      call g_logger%fatal('libXC not available - cannot validate native component ID '//int2str(libxc_id)//'.', &
-                          __FILE__, __LINE__)
-#endif
-   end function validate_libxc_compatibility
 
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
