@@ -39,9 +39,6 @@ program main
 
 #ifdef OpenMP_Fortran_FOUND
    !$omp parallel
-   !!!!$omp master
-   !!!nomp = omp_get_num_threads()
-   !!!!$omp end master
    if (omp_get_thread_num() == 0) then
       nomp = omp_get_num_threads()
    end if

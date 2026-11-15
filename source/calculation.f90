@@ -135,10 +135,6 @@ module calculation_mod
 
       !> name list input file
       character(len=sl) :: fname
-
-      !> User-facing finite-q static exchange-curvature path.
-
-      !> User-facing rotation linear-response post-processing path.
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
