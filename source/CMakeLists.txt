@@ -92,7 +92,6 @@ add_library(${PROJECT_NAME} STATIC
     report.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
-    sigma_provider.f90
     self.f90
     self_reciprocal.f90
     ldau_diagnostics.f90

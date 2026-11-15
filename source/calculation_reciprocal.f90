@@ -445,7 +445,6 @@ contains
    !>        case any on-site recursion left hamiltonian%ee rotated.
    !---------------------------------------------------------------------------
    module subroutine post_processing_kspace_green(this)
-      use sigma_provider_mod, only: sigma_zero
       class(calculation), intent(in) :: this
       type(control), target :: control_obj
       type(lattice), target :: lattice_obj
@@ -458,7 +457,6 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(reciprocal), target :: reciprocal_obj
-      type(sigma_zero) :: sigma
       real(rp), allocatable :: dos_rs(:), dos_le(:), mz_rs(:), mz_le(:)
       complex(rp), allocatable :: blk_rs(:, :, :), blk_le(:, :, :)
       complex(rp), allocatable :: gij_rs(:, :, :, :), gij_le(:, :, :, :), gij_dyson(:, :, :, :)
@@ -522,7 +520,7 @@ contains
       ! --- k-space Lehmann route: overwrite green%gij from the eigenpairs. ---
       reciprocal_obj = reciprocal(hamiltonian_obj)
       call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ mesh (backend E requirement)
-      call reciprocal_obj%fill_green(green_obj, sigma)
+      call reciprocal_obj%fill_green(green_obj)
       blk_le = green_obj%gij(:, :, :, p0)
       gij_le = green_obj%gij
       call onsite_dos_mz(blk_le, norb_h, dos_le, mz_le)
@@ -534,7 +532,7 @@ contains
       ! so backend D inverts z*I - H(k)); the difference is solver-tolerance ripple.
       gij_le = green_obj%gij
       reciprocal_obj%green_backend = 'dyson'
-      call reciprocal_obj%fill_green(green_obj, sigma)
+      call reciprocal_obj%fill_green(green_obj)
       gij_dyson = green_obj%gij
       max_dyson_diff = maxval(abs(green_obj%gij - gij_le))
       green_obj%gij = gij_le   ! restore backend-E result for the report below

@@ -39,7 +39,6 @@ module reciprocal_mod
    use charge_mod
    use energy_mod, only: energy
    use green_mod, only: green
-   use sigma_provider_mod, only: sigma_provider, sigma_zero
    use spectrum_bounds_mod, only: bounds, compute_spectrum_bounds
    use precision_mod, only: rp
    use math_mod
@@ -1773,11 +1772,9 @@ end function integrate_dos_up_to_energy
    !> @brief Fill the canonical `green` arrays from the k-space engine.
    !> @param[inout] this      Reciprocal object (k-mesh, H(k) machinery).
    !> @param[inout] green_obj Green object whose arrays are populated in place.
-   !> @param[in]    sigma     Self-energy provider (sigma_zero for backend E).
-   module subroutine fill_green(this, green_obj, sigma)
+   module subroutine fill_green(this, green_obj)
       class(reciprocal), intent(inout) :: this
       type(green), intent(inout) :: green_obj
-      class(sigma_provider), intent(in) :: sigma
    end subroutine fill_green
 
    !> @brief Fill mu_nm_stochastic from the k-space eigenpairs (exact moments).

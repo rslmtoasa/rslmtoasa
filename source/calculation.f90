@@ -753,7 +753,6 @@ contains
    !> @note The damping term needs SOC in the potential (xi_p/xi_d). The
    !>       k-space routes also need kspace_ham_order=’second’.
    subroutine post_processing_exchange(this)
-      use sigma_provider_mod, only: sigma_zero
       class(calculation), intent(in) :: this
 
       type(control), target :: control_obj
@@ -768,7 +767,6 @@ contains
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
       type(reciprocal), target :: reciprocal_obj
-      type(sigma_zero) :: sigma
       integer :: i
 
       call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
@@ -817,7 +815,7 @@ contains
          reciprocal_obj = reciprocal(hamiltonian_obj)
          reciprocal_obj%green_backend = trim(this%gf_route)
          call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ (backend E requirement)
-         call reciprocal_obj%fill_green(green_obj, sigma)
+         call reciprocal_obj%fill_green(green_obj)
       end select
       call green_obj%calculate_intersite_gf_twoindex()
       if ((lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0)) then

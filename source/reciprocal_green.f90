@@ -24,7 +24,7 @@
 !>
 !> Backend D -- direct Dyson inversion (Sigma(z) != 0):
 !>   G(k,z) = [ z*S - H(k) - Sigma(z) ]^{-1}    per (k, z)
-!>   batched nb x nb factor/solve; Sigma enters via `sigma_provider`.
+!>   batched nb x nb factor/solve; Sigma = 0.
 !>   Permanent CI invariant: backend D with Sigma = 0 == backend E.
 !>
 !> THIS FILE (task B2.1) provides the skeleton: the energy-contour adoption
@@ -85,16 +85,12 @@ contains
    !>          backend. Backends fill the SAME `gij/gji`, `gij_eta`, and torque
    !>          arrays the recursion route fills, so consumers are untouched.
    !>          Backend cores are staged: E in B2.2, D in B2.4 (they currently
-   !>          raise a not-implemented error). `fill_green` is not yet wired into
-   !>          any production path (dispatch key lands in B2.5), so this skeleton
-   !>          leaves regression behaviour bit-identical.
+   !>          raise a not-implemented error).
    !> @param[inout] this      Reciprocal object (k-mesh, H(k) machinery).
    !> @param[inout] green_obj Green object whose arrays are populated in place.
-   !> @param[in]    sigma     Self-energy provider (sigma_zero for backend E).
-   module subroutine fill_green(this, green_obj, sigma)
+   module subroutine fill_green(this, green_obj)
       class(reciprocal), intent(inout) :: this
       type(green), intent(inout) :: green_obj
-      class(sigma_provider), intent(in) :: sigma
       complex(rp), allocatable :: z_contour(:)
 
       ! Backend E and the Sigma=0 form of backend D are orthogonal-basis
@@ -115,14 +111,12 @@ contains
 
       select case (trim(this%green_backend))
       case ('lehmann')
-         ! Backend E (strict Lehmann, Sigma = 0). sigma is accepted for a
-         ! uniform filler signature but unused here (it enters backend D only).
+         ! Backend E (strict Lehmann, Sigma = 0).
          call fill_green_lehmann(this, green_obj, z_contour)
       case ('dyson')
-         ! Backend D (direct Dyson): sigma is the provider it inverts against
-         ! (sigma_zero gives Sigma = 0, which makes D reproduce E to solver
-         ! tolerance -- the permanent CI invariant pinned in B2.4).
-         call fill_green_dyson(this, green_obj, z_contour, sigma)
+         ! Backend D (direct Dyson) with Sigma = 0, which makes D reproduce E
+         ! to solver tolerance -- the permanent CI invariant pinned in B2.4.
+         call fill_green_dyson(this, green_obj, z_contour)
       case default
          call g_logger%error('reciprocal%fill_green: unknown green_backend "' // &
             trim(this%green_backend) // '" (expected lehmann|dyson).', __FILE__, __LINE__)
@@ -501,32 +495,6 @@ contains
       end do
    end subroutine build_fermi_eta_contour
 
-   !> @brief Assemble the block-diagonal self-energy Sigma(z) for backend D.
-   !> @details Places each unit-cell site’s nb x nb retarded self-energy block on
-   !>          the diagonal of the full nmat x nmat Dyson matrix, in the same site
-   !>          order as the H(k) layout. Sigma depends only on z (not k), so this
-   !>          is recomputed per energy; for sigma_zero every block is zero.
-   !> @param[in]  sigma    Self-energy provider.
-   !> @param[in]  z        Complex energy on the retarded contour.
-   !> @param[in]  nsite    Number of unit-cell sites (nmat/nb).
-   !> @param[inout] sblk   nb x nb scratch block (avoids per-call allocation).
-   !> @param[out] sig_full Assembled nmat x nmat block-diagonal Sigma(z).
-   subroutine build_sigma_full(sigma, z, nsite, sblk, sig_full)
-      class(sigma_provider), intent(in) :: sigma
-      complex(rp), intent(in) :: z
-      integer, intent(in) :: nsite
-      complex(rp), intent(inout) :: sblk(:, :)
-      complex(rp), intent(out) :: sig_full(:, :)
-      integer :: is, off
-
-      sig_full = (0.0_rp, 0.0_rp)
-      do is = 1, nsite
-         call sigma%get_sigma(z, is, sblk)
-         off = (is - 1)*nb
-         sig_full(off + 1:off + nb, off + 1:off + nb) = sblk
-      end do
-   end subroutine build_sigma_full
-
    !> @brief Backend D core: direct-Dyson fill of gij/gji, eta ladder, torque.
    !> @details Streams over (k, z): one nmat x nmat inversion
    !>            G(k,z) = [z*I - H(k) - Sigma(z)]^{-1}
@@ -534,28 +502,26 @@ contains
    !>          orthonormal eigenproblem, so the D == E invariant holds only for
    !>          S = I), distributed to EVERY pair with the same 1/N_k inverse Bloch
    !>          phase e^{i k.dR_ij} and pair->site map as backend E (design B2 §1.4:
-   !>          never re-invert per pair or materialize all (k,z)). Sigma enters via
-   !>          the provider; sigma_zero makes this reproduce backend E to solver
-   !>          tolerance -- the permanent CI invariant (test_dyson_equivalence).
+   !>          never re-invert per pair or materialize all (k,z)). Sigma = 0, which
+   !>          makes this reproduce backend E to solver tolerance -- the permanent
+   !>          CI invariant (test_dyson_equivalence).
    !>          The torque families and the eta ladder are filled from the same
    !>          Pauli algebra (pauli_decompose_block) backend E uses.
    !> @param[inout] this      Reciprocal object (H(k) tiles).
    !> @param[inout] green_obj Green object whose gij/gji are populated in place.
    !> @param[in]    z_contour Retarded complex-energy contour (size = ne).
-   !> @param[in]    sigma     Self-energy provider (sigma_zero => backend E).
-   subroutine fill_green_dyson(this, green_obj, z_contour, sigma)
+   subroutine fill_green_dyson(this, green_obj, z_contour)
       class(reciprocal), intent(inout) :: this
       type(green), intent(inout) :: green_obj
       complex(rp), intent(in) :: z_contour(:)
-      class(sigma_provider), intent(in) :: sigma
 
-      integer :: nk, ne, nmat, nsite, ik, ikg, ie, i, npair_loc, pair, pair_glob, ioff, joff
+      integer :: nk, ne, nmat, ik, ikg, ie, i, npair_loc, pair, pair_glob, ioff, joff
       logical :: do_eta
       real(rp), allocatable :: kfrac(:, :), p_dr(:, :)
       integer, allocatable :: p_ioff(:), p_joff(:), p_pair(:)
       real(rp) :: kdotr
       complex(rp), allocatable :: phse(:), z_eta(:)
-      complex(rp), allocatable :: gk(:, :), sig_full(:, :), sblk(:, :), gtmp(:, :, :)
+      complex(rp), allocatable :: gk(:, :), sig_full(:, :), gtmp(:, :, :)
       complex(rp), allocatable :: tnmag(:, :, :), tz(:, :, :), ty(:, :, :), tx(:, :, :)
 
       ! Backend D inverts H(k) directly -- no eigensolve. Build the tiles if the
@@ -575,7 +541,6 @@ contains
          return
       end if
       nmat = size(this%hk_bulk, 1)
-      nsite = nmat/nb
       ne = size(z_contour)
 
       ! Fractional k-points for the (undistributed) mesh.
@@ -595,7 +560,8 @@ contains
          call pair_geometry(this, pair_glob, p_ioff(i), p_joff(i), p_dr(:, i))
       end do
 
-      allocate (gk(nmat, nmat), sig_full(nmat, nmat), sblk(nb, nb))
+      allocate (gk(nmat, nmat), sig_full(nmat, nmat))
+      sig_full = (0.0_rp, 0.0_rp)
 
       ! The green arrays double as (k,z)-accumulators; zero, accumulate, then
       ! divide by N_k. gij/gji cover every local pair, so this is complete.
@@ -614,7 +580,6 @@ contains
          end do
 
          do ie = 1, ne
-            call build_sigma_full(sigma, z_contour(ie), nsite, sblk, sig_full)
             call dyson_kspace_inverse(this%hk_bulk(:, :, ik), z_contour(ie), sig_full, gk)
             do i = 1, npair_loc
                ioff = p_ioff(i); joff = p_joff(i); pair = p_pair(i)
@@ -627,7 +592,6 @@ contains
 
          if (do_eta) then
             do ie = 1, 64
-               call build_sigma_full(sigma, z_eta(ie), nsite, sblk, sig_full)
                call dyson_kspace_inverse(this%hk_bulk(:, :, ik), z_eta(ie), sig_full, gk)
                do i = 1, npair_loc
                   ioff = p_ioff(i); joff = p_joff(i); pair = p_pair(i)
@@ -695,7 +659,7 @@ contains
 
       if (allocated(gtmp)) deallocate (gtmp, tnmag, tz, ty, tx)
       if (allocated(z_eta)) deallocate (z_eta)
-      deallocate (kfrac, p_ioff, p_joff, p_pair, p_dr, phse, gk, sig_full, sblk)
+      deallocate (kfrac, p_ioff, p_joff, p_pair, p_dr, phse, gk, sig_full)
    end subroutine fill_green_dyson
 
    ! NOTE (spin frame / future local-frame option): backend E delivers gij/gji in
