@@ -1387,7 +1387,7 @@ contains
 
       allocate (F(n_mom, nv))
       allocate (mu_sp(nb, nb, n_mom, natoms), g0_atom(nb, nb, nv))
-      call prepare_moments_sp(mu, nb, n_mom, natoms, mu_sp)
+      mu_sp = cmplx(real(mu, sp), aimag(mu), sp)
       cot = cos(pi/(n_mom + 1.0_rp))/sin(pi/(n_mom + 1.0_rp))
       !$omp parallel do private(ie, i, th, thl, gj, cc, pref, ang) schedule(static)
       do ie = 1, nv
@@ -1507,14 +1507,6 @@ contains
       end do
       deallocate(kernel)
    end subroutine cheb_green_complex
-
-   subroutine prepare_moments_sp(mu_in, nb, n_mom, natoms, mu_out)
-      integer, intent(in) :: nb, n_mom, natoms
-      complex(rp), intent(in) :: mu_in(nb, nb, n_mom, natoms)
-      complex(sp), intent(out) :: mu_out(nb, nb, n_mom, natoms)
-
-      mu_out = cmplx(real(mu_in, sp), aimag(mu_in), sp)
-   end subroutine prepare_moments_sp
 
    !> Fast-CPU stochastic conductivity moments for one reference vector:
    !>   mu_nm = sum_k left_m(k)^H (v_a T_{n-1}(H~) v_b |psiref>)(k),
