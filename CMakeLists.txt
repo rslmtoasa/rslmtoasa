@@ -1,28 +1,9 @@
-# if(COMMAND cmake_policy)
-#   cmake_policy(SET CMP0003 NEW)
-#   cmake_policy(SET CMP0076 NEW)
-# endif()
-# 
-# cmake_policy(SET CMP0011 NEW)
-# cmake_policy(SET CMP0012 NEW)
-# cmake_policy(SET CMP0048 NEW)
-# cmake_policy(SET CMP0054 NEW)
-
-
 cmake_minimum_required(VERSION 3.19)
 
 set(PROJECT_NAME rslmto)
 project(${PROJECT_NAME})
 
-# Find all the .in files
-# file(GLOB inFiles RELATIVE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/*.in" "${PROJECT_SOURCE_DIR}/test/*.in")
-# foreach(infileName ${inFiles})
-#   string(REGEX REPLACE ".in\$" "" outfileName "${infileName}")
-#   configure_file(${PROJECT_SOURCE_DIR}/${infileName} ${PROJECT_SOURCE_DIR}/${outfileName})
-# endforeach(infileName)
-
 set(SRC ${CMAKE_SOURCE_DIR}/source)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 # Enable Fortran language
 enable_language(Fortran)

@@ -1,5 +1,4 @@
 # Add library
-set(cmake_archive_output_directory lib)
 message(STATUS "The project name is: ${PROJECT_NAME}")
 add_library(${PROJECT_NAME} STATIC
     array.f90

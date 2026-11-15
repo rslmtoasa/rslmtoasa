@@ -118,11 +118,6 @@ message(STATUS "CMAKE_Fortran_FLAGS_TEST           : ${CMAKE_Fortran_FLAGS_TEST}
 message(STATUS "CMAKE_Fortran_FLAGS_DEBUG          : ${CMAKE_Fortran_FLAGS_DEBUG}")
 message(STATUS "CMAKE_Fortran_FLAGS                : ${CMAKE_Fortran_FLAGS}")
 
-if(USE_VSL)
-   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
-                 Fortran "-fno-range-check")
-endif()
-
 # Ensure that preprocessor flags are invoked
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
                  Fortran "-cpp"
@@ -313,11 +308,6 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 
              
 mark_as_advanced(CMAKE_Fortran_FLAGS_TEST CMAKE_Fortran_FLAGS_TESTING)
-list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_RELEASE)
-list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_RELWITHDEBINFO)
-list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_TEST)
-list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_DEBUG)
-list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS)
 message(STATUS "CMAKE_Fortran_FLAGS_RELEASE        : ${CMAKE_Fortran_FLAGS_RELEASE}")
 message(STATUS "CMAKE_Fortran_FLAGS_RELWITHDEBINFO : ${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}")
 message(STATUS "CMAKE_Fortran_FLAGS_TEST           : ${CMAKE_Fortran_FLAGS_TEST}")
