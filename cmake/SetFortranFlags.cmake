@@ -61,6 +61,26 @@ if(ENABLE_MPI AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU"
 endif()
 
 #########################################################
+# CPU architecture flag. Chosen on every configure (before the early return),
+# so toggling ENABLE_MARCH_NATIVE in an existing build directory takes effect.
+# ON: host ISA (-xHost Intel, -march=native GNU, -ta=host Portland).
+# OFF: generic baseline (-mtune=generic), for binaries run on other machines.
+# macOS always uses -mtune=native (tuning only, no host ISA extensions).
+#########################################################
+option(ENABLE_MARCH_NATIVE "Optimize for native CPU architecture (-march=native)" ON)
+string(REGEX REPLACE " *(-xHost|-march=native|-mtune=native|-mtune=generic|-ta=host|/QxHost)" ""
+       RSLMTO_FLAGS_NO_ARCH "${CMAKE_Fortran_FLAGS}")
+set(CMAKE_Fortran_FLAGS "${RSLMTO_FLAGS_NO_ARCH}" CACHE STRING "Set the CMAKE_Fortran_FLAGS flags" FORCE)
+if(APPLE)
+    set(RSLMTO_ARCH_FLAGS "-mtune=native")
+elseif(ENABLE_MARCH_NATIVE)
+    set(RSLMTO_ARCH_FLAGS "-xHost" "-march=native" "-ta=host" "/QxHost")
+else()
+    set(RSLMTO_ARCH_FLAGS "-mtune=generic")
+endif()
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}" Fortran ${RSLMTO_ARCH_FLAGS})
+
+#########################################################
 # If the compiler flags have already been set, return now
 #########################################################
 #
@@ -107,27 +127,6 @@ endif()
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
                  Fortran "-cpp"
                          "-fpp")
-
-# Optimize for the host's architecture (default: native -march=native).
-# For portable/CI builds where the binary may run on a different machine,
-# pass -DENABLE_MARCH_NATIVE=OFF to use generic baseline (-mtune=generic).
-option(ENABLE_MARCH_NATIVE "Optimize for native CPU architecture (-march=native)" ON)
-IF(APPLE)
-    SET(GNUNATIVE "-mtune=native")
-ELSEIF(NOT ENABLE_MARCH_NATIVE)
-    # Portable/CI: generic baseline
-    SET(GNUNATIVE "-mtune=generic")
-ELSE()
-    # Default: native optimization
-    SET(GNUNATIVE "-march=native")
-ENDIF()
-# Optimize for the host's architecture
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
-                 Fortran "-xHost"        # Intel
-                         ${GNUNATIVE}    # GNU
-                         "-ta=host"      # Portland Group
-                         "/QxHost"       # Intel Windows
-                )
 
 ###################
 ### DEBUG FLAGS ###
