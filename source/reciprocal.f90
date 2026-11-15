@@ -129,8 +129,6 @@ module reciprocal_mod
       logical :: first_order_assembly = .false.
       logical :: second_order_assembly = .false.
       logical :: overlap = .false.
-      integer :: preferred_tile_size = 1
-      integer :: maximum_tile_size = 1
       integer :: residency = reciprocal_residency_host
    end type reciprocal_execution_capabilities
 
@@ -212,7 +210,6 @@ module reciprocal_mod
    type, extends(reciprocal_execution_backend), public :: lapack_reciprocal_backend
       type(reciprocal_assembler) :: assembler
       type(reciprocal_workspace) :: workspace
-      integer :: prepared_operator_generation = -1
       !> Request-shape counters are backend-contract observability for the
       !> reciprocal tile tests.  They count execute_batch calls, not k points.
       integer :: execute_batch_requests = 0

@@ -159,8 +159,6 @@ contains
       capabilities%first_order_assembly = .false.
       capabilities%second_order_assembly = .false.
       capabilities%overlap = .false.
-      capabilities%preferred_tile_size = 1
-      capabilities%maximum_tile_size = huge(1)
       capabilities%residency = reciprocal_residency_device
    end subroutine cuda_backend_capabilities
 
@@ -620,7 +618,6 @@ contains
                ! Geometry/order choices can change across SCF probes.  Refresh
                ! the non-owning assembler view without discarding its workspace.
                backend%assembler = assembler
-               backend%prepared_operator_generation = -1
                return
             end if
          type is (cuda_reciprocal_backend)
@@ -672,8 +669,6 @@ contains
       capabilities%first_order_assembly = .true.
       capabilities%second_order_assembly = .true.
       capabilities%overlap = .true.
-      capabilities%preferred_tile_size = max(1, this%workspace%tile_capacity)
-      capabilities%maximum_tile_size = huge(1)
       capabilities%residency = reciprocal_residency_host
    end subroutine lapack_backend_capabilities
 
@@ -684,7 +679,6 @@ contains
       if (.not. this%initialized) then
          call g_logger%fatal('reciprocal backend: prepare requested before initialization.', __FILE__, __LINE__)
       end if
-      this%prepared_operator_generation = operator_generation
    end subroutine lapack_backend_prepare_operator
 
    module subroutine lapack_backend_execute_batch(this, request, result)
@@ -835,7 +829,6 @@ contains
       if (allocated(this%assembler%ham_vec_type_direct)) deallocate(this%assembler%ham_vec_type_direct)
       nullify(this%assembler%hamiltonian, this%assembler%lattice, this%assembler%control)
       call this%workspace%clear()
-      this%prepared_operator_generation = -1
       this%initialized = .false.
    end subroutine lapack_backend_release
 
