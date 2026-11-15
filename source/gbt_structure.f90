@@ -17,15 +17,8 @@ module gbt_structure_mod
    public :: gbt_bond_phase
    public :: gbt_reference_frame
    public :: gbt_frame_from_phase
-   public :: gbt_frame_for_cell
    public :: gbt_frame_link
    public :: gbt_endpoint_link
-   public :: gbt_rotating_to_lab_vector
-   public :: gbt_lab_to_rotating_vector
-   public :: gbt_rotating_to_lab_spinor
-   public :: gbt_lab_to_rotating_spinor
-   public :: gbt_rotating_to_lab_density
-   public :: gbt_lab_to_rotating_density
    public :: gbt_reference_moment_is_collinear
    public :: gbt_lift_orbital_block
    public :: gbt_contract_collinear
@@ -81,18 +74,6 @@ contains
       frame%R = matmul(translation_r, reference_r)
    end subroutine gbt_frame_from_phase
 
-   !> Construct the frame for a physical cell translation.
-   !> `q_cart_2pi_over_alat` is in the repository’s Cartesian `2*pi/alat`
-   !> convention and `r_cart` is a Cartesian length.
-   pure subroutine gbt_frame_for_cell(q_cart_2pi_over_alat, r_cart, alat, theta, phi, frame)
-      real(rp), intent(in) :: q_cart_2pi_over_alat(3), r_cart(3), alat, theta, phi
-      type(gbt_frame_t), intent(out) :: frame
-      real(rp) :: phase
-
-      phase = gbt_bond_phase(q_cart_2pi_over_alat, r_cart, alat)
-      call gbt_frame_from_phase(theta, phi, phase, frame)
-   end subroutine gbt_frame_for_cell
-
    !> Form the directed link `U_a^dagger U_b` between two authoritative frames.
    pure subroutine gbt_frame_link(frame_a, frame_b, link)
       type(gbt_frame_t), intent(in) :: frame_a, frame_b
@@ -113,61 +94,6 @@ contains
       call gbt_frame_from_phase(theta_b, phi_b, alpha, frame_b)
       call gbt_frame_link(frame_a, frame_b, link)
    end subroutine gbt_endpoint_link
-
-   !> Convert a vector from the rotating frame to the laboratory frame.
-   pure subroutine gbt_rotating_to_lab_vector(frame, rotating, lab)
-      type(gbt_frame_t), intent(in) :: frame
-      real(rp), intent(in) :: rotating(3)
-      real(rp), intent(out) :: lab(3)
-
-      lab = matmul(frame%R, rotating)
-   end subroutine gbt_rotating_to_lab_vector
-
-   !> Convert a vector from the laboratory frame to the rotating frame.
-   pure subroutine gbt_lab_to_rotating_vector(frame, lab, rotating)
-      type(gbt_frame_t), intent(in) :: frame
-      real(rp), intent(in) :: lab(3)
-      real(rp), intent(out) :: rotating(3)
-
-      rotating = matmul(transpose(frame%R), lab)
-   end subroutine gbt_lab_to_rotating_vector
-
-   !> Convert a two-component spinor from the rotating frame to the lab frame.
-   pure subroutine gbt_rotating_to_lab_spinor(frame, rotating, lab)
-      type(gbt_frame_t), intent(in) :: frame
-      complex(rp), intent(in) :: rotating(2)
-      complex(rp), intent(out) :: lab(2)
-
-      lab = matmul(frame%U, rotating)
-   end subroutine gbt_rotating_to_lab_spinor
-
-   !> Convert a two-component spinor from the lab frame to the rotating frame.
-   pure subroutine gbt_lab_to_rotating_spinor(frame, lab, rotating)
-      type(gbt_frame_t), intent(in) :: frame
-      complex(rp), intent(in) :: lab(2)
-      complex(rp), intent(out) :: rotating(2)
-
-      rotating = matmul(transpose(conjg(frame%U)), lab)
-   end subroutine gbt_lab_to_rotating_spinor
-
-   !> Convert a spin density matrix from the rotating frame to the lab frame.
-   !> The density convention is `rho = psi psi^dagger`.
-   pure subroutine gbt_rotating_to_lab_density(frame, rotating, lab)
-      type(gbt_frame_t), intent(in) :: frame
-      complex(rp), intent(in) :: rotating(2, 2)
-      complex(rp), intent(out) :: lab(2, 2)
-
-      lab = matmul(frame%U, matmul(rotating, transpose(conjg(frame%U))))
-   end subroutine gbt_rotating_to_lab_density
-
-   !> Convert a spin density matrix from the lab frame to the rotating frame.
-   pure subroutine gbt_lab_to_rotating_density(frame, lab, rotating)
-      type(gbt_frame_t), intent(in) :: frame
-      complex(rp), intent(in) :: lab(2, 2)
-      complex(rp), intent(out) :: rotating(2, 2)
-
-      rotating = matmul(transpose(conjg(frame%U)), matmul(lab, frame%U))
-   end subroutine gbt_lab_to_rotating_density
 
    !> Whether `moment` is a valid strict GBT rotating-frame reference axis.
    !> The GBT builder consumes only the sign of z for the collinear channels;
