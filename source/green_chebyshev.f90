@@ -10,7 +10,7 @@
 submodule (green_mod) green_chebyshev
 
    use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_dp, cheb_green_complex
-   use math_mod, only: i_unit, pi, jackson_kernel, lorentz_kernel, t_polynomial, &
+   use math_mod, only: i_unit, pi, jackson_kernel, lorentz_kernel, &
                        hubbard_spectral_density_element, project_spectral_density_2x2
    use basis_mod, only: norb, spin_off
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
@@ -31,17 +31,15 @@ contains
       integer, intent(in) :: istart
       ! Local variables
       real(rp), dimension(:), allocatable :: kernel
-      real(rp), dimension(:, :), allocatable :: polycheb
-      real(rp), dimension(:), allocatable :: w, wscale
+      real(rp), dimension(:), allocatable :: wscale
       complex(rp), dimension(:, :, :), allocatable :: mug
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
+      real(rp) :: a, b, emin_win, emax_win
       complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n
+      integer :: ie, i, l, m, n
 
       this%g0 = 0.0d0
 
-      allocate (kernel(size(this%recursion%mu_n, 3)), polycheb(this%en%channels_ldos + 10, 0:size(this%recursion%mu_n, 3)), w(this%en%channels_ldos + 10), &
-                wscale(this%en%channels_ldos + 10))
+      allocate (kernel(size(this%recursion%mu_n, 3)), wscale(this%en%channels_ldos + 10))
       allocate (mug(nb, nb, size(this%recursion%mu_n, 3)))
       ! Defining rescaling coeficients
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
@@ -61,9 +59,6 @@ contains
             end do
          end do
          mug(:, :, 2:size(kernel)) = mug(:, :, 2:size(kernel))*2.0_rp
-
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
 
          ! Calculate the density of states
          !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
@@ -85,7 +80,7 @@ contains
          !$omp end parallel do
       end do  ! End loop on n
 
-      deallocate (kernel, polycheb, w, wscale, mug)
+      deallocate (kernel, wscale, mug)
    end subroutine chebyshev_green_ij
 
    !---------------------------------------------------------------------------
@@ -201,11 +196,10 @@ contains
       logical, intent(in), optional :: use_gpu
       ! Local variables
       real(rp), dimension(size(this%recursion%mu_n, 3)) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10, 0:size(this%recursion%mu_n, 3)) :: polycheb
-      real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
+      real(rp), dimension(this%en%channels_ldos + 10) :: wscale
+      real(rp) :: a, b, emin_win, emax_win
       complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n, nv, n_glob, n_local
+      integer :: ie, i, l, m, n, nv, n_glob, n_local
       complex(rp), allocatable :: mug(:, :, :)
       complex(rp), allocatable :: g0_local(:, :, :, :)
       type(rsrec_cuda_backend), pointer :: gpu_backend
@@ -302,9 +296,6 @@ contains
          !do i=1, size(kernel)
          !  write(400+n, *) i, sum(this%recursion%mu_n(n, i, 1:18, 1:18))
          !end do
-
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
 
          ! Calculate the density of states
          !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
