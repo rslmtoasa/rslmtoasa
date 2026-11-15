@@ -78,7 +78,7 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Verified (last full run, 4 of 179 failing):** `Val04LdaUPhysics` (Hermiticity residual of the stored occupation matrix 1.08e-7 against 1e-7 for
   the u4 deck; later also stops at the Fixed-U guard, see below), `Val12LmtoFieldsTorques` (SOC-free global rotation changes the torque invariant by
   8.281e-03 T against 5.0e-3), `Val16GbtCommensurateSupercells` (the `nstep = 100` reference supercell run does not reach `Converged!`; script
-  retired, archive tag) and `Val17GbtHarmonicGoldstone` (`tests/validation/val_gbt_harmonic.py`: canonical occupation N = 8.0069 against `|N-8| <
+  retired, archive tag) and `Val17GbtHarmonicGoldstone` (`tests/validation/val_gbt_harmonic.py`, script retired, at tag `archive/fable_v4b_gbt-2026-11-05`: canonical occupation N = 8.0069 against `|N-8| <
   1e-8`, and sin^2(theta) spread 10.39% against 5%). A later cone-angle remeasurement gives a 1.49% spread, so the Val17 status is not reconciled.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
 
