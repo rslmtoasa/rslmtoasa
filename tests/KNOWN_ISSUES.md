@@ -239,11 +239,11 @@ are not tracked here; see `docs/DECISIONS.md`.
 
 ## spin_response
 
-### kB defined ten times — 2026-10-05
-- **Verified:** `kB_Ry_per_K = 6.3336814e-6_rp` is declared locally nine times (`source/reciprocal.f90`, `reciprocal_dos.f90`,
-  `reciprocal_occupations.f90`, `reciprocal_spin_density.f90`, `self_reciprocal.f90`), and `math.f90` holds `0.633362019d-5` (`kB_simpson_f`), a
-  relative 9.7e-6 different; not unified because `simpson_f` is on the bit-identical exchange path. Proposal: one definition (about 10 lines; a 1e-5
-  relative change in kT at finite T).
+### kB defined three times — 2026-10-05, updated 2026-11-15
+- **Verified:** `kB_Ry_per_K = 6.3336814e-6_rp` is the public parameter of `source/reciprocal.f90`, used by the reciprocal submodules and
+  `self_reciprocal.f90`; `source/pauli_ground_state_projection.f90` keeps its own copy of the same literal (`kB_RY_PER_K`); `math.f90` holds
+  `0.633362019d-5` (`kB_simpson_f`), a relative 9.7e-6 different, not unified because `simpson_f` is on the bit-identical exchange path.
+  Proposal: one definition (about 5 lines; a 1e-5 relative change in kT at finite T).
 
 ### `<prefix>_dispersion.dat` rows run `n/a` into the previous number — 2026-10-07
 - **Verified:** with no peak or crossing, rows read `2.19599654E-01n/a` (format `(7es16.8,2a24)` with left-justified texts); seen for every row with
