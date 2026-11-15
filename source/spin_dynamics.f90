@@ -109,8 +109,6 @@ module spin_dynamics_mod
       procedure :: restore_to_default
       procedure :: asd_pred
       procedure :: asd_corr
-      procedure :: asd_pred_euler
-      procedure :: asd_corr_euler
       procedure :: sd_run
       procedure :: writelammpstraj
    end type spin_dynamics
@@ -374,64 +372,6 @@ contains
          !end if
       end do
    end subroutine asd_corr
-
-   subroutine asd_pred_euler(this, mom_in, field_in, temp_in, dt_in, na_in)
-      implicit none
-      class(spin_dynamics), intent(inout)      :: this
-      real(rp), dimension(3, na_in), intent(in) :: mom_in
-      real(rp), dimension(3, na_in), intent(in) :: field_in
-      real(rp), intent(in)                     :: dt_in
-      real(rp), intent(in)                     :: temp_in
-      integer, intent(in)                      :: na_in
-      !real(rp), dimension(3,na_in), intent(out) :: mom_pred
-      integer :: i, nplusbulk
-      real(rp) :: alpha
-      real(rp), dimension(3) :: torque_term1, torque_term2, dm
-
-      alpha = this%alpha
-
-      this%b2eff(:, :) = 0.0d0
-
-      do i = 1, na_in
-         nplusbulk = i + this%lattice%nbulk
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = 0.0d0
-         torque_term1 = -gama*cross_product(mom_in(:, i), field_in(:, i))
-         torque_term2 = -alpha*gama*cross_product(mom_in(:, i), cross_product(mom_in(:, i), field_in(:, i)))
-         dm = torque_term1 + torque_term2
-         this%b2eff(:, i) = dm
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = mom_in(:, i) + dt_in*dm
-         this%emom(:, i) = this%symbolic_atom(nplusbulk)%potential%mom0(:)/norm2(this%symbolic_atom(nplusbulk)%potential%mom0(:))
-      end do
-   end subroutine asd_pred_euler
-
-   subroutine asd_corr_euler(this, mom_pred, field_in, temp_in, dt_in, na_in)
-      implicit none
-      class(spin_dynamics), intent(inout)      :: this
-      real(rp), dimension(3, na_in), intent(in) :: mom_pred
-      real(rp), dimension(3, na_in), intent(in) :: field_in
-      real(rp), intent(in)                     :: dt_in
-      real(rp), intent(in)                     :: temp_in
-      integer, intent(in)                      :: na_in
-      !real(rp), dimension(3,na_in), intent(out) :: mom_corr
-
-      integer :: i, nplusbulk
-      real(rp) :: alpha
-      real(rp), dimension(3) :: torque_term1, torque_term2, dm
-
-      this%alpha = alpha
-
-      do i = 1, na_in
-         nplusbulk = i + this%lattice%nbulk
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = 0.0d0
-         ! Recalculating the torque terms using the predicted moments
-         torque_term1 = -gama*cross_product(mom_pred(:, i), field_in(:, i))
-         torque_term2 = -alpha*gama*cross_product(mom_pred(:, i), cross_product(mom_pred(:, i), field_in(:, i)))
-         dm = 0.5d0*(this%b2eff(:, i) + (torque_term1 + torque_term2))
-         ! Updating the magnetic moments based on the corrected torque
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = mom_pred(:, i) + dt_in*dm
-         this%emom2(:, i) = this%symbolic_atom(nplusbulk)%potential%mom0(:)/norm2(this%symbolic_atom(nplusbulk)%potential%mom0(:))
-      end do
-   end subroutine asd_corr_euler
 
    subroutine sd_run(this)
       implicit none
