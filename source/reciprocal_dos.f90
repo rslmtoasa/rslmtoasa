@@ -1445,7 +1445,7 @@ end function integrate_dos_up_to_energy
       real(rp) :: eband
 
       integer :: ie
-      real(rp) :: e1, e2, f1, f2, kT, arg1, arg2, delta_e
+      real(rp) :: e1, e2, f1, f2, kT, delta_e
 
       eband = 0.0_rp
       if (.not. allocated(this%total_dos) .or. .not. allocated(this%dos_energy_grid)) return
@@ -1454,22 +1454,8 @@ end function integrate_dos_up_to_energy
       do ie = 1, size(this%dos_energy_grid) - 1
          e1 = this%dos_energy_grid(ie)
          e2 = this%dos_energy_grid(ie + 1)
-         arg1 = (e1 - this%fermi_level)/kT
-         arg2 = (e2 - this%fermi_level)/kT
-         if (arg1 >= 50.0_rp) then
-            f1 = 0.0_rp
-         else if (arg1 <= -50.0_rp) then
-            f1 = 1.0_rp
-         else
-            f1 = 1.0_rp/(exp(arg1) + 1.0_rp)
-         end if
-         if (arg2 >= 50.0_rp) then
-            f2 = 0.0_rp
-         else if (arg2 <= -50.0_rp) then
-            f2 = 1.0_rp
-         else
-            f2 = 1.0_rp/(exp(arg2) + 1.0_rp)
-         end if
+         f1 = fermi_dirac_occupation(e1, this%fermi_level, kT)
+         f2 = fermi_dirac_occupation(e2, this%fermi_level, kT)
          delta_e = e2 - e1
          eband = eband + 0.5_rp*delta_e*(e1*this%total_dos(ie)*f1 + &
                                          e2*this%total_dos(ie + 1)*f2)
