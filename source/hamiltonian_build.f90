@@ -1784,14 +1784,10 @@ contains
          if (itype >= 1 .and. itype <= size(this%theta_ss_sublattice) .and. itype <= size(this%phi_ss_sublattice)) then
             theta = this%theta_ss_sublattice(itype)
             phi = this%phi_ss_sublattice(itype)
-         else if (axis_sign > 0.0_rp) then
-            theta = this%theta_ss
-            phi = 0.0_rp
-         else
-            theta = acos(-1.0_rp) - this%theta_ss
-            phi = acos(-1.0_rp)
+            return
          end if
-      else if (axis_sign > 0.0_rp) then
+      end if
+      if (axis_sign > 0.0_rp) then
          theta = this%theta_ss
          phi = 0.0_rp
       else
