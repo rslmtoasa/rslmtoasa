@@ -540,7 +540,6 @@ module reciprocal_mod
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: require_replicated_k_workset
       procedure :: set_basis_sizes
-      procedure :: get_basis_type_from_size
       procedure :: check_multisite_hamiltonian_diagonal
       procedure :: build_kspace_overlap
       procedure :: diagonalize_hamiltonian
@@ -581,7 +580,6 @@ module reciprocal_mod
       procedure :: invalidate_spectral_cache
       procedure :: invalidate_if_operator_changed
       procedure :: build_from_file
-      procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
@@ -1079,17 +1077,6 @@ module reciprocal_mod
       ! Include namelist declarations for reciprocal module
    end subroutine build_from_file
 
-   !> @brief Set Monkhorst-Pack mesh dimensions.
-   !> @param[inout] this Reciprocal object whose nk_mesh is updated.
-   !> @param[in] nk1 Number of k-points along reciprocal axis 1.
-   !> @param[in] nk2 Number of k-points along reciprocal axis 2.
-   !> @param[in] nk3 Number of k-points along reciprocal axis 3.
-   module subroutine set_kpoint_mesh(this, nk1, nk2, nk3)
-      class(reciprocal), intent(inout) :: this
-      integer, intent(in) :: nk1, nk2, nk3
-
-   end subroutine set_kpoint_mesh
-
    !> @brief Generate reciprocal lattice vectors from the real-space lattice.
    !> @details Computes the reciprocal basis and reciprocal-cell volume from
    !>          lattice%a and lattice%alat for later k-point and Fourier work.
@@ -1349,44 +1336,6 @@ module subroutine check_multisite_hamiltonian_diagonal(this)
    
 end subroutine check_multisite_hamiltonian_diagonal
 
-!> @brief Check Hermiticity of one k-space Hamiltonian matrix.
-!> @param[in] this Reciprocal object containing k-space Hamiltonian data.
-!> @param[in] ik k-point index to inspect.
-module subroutine check_hamiltonian_hermiticity(this, ik)
-   class(reciprocal), intent(in) :: this
-   integer, intent(in) :: ik
-   
-   integer :: i, j, n
-   real(rp) :: max_diff, diff
-   complex(rp) :: h_ij, h_ji_conj
-   
-end subroutine check_hamiltonian_hermiticity
-
-!> @brief Print block-structure diagnostics for one k-space Hamiltonian.
-!> @param[in] this Reciprocal object containing k-space Hamiltonian data.
-!> @param[in] ik k-point index to inspect.
-module subroutine print_hamiltonian_structure(this, ik)
-   class(reciprocal), intent(in) :: this
-   integer, intent(in) :: ik
-   
-   integer :: i, j, n_sites, block_size
-   integer :: iblock, jblock, i_start, j_start
-   real(rp) :: block_norm
-   character(len=500) :: msg
-   
-end subroutine print_hamiltonian_structure
-
-   !> @brief Return a basis label from the configured orbital count.
-   !> @param[in] this Reciprocal object containing basis_size metadata.
-   !> @param[in] ntype Atom type index.
-   !> @return Basis label such as sp, spd, or spdf.
-   module function get_basis_type_from_size(this, ntype) result(basis_type)
-      class(reciprocal), intent(in) :: this
-      integer, intent(in) :: ntype
-      character(len=10) :: basis_type
-
-   end function get_basis_type_from_size
-
    !> @brief Diagonalize the active k-space Hamiltonians.
    !> @details Solves standard or generalized eigenproblems depending on
    !>          reciprocal_mode and stores eigenvalues/eigenvectors for bands and DOS.
@@ -1526,20 +1475,6 @@ end subroutine print_hamiltonian_structure
       integer, allocatable :: full_to_irred(:), irred_to_full(:)
 
    end subroutine generate_reduced_kpoint_mesh
-
-   !> @brief Write a complex matrix and its k-point label to a text file.
-   !> @param[in] matrix Matrix to dump.
-   !> @param[in] filename Output file name.
-   !> @param[in] k_point k-point associated with the matrix.
-   module subroutine dump_complex_matrix(matrix, filename, k_point)
-      complex(rp), dimension(:, :), intent(in) :: matrix
-      character(len=*), intent(in) :: filename
-      real(rp), dimension(3), intent(in) :: k_point
-      ! Local variables
-      integer :: unit, i, j, n_rows, n_cols
-      character(len=100) :: fmt_str
-
-   end subroutine dump_complex_matrix
 
    !> @brief Calculate reciprocal-space density of states.
    !> @details Configures the energy grid and DOS method, ensures eigenvalues are

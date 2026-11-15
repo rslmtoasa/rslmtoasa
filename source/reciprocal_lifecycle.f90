@@ -557,20 +557,6 @@ contains
       call this%generate_mp_mesh()
    end subroutine force_full_bz_for_nonzero_q_gbt
 
-   !> @brief Set Monkhorst-Pack mesh dimensions.
-   !> @param[inout] this Reciprocal object whose nk_mesh is updated.
-   !> @param[in] nk1 Number of k-points along reciprocal axis 1.
-   !> @param[in] nk2 Number of k-points along reciprocal axis 2.
-   !> @param[in] nk3 Number of k-points along reciprocal axis 3.
-   module subroutine set_kpoint_mesh(this, nk1, nk2, nk3)
-      class(reciprocal), intent(inout) :: this
-      integer, intent(in) :: nk1, nk2, nk3
-
-      this%nk_mesh = [nk1, nk2, nk3]
-      call g_logger%info('reciprocal%set_kpoint_mesh: Set k-point mesh to ' // &
-         trim(int2str(nk1)) // 'x' // trim(int2str(nk2)) // 'x' // trim(int2str(nk3)), __FILE__, __LINE__)
-   end subroutine set_kpoint_mesh
-
    !> @brief Generate reciprocal lattice vectors from the real-space lattice.
    !> @details Computes the reciprocal basis and reciprocal-cell volume from
    !>          lattice%a and lattice%alat for later k-point and Fourier work.

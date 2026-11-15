@@ -634,38 +634,4 @@ contains
       if (this%dump_symmetry_kmap) call this%write_symmetry_kmap_dump('symmetry_kmap.dat')
    end subroutine generate_reduced_kpoint_mesh
 
-   !> @brief Write a complex matrix and its k-point label to a text file.
-   !> @param[in] matrix Matrix to dump.
-   !> @param[in] filename Output file name.
-   !> @param[in] k_point k-point associated with the matrix.
-   module subroutine dump_complex_matrix(matrix, filename, k_point)
-      complex(rp), dimension(:, :), intent(in) :: matrix
-      character(len=*), intent(in) :: filename
-      real(rp), dimension(3), intent(in) :: k_point
-      ! Local variables
-      integer :: unit, i, j, n_rows, n_cols
-      character(len=100) :: fmt_str
-
-      n_rows = size(matrix, 1)
-      n_cols = size(matrix, 2)
-
-      open(newunit=unit, file=trim(filename), status='replace', action='write')
-
-      ! Write header
-      write(unit, '(A)') '# Complex matrix dump for debugging'
-      write(unit, '(A,3F12.8)') '# k-point: ', k_point
-      write(unit, '(A,I0,A,I0)') '# Matrix dimensions: ', n_rows, ' x ', n_cols
-      write(unit, '(A)') '# Format: row, col, real_part, imag_part'
-      write(unit, '(A)') '#'
-
-      ! Write matrix elements
-      do i = 1, n_rows
-         do j = 1, n_cols
-            write(unit, '(2I6,2ES20.12E3)') i, j, real(matrix(i,j)), aimag(matrix(i,j))
-         end do
-      end do
-
-      close(unit)
-   end subroutine dump_complex_matrix
-
 end submodule reciprocal_bands
