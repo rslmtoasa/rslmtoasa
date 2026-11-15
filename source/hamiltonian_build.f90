@@ -2350,7 +2350,7 @@ contains
                h_gamma(i_start:i_end, i_start:i_end) = h_gamma(i_start:i_end, i_start:i_end) + this%lsham(:, :, ntype_i)
             end if
          end do
-         call compute_spectrum_bounds(h_gamma, gamma_bounds, 'sturm', verbose=.false.)
+         call compute_spectrum_bounds(h_gamma, gamma_bounds, 'sturm')
          if (gamma_bounds%sturm_available) then
             have_gamma = .true.
             hgamma_min = gamma_bounds%e_min_sturm

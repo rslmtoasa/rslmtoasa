@@ -8,9 +8,8 @@
 !> Module to compute tight spectrum bounds for Tight-Binding Hamiltonians
 !> Useful for KPM/Chebyshev polynomial expansion
 !> Implements Gershgorin circle theorem and Sturm/exact diagonalization
-!> Also provides an OO wrapper `bounds` type with constructor.
-!> Configuration is typically done via the parent object’s namelist
-!> (e.g., hamiltonian reads bounds_algorithm and bounds_scaling from /hamiltonian/ namelist).
+!> Configuration is read by the parent object (hamiltonian reads
+!> bounds_algorithm and bounds_scaling from the &hamiltonian namelist).
 !------------------------------------------------------------------------------
 
 module spectrum_bounds_mod
@@ -23,7 +22,7 @@ module spectrum_bounds_mod
    real(rp), parameter :: default_scaling = 1.05_rp
    private
 
-   public :: compute_spectrum_bounds, bounds_constructor
+   public :: compute_spectrum_bounds
    public :: normalize_bounds_algorithm, select_bounds_interval, apply_bounds_scaling
 
    !> Single type to store spectrum bounds and user options
@@ -35,10 +34,7 @@ module spectrum_bounds_mod
       real(rp) :: e_max_gershgorin = 0.0_rp
       real(rp) :: e_min = 0.0_rp
       real(rp) :: e_max = 0.0_rp
-      real(rp) :: sturm_width = 0.0_rp
-      real(rp) :: gershgorin_width = 0.0_rp
       logical :: sturm_available = .false.
-      logical :: use_sturm = .false.
 
       ! User-configurable options (set via parent object’s namelist)
       character(len=16) :: algorithm = 'none'
@@ -46,9 +42,6 @@ module spectrum_bounds_mod
 
    contains
       procedure :: restore_to_default
-      ! read_from_namelist is DEPRECATED - use parent object’s namelist instead
-      ! (e.g., hamiltonian reads bounds_algorithm/bounds_scaling from /hamiltonian/)
-      procedure :: read_from_namelist
    end type bounds
 
 contains
@@ -119,14 +112,13 @@ contains
 
    !---------------------------------------------------------------------------
    ! Compute spectrum bounds (Gershgorin + optional Sturm/Exact)
-   subroutine compute_spectrum_bounds(H, res, method, verbose)
+   subroutine compute_spectrum_bounds(H, res, method)
       complex(rp), dimension(:, :), intent(in) :: H
    type(bounds), intent(out) :: res
       character(len=*), intent(in), optional :: method
-      logical, intent(in), optional :: verbose
 
       character(len=32) :: method_to_use
-      logical :: verb, try_sturm
+      logical :: try_sturm
       integer :: n
 
       n = size(H, 1)
@@ -135,27 +127,18 @@ contains
          return
       end if
 
-      verb = .false.
-      if (present(verbose)) verb = verbose
-
       method_to_use = 'both'
       if (present(method)) method_to_use = trim(adjustl(method))
 
    res%sturm_available = .false.
-   res%use_sturm = .false.
 
       ! Always compute Gershgorin (fast, O(n^2))
    call compute_gershgorin_bounds(H, res%e_min_gershgorin, res%e_max_gershgorin)
-   res%gershgorin_width = res%e_max_gershgorin - res%e_min_gershgorin
 
       ! Try Sturm if requested (diagonalization-based fallback)
       try_sturm = (method_to_use == 'sturm' .or. method_to_use == 'both')
       if (try_sturm) then
          call compute_sturm_bounds(H, res%e_min_sturm, res%e_max_sturm, res%sturm_available)
-         if (res%sturm_available) then
-            res%sturm_width = res%e_max_sturm - res%e_min_sturm
-            res%use_sturm = .true.
-         end if
       end if
 
       ! Select best bounds
@@ -165,10 +148,6 @@ contains
       else
          res%e_min = res%e_min_gershgorin
          res%e_max = res%e_max_gershgorin
-      end if
-
-      if (verb) then
-         call print_bounds_info(res)
       end if
 
    end subroutine compute_spectrum_bounds
@@ -271,46 +250,6 @@ contains
    end subroutine compute_sturm_bounds
 
 
-   !---------------------------------------------------------------------------
-   subroutine print_bounds_info(b)
-      type(bounds), intent(in) :: b
-      real(rp) :: ratio
-      character(len=128) :: msg
-
-      write(msg, '(A)') 'Spectrum Bounds Analysis:'
-      call g_logger%info(msg, __FILE__, __LINE__)
-
-      write(msg, '(A,F15.8,A,F15.8)') '  Gershgorin: [', b%e_min_gershgorin, ', ', b%e_max_gershgorin
-      call g_logger%info(msg, __FILE__, __LINE__)
-      write(msg, '(A,F15.8)') '    Width: ', b%gershgorin_width
-      call g_logger%info(msg, __FILE__, __LINE__)
-
-      if (b%sturm_available) then
-         write(msg, '(A,F15.8,A,F15.8)') '  Sturm/Exact: [', b%e_min_sturm, ', ', b%e_max_sturm
-         call g_logger%info(msg, __FILE__, __LINE__)
-         write(msg, '(A,F15.8)') '    Width: ', b%sturm_width
-         call g_logger%info(msg, __FILE__, __LINE__)
-
-         ratio = b%sturm_width / b%gershgorin_width
-         write(msg, '(A,F8.4)') '  Tightness ratio (Sturm/Gershgorin): ', ratio
-         call g_logger%info(msg, __FILE__, __LINE__)
-      else
-         call g_logger%info('  Sturm sequence: NOT AVAILABLE', __FILE__, __LINE__)
-      end if
-
-      write(msg, '(A,F15.8,A,F15.8)') '  Selected: [', b%e_min, ', ', b%e_max
-      call g_logger%info(msg, __FILE__, __LINE__)
-
-   end subroutine print_bounds_info
-
-
-   !---------------------------------------------------------------------------
-   ! Bounds object constructor and helpers
-   function bounds_constructor() result(obj)
-      type(bounds), pointer :: obj
-      allocate(obj)
-      call obj%restore_to_default()
-   end function bounds_constructor
 
    subroutine restore_to_default(this)
       class(bounds), intent(inout) :: this
@@ -323,44 +262,6 @@ contains
       this%e_min_sturm = huge(1.0_rp)
       this%e_max_sturm = -huge(1.0_rp)
       this%sturm_available = .false.
-      this%use_sturm = .false.
-      this%sturm_width = 0.0_rp
-      this%gershgorin_width = 0.0_rp
    end subroutine restore_to_default
-
-   !> @brief Read bounds configuration from namelist (DEPRECATED)
-   !> @details This method is deprecated. Configuration should be done via
-   !>          the parent object’s namelist (e.g., hamiltonian reads
-   !>          bounds_algorithm and bounds_scaling from /hamiltonian/ namelist).
-   !>          This method is kept for backward compatibility but may be removed.
-   subroutine read_from_namelist(this, fname)
-      class(bounds), intent(inout) :: this
-      character(len=*), intent(in) :: fname
-      integer :: funit, iostat
-
-   include 'include_codes/namelists/bounds.f90'
-
-      call g_logger%warning('bounds%read_from_namelist is DEPRECATED. '// &
-         'Use parent object namelist (e.g., bounds_algorithm in /hamiltonian/) instead.', __FILE__, __LINE__)
-
-      open(newunit=funit, file=trim(fname), action='read', status='old', iostat=iostat)
-      if (iostat /= 0) then
-         call g_logger%warning('bounds%read_from_namelist: cannot open file '//trim(fname), __FILE__, __LINE__)
-         return
-      end if
-
-      read(funit, nml=bounds, iostat=iostat)
-      if (iostat /= 0 .and. .not. IS_IOSTAT_END(iostat)) then
-         call g_logger%info('bounds%read_from_namelist: namelist /bounds/ not present or error', __FILE__, __LINE__)
-      end if
-      close(funit)
-
-      ! Transfer namelist locals into object fields
-      if (len_trim(bounds_algorithm) == 0) bounds_algorithm = 'none'
-      if (bounds_scaling <= 0.0_rp) bounds_scaling = default_scaling
-      this%algorithm = bounds_algorithm
-      this%scaling = bounds_scaling
-
-   end subroutine read_from_namelist
 
 end module spectrum_bounds_mod

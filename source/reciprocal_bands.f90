@@ -190,7 +190,7 @@ contains
       if (.not. allocated(this%hk_bulk)) return
       allocate(h_gamma(size(this%hk_bulk, 1), size(this%hk_bulk, 2)))
       h_gamma = this%hk_bulk(:, :, 1)
-      call compute_spectrum_bounds(h_gamma, bnd, method='both', verbose=.false.)
+      call compute_spectrum_bounds(h_gamma, bnd, method='both')
       call g_logger%info('Gamma bounds diagnostic: Gershgorin [' // &
          trim(real2str(bnd%e_min_gershgorin, '(F12.6)')) // ', ' // &
          trim(real2str(bnd%e_max_gershgorin, '(F12.6)')) // ']', __FILE__, __LINE__)
