@@ -197,7 +197,6 @@ module reciprocal_mod
       procedure(backend_capabilities_if), deferred :: capabilities
       procedure(backend_prepare_if), deferred :: prepare_operator
       procedure(backend_execute_if), deferred :: execute_batch
-      procedure(backend_contract_lehmann_if), deferred :: contract_lehmann
       procedure(backend_execution_metrics_if), deferred :: execution_metrics
       procedure(backend_synchronize_if), deferred :: synchronize
       procedure(backend_release_if), deferred :: release
@@ -222,7 +221,6 @@ module reciprocal_mod
       procedure :: capabilities => lapack_backend_capabilities
       procedure :: prepare_operator => lapack_backend_prepare_operator
       procedure :: execute_batch => lapack_backend_execute_batch
-      procedure :: contract_lehmann => lapack_backend_contract_lehmann
       procedure :: execution_metrics => lapack_backend_execution_metrics
       procedure :: synchronize => lapack_backend_synchronize
       procedure :: release => lapack_backend_release
@@ -239,9 +237,6 @@ module reciprocal_mod
       integer :: input_hamiltonian_solve_requests = 0
       integer :: operator_prepare_requests = 0
       integer :: operator_prepare_reuses = 0
-      ! FP64 is the normal production path.  The fp32_* names are explicit
-      ! ACC-P1b probes and are never selected by normal reciprocal workflows.
-      character(len=32) :: solver_strategy = 'zheevd_serial'
       real(rp) :: h2d_seconds = 0.0_rp
       real(rp) :: gpu_solve_seconds = 0.0_rp
       real(rp) :: d2h_seconds = 0.0_rp
@@ -271,15 +266,11 @@ module reciprocal_mod
       procedure :: initialize => cuda_backend_initialize
       procedure :: capabilities => cuda_backend_capabilities
       procedure :: prepare_operator => cuda_backend_prepare_operator
-      procedure :: set_solver_strategy => cuda_backend_set_solver_strategy
-      procedure :: solver_strategy_supported => cuda_backend_solver_strategy_supported
       procedure :: execute_batch => cuda_backend_execute_batch
       procedure :: contract_lehmann => cuda_backend_contract_lehmann
       procedure :: contract_lehmann_resident => cuda_backend_contract_lehmann_resident
       procedure :: resident_eigensystem_matches => cuda_backend_resident_eigensystem_matches
       procedure :: execution_metrics => cuda_backend_execution_metrics
-      procedure :: reset_timing_metrics => cuda_backend_reset_timing_metrics
-      procedure :: memory_info => cuda_backend_memory_info
       procedure :: synchronize => cuda_backend_synchronize
       procedure :: release => cuda_backend_release
       final :: cuda_backend_destructor
@@ -640,22 +631,6 @@ module reciprocal_mod
          integer(c_int) :: rslmto_reciprocal_cuda_prepare_operator
       end function rslmto_reciprocal_cuda_prepare_operator
 
-      function rslmto_reciprocal_cuda_set_solver_strategy(context, strategy) &
-         bind(C, name='rslmto_reciprocal_cuda_set_solver_strategy')
-         import c_int, c_ptr
-         type(c_ptr), value :: context
-         integer(c_int), value :: strategy
-         integer(c_int) :: rslmto_reciprocal_cuda_set_solver_strategy
-      end function rslmto_reciprocal_cuda_set_solver_strategy
-
-      function rslmto_reciprocal_cuda_solver_strategy_supported(context, n, batch_size, request_eigenvectors) &
-         bind(C, name='rslmto_reciprocal_cuda_solver_strategy_supported')
-         import c_int, c_ptr
-         type(c_ptr), value :: context
-         integer(c_int), value :: n, batch_size, request_eigenvectors
-         integer(c_int) :: rslmto_reciprocal_cuda_solver_strategy_supported
-      end function rslmto_reciprocal_cuda_solver_strategy_supported
-
       function rslmto_reciprocal_cuda_solve_zheevd_batch(context, n, batch_size, hamiltonians, eigenvalues, eigenvectors, &
                                                          request_eigenvectors) &
          bind(C, name='rslmto_reciprocal_cuda_solve_zheevd_batch')
@@ -668,19 +643,6 @@ module reciprocal_mod
          integer(c_int), value :: request_eigenvectors
          integer(c_int) :: rslmto_reciprocal_cuda_solve_zheevd_batch
       end function rslmto_reciprocal_cuda_solve_zheevd_batch
-
-      function rslmto_reciprocal_cuda_solve_cheevd_batch(context, n, batch_size, hamiltonians, eigenvalues, eigenvectors, &
-                                                         request_eigenvectors) &
-         bind(C, name='rslmto_reciprocal_cuda_solve_cheevd_batch')
-         import c_double, c_double_complex, c_int, c_ptr
-         type(c_ptr), value :: context
-         integer(c_int), value :: n, batch_size
-         complex(c_double_complex), intent(in) :: hamiltonians(*)
-         real(c_double), intent(out) :: eigenvalues(*)
-         complex(c_double_complex), intent(out) :: eigenvectors(*)
-         integer(c_int), value :: request_eigenvectors
-         integer(c_int) :: rslmto_reciprocal_cuda_solve_cheevd_batch
-      end function rslmto_reciprocal_cuda_solve_cheevd_batch
 
       function rslmto_reciprocal_cuda_get_resident_token(context) &
          bind(C, name='rslmto_reciprocal_cuda_get_resident_token')
@@ -764,19 +726,6 @@ module reciprocal_mod
          integer(c_long_long), intent(out) :: pinned_alloc_count, pinned_free_count
       end subroutine rslmto_reciprocal_cuda_get_resource_counters
 
-      subroutine rslmto_reciprocal_cuda_reset_timings(context) bind(C, name='rslmto_reciprocal_cuda_reset_timings')
-         import c_ptr
-         type(c_ptr), value :: context
-      end subroutine rslmto_reciprocal_cuda_reset_timings
-
-      function rslmto_reciprocal_cuda_get_memory(context, free_bytes, total_bytes) &
-         bind(C, name='rslmto_reciprocal_cuda_get_memory')
-         import c_int, c_long_long, c_ptr
-         type(c_ptr), value :: context
-         integer(c_long_long), intent(out) :: free_bytes, total_bytes
-         integer(c_int) :: rslmto_reciprocal_cuda_get_memory
-      end function rslmto_reciprocal_cuda_get_memory
-
       function rslmto_reciprocal_cuda_synchronize(context) bind(C, name='rslmto_reciprocal_cuda_synchronize')
          import c_int, c_ptr
          type(c_ptr), value :: context
@@ -817,14 +766,6 @@ module reciprocal_mod
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine backend_execute_if
 
-   subroutine backend_contract_lehmann_if(this, request, result, status)
-      import reciprocal_execution_backend, reciprocal_lehmann_request, reciprocal_lehmann_result
-      class(reciprocal_execution_backend), intent(inout) :: this
-      type(reciprocal_lehmann_request), intent(in) :: request
-      type(reciprocal_lehmann_result), intent(inout) :: result
-      integer, intent(out) :: status
-   end subroutine backend_contract_lehmann_if
-
    subroutine backend_execution_metrics_if(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       import reciprocal_execution_backend
       class(reciprocal_execution_backend), intent(in) :: this
@@ -862,13 +803,6 @@ module reciprocal_mod
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine lapack_backend_execute_batch
 
-   module subroutine lapack_backend_contract_lehmann(this, request, result, status)
-      class(lapack_reciprocal_backend), intent(inout) :: this
-      type(reciprocal_lehmann_request), intent(in) :: request
-      type(reciprocal_lehmann_result), intent(inout) :: result
-      integer, intent(out) :: status
-   end subroutine lapack_backend_contract_lehmann
-
    module subroutine lapack_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       class(lapack_reciprocal_backend), intent(in) :: this
       integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
@@ -901,20 +835,6 @@ module reciprocal_mod
       integer, intent(in) :: operator_generation
    end subroutine cuda_backend_prepare_operator
 
-   module function cuda_backend_set_solver_strategy(this, strategy) result(status)
-      class(cuda_reciprocal_backend), intent(inout) :: this
-      character(len=*), intent(in) :: strategy
-      integer :: status
-   end function cuda_backend_set_solver_strategy
-
-   module subroutine cuda_backend_solver_strategy_supported(this, n, batch_size, request_eigenvectors, supported, reason)
-      class(cuda_reciprocal_backend), intent(in) :: this
-      integer, intent(in) :: n, batch_size
-      logical, intent(in) :: request_eigenvectors
-      logical, intent(out) :: supported
-      character(len=*), intent(out) :: reason
-   end subroutine cuda_backend_solver_strategy_supported
-
    module subroutine cuda_backend_execute_batch(this, request, result)
       class(cuda_reciprocal_backend), intent(inout) :: this
       type(reciprocal_execution_request), intent(in) :: request
@@ -945,15 +865,6 @@ module reciprocal_mod
       class(cuda_reciprocal_backend), intent(in) :: this
       integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
    end subroutine cuda_backend_execution_metrics
-
-   module subroutine cuda_backend_reset_timing_metrics(this)
-      class(cuda_reciprocal_backend), intent(inout) :: this
-   end subroutine cuda_backend_reset_timing_metrics
-
-   module subroutine cuda_backend_memory_info(this, free_bytes, total_bytes)
-      class(cuda_reciprocal_backend), intent(in) :: this
-      integer(c_long_long), intent(out) :: free_bytes, total_bytes
-   end subroutine cuda_backend_memory_info
 
    module subroutine cuda_backend_synchronize(this)
       class(cuda_reciprocal_backend), intent(inout) :: this

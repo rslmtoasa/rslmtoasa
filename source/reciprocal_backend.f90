@@ -4,57 +4,9 @@
 ! reciprocal_mod is visible to reciprocal SCF and response orchestration.
 !------------------------------------------------------------------------------
 submodule (reciprocal_mod) reciprocal_backend
-   use lehmann_kernel_mod, only: lehmann_pair_block
    implicit none
 
 contains
-
-   module subroutine lapack_backend_contract_lehmann(this, request, result, status)
-      class(lapack_reciprocal_backend), intent(inout) :: this
-      type(reciprocal_lehmann_request), intent(in) :: request
-      type(reciprocal_lehmann_result), intent(inout) :: result
-      integer, intent(out) :: status
-      integer :: nmat, nk, ne, npair, nblk, ipair, clock_start, clock_stop, clock_rate
-
-      status = 0
-      result%valid = .false.
-      result%h2d_seconds = 0.0_rp
-      result%contraction_seconds = 0.0_rp
-      result%d2h_seconds = 0.0_rp
-      if (allocated(result%blocks)) deallocate(result%blocks)
-
-      if (.not. allocated(request%eigenvalues) .or. .not. allocated(request%eigenvectors) .or. &
-          .not. allocated(request%k_points) .or. .not. allocated(request%z_contour) .or. &
-          .not. allocated(request%dr) .or. .not. allocated(request%ioffset) .or. .not. allocated(request%joffset)) then
-         status = 1
-         return
-      end if
-      nmat = size(request%eigenvalues, 1)
-      nk = size(request%eigenvalues, 2)
-      ne = size(request%z_contour)
-      npair = size(request%ioffset)
-      nblk = request%nblk
-      if (nmat < 1 .or. nk < 1 .or. ne < 1 .or. npair < 1 .or. nblk < 1 .or. &
-          size(request%eigenvectors, 1) /= nmat .or. size(request%eigenvectors, 2) /= nmat .or. &
-          size(request%eigenvectors, 3) /= nk .or. size(request%k_points, 1) /= 3 .or. &
-          size(request%k_points, 2) /= nk .or. size(request%dr, 1) /= 3 .or. size(request%dr, 2) /= npair .or. &
-          size(request%joffset) /= npair .or. nblk > nmat) then
-         status = 1
-         return
-      end if
-
-      allocate(result%blocks(nblk, nblk, ne, npair))
-      call system_clock(count_rate=clock_rate)
-      call system_clock(clock_start)
-      do ipair = 1, npair
-         call lehmann_pair_block(request%eigenvalues, request%eigenvectors, request%k_points, request%z_contour, &
-                                 request%dr(:, ipair), request%ioffset(ipair), request%joffset(ipair), nblk, &
-                                 result%blocks(:, :, :, ipair))
-      end do
-      call system_clock(clock_stop)
-      result%contraction_seconds = real(clock_stop - clock_start, rp) / real(max(1, clock_rate), rp)
-      result%valid = .true.
-   end subroutine lapack_backend_contract_lehmann
 
    module subroutine cuda_backend_initialize(this, assembler)
       class(cuda_reciprocal_backend), intent(inout) :: this
@@ -72,7 +24,6 @@ contains
       this%input_hamiltonian_solve_requests = 0
       this%operator_prepare_requests = 0
       this%operator_prepare_reuses = 0
-      this%solver_strategy = 'zheevd_serial'
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp
@@ -191,86 +142,6 @@ contains
 #endif
    end subroutine cuda_backend_prepare_operator
 
-   module function cuda_backend_set_solver_strategy(this, strategy) result(status)
-      class(cuda_reciprocal_backend), intent(inout) :: this
-      character(len=*), intent(in) :: strategy
-      character(len=32) :: normalized
-      integer(c_int) :: c_strategy
-      integer :: status
-#ifdef USE_CUDA_RECIPROCAL
-      integer(c_int) :: c_status
-#endif
-
-      status = 1
-      normalized = trim(lower(strategy))
-      if (.not. this%initialized) then
-         call g_logger%error('reciprocal CUDA backend: solver strategy requested before initialization.', __FILE__, __LINE__)
-         return
-      end if
-      select case (normalized)
-      case ('zheevd_serial', 'zheevd', 'serial', 'fp64_zheevd')
-         normalized = 'zheevd_serial'
-         c_strategy = 0_c_int
-      case ('zheevj_batched', 'zheevj', 'batched', 'fp64_zheevj_batched')
-         normalized = 'zheevj_batched'
-         c_strategy = 1_c_int
-      case ('fp32_cheevd', 'cheevd')
-         normalized = 'fp32_cheevd'
-         c_strategy = 2_c_int
-      case ('fp32_cheevj_batched', 'cheevj_batched')
-         normalized = 'fp32_cheevj_batched'
-         c_strategy = 3_c_int
-      case default
-         call g_logger%error('reciprocal CUDA backend: unknown solver strategy '//trim(strategy)//'.', __FILE__, __LINE__)
-         return
-      end select
-#ifdef USE_CUDA_RECIPROCAL
-      c_status = rslmto_reciprocal_cuda_set_solver_strategy(this%context, c_strategy)
-      if (c_status /= 0_c_int) then
-         call g_logger%error('reciprocal CUDA backend: failed to select '//trim(normalized)//'.', __FILE__, __LINE__)
-         return
-      end if
-      this%solver_strategy = normalized
-      status = 0
-#else
-      call g_logger%error('reciprocal CUDA backend: solver strategy is unavailable in this build.', __FILE__, __LINE__)
-#endif
-   end function cuda_backend_set_solver_strategy
-
-   module subroutine cuda_backend_solver_strategy_supported(this, n, batch_size, request_eigenvectors, supported, reason)
-      class(cuda_reciprocal_backend), intent(in) :: this
-      integer, intent(in) :: n, batch_size
-      logical, intent(in) :: request_eigenvectors
-      logical, intent(out) :: supported
-      character(len=*), intent(out) :: reason
-#ifdef USE_CUDA_RECIPROCAL
-      integer(c_int) :: c_status
-#endif
-
-      supported = .false.
-      reason = 'CUDA backend is not initialized'
-      if (.not. this%initialized) return
-#ifdef USE_CUDA_RECIPROCAL
-      c_status = rslmto_reciprocal_cuda_solver_strategy_supported(this%context, int(n, c_int), int(batch_size, c_int), &
-                                                                   merge(1_c_int, 0_c_int, request_eigenvectors))
-      if (c_status == 0_c_int) then
-         supported = .true.
-         reason = 'supported'
-      else if (c_status > 0_c_int) then
-         if (index(trim(this%solver_strategy), 'zheevj_batched') > 0 .or. &
-             index(trim(this%solver_strategy), 'cheevj_batched') > 0) then
-            reason = 'cuSOLVER *heevjBatched requires n <= 32'
-         else
-            reason = 'CUDA solver strategy does not support this request'
-         end if
-      else
-         reason = 'invalid CUDA solver request'
-      end if
-#else
-      reason = 'executable was built without CUDA support'
-#endif
-   end subroutine cuda_backend_solver_strategy_supported
-
    module subroutine cuda_backend_execute_batch(this, request, result)
       class(cuda_reciprocal_backend), intent(inout) :: this
       type(reciprocal_execution_request), intent(in) :: request
@@ -308,22 +179,12 @@ contains
       this%input_hamiltonian_solve_requests = this%input_hamiltonian_solve_requests + 1
       allocate(result%eigenvalues(nmat, nk))
       if (request%request_eigenvectors) allocate(result%eigenvectors(nmat, nmat, nk))
-      if (index(trim(this%solver_strategy), 'fp32_') == 1) then
-         if (request%request_eigenvectors) then
-            status = rslmto_reciprocal_cuda_solve_cheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
-               request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
-         else
-            status = rslmto_reciprocal_cuda_solve_cheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
-               request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
-         end if
+      if (request%request_eigenvectors) then
+         status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+            request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
       else
-         if (request%request_eigenvectors) then
-            status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
-               request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
-         else
-            status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
-               request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
-         end if
+         status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+            request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
       end if
       if (status /= 0_c_int) then
          if (request%request_eigenvectors) then
@@ -495,49 +356,6 @@ contains
       input_hamiltonian_solves = this%input_hamiltonian_solve_requests
    end subroutine cuda_backend_execution_metrics
 
-   !> Reset interval timing counters without discarding lifetime request
-   !> counters or the persistent CUDA context/workspace.
-   module subroutine cuda_backend_reset_timing_metrics(this)
-      class(cuda_reciprocal_backend), intent(inout) :: this
-#ifdef USE_CUDA_RECIPROCAL
-      if (this%initialized) call rslmto_reciprocal_cuda_reset_timings(this%context)
-#endif
-      this%h2d_seconds = 0.0_rp
-      this%gpu_solve_seconds = 0.0_rp
-      this%d2h_seconds = 0.0_rp
-      this%d2h_values_seconds = 0.0_rp
-      this%d2h_vectors_seconds = 0.0_rp
-      this%sync_seconds = 0.0_rp
-      this%host_staging_seconds = 0.0_rp
-      this%host_conversion_seconds = 0.0_rp
-      this%host_widen_seconds = 0.0_rp
-      this%total_reciprocal_seconds = 0.0_rp
-      this%h2d_bytes = 0_c_long_long
-      this%d2h_values_bytes = 0_c_long_long
-      this%d2h_vectors_bytes = 0_c_long_long
-      this%timing_calls = 0
-   end subroutine cuda_backend_reset_timing_metrics
-
-   !> Return a point-in-time device-memory snapshot for benchmark preflight.
-   module subroutine cuda_backend_memory_info(this, free_bytes, total_bytes)
-      class(cuda_reciprocal_backend), intent(in) :: this
-      integer(c_long_long), intent(out) :: free_bytes, total_bytes
-#ifdef USE_CUDA_RECIPROCAL
-      integer(c_int) :: status
-      free_bytes = 0_c_long_long
-      total_bytes = 0_c_long_long
-      if (.not. this%initialized) return
-      status = rslmto_reciprocal_cuda_get_memory(this%context, free_bytes, total_bytes)
-      if (status /= 0_c_int) then
-         free_bytes = 0_c_long_long
-         total_bytes = 0_c_long_long
-      end if
-#else
-      free_bytes = 0_c_long_long
-      total_bytes = 0_c_long_long
-#endif
-   end subroutine cuda_backend_memory_info
-
    module subroutine cuda_backend_synchronize(this)
       class(cuda_reciprocal_backend), intent(inout) :: this
 #ifdef USE_CUDA_RECIPROCAL
@@ -561,7 +379,6 @@ contains
       this%context = c_null_ptr
       this%device = -1
       this%prepared_operator_generation = -1
-      this%solver_strategy = 'zheevd_serial'
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp

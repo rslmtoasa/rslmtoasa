@@ -304,16 +304,16 @@ contains
             lehmann_request%ioffset(npair_local + ipair) = joff
             lehmann_request%joffset(npair_local + ipair) = ioff
          end do
-         if (use_gpu_resident) then
-            select type (backend => this%execution_backend)
-            type is (cuda_reciprocal_backend)
+         select type (backend => this%execution_backend)
+         type is (cuda_reciprocal_backend)
+            if (use_gpu_resident) then
                call backend%contract_lehmann_resident(lehmann_request, lehmann_result, lehmann_status)
-            class default
-               lehmann_status = 1
-            end select
-         else
-            call this%execution_backend%contract_lehmann(lehmann_request, lehmann_result, lehmann_status)
-         end if
+            else
+               call backend%contract_lehmann(lehmann_request, lehmann_result, lehmann_status)
+            end if
+         class default
+            lehmann_status = 1
+         end select
          if (lehmann_status /= 0 .or. .not. lehmann_result%valid) then
             call g_logger%error('fill_green_lehmann: CUDA Lehmann contraction failed; canonical arrays were not updated.', &
                __FILE__, __LINE__)

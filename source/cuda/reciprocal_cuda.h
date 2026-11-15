@@ -29,8 +29,6 @@ const char *rslmto_reciprocal_cuda_last_error(void);
 
 int rslmto_reciprocal_cuda_prepare_operator(
     rslmto_reciprocal_cuda_context *context, int operator_generation);
-int rslmto_reciprocal_cuda_set_solver_strategy(
-    rslmto_reciprocal_cuda_context *context, int strategy);
 /* Returns 0 when the selected strategy can accept this request, 1 when the
  * request is explicitly unsupported, and -1 for invalid/uninitialized state.
  * In particular, cuSOLVER ZheevjBatched requires n <= 32. */
@@ -40,17 +38,6 @@ int rslmto_reciprocal_cuda_solver_strategy_supported(
     int batch_size,
     int request_eigenvectors);
 int rslmto_reciprocal_cuda_solve_zheevd_batch(
-    rslmto_reciprocal_cuda_context *context,
-    int n,
-    int batch_size,
-    const void *host_hamiltonians,
-    double *host_eigenvalues,
-    void *host_eigenvectors,
-    int request_eigenvectors);
-/* The FP32 entry point deliberately accepts the original host H64 and returns
- * widened FP64 eigenpairs.  Conversion is owned by the persistent CUDA
- * context, so callers do not allocate conversion buffers per matrix. */
-int rslmto_reciprocal_cuda_solve_cheevd_batch(
     rslmto_reciprocal_cuda_context *context,
     int n,
     int batch_size,
@@ -137,12 +124,6 @@ void rslmto_reciprocal_cuda_get_resource_counters(
     long long *event_destroy_count,
     long long *pinned_alloc_count,
     long long *pinned_free_count);
-void rslmto_reciprocal_cuda_reset_timings(
-    rslmto_reciprocal_cuda_context *context);
-int rslmto_reciprocal_cuda_get_memory(
-    rslmto_reciprocal_cuda_context *context,
-    long long *free_bytes,
-    long long *total_bytes);
 int rslmto_reciprocal_cuda_synchronize(
     rslmto_reciprocal_cuda_context *context);
 void rslmto_reciprocal_cuda_destroy(
