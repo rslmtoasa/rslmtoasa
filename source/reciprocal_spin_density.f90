@@ -37,7 +37,7 @@
 !> `spin_density_mod` header for the full contract.
 !------------------------------------------------------------------------------
 submodule(reciprocal_mod) reciprocal_spin_density
-   use spin_density_mod, only: spin_density, sd_orders, sd_producer_kspace, &
+   use spin_density_mod, only: spin_density, sd_orders, &
                                sd_constrained_spiral, sd_relaxed_reference
    implicit none
 
@@ -82,7 +82,6 @@ contains
       n_orb_per_spin = n_orb_site/this%n_spin_components
 
       this%rf_density = spin_density(this%n_sites, this%n_orb_types)
-      this%rf_density%producer = sd_producer_kspace
 
       lstart = [1, 2, 5, 10]
       lend = [1, 4, 9, 16]

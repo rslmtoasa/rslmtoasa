@@ -41,7 +41,7 @@ module bands_mod
    use mpi
 #endif
    use basis_mod, only: nb, norb, spin_off, lmax_basis
-   use spin_density_mod, only: spin_density, sd_orders, sd_producer_rs, &
+   use spin_density_mod, only: spin_density, sd_orders, &
                                sd_matrix_from_cartesian, &
                                sd_constrained_spiral, sd_relaxed_reference
    implicit none
@@ -722,7 +722,6 @@ contains
 #endif
 
       call sd%zero_density()
-      sd%producer = sd_producer_rs
 
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)

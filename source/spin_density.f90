@@ -47,9 +47,8 @@
 !>     m_x = -Im(G_ud + G_du)/pi, m_y = -Re(G_ud - G_du)/pi,
 !>     m_z = -Im(G_uu - G_dd)/pi, n = -Im(G_uu + G_dd)/pi -- again the signs
 !>     the pre-WP7 real-space accumulation used.
-!>   * The stored matrix is the ROTATING-frame density. Lab-frame moments are
-!>     reconstructed only for output/comparison, by `lab_frame_moment`, using
-!>     the gauge D(phi) = diag(e^{-i phi/2}, e^{+i phi/2}) with phi = q.R_na.
+!>   * The stored matrix is the ROTATING-frame density; the lab frame follows
+!>     from the gauge D(phi) = diag(e^{-i phi/2}, e^{+i phi/2}) with phi = q.R_na.
 !>
 !> Two SCF policies are supported and are deliberately different objects, not
 !> two readings of one code path (`resolve_site_axis`):
@@ -62,7 +61,6 @@
 !------------------------------------------------------------------------------
 module spin_density_mod
    use precision_mod, only: rp
-   use gbt_structure_mod, only: gbt_frame_t, gbt_frame_from_phase, gbt_rotating_to_lab_vector
    use logger_mod, only: g_logger
    use string_mod, only: int2str, real2str
    implicit none
@@ -77,11 +75,6 @@ module spin_density_mod
    character(len=sd_name_len), parameter, public :: sd_constrained_spiral = 'constrained_spiral'
    character(len=sd_name_len), parameter, public :: sd_relaxed_reference = 'relaxed_reference'
 
-   !> Producer tags -- which solver filled the object.
-   character(len=sd_name_len), parameter, public :: sd_producer_none = 'none'
-   character(len=sd_name_len), parameter, public :: sd_producer_rs = 'real_space_green'
-   character(len=sd_name_len), parameter, public :: sd_producer_kspace = 'kspace_eigenvectors'
-
    type, public :: spin_density
       !> Number of sites carried by this object.
       integer :: nsite = 0
@@ -89,8 +82,6 @@ module spin_density_mod
       integer :: nl = 0
       !> SCF policy governing how the axis and the mixed variables are chosen.
       character(len=sd_name_len) :: policy = sd_constrained_spiral
-      !> Which producer filled the object.
-      character(len=sd_name_len) :: producer = sd_producer_none
       !> rho(s, s’, l, site, order) -- rotating-frame 2x2 spin density matrix.
       complex(rp), dimension(:, :, :, :, :), allocatable :: rho
       !> Explicit per-site projection axis (unit vector). No default meaning.
@@ -109,8 +100,6 @@ module spin_density_mod
       procedure :: radial_band_moments
       procedure :: electron_count
       procedure :: check_physicality
-      procedure :: max_deviation
-      procedure :: lab_frame_moment
       procedure :: resolve_site_axis
       final :: destructor
    end type spin_density
@@ -163,7 +152,6 @@ contains
       this%axis(:, :) = 0.0_rp
       this%axis_set(:) = .false.
       this%policy = sd_constrained_spiral
-      this%producer = sd_producer_none
    end subroutine restore_to_default
 
    !> @brief Clear the accumulated density and every stated axis, keeping the
@@ -408,51 +396,6 @@ contains
          end if
       end if
    end subroutine check_physicality
-
-   !---------------------------------------------------------------------------
-   !> @brief Largest absolute difference between two filled contracts.
-   !> @details The producer-equivalence measure: RS and k-space must fill the
-   !>          same object, so this is what a cross-solver test asserts on.
-   !---------------------------------------------------------------------------
-   real(rp) function max_deviation(this, other)
-      class(spin_density), intent(in) :: this
-      type(spin_density), intent(in) :: other
-
-      if (this%nsite /= other%nsite .or. this%nl /= other%nl) then
-         call g_logger%fatal('spin_density%max_deviation: shape mismatch ('// &
-                             trim(int2str(this%nsite))//'x'//trim(int2str(this%nl))//' vs '// &
-                             trim(int2str(other%nsite))//'x'//trim(int2str(other%nl))//').', &
-                             __FILE__, __LINE__)
-      end if
-      max_deviation = maxval(abs(this%rho - other%rho))
-   end function max_deviation
-
-   !---------------------------------------------------------------------------
-   !> @brief Lab-frame moment of one channel, for output/comparison only.
-   !> @details rho_lab = D(phi) rho D^dagger(phi) with
-   !>          D(phi) = diag(e^{-i phi/2}, e^{+i phi/2}) and phi = q.R_na, so
-   !>          the transverse moment rotates by +phi about z and the
-   !>          longitudinal component is untouched. The SCF must never consume
-   !>          this; it exists so a single-q run can be compared with an
-   !>          explicit supercell.
-   !---------------------------------------------------------------------------
-   subroutine lab_frame_moment(this, isite, il, iorder, phase, n, m_lab)
-      class(spin_density), intent(in) :: this
-      integer, intent(in) :: isite, il, iorder
-      real(rp), intent(in) :: phase
-      real(rp), intent(out) :: n
-      real(rp), dimension(3), intent(out) :: m_lab
-      real(rp) :: m(3)
-      type(gbt_frame_t) :: frame
-
-      call this%cartesian(isite, il, iorder, n, m)
-      ! A density stored by the SCF contract is already in the rotating
-      ! reference coordinates.  For output/comparison, use the same
-      ! authoritative frame map as the Hamiltonian rather than duplicating a
-      ! z-rotation here.
-      call gbt_frame_from_phase(0.0_rp, 0.0_rp, phase, frame)
-      call gbt_rotating_to_lab_vector(frame, m, m_lab)
-   end subroutine lab_frame_moment
 
    !---------------------------------------------------------------------------
    !> @brief Apply the SCF policy to one site and return what may be mixed.
