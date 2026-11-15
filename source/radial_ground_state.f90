@@ -119,7 +119,6 @@ module radial_ground_state_mod
       procedure :: set_reported_moment
       procedure :: log_mesh_integral
       procedure :: charge_integral
-      procedure :: spin_number_integral
       procedure :: write_file
       final :: finalize_radial_ground_state
    end type radial_ground_state
@@ -428,13 +427,6 @@ contains
          error stop 'radial_ground_state%charge_integral: channel must be 1 or 2'
       end if
    end function charge_integral
-
-   function spin_number_integral(this) result(integral)
-      class(radial_ground_state), intent(in) :: this
-      real(rp) :: integral
-
-      integral = this%charge_integral(1) - this%charge_integral(2)
-   end function spin_number_integral
 
    subroutine write_file(this, filename, site_index)
       class(radial_ground_state), intent(in) :: this
