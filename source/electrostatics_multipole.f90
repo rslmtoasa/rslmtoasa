@@ -22,21 +22,18 @@
 !> electrostatics reduce bit-for-bit to the existing monopole result.
 !---------------------------------------------------------------------------
 module electrostatics_multipole_mod
-   use mpi_mod, only: rank, start_atom, end_atom, g2l_map
+   use mpi_mod, only: start_atom, end_atom, g2l_map
 #ifdef USE_MPI
    use mpi
 #endif
    use bands_mod, only: bands
    use precision_mod, only: rp
-   use string_mod, only: fmt
-   use logger_mod, only: g_logger
-   use math_mod, only: simpson_m
+   use math_mod, only: simpson_m, pi
    use basis_mod, only: spin_off
    implicit none
 
    private
 
-   real(rp), parameter :: pi = 3.14159265358979323846_rp
 
    !> Orbital indices in the SPHERICAL-harmonic basis that g0 lives in. The
    !> Hamiltonian is transformed cartesian -> spherical via hcpx(...,’cart2sph’)
@@ -140,10 +137,6 @@ contains
          q10_old = bnd%symbolic_atom(bnd%lattice%nbulk + na_glob)%potential%q10
          q10_all(na_glob) = mix*q10_all(na_glob) + (1.0_rp - mix)*q10_old
          bnd%symbolic_atom(bnd%lattice%nbulk + na_glob)%potential%q10 = q10_all(na_glob)
-         ! if (rank == 0) then
-         !    call g_logger%info(’B6 dipole moment Q10 of atom’//fmt(’i4’, na_glob)// &
-         !                       ’ = ’//fmt(’f12.8’, q10_all(na_glob)), __FILE__, __LINE__)
-         ! end if
       end do
 
       deallocate (q10_all)
@@ -188,10 +181,10 @@ contains
          wgt = 2.0_rp*(mod(ir + 1, 2) + 1)/3.0_rp
          if (ir == 2 .or. ir == nr) wgt = 1.0_rp/3.0_rp
 
-         ! Spin-averaged large-component amplitudes u_l(r).
-         phi_s = 0.5_rp*(phi_amp(ir, idx_l(idx_s),   1) + phi_amp(ir, idx_l(idx_s),   2))
-         phi_p = 0.5_rp*(phi_amp(ir, idx_l(idx_pz),  1) + phi_amp(ir, idx_l(idx_pz),  2))
-         phi_d = 0.5_rp*(phi_amp(ir, idx_l(idx_dz2), 1) + phi_amp(ir, idx_l(idx_dz2), 2))
+         ! Spin-averaged large-component amplitudes u_l(r); channel index l+1 (s=1, p=2, d=3).
+         phi_s = 0.5_rp*(phi_amp(ir, 1, 1) + phi_amp(ir, 1, 2))
+         phi_p = 0.5_rp*(phi_amp(ir, 2, 1) + phi_amp(ir, 2, 2))
+         phi_d = 0.5_rp*(phi_amp(ir, 3, 1) + phi_amp(ir, 3, 2))
 
          ! ASA+M multipole normalization: the l=1 moment uses (r/S)^l with l=1,
          ! i.e. the dipole length is measured in Wigner-Seitz radii (Vitos/Skriver;
@@ -202,18 +195,5 @@ contains
          rpb = rpb*ea
       end do
    end subroutine radial_dipole_elements
-
-   !> Map an orbital index (real-harmonics spd basis) to its (l+1) partial-wave
-   !> channel used to index phi_amp / fun2: s->1, p->2, d->3.
-   pure integer function idx_l(iorb)
-      integer, intent(in) :: iorb
-      if (iorb == idx_s) then
-         idx_l = 1
-      else if (iorb == idx_pz) then
-         idx_l = 2
-      else
-         idx_l = 3
-      end if
-   end function idx_l
 
 end module electrostatics_multipole_mod
