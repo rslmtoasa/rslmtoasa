@@ -224,13 +224,13 @@ module calculation_mod
       end subroutine frozen_magnon_kspace
 
       module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, &
-                                                       energy_mesh_before_hamiltonian, stochastic_moments, &
+                                                       energy_mesh_before_hamiltonian, &
                                                        control_obj, lattice_obj, charge_obj, mix_obj, energy_obj, &
                                                        hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
                                                        preprocessing_route)
          class(calculation), intent(in) :: this
          logical, intent(in) :: use_paoflow, use_exchange_pairs
-         logical, intent(in) :: energy_mesh_before_hamiltonian, stochastic_moments
+         logical, intent(in) :: energy_mesh_before_hamiltonian
          type(control), target, intent(inout) :: control_obj
          type(lattice), target, intent(inout) :: lattice_obj
          type(charge), target, intent(inout) :: charge_obj
@@ -424,7 +424,7 @@ contains
       ! The selected preprocessing route has already converged and written the
       ! atom state.  Rebuild only the consumer stack from that route; do not
       ! manufacture a surface/impurity geometry here.
-      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, charge_obj, mix_obj, &
+      call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, charge_obj, mix_obj, &
                                          energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
                                          this%pre_processing)
 
@@ -730,7 +730,7 @@ contains
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
 
-      call prepare_post_processing_stack(this, .true., .true., .false., .false., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, .true., .true., .false., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       self_obj = self(bands_obj, mix_obj)
@@ -775,7 +775,7 @@ contains
       type(sigma_zero) :: sigma
       integer :: i
 
-      call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       exchange_obj = exchange(bands_obj)
@@ -845,7 +845,7 @@ contains
    !> @brief Conductivity-tensor post-processing (B5.1 dispatch).
    !> @details The routine picks the source of the Chebyshev transport moments
    !>          (mu_nm_stochastic) from this%gf_route. Route ’recursion’ runs
-   !>          the stochastic moment generator inside prepare_post_processing_stack.
+   !>          the stochastic moment generator after prepare_post_processing_stack.
    !>          Routes ’lehmann’ and ’dyson’ fill the same array exactly from the
    !>          k-space eigenpairs (reciprocal%fill_moments), on the same
    !>          Chebyshev scaling window the recursion route uses
@@ -884,7 +884,7 @@ contains
       ! error bound (see docs/validation/route_agnostic_estimators.md).
       rec_moments = (trim(this%gf_route) == 'recursion')
       call g_kpm_profile%start('P_stack_setup')
-      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
@@ -946,7 +946,7 @@ contains
       call g_kpm_profile%start('T_transport_total')
 
       call g_kpm_profile%start('P_stack_setup')
-      call prepare_post_processing_stack(this, .true., .false., .true., .false., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, .true., .false., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
@@ -1148,7 +1148,7 @@ contains
 
       fm_obj = frozen_magnon(this%fname)
 
-      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
 

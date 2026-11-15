@@ -7,14 +7,13 @@ contains
 
    !> @brief Build the shared object stack for a post-processing driver.
    module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
-                                                   stochastic_moments, control_obj, lattice_obj, charge_obj, mix_obj, &
+                                                   control_obj, lattice_obj, charge_obj, mix_obj, &
                                                    energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
                                                    preprocessing_route)
       class(calculation), intent(in) :: this
       logical, intent(in) :: use_paoflow
       logical, intent(in) :: use_exchange_pairs
       logical, intent(in) :: energy_mesh_before_hamiltonian
-      logical, intent(in) :: stochastic_moments
       type(control), target, intent(inout) :: control_obj
       type(lattice), target, intent(inout) :: lattice_obj
       type(charge), target, intent(inout) :: charge_obj
@@ -172,7 +171,6 @@ contains
       end if
 
       recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-      if (stochastic_moments) call recursion_obj%compute_moments_stochastic()
       dos_obj = dos(recursion_obj, energy_obj)
       green_obj = green(dos_obj)
       bands_obj = bands(green_obj)
@@ -470,7 +468,7 @@ contains
       real(rp) :: max_mz_diff, max_blk_diff, max_dyson_diff
       real(rp) :: onsite_mom(3)
 
-      call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       do i = 1, lattice_obj%ntype
