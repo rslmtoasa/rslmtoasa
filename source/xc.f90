@@ -408,7 +408,7 @@ contains
       end select
       
       ! Initialize libXC support if needed
-      call obj%init_libxc(ctrl)
+      call obj%init_libxc()
    end function constructor
 
    !==============================================================================
@@ -1347,9 +1347,8 @@ contains
    !> Initialize libXC functional if needed based on txc value
    !> Validates compatibility with ASA before initialization
    !>--------------------------------------------------------------------------
-   subroutine init_libxc(this, ctrl)
+   subroutine init_libxc(this)
       class(xc), intent(inout) :: this
-      type(control), intent(in) :: ctrl
 
       logical :: selector_is_libxc
 
