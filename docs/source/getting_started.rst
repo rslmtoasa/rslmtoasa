@@ -81,29 +81,37 @@ Key CMake Options
 .. table::
    :align: left
 
-   +---------------------------+-------------------------------------------+---------+
-   | Option                    | Description                               | Default |
-   +===========================+===========================================+=========+
-   | ENABLE_OPENMP             | Enable OpenMP parallelization             | ON      |
-   +---------------------------+-------------------------------------------+---------+
-   | ENABLE_MPI                | Enable MPI parallelization                | OFF     |
-   +---------------------------+-------------------------------------------+---------+
-   | ENABLE_LIBXC              | Use libXC exchange-correlation functionals| OFF     |
-   +---------------------------+-------------------------------------------+---------+
-   | ENABLE_SPGLIB             | Use spglib for symmetry / k-path          | ON      |
-   +---------------------------+-------------------------------------------+---------+
-   | ENABLE_CUDA_PLUGIN        | Build the CUDA recursion plugin backend   | OFF     |
-   +---------------------------+-------------------------------------------+---------+
-   | ENABLE_MKL_KERNELS        | Build MKL Chebyshev kernels (batch/sparse)| OFF     |
-   +---------------------------+-------------------------------------------+---------+
-   | COLOR                     | Enable colored terminal output            | ON      |
-   +---------------------------+-------------------------------------------+---------+
-   | ENABLE_FLUSH              | Flush print output to files               | OFF     |
-   +---------------------------+-------------------------------------------+---------+
-   | RUN_REG_TESTS             | Run regression tests                      | OFF     |
-   +---------------------------+-------------------------------------------+---------+
-   | RUN_EXAMPLE_TESTS         | Run fast example-based SCF tests          | OFF     |
-   +---------------------------+-------------------------------------------+---------+
+   +-------------------------+---------------------------------------------+-------------------+
+   | Option                  | Description                                 | Default           |
+   +=========================+=============================================+===================+
+   | ENABLE_OPENMP           | Enable OpenMP parallelization               | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_MPI              | Enable MPI parallelization                  | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_MARCH_NATIVE     | Optimize for the build host's CPU           | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_LIBXC            | Use libXC exchange-correlation functionals  | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_SPGLIB           | Use spglib for symmetry / k-path            | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_CUDA_PLUGIN      | Build the CUDA recursion plugin backend     | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_CUDA_RECIPROCAL  | Build the CUDA reciprocal backend           | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_FUSED_RECIPROCAL | Fuse H(k) assembly and eigensolution        | ON (OFF on macOS) |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_MKL_KERNELS      | Build MKL Chebyshev kernels (batch/sparse)  | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | COLOR                   | Enable colored terminal output              | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_FLUSH            | Flush print output to files                 | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | RUN_REG_TESTS           | Run regression tests                        | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | RUN_EXAMPLE_TESTS       | Run fast example-based SCF tests            | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | RUN_UNIT_TESTS          | Build and run standalone Fortran unit tests | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
 
 For GPU acceleration via the CUDA plugin, see :ref:`theory/gpu_acceleration`.
 

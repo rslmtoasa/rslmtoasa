@@ -58,7 +58,7 @@ On Ubuntu or Debian, install the basic dependencies:
 
 ```bash
 sudo apt update
-sudo apt install git build-essential cmake gfortran libopenblas-dev liblapack-dev
+sudo apt install git build-essential cmake gfortran libopenblas-dev liblapack-dev libsymspg-dev
 ```
 
 Clone and build:
@@ -106,10 +106,17 @@ Use a separate build directory when changing compilers or MPI implementations.
 | `ENABLE_OPENMP` | `ON` | Enable OpenMP when detected |
 | `ENABLE_MPI` | `OFF` | Enable MPI; requires an MPI toolchain |
 | `ENABLE_MARCH_NATIVE` | `ON` | Request host CPU optimization |
+| `ENABLE_SPGLIB` | `ON` | Use spglib for symmetry and k-paths; requires spglib (`libsymspg-dev`) |
+| `ENABLE_LIBXC` | `OFF` | Use libXC exchange-correlation functionals (see below) |
+| `ENABLE_MKL_KERNELS` | `OFF` | Build MKL Chebyshev kernels (batched and sparse); requires oneMKL |
+| `ENABLE_CUDA_PLUGIN` | `OFF` | Build the CUDA recursion backend; requires the CUDA toolkit |
+| `ENABLE_CUDA_RECIPROCAL` | `OFF` | Build the CUDA reciprocal backend; requires the CUDA toolkit |
+| `ENABLE_FUSED_RECIPROCAL` | `ON` (`OFF` on macOS) | Fuse reciprocal H(k) assembly and eigensolution |
 | `COLOR` | `ON` | Enable colored terminal output |
 | `ENABLE_FLUSH` | `OFF` | Flush printouts |
 | `RUN_EXAMPLE_TESTS` | `OFF` | Register SCF and post-processing example tests |
 | `RUN_REG_TESTS` | `OFF` | Register the legacy recursion regression tests |
+| `RUN_UNIT_TESTS` | `OFF` | Build and register the standalone Fortran unit tests |
 
 For GNU builds targeting another CPU, set `-DENABLE_MARCH_NATIVE=OFF`. CPU flag selection is compiler-dependent; check the resolved flags when preparing portable binaries.
 
