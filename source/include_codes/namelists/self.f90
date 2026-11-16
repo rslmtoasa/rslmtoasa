@@ -7,8 +7,6 @@ integer :: magnetic_seed_steps !< Number of outer SCF iterations with the tempor
 integer, dimension(:), allocatable :: rb
 real(rp) :: conv_thr, soc_scale
 real(rp) :: r05_p_tolerance, r05_v_tolerance
-real(rp) :: atomsc_test_tol, atomsc_test_tolrsq
-integer :: atomsc_test_inner_cap
 real(rp) :: magnetic_seed_field !< Temporary B_fsm seed in the existing Ry convention.
 real(rp), dimension(:), allocatable :: ws, mixmag
 logical, allocatable :: force_nonmagnetic(:)
@@ -18,5 +16,5 @@ namelist /self/ ws_all, all_inequivalent, &
    mix_all, magnetic_mixing, mixmag_all, freeze, orbital_polarization, &
    rigid_band, rb, nstep, init, soc_scale, use_kspace, &
    conv_thr, ws, mixmag, fix_soc , cold, &
-   r05_p_tolerance, r05_v_tolerance, atomsc_test_tol, atomsc_test_tolrsq, atomsc_test_inner_cap, &
+   r05_p_tolerance, r05_v_tolerance, &
    magnetic_seed_enable, magnetic_seed_steps, magnetic_seed_field, force_nonmagnetic

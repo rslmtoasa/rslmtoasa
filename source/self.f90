@@ -1264,8 +1264,7 @@ contains
       class(self), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, k
-      logical :: atomsc_control_active
+      integer :: iostatus, funit, i
       character(len=128) :: radial_mode_reason
       character(len=8) :: radial_mode_source
 
@@ -1285,9 +1284,6 @@ contains
       conv_thr = this%conv_thr
       r05_p_tolerance = this%r05_p_tolerance
       r05_v_tolerance = this%r05_v_tolerance
-      atomsc_test_tol = this%atomsc_test_tol
-      atomsc_test_tolrsq = this%atomsc_test_tolrsq
-      atomsc_test_inner_cap = this%atomsc_test_inner_cap
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
       cold = this%cold
@@ -1395,34 +1391,10 @@ contains
       this%nstep = nstep
       this%r05_p_tolerance = r05_p_tolerance
       this%r05_v_tolerance = r05_v_tolerance
-      this%atomsc_test_tol = atomsc_test_tol
-      this%atomsc_test_tolrsq = atomsc_test_tolrsq
-      this%atomsc_test_inner_cap = atomsc_test_inner_cap
       if (this%r05_p_tolerance > 0.0_rp .and. this%r05_p_tolerance > 1.0_rp) &
          call g_logger%fatal('self%r05_p_tolerance must be in (0,1].', __FILE__, __LINE__)
       if (this%r05_v_tolerance > 0.0_rp .and. this%r05_v_tolerance > 1.0_rp) &
          call g_logger%fatal('self%r05_v_tolerance must be in (0,1] Ry.', __FILE__, __LINE__)
-      if ((this%atomsc_test_tol > 0.0_rp .or. this%atomsc_test_tolrsq > 0.0_rp .or. &
-           this%atomsc_test_inner_cap > 0) .and. &
-          (this%atomsc_test_tol <= 0.0_rp .or. this%atomsc_test_tolrsq <= 0.0_rp .or. &
-           this%atomsc_test_inner_cap < 2)) then
-         call g_logger%fatal('atomsc_test_tol, atomsc_test_tolrsq, and atomsc_test_inner_cap must be set together.', &
-                             __FILE__, __LINE__)
-      end if
-      if (this%atomsc_test_tol > 0.0_rp) then
-         if (use_kspace) call g_logger%fatal('atomsc test overrides are restricted to RS calculations.', __FILE__, __LINE__)
-         atomsc_control_active = .false.
-         do k = 1, size(this%symbolic_atom)
-            if (allocated(this%symbolic_atom(k)%potential%hubbard_u)) &
-               atomsc_control_active = atomsc_control_active .or. &
-                  any(abs(this%symbolic_atom(k)%potential%hubbard_u) > 1.0e-10_rp)
-            if (allocated(this%symbolic_atom(k)%potential%hubbard_j)) &
-               atomsc_control_active = atomsc_control_active .or. &
-                  any(abs(this%symbolic_atom(k)%potential%hubbard_j) > 1.0e-10_rp)
-         end do
-         if (atomsc_control_active) &
-            call g_logger%fatal('atomsc test overrides are restricted to U=J=0 controls.', __FILE__, __LINE__)
-      end if
 
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)

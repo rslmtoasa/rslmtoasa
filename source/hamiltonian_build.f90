@@ -1,5 +1,4 @@
 submodule(hamiltonian_mod) hamiltonian_build
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q, explicit_texture, &
       normalize_magnetic_representation, select_endpoint_moments, texture_bulk_reuse_is_valid
    use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear, &
@@ -451,11 +450,6 @@ contains
       hubbard_soc_experimental = this%hubbard_soc_experimental
       hubbard_u_potential_form = this%hubbard_u_potential_form
       hubbard_radial_moments = this%hubbard_radial_moments
-      hubbard_test_operator = this%hubbard_test_operator
-      hubbard_test_lambda = this%hubbard_test_lambda
-      hubbard_test_spin = this%hubbard_test_spin
-      fixed_u_test_tighten_r05 = this%fixed_u_test_tighten_r05
-      fixed_u_test_allow_hoh_w1_u0 = .false.
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
       export = this%export
@@ -548,42 +542,6 @@ contains
           this%hubbard_radial_moments /= 'auto') then
          call g_logger%fatal("Invalid hubbard_radial_moments. Use 'auto', 'spectral', or 'local'.", __FILE__, __LINE__)
       end if
-      this%hubbard_test_operator = lower(trim(hubbard_test_operator))
-      if (len_trim(this%hubbard_test_operator) == 0) this%hubbard_test_operator = 'none'
-      if (this%hubbard_test_operator /= 'none' .and. this%hubbard_test_operator /= 'w1' .and. &
-          this%hubbard_test_operator /= 'w2') then
-         call g_logger%fatal("Invalid hubbard_test_operator. Use 'none', 'w1', or 'w2'.", __FILE__, __LINE__)
-      end if
-      if (.not. ieee_is_finite(hubbard_test_lambda)) then
-         call g_logger%fatal('hubbard_test_lambda must be finite and is given in Ry.', __FILE__, __LINE__)
-      end if
-      this%hubbard_test_lambda = hubbard_test_lambda
-      if (hubbard_test_spin < 0 .or. hubbard_test_spin > 2) then
-         call g_logger%fatal('hubbard_test_spin must be 0 (both), 1 (up), or 2 (down).', __FILE__, __LINE__)
-      end if
-      this%hubbard_test_spin = hubbard_test_spin
-      if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_operator /= 'w1') then
-         call g_logger%fatal('hubbard_test_spin selection is available only for the W1 diagnostic operator.', &
-                             __FILE__, __LINE__)
-      end if
-      this%fixed_u_test_tighten_r05 = fixed_u_test_tighten_r05
-      this%fixed_u_test_allow_hoh_w1_u0 = fixed_u_test_allow_hoh_w1_u0
-      this%hubbard_test_operator_check = this%hubbard_test_operator /= 'none'
-      if (.not. this%hubbard_test_operator_check .and. this%hubbard_test_lambda /= 0.0_rp) then
-         call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
-      end if
-      if (this%hubbard_test_operator_check) then
-         if (.not. (this%control%nsp == 1 .or. this%control%nsp == 2) .or. &
-             this%control%lmax /= 2 .or. &
-             (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) .or. &
-             (this%control%has_soc() .and. this%control%nsp /= 2) .or. &
-             this%control%is_noncollinear()) then
-            call g_logger%fatal('A4 test operator requires nsp=1 or nsp=2, lmax=2, and hoh=.false..', __FILE__, __LINE__)
-         end if
-         if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
-            call g_logger%fatal('A4 test operator requires the fixed Liechtenstein basis convention.', __FILE__, __LINE__)
-         end if
-      end if
       this%bounds%algorithm = lower(trim(bounds_algorithm))
       if (len_trim(this%bounds%algorithm) == 0) this%bounds%algorithm = 'none'
       this%export = lower(trim(export))
@@ -611,13 +569,6 @@ contains
       end if
       if ((trim(lower(hubbard_u_potential_form)) == 'acbn0' .or. has_hubbard_v) .and. .not. this%hubbard_experimental) then
          call g_logger%fatal("ACBN0 and +V inputs are experimental; set hubbard_experimental = .true. in &hamiltonian to enable them.", __FILE__, __LINE__)
-      end if
-
-      if (this%hubbard_test_operator_check) then
-         if (has_legacy_uj .or. has_impurity_uj .or. has_hubbard_v .or. has_hubbard_u_sc) then
-            call g_logger%fatal('A4 test operators cannot be combined with legacy/impurity U, intersite V, or self-consistent U.', &
-                                __FILE__, __LINE__)
-         end if
       end if
 
       ! Optional Hubbard inputs from &hamiltonian are provided in eV.
@@ -1381,10 +1332,6 @@ contains
                   this%ee(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            ! write(131,*) ’m=’, m
-            ! write(131,’(18f10.6)’) real(this%ee(:,:,m,ntype))
-            ! write(132,*) ’m=’, m
-            ! write(132,’(18f10.6)’) aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
             do i = 1, nb
