@@ -340,6 +340,60 @@ Energy mesh parameters defined in:
 - **Mesh generation:** ``source/energy.f90::e_mesh()``
 - **Usage:** ``source/green.f90``, ``source/density_of_states.f90``
 
+vmix (&charge, calctype='L')
+----------------------------
+
+**Type:** Real
+
+**Default:** 1.0
+
+**Purpose:** ``vmix`` is the linear mixing of the Madelung potential of the active region in the
+interface (``calctype = 'L'``) update; 1.0 takes the new potential.
+
+Stored electrostatics state (&charge)
+-------------------------------------
+
+The other ``&charge`` keys hold the Madelung and surface-electrostatics setup that
+pre-processing computes and writes to the output namelist; they are not normally
+set by hand.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Key
+     - Meaning
+   * - ``gx``, ``gy``, ``gz``, ``gt``
+     - Lattice distortion factors of the bulk Madelung matrix (1 = no distortion).
+   * - ``b``, ``c``
+     - Lattice parameters b and c of the Madelung setup.
+   * - ``vol``
+     - Cell volume of the Madelung setup.
+   * - ``alamda``, ``amax``, ``bmax``, ``rmax``, ``gmax``, ``ar2d``
+     - Ewald-type setup parameters of the Madelung sums.
+   * - ``nr0``, ``numr``, ``numg``, ``numvr``, ``numvg``
+     - Counts of real- and reciprocal-space vectors of the surface Madelung sums.
+   * - ``nq3``, ``qx3``, ``qy3``, ``qz3``
+     - Number and positions of the atoms in the 3D cell.
+   * - ``qx``, ``qy``, ``qz``
+     - Basis vectors of the 2D cell.
+   * - ``bsx``, ``bsy``, ``bsz``, ``bkx``, ``bky``, ``bkz``
+     - 2D translation vectors in real and reciprocal space.
+   * - ``asx``, ``asy``, ``asz``, ``akx``, ``aky``, ``akz``, ``dr``, ``dg``
+     - Auxiliary real- and reciprocal-space vectors of the surface sums.
+   * - ``dss``
+     - Monopole part of the electrostatic potential matrix.
+   * - ``dsz``, ``ds3z2``, ``dsx2y2``, ``dsxy``, ``dzz``, ``dz3z2``, ``am``, ``bm``, ``pm``
+     - Higher-multipole parts of the electrostatic potential matrix.
+   * - ``amad``
+     - Electrostatic matrix of the impurity cluster.
+   * - ``w``
+     - Bulk Madelung variables.
+   * - ``wsimp``
+     - Wigner-Seitz radius per atom shell that receives charge (impurity).
+   * - ``wssurf``
+     - Wigner-Seitz radius per layer that receives charge (surface).
+
 See Also
 ========
 

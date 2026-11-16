@@ -227,6 +227,57 @@ Basis/potential parameters defined in:
 - **Usage in Hamiltonian:** ``source/hamiltonian.f90::build_bulkham()``
 - **Database interface:** ``source/element.f90``
 
+Stored potential state (&par)
+=============================
+
+These ``&par`` keys are written by the code to ``<label>_out.nml`` and read back on
+restart; they are not normally edited. Orbital arrays are indexed (l+1, spin) with
+spin 1 = up, 2 = down, unless stated otherwise. The Hubbard keys of ``&par`` are on
+:ref:`keywords/lda_u`.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Key
+     - Meaning
+   * - ``pl``
+     - Potential parameters :math:`P_l = 0.5 - \arctan(D_l)/\pi` per l and spin.
+   * - ``ql``
+     - Moments of the occupied density per l and spin (Phys. Rev. B 43, 9538 (1991), Eq. 48).
+   * - ``ppar``, ``qpar``, ``srdel``, ``vl``
+     - Potential parameters on the orthogonal basis per l and spin.
+   * - ``gravity_center``
+     - Band gravity centre per l and spin.
+   * - ``shifted_band``
+     - ``center_band`` minus ``gravity_center``.
+   * - ``obar``
+     - Potential parameter :math:`\bar{o}` per l and spin; ``obx`` is built from it.
+   * - ``center_band_s_up``, ``center_band_s_dw``, ``center_band_p_up``, ``center_band_p_dw``, ``center_band_d_up``, ``center_band_d_dw``, ``width_band_s_up``, ``width_band_s_dw``, ``width_band_p_up``, ``width_band_p_dw``, ``width_band_d_up``, ``width_band_d_dw``
+     - Copies of ``center_band`` and ``width_band`` for s, p, d and each spin, written for
+       reading; the code does not read them back.
+   * - ``cx``, ``wx``, ``cex``, ``obx``
+     - Internal per-orbital potential parameters (9 orbitals × 2 spins): band centre, band
+       width, centre minus gravity centre, and the ``hoh`` parameter o.
+   * - ``cx0``, ``cx1``, ``wx0``, ``wx1``
+     - Spin sum (``0``) and difference (``1``) of ``cx`` and ``wx``.
+   * - ``cshi``, ``dw_l``
+     - Band variables per orbital (18 entries); no further meaning documented in the code.
+   * - ``xi_p``, ``xi_d``
+     - Spin-orbit coupling parameters of the p and d channels (2 values each).
+   * - ``rac``
+     - Racah parameters (2 values).
+   * - ``lmom``
+     - Orbital moment of the atom (not normalised).
+   * - ``sumec``, ``sumev``
+     - Core and valence band-energy sums (Ry).
+   * - ``etot``, ``utot``, ``ekin``, ``rhoeps``
+     - Total, electrostatic and kinetic energy and the XC energy integral of the atom (Ry).
+   * - ``vmad``
+     - Madelung potential at the site (Ry).
+   * - ``vrmax``
+     - Sphere-boundary potential for the muffin-tin zero: spin average and up minus down.
+
 See Also
 ========
 
