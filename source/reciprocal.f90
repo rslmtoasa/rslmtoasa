@@ -536,7 +536,6 @@ module reciprocal_mod
       procedure :: calculate_band_structure
       procedure :: calculate_density_of_states
       procedure :: calculate_dos_tetrahedron
-      procedure :: expand_eigenvalues_to_full_mesh
       procedure :: calculate_dos_gaussian
       procedure :: calculate_dos_blochl
       procedure :: setup_dos_energy_grid
@@ -554,7 +553,6 @@ module reciprocal_mod
       procedure :: calculate_band_energy_from_total_dos
       procedure :: calculate_band_energy_from_moments
       procedure :: calculate_adaptive_sigma
-      procedure :: find_fermi_level_from_dos
       procedure :: calculate_ldm_from_projected_dos
       procedure :: calculate_spinor_dm
       procedure :: integrate_dos_up_to_energy
@@ -1427,12 +1425,6 @@ end subroutine calculate_dos_gaussian
       class(reciprocal), intent(inout) :: this
    end subroutine setup_tetrahedra
 
-   !> @brief Expand irreducible-k eigenvalues/eigenvectors to the full mesh.
-   !> @param[inout] this Reciprocal object whose eigen arrays are expanded.
-   module subroutine expand_eigenvalues_to_full_mesh(this)
-      class(reciprocal), intent(inout) :: this
-   end subroutine expand_eigenvalues_to_full_mesh
-
    !> @brief Convert 3D mesh coordinates to a periodic flat k-point index.
    !> @param[in] this Reciprocal object providing helper context.
    !> @param[in] i Mesh coordinate along axis 1.
@@ -1587,16 +1579,6 @@ end subroutine fill_band_moments_from_spin_density
       real(rp), intent(out), optional :: electron_count
       real(rp) :: eband
    end function calculate_canonical_band_energy
-
-!> @brief Find the Fermi level matching a target electron count.
-!> @param[in] this Reciprocal object containing DOS/NOS information.
-!> @param[in] total_electrons Target number of electrons.
-!> @return Fermi level in the reciprocal DOS energy units.
-module function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
-   class(reciprocal), intent(in) :: this
-   real(rp), intent(in) :: total_electrons
-   real(rp) :: fermi_level
-end function find_fermi_level_from_dos
 
 !> @brief Integrate DOS occupation up to an energy with Fermi weighting.
 !> @param[in] this Reciprocal object containing DOS grid data.

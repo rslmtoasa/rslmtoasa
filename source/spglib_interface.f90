@@ -131,12 +131,9 @@ module spglib_interface_mod
       procedure :: finalize
       procedure :: detect_space_group
       procedure :: get_symmetry_operations
-      procedure :: get_reduced_kpoint_mesh
       procedure :: get_reduced_kpoint_mesh_with_points
-      procedure :: get_rotation_matrices
       procedure :: get_full_kpoint_mesh_with_points
       procedure :: get_crystal_system
-      procedure :: get_band_path_points
       procedure :: get_dataset
       procedure :: is_available
       procedure :: get_space_group_number
@@ -285,56 +282,6 @@ contains
       call root_print('spglib_interface: Symmetry operations unavailable (spglib not compiled)')
 #endif
    end function get_symmetry_operations
-
-   !---------------------------------------------------------------------------
-   !> @brief Get irreducible k-point mesh
-   !---------------------------------------------------------------------------
-   function get_reduced_kpoint_mesh(this, mesh_dims, is_shift) result(num_ir_kpoints)
-      class(spglib_interface), intent(in) :: this
-      integer, intent(in) :: mesh_dims(3)
-      integer, intent(in), optional :: is_shift(3)
-      integer :: num_ir_kpoints
-
-#ifdef USE_SPGLIB
-      integer :: total_kpoints
-      integer :: shift(3)
-      integer, allocatable :: grid_address(:,:)
-      integer, allocatable :: ir_mapping(:)
-
-      if (.not. this%initialized) then
-         call root_print('ERROR: spglib_interface: Not initialized')
-         num_ir_kpoints = 0
-         return
-      end if
-
-      total_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)
-      
-      if (present(is_shift)) then
-         shift = is_shift
-      else
-         shift = [0, 0, 0]  ! No shift by default
-      end if
-
-      allocate(grid_address(3, total_kpoints))
-      allocate(ir_mapping(total_kpoints))
-
-      num_ir_kpoints = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
-                                                 mesh_dims, shift, 1, &  ! 1 = use time reversal
-                                                 this%lattice_vectors, &
-                                                 this%atomic_positions, &
-                                                 this%atomic_types, &
-                                                 this%num_atoms, &
-                                                 this%symprec)
-
-      if (rank == 0) write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
-                                 num_ir_kpoints, 'irreducible points'
-
-      deallocate(grid_address, ir_mapping)
-#else
-      num_ir_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)  ! Full mesh without reduction
-      call root_print('spglib_interface: Using full k-mesh (spglib not compiled)')
-#endif
-   end function get_reduced_kpoint_mesh
 
    !---------------------------------------------------------------------------
    !> @brief Get irreducible k-point mesh with k-points and weights
@@ -510,47 +457,6 @@ contains
    end function get_reduced_kpoint_mesh_with_points
 
    !---------------------------------------------------------------------------
-   !> @brief Get the full set of point-group rotation matrices for the crystal.
-   !> @details Real-space fractional-coordinate convention, i.e. the same
-   !>          rotation matrices returned by spg_get_symmetry and consumed
-   !>          directly by spg_get_stabilized_reciprocal_mesh. Translations are
-   !>          discarded: only the rotational part is needed to determine
-   !>          whether an operation leaves a given q-point invariant.
-   !> @param[out] rotations Rotation matrices [3, 3, num_ops]
-   !> @return Number of operations, or 0 on failure
-   !---------------------------------------------------------------------------
-   function get_rotation_matrices(this, rotations) result(num_ops)
-      class(spglib_interface), intent(in) :: this
-      integer, allocatable, intent(out) :: rotations(:,:,:)
-      integer :: num_ops
-
-#ifdef USE_SPGLIB
-      integer, parameter :: max_operations = 192
-      integer :: rotation(3,3,max_operations)
-      real(c_double) :: translation(3,max_operations)
-
-      if (.not. this%initialized) then
-         call root_print('ERROR: spglib_interface: Not initialized')
-         num_ops = 0
-         return
-      end if
-
-      num_ops = spg_get_symmetry(rotation, translation, max_operations, &
-                                this%lattice_vectors, this%atomic_positions, &
-                                this%atomic_types, this%num_atoms, this%symprec)
-
-      if (num_ops > 0) then
-         if (allocated(rotations)) deallocate(rotations)
-         allocate(rotations(3, 3, num_ops))
-         rotations = rotation(:, :, 1:num_ops)
-      end if
-#else
-      num_ops = 0
-      call root_print('spglib_interface: Symmetry operations unavailable (spglib not compiled)')
-#endif
-   end function get_rotation_matrices
-
-   !---------------------------------------------------------------------------
    !> @brief Get full (non-reduced) k-point mesh points in spglib grid convention
    !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
    !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]
@@ -642,36 +548,6 @@ contains
          crystal_system = 'unknown'
       end if
    end function get_crystal_system
-
-   !---------------------------------------------------------------------------
-   !> @brief Get high-symmetry k-path points for band structure
-   !---------------------------------------------------------------------------
-   function get_band_path_points(this) result(path_available)
-      class(spglib_interface), intent(in) :: this
-      logical :: path_available
-
-      ! This is a placeholder for band path generation
-      ! In a full implementation, this would use spglib’s band path functionality
-      ! or implement custom logic based on the crystal system
-      
-      path_available = .false.
-      
-      if (.not. this%initialized) then
-         call root_print('ERROR: spglib_interface: Not initialized')
-         return
-      end if
-
-#ifdef USE_SPGLIB
-      ! TODO: Implement band path generation using spglib
-      ! This would involve calling spglib functions to get high-symmetry points
-      ! For now, just indicate that the feature is available with spglib
-      path_available = .true.
-      if (rank == 0) write(*,*) 'spglib_interface: Band path generation available for ', &
-                                trim(this%crystal_system), ' crystal system'
-#else
-      call root_print('spglib_interface: Band path generation unavailable (spglib not compiled)')
-#endif
-   end function get_band_path_points
 
    !---------------------------------------------------------------------------
    !> @brief Check if spglib functionality is available
