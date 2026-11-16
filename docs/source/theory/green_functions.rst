@@ -136,9 +136,11 @@ Green's function spectral function expanded in Chebyshev polynomials:
 
 .. math::
 
-   \rho(E) = \frac{1}{\sqrt{(E_{\max} - E)(E - E_{\min})}} \sum_n \mu_n T_n\left(\frac{2E - E_{\max} - E_{\min}}{E_{\max} - E_{\min}}\right)
+   \rho(E) = \frac{1}{\pi \sqrt{a^2 - (E-b)^2}} \left[ g_0 \mu_0 + 2 \sum_{n \ge 1} g_n \mu_n T_n\left(\frac{E-b}{a}\right) \right]
 
-where :math:`\mu_n` are Chebyshev moments (computed recursively).
+where :math:`\mu_n` are Chebyshev moments (computed recursively), :math:`g_n`
+is the Jackson kernel, :math:`a = (E_{\max} - E_{\min})/1.7` and
+:math:`b = (E_{\max} + E_{\min})/2` (see :ref:`theory/recursion_method`).
 
 **Advantages:**
 
@@ -153,8 +155,9 @@ Implementation in RS-LMTO
 
 - ``green.f90::sgreen()`` - Scalar (on-site) Green's function
 - ``green.f90::bgreen()`` - Block Green's function for all sites
-- ``green.f90::block_green_eta()`` - Green's function with energy-dependent broadening
-- ``green.f90::chebyshev_green()`` - Chebyshev moment representation
+- ``green.f90::block_green_eta()`` - Deprecated wrapper of ``block_green_core``; on-site G at the Fermi point plus an imaginary shift
+- ``green.f90::chebyshev_green_eta()``, ``chebyshev_green_ij()`` - Chebyshev on-site (imaginary shift) and intersite G
+- ``green.f90::chebyshev_dos_dispatch()`` - Chebyshev on-site reconstruction for the DOS
 - ``recursion.f90::recur()`` - Lanczos recursion coefficients
 - ``density_of_states.f90::chebyshev_dos()`` - DOS from Chebyshev moments
 
@@ -166,29 +169,21 @@ Implementation in RS-LMTO
    type :: green
        complex(rp), allocatable :: g0(:,:,:,:)      ! On-site Green's function
        complex(rp), allocatable :: gij(:,:,:,:)     ! Inter-site Green's function
-       complex(rp), allocatable :: gij_eta(:,:,:,:) ! G with energy-dependent eta
+       complex(rp), allocatable :: gij_eta(:,:,:,:) ! Intersite G vs imaginary eta
        ! ... more fields for different interactions
    contains
        procedure :: sgreen          ! Compute on-site
        procedure :: bgreen          ! Compute full block
-       procedure :: chebyshev_green ! Chebyshev expansion
+       procedure :: chebyshev_green_ij ! Chebyshev intersite G
    end type green
 
-Energy Dependent Broadening
-===========================
+Imaginary Energy Shift
+======================
 
-The code supports **energy-dependent broadening** via parameter :math:`\eta(E)`:
-
-.. math::
-
-   G_{ij}(E) = \langle i | (E - H + i\eta(E))^{-1} | j \rangle
-
-**Typical forms:**
-
-1. **Constant:** :math:`\eta = \eta_0` (broadening parameter)
-2. **Energy-dependent:** :math:`\eta(E) = \eta_0 (1 + |E - E_F|)` (sharper near Fermi level)
-
-Controlled by keyword ``ieta`` in input namelists (see :ref:`keywords/energy_mesh`).
+The ``*_eta`` routines evaluate :math:`G` at the Fermi point with a complex
+shift :math:`\eta = i\,r` passed in by the caller; ``bands.f90`` scans
+:math:`r` over a quadrature grid. There is no input key for :math:`\eta` and
+no energy-dependent :math:`\eta(E)`.
 
 Fermi Level Determination
 =========================
@@ -197,7 +192,7 @@ The **Fermi level** :math:`E_F` is found by integrating the DOS:
 
 .. math::
 
-   N_e = \int_{-\infty}^{E_F} dE \, \rho(E) \, f(E)
+   N_e = \int_{-\infty}^{E_F} dE \, \rho(E)
 
 where :math:`N_e` is the target number of electrons.
 
@@ -205,7 +200,8 @@ where :math:`N_e` is the target number of electrons.
 
 1. **Fixed Fermi level:** Specify ``fix_fermi = .true.`` in input
 2. **Self-consistent:** Iteratively adjust :math:`E_F` to match electron count
-3. **Temperature effects:** Include Fermi-Dirac distribution with temperature :math:`T`
+
+The real-space Fermi level is found at zero temperature.
 
 Magnetic Response and Spin-Resolved Functions
 ==============================================
@@ -224,23 +220,9 @@ For **non-collinear** magnetism:
 Computing Transport Properties
 ==============================
 
-**Conductivity tensor:**
-
-.. math::
-
-   \sigma_{\alpha\beta}(E) = \frac{e^2}{2\pi} \text{Im} \text{Tr}[v_\alpha G(E) v_\beta G(E)]
-
-where :math:`v_\alpha` are velocity operators, derived from Hamiltonian.
-
-See ``conductivity.f90`` for implementation.
-
-**Kubo-Greenwood Formula:**
-
-Relates conductivity to Green's function:
-
-.. math::
-
-   \sigma(E) = \frac{e^2}{V} \text{Im} \sum_{i,j} G_{ij}(E) v_{ij} G_{ji}(E) v_{ji}
+The conductivity uses the Kubo-Bastin formula, evaluated from Chebyshev
+double moments of the velocity operators (``source/recursion_transport.f90``,
+``source/conductivity.f90``).
 
 Advantages and Limitations
 ==========================
@@ -273,7 +255,7 @@ This section documents:
 - **Usage context:**
   
   - ``source/self.f90::run()`` - Calls Green's function in SCF loop
-  - ``source/bands.f90`` - Band structure from Green's functions
+  - ``source/bands.f90`` - Fermi level, DOS and moments from Green's functions
   - ``source/conductivity.f90`` - Transport from Green's functions
 
 See Also

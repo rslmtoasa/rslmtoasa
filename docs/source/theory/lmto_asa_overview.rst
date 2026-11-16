@@ -104,7 +104,8 @@ The potential is characterized by few parameters:
 - **Band widths** :math:`\sqrt{\Delta_l}` (bandwidth)
 - **Wigner-Seitz radius** :math:`s` (defines sphere size)
 
-These are pre-computed or fitted to first-principles or ab-initio data.
+These are computed from the atomic-sphere (radial) solution in every SCF
+iteration (``self%lmtst`` called from ``run_scf`` in ``source/self.f90``).
 
 Green's Function Formalism
 --------------------------
@@ -131,9 +132,9 @@ The charge density is obtained by integrating the imaginary part of the Green's 
 
 .. math::
 
-   n_i = \int_{-\infty}^{E_F} dE \, \text{Im} G_{ii}(E) \, f(E)
+   n_i = -\frac{1}{\pi} \int_{-\infty}^{E_F} dE \, \text{Im} G_{ii}(E)
 
-where :math:`E_F` is the Fermi energy and :math:`f(E)` is the Fermi-Dirac distribution.
+where :math:`E_F` is the Fermi energy (zero temperature in the real-space SCF).
 
 The self-consistent field (SCF) procedure:
 
@@ -178,7 +179,7 @@ The code now supports explicit reciprocal-space solve modes via ``&reciprocal``:
 - ``reciprocal_mode='generalized_overlap_kanpur'``:
   
   - Reserved mode name for a future formal Kanpur-consistent overlap/secular implementation.
-  - At present this path is not implemented and falls back to ``ham_only`` behavior with warnings.
+  - At present this path is not implemented; the run stops with a fatal error.
 
 Implication: reciprocal-space generalized-overlap results should currently be interpreted as
 diagnostic/prototyping output unless and until the Kanpur-consistent overlap path is completed.

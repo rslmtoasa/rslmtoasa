@@ -49,13 +49,12 @@ From Green's function (DOS integration below Fermi level):
 
 .. math::
 
-   n_i^{(i+1)} = \int_{-\infty}^{E_F} dE \, \rho_i(E) \, f(E - \mu)
+   n_i^{(i+1)} = \int_{-\infty}^{E_F} dE \, \rho_i(E)
 
 where:
 
 - :math:`\rho_i(E)` is local density of states
-- :math:`f(E - \mu)` is Fermi-Dirac distribution (includes temperature)
-- :math:`E_F` is Fermi energy determined from electron count
+- :math:`E_F` is Fermi energy determined from electron count (zero temperature)
 
 **Effective Potential:**
 
@@ -113,8 +112,7 @@ Implementation in RS-LMTO
       ! 4. Integrate DOS for charge density
       call density_of_states%density(green, recursion, ...)
       
-      ! 5. Update charge and potential
-      call charge%calculate_density(dos, ...)
+      ! 5. Update potential
       call charge%bulkpot()
       
       ! 6. Mix charge densities
@@ -128,31 +126,12 @@ Implementation in RS-LMTO
 SCF Convergence Criteria
 ========================
 
-**Typical Convergence Checks:**
-
-1. **Charge density difference:**
-   
-   .. math::
-
-      \Delta q = \sum_i |q_i^{(i+1)} - q_i^{(i)}| < \text{tolerance}
-
-   Input: ``conv_thr`` in ``&self`` (default :math:`0.5\times 10^{-8}`), compared with the printed ``Diff``
-
-2. **Potential difference:**
-   
-   .. math::
-
-      \Delta V = \sum_i |V_i^{(i+1)} - V_i^{(i)}| < \text{tolerance}
-
-3. **Energy convergence:**
-   
-   .. math::
-
-      \Delta E = |E^{(i+1)} - E^{(i)}| < \text{tolerance}
-
-4. **Force/torque on atoms** (if applicable)
-
-All criteria must be satisfied. Convergence typically requires 10-100 iterations.
+The run is converged when ``mix%delta`` (the RMS difference between old and
+new moments, printed as ``Diff``) is below ``conv_thr`` in ``&self`` (default
+:math:`0.5\times 10^{-8}`). When active, the fixed-U residual test and the
+constraint-angle test (``constraints_enable``) must also pass
+(``self%is_converged`` in ``source/self.f90``). There is no potential, energy
+or force test.
 
 Density Mixing Strategies
 =========================
@@ -202,16 +181,9 @@ See :ref:`keywords/scf_settings` for input keywords:
 Convergence Acceleration
 ========================
 
-**Techniques used:**
-
-1. **Variable mixing parameter** - Increase :math:`\alpha` as convergence improves
-2. **Residual norm weighting** - Weight recent residuals more heavily
-3. **Extrapolation** - Predict next density from trend
-
 **When convergence stalls:**
 
-- Reduce mixing parameter :math:`\alpha`
-- Increase Broyden history length
+- Reduce mixing parameter ``beta``
 - Check for oscillations between states
 - Ensure recursion cutoff is adequate
 
@@ -234,37 +206,22 @@ For each atom type and spin:
 
    \mu = E_F(\text{search to match } N_e)
 
-**Methods:**
+**Method:**
 
-1. **Bisection** - Slow but reliable
-2. **Newton-Raphson** - Faster, requires DOS derivative
-3. **Fixed Fermi** (``fix_fermi = .true.``) - Skip adjustment (useful for impurities)
+``bands%fermi`` integrates the DOS cumulatively with Simpson's rule up to the
+valence count and interpolates linearly inside the last interval. It runs only
+for ``calctype`` ``'B'`` or ``'L'`` with ``fix_fermi = .false.``; with
+``fix_fermi = .true.`` the input Fermi level is kept (useful for impurities).
 
-**Implementation:**
+Temperature
+===========
 
-``bands.f90::calculate_fermi()`` searches for the correct :math:`E_F`.
+The real-space SCF and Fermi level are at zero temperature. ``&energy
+temperature`` (K) only smears the energy integral of the exchange (:math:`J_{ij}`)
+calculation; ``&reciprocal temperature`` (K) is used by the k-space route.
 
-Temperature Effects
-===================
-
-At **finite temperature**, use Fermi-Dirac distribution:
-
-.. math::
-
-   f(E) = \frac{1}{e^{(E - \mu)/k_B T} + 1}
-
-**Effects on charge density:**
-
-- Smears out Fermi surface
-- Electrons excite above :math:`E_F`
-- Changes magnetic moments and stability
-
-**Control:**
-
-Keyword ``temperature`` in input (Kelvin or Ry). Default: T=0 (zero temperature).
-
-Energy Calculation and Forces
-==============================
+Energy Calculation
+==================
 
 The **total energy** at each SCF iteration includes:
 
@@ -276,15 +233,9 @@ where :math:`T[G]` is kinetic energy from Green's function:
 
 .. math::
 
-   T = \int dE \, E \, \rho(E) \, f(E)
+   T = \int_{-\infty}^{E_F} dE \, E \, \rho(E)
 
-**Forces on atoms** (if doing geometry optimization):
-
-.. math::
-
-   F_I = -\frac{\partial E_{\text{tot}}}{\partial \mathbf{R}_I}
-
-Computed via Hellmann-Feynman theorem (handled by ``force`` module if available).
+No forces are computed.
 
 Magnetic Convergence
 ====================
@@ -325,8 +276,8 @@ When SCF Fails to Converge
 
 **Common issues:**
 
-1. **Too aggressive mixing** - Reduce ``alpha``
-2. **Inadequate recursion depth** - Increase ``llsp``, ``lld``
+1. **Too aggressive mixing** - Reduce ``beta``
+2. **Inadequate recursion depth** - Increase ``lld``
 3. **Energy mesh too coarse** - Increase ``channels_ldos``
 4. **Unstable Hamiltonian** - Check element/potential parameters
 5. **Bad initial guess** - Start from converged nearby configuration
@@ -338,21 +289,11 @@ When SCF Fails to Converge
 - Check for charge oscillations
 - Increase output verbosity (``verbose = .true.``)
 
-Example SCF Convergence
-=======================
+SCF Log
+=======
 
-Typical convergence for bulk Si (from ``example/bulk/Si/``):
-
-.. code-block:: text
-
-   Iteration   ΔQ (mRy)    ΔE (mRy)    Wall time (s)
-   --------    --------    --------    --------
-   1           0.523       -0.287      2.1
-   2           0.156        0.089      1.9
-   3           0.042        0.024      1.8
-   4           0.009       -0.002      1.8
-   5           0.002        0.000      1.8
-   SCF converged in 5 iterations
+Each iteration logs ``Not converged! Diff= ...``; the last one logs
+``Converged!`` followed by the final ``Diff``.
 
 Provenance
 ==========

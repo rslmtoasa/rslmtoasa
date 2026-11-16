@@ -84,8 +84,8 @@ Example:
 - ``'conv'`` — real-space convolution periodic operator apply; same periodicity
   requirement as ``'fft'``.
 
-An unrecognized ``gpu_backend`` is not fatal: the run logs a warning and falls
-back to the current CPU recursion path.
+An unrecognized ``gpu_backend`` (or ``gpu_precision``) stops the run at input,
+also in builds without the GPU plugin.
 
 ``gpu_precision``
 -----------------
@@ -134,12 +134,9 @@ restriction on scalar Lanczos or the periodicity requirement on ``fft``/``conv``
 the run emits a warning and continues on the CPU path. A CUDA-enabled build
 still requires a working CUDA device when the GPU route is actually selected.
 
-The current route inventory and evidence level are recorded in
-``docs/DECISIONS.md``. In particular, the low-level
-DOS/GF, orbital-moment, and conductivity-moment contracts have hardware
-coverage, and ACC-13 adds a focused production CPU/CUDA comparison for
-charge, spin, and orbital Kubo-Bastin transport. The broader VAL-09 physics
-campaign remains the CPU scientific oracle.
+GPU route decisions are recorded in ``docs/DECISIONS.md``. The CPU
+Kubo-Bastin transport study is
+``docs/validation/VAL-09_KUBO_BASTIN_TRANSPORT.md``.
 
 Device data is fingerprinted and cached (context creation, BSR upload) so that
 repeated calls with the same Hamiltonian — e.g. across energy points — do not

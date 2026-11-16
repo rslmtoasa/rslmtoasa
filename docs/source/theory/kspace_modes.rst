@@ -273,6 +273,8 @@ Hamiltonian Semantics
 
      H(k) = h(k) - [hoh](k) + E_\nu + H_{LS}
 
+- Requires ``hoh=.true.`` in ``&hamiltonian``; otherwise the first-order
+  Hamiltonian is built without a warning.
 - Adds the Bloch-summed ``Hcc_2c(k)`` when ``ccor_2c=.true.``.
 - Solves a standard Hermitian eigenproblem with identity overlap.
 
@@ -295,6 +297,10 @@ Minimal Example
 
    &calculation
       post_processing = 'band_structure'
+   /
+
+   &hamiltonian
+      hoh = .true.
    /
 
    &reciprocal

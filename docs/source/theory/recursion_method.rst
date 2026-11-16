@@ -92,19 +92,22 @@ Instead of computing :math:`\rho(E)` directly from Green's function, RS-LMTO com
 
 .. math::
 
-   \mu_n = \text{Tr}[H^n] / N
+   \mu_n = \langle 0 | T_n(\tilde H) | 0 \rangle, \qquad \tilde H = (H - b)/a
 
-These are then expanded:
+for each recursion site and orbital block :math:`|0\rangle` (not a trace over
+the cluster). The DOS is the kernel-damped sum
 
 .. math::
 
-   \rho(E) = \frac{W(\sqrt{E})}{\pi \sqrt{1 - (E/W)^2}} \sum_{n=0}^{N_{\text{cheb}}} \mu_n T_n(E/W)
+   \rho(E) = \frac{1}{\pi \sqrt{a^2 - (E-b)^2}}
+   \left[ g_0 \mu_0 + 2 \sum_{n \ge 1} g_n \mu_n T_n\!\left(\frac{E-b}{a}\right) \right]
 
 where:
 
 - :math:`T_n` are Chebyshev polynomials
-- :math:`W` is a bandwidth parameter for scaling
-- :math:`N_{\text{cheb}}` is the number of moments (typically 100-500)
+- :math:`g_n` is the Jackson kernel
+- :math:`a`, :math:`b` are the scaling parameters given under "Energy Rescaling" below
+- the number of moments is :math:`2\,\texttt{lld} + 2`
 
 **Advantages:**
 
@@ -141,14 +144,14 @@ Implementation in RS-LMTO
       real(rp), allocatable :: b2(:,:,:,:)      ! Lanczos coeff b_n^2
       complex(rp), allocatable :: a_b(:,:,:,:)  ! Block form of a
       complex(rp), allocatable :: b2_b(:,:,:,:) ! Block form of b^2
-      complex(rp), allocatable :: psi(:,:,:)    ! Lanczos wavefunctions
+      complex(rp), allocatable :: psi(:,:)      ! Lanczos wavefunctions
       complex(rp), allocatable :: mu_n(:,:,:,:) ! Chebyshev moments
    contains
       procedure :: hop         ! Lanczos hop (single recursion step)
       procedure :: hop_b       ! Block Lanczos
       procedure :: recur       ! Full Lanczos recursion
       procedure :: recur_b     ! Block recursion
-      procedure :: chebyshev_recur_ll ! Chebyshev recursion
+      procedure :: chebyshev_recur_ll ! One Chebyshev recursion step
       ! ... more procedures
    end type recursion
 
@@ -160,11 +163,12 @@ Implementation in RS-LMTO
 
 2. **``recur()`` and ``recur_b()``**
    
-   Full recursion loop: iterate to cutoff ``llsp`` or ``lld`` (recursion depth).
+   Full recursion loop: iterate to the recursion depth ``lld``.
 
-3. **``chebyshev_recur_ll()``**
+3. **``chebyshev_recur()``**
    
-   Chebyshev moment calculation (stochastic or exact traces).
+   Chebyshev moment calculation, per site (``chebyshev_recur_ll()`` is one
+   recursion step).
 
 4. **``chebyshev_dos()``**
    
@@ -175,10 +179,11 @@ Recursion Cutoff Parameters
 
 **Control parameters** (from ``control.f90``):
 
-- **``llsp``** - Recursion cutoff for s and p electrons (typical: 50-100)
-- **``lld``** - Recursion cutoff for d electrons (typical: 50-100)
+- **``lld``** - Recursion depth for all orbitals (typical: 50-100)
+- **``llsp``** - Enters only array dimensions (``max(llsp, lld)``); it does
+  not change the recursion
 
-These determine the **depth** of recursion (number of coefficients computed).
+``lld`` sets the number of coefficients computed.
 
 **Trade-off:**
 
@@ -187,27 +192,14 @@ These determine the **depth** of recursion (number of coefficients computed).
 
 Typical values balance accuracy and speed; see examples in ``example/`` directory.
 
-Stochastic Trace Evaluation
-============================
+Random Vectors (Conductivity Only)
+==================================
 
-For large systems, computing exact Chebyshev moments :math:`\mu_n = \text{Tr}[H^n]` is expensive.
-
-**Stochastic approach:**
-
-Use random vectors :math:`|r\rangle` to estimate the trace:
-
-.. math::
-
-   \mu_n \approx \frac{1}{N_{\text{random}}} \sum_i \langle r_i | H^n | r_i \rangle
-
-**Advantages:**
-
-- Scales as :math:`O(N_{\text{random}})` independent of system size
-- Unbiased estimate with statistical error
-
-**Control:**
-
-Keyword ``random_vec_num`` (in ``control.f90``) specifies number of random vectors.
+The DOS/SCF Chebyshev moments are computed per site, without random vectors.
+The Kubo-Bastin conductivity moments (``compute_moments_stochastic`` in
+``source/recursion_transport.f90``) use random starting vectors when
+``cond_calctype = 'random_vec'`` (default ``'per_type'``); ``random_vec_num``
+in ``&control`` sets their number.
 
 Numerical Aspects
 =================
@@ -228,9 +220,13 @@ To use Chebyshev polynomials (:math:`T_n : [-1,1] \to \mathbb{R}`), energies are
 
 .. math::
 
-   E_{\text{scaled}} = \frac{2E - (E_{\max} + E_{\min})}{E_{\max} - E_{\min}}
+   E_{\text{scaled}} = \frac{E - b}{a}, \qquad
+   a = \frac{E_{\max} - E_{\min}}{1.7}, \qquad
+   b = \frac{E_{\max} + E_{\min}}{2}
 
-where :math:`E_{\min}`, :math:`E_{\max}` define the spectral window.
+where :math:`E_{\min}`, :math:`E_{\max}` are the Hamiltonian bounds when
+they are set (``bounds%e_max > bounds%e_min``), otherwise ``energy_min`` and
+``energy_max`` from ``&energy`` (``resolve_chebyshev_window``).
 
 Chebyshev Bounds Workflow
 =========================
@@ -265,7 +261,7 @@ Hopping Region and Cluster Truncation
 In real-space formulation, the recursion operates within a **hopping region** defined by:
 
 1. **Central atom(s)** where properties are computed
-2. **Neighboring atoms** at distances up to ``r2`` (input parameter)
+2. **Neighboring atoms** within radius :math:`\sqrt{r2}` (``r2`` is the squared cutoff radius, ``r2 = ct**2``)
 
 Beyond the hopping region, contributions are neglected (Hamiltonian is zero).
 
@@ -326,7 +322,7 @@ Comparison: Direct Diagonalization vs. Recursion
      - Low
      - High
 
-where :math:`L` is recursion cutoff (``llsp`` or ``lld``).
+where :math:`L` is the recursion depth ``lld``.
 
 Provenance
 ==========
@@ -341,7 +337,7 @@ Main implementation locations:
 
 - **Chebyshev moments:**
   
-  - ``source/recursion.f90::chebyshev_recur_ll()`` - Moment calculation
+  - ``source/recursion.f90::chebyshev_recur_ll()`` - One Chebyshev recursion step
   - ``source/density_of_states.f90::chebyshev_dos()`` - DOS from moments
 
 - **Green's function:**

@@ -126,7 +126,7 @@ until it reaches a ceiling of :math:`10^4`.
    previous field into the next iteration.
 
 **Code reference:** ``source/include_codes/abspinlib/constrain.f90``,
-``i_cons == 2`` branch (lines 84–89).
+``i_cons == 2`` branch.
 
 ----
 
@@ -171,7 +171,7 @@ This is a logistic-type update that accelerates growth when
 value :math:`\lambda_{\max} = 10`.
 
 **Code reference:** ``source/include_codes/abspinlib/constrain.f90``,
-``i_cons == 3`` branch (lines 90–96).
+``i_cons == 3`` branch.
 
 ----
 
@@ -232,7 +232,7 @@ The PID diagnostic energy is accumulated as the quadratic controller cost:
    E_{\mathrm{con}} \mathrel{+}= \frac{1}{2}\lambda \, |\mathbf{m}_{\Delta,i}|^2.
 
 **Code reference:** ``source/include_codes/abspinlib/constrain.f90``,
-``i_cons == 4`` branch (lines 97–155).
+``i_cons == 4`` branch.
 
 .. tip::
 
@@ -309,11 +309,11 @@ For each atom :math:`i` (skipped if :math:`|\mathbf{m}_i| < m_{\mathrm{thresh}} 
    \right), \\[4pt]
    \lambda_t^{(n+1)} &= \min\!\left(\lambda_t^{(n+1/2)} + 2,\; \lambda_{\max}\right).
 
-The first rule is a logistic saturation; the second adds a constant increment,
-providing rapid initial growth of :math:`\lambda_t` toward :math:`\lambda_{\max} = 10`.
+Since :math:`\lambda_t` starts at :math:`\lambda_{\max} = 10` (``initialize_cfd``),
+both rules leave it at 10.
 
 **Code reference:** ``source/include_codes/abspinlib/constrain.f90``,
-``i_cons == 5`` branch (lines 158–200).
+``i_cons == 5`` branch.
 
 .. [#madudarev] P.-W. Ma and S. L. Dudarev, *Phys. Rev. B* **91**, 054420 (2015).
    DOI: `10.1103/PhysRevB.91.054420 <https://doi.org/10.1103/PhysRevB.91.054420>`_
@@ -395,11 +395,8 @@ rules applied at the end of each call to ``constrain()`` are:
   :math:`\lambda_t` by 1.2 (capped at :math:`10^4`); additionally for method 3
   apply the logistic saturation.
 - **Method 4:** :math:`\lambda_t` is held at the fixed maximum :math:`\lambda`.
-- **Method 5:** additive growth by 2 per iteration (capped at
-  :math:`\lambda_{\max}`).
-
-The motivation is to start with a moderate penalty (avoids over-steering at the
-beginning of SCF) and tighten it as the calculation progresses.
+- **Method 5:** the rules above are capped at :math:`\lambda_{\max}`, so
+  :math:`\lambda_t` stays at 10.
 
 ----
 
@@ -442,10 +439,10 @@ Provenance
 - **Core implementation:** ``source/include_codes/abspinlib/constrain.f90``
   — module ``cfd``, subroutines ``initialize_cfd`` and ``constrain``
 - **Namelist definition:** ``source/include_codes/namelists/constraints.f90``
-- **Control integration:** ``source/control.f90`` (lines 192–196, 340–360, 418–420)
-- **SCF application:** ``source/self.f90`` (lines 445–449, 862–881)
-- **Exchange application:** ``source/exchange.f90`` (lines 120–124, 1471–1492)
-- **Transport application:** ``source/conductivity.f90`` (lines 102–106)
+- **Control integration:** ``source/control.f90``
+- **SCF application:** ``source/self.f90``
+- **Exchange application:** ``source/exchange.f90``
+- **Transport application:** ``source/conductivity.f90``
 
 See Also
 ========

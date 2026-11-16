@@ -39,16 +39,12 @@ where:
 
 **Effective field:**
 
-.. math::
-
-   \mathbf{B}_i^{\text{eff}} = -\frac{1}{\mu_i} \frac{\partial H}{\partial \mathbf{m}_i}
-
-Includes contributions from:
-
-- Exchange interactions: :math:`J_{ij} \mathbf{m}_i \cdot \mathbf{m}_j`
-- External field: :math:`\mathbf{B}_{\text{ext}}`
-- Anisotropy: :math:`K_i (\mathbf{m}_i \cdot \hat{\mathbf{e}})^2`
-- Thermal fluctuations: :math:`\mathbf{B}_i^{\text{th}}`
+The field is not built from a :math:`J_{ij}` spin Hamiltonian. At each
+predictor and corrector step the code runs the electronic SCF
+(``self%run()``), computes the torque field ``bands%mag_for`` with
+``bands%calculate_magnetic_torques()`` and converts it to Tesla
+(``sd_run`` in ``source/spin_dynamics.f90``). The thermal field is generated
+inside ``depondt.f90``.
 
 Stochastic LLG (Langevin Dynamics)
 ===================================
@@ -81,41 +77,11 @@ Numerical Integration Methods
 
 **Depondt-Mertens Integrator**
 
-A predictor-corrector method preserving :math:`|\mathbf{m}_i| = 1`:
-
-1. **Predictor step:**
-
-   .. math::
-
-      \mathbf{m}_i^{n+1/2} = \mathbf{m}_i^n + \frac{\Delta t}{2} \frac{d\mathbf{m}_i^n}{dt}
-
-2. **Normalize:**
-
-   .. math::
-
-      \tilde{\mathbf{m}}_i^{n+1/2} = \frac{\mathbf{m}_i^{n+1/2}}{|\mathbf{m}_i^{n+1/2}|}
-
-3. **Corrector step:**
-
-   .. math::
-
-      \mathbf{m}_i^{n+1} = \mathbf{m}_i^n + \Delta t \frac{d\tilde{\mathbf{m}}_i^{n+1/2}}{dt}
-
-4. **Final normalization**
-
-**Heun Method**
-
-Second-order Runge-Kutta for better accuracy:
-
-.. math::
-
-   \mathbf{k}_1 = f(\mathbf{m}_i^n)
-
-   \mathbf{k}_2 = f(\mathbf{m}_i^n + \Delta t \mathbf{k}_1)
-
-   \mathbf{m}_i^{n+1} = \mathbf{m}_i^n + \frac{\Delta t}{2}(\mathbf{k}_1 + \mathbf{k}_2)
-
-followed by normalization.
+The only integrator is the Depondt-Mertens solver
+(``source/include_codes/abspinlib/depondt.f90``): a Heun-type
+predictor-corrector that rotates each moment about the effective field instead
+of adding increments, so the moment magnitude is kept
+(``depondt_evolve_first`` / ``depondt_evolve_second``).
 
 Implementation in RS-LMTO
 ==========================
@@ -125,160 +91,69 @@ Implementation in RS-LMTO
 Type: spin_dynamics
 -------------------
 
-**Key members:**
+**Key members** (read from ``&sd``):
 
-- ``integrator`` - Integration scheme ('depon' or 'heun')
-- ``nt`` - Number of time steps
-- ``dt`` - Time step (femtoseconds)
-- ``t_i, t_f`` - Initial and final times
-- ``asd_step`` - Current ASD step number
-- Temperature - Simulation temperature
+- ``asd_step`` - Number of spin-dynamics steps
+- ``dt`` - Time step (the code passes ``dt*1.0d-12`` to the integrator)
+- ``alpha`` - Gilbert damping
+- ``sd_temp`` - Temperature
+- ``integrator``, ``nt``, ``t_i``, ``t_f`` - Read but not used
 
-**Main procedures:**
+**Procedures:**
 
-- ``process()`` - Run full spin dynamics simulation
-- ``iterate()`` - Single time step integration
-- ``calculate_effective_field()`` - Compute :math:`\mathbf{B}_i^{\text{eff}}`
-- ``langevin_field()`` - Generate thermal noise
-- ``update_moments()`` - Integrate LLG equation
-
-Exchange Coupling from DFT
-===========================
-
-The exchange parameters :math:`J_{ij}` are calculated from DFT using the magnetic
-force theorem and Green's function approach:
-
-.. math::
-
-   J_{ij} = -\frac{1}{4\pi} \int_{-\infty}^{E_F} dE \, 
-   \text{Im} \text{Tr}[t_i G_{ij}^{\uparrow}(E) t_j G_{ji}^{\downarrow}(E)]
-
-where:
-
-- :math:`G_{ij}^{\sigma}(E)` is the inter-site Green's function for spin :math:`\sigma`
-- :math:`t_i` is the scattering matrix at site :math:`i`
-
-See ``exchange.f90`` for implementation.
-
-Observables
-===========
-
-**Magnetization:**
-
-.. math::
-
-   \mathbf{M}(t) = \frac{1}{N} \sum_i \mu_i \mathbf{m}_i(t)
-
-**Energy:**
-
-.. math::
-
-   E(t) = -\sum_{ij} J_{ij} \mathbf{m}_i(t) \cdot \mathbf{m}_j(t)
-
-**Autocorrelation function:**
-
-.. math::
-
-   C(t) = \langle \mathbf{M}(0) \cdot \mathbf{M}(t) \rangle
-
-**Magnetic susceptibility:**
-
-Fourier transform of correlation function relates to susceptibility:
-
-.. math::
-
-   \chi(\omega) = \int_0^\infty dt \, e^{i\omega t} C(t)
+- ``sd_run()`` - Spin-dynamics loop
+- ``asd_pred()``, ``asd_corr()`` - Predictor and corrector steps
+- ``writelammpstraj()`` - Trajectory output
+- ``build_from_file()``, ``restore_to_default()`` - Input and defaults
 
 Typical Workflow
 ================
 
-1. **SCF calculation** - Obtain ground state electronic structure
-2. **Exchange calculation** - Compute :math:`J_{ij}` parameters
-3. **Initial configuration** - Set initial magnetic moments
-4. **Time evolution** - Integrate LLG for many time steps
-5. **Analysis** - Extract magnetization dynamics, correlations
+``sd_run`` repeats for ``asd_step`` steps:
+
+1. **Field** - Electronic SCF, then torque field ``bands%mag_for``
+2. **Predictor** - Depondt step with that field
+3. **Field** - Electronic SCF at the predicted moments, new torque field
+4. **Corrector** - Depondt step, then electronic SCF at the corrected moments
 
 Input Parameters
 ================
 
-In ``&control`` namelist:
+In ``&sd`` (``source/include_codes/namelists/spin_dynamics.f90``):
 
-- ``asd_nsteps`` - Number of ASD time steps (default: 1000)
-- ``asd_dt`` - Time step in femtoseconds (default: 0.1 fs)
-- ``asd_temp`` - Temperature in Kelvin (default: 0)
-- ``asd_damping`` - Gilbert damping :math:`\alpha` (default: 0.1)
-- ``asd_integrator`` - Integration method ('depondt' or 'heun')
+- ``asd_step`` - Number of steps (default: 0)
+- ``dt`` - Time step (default: ``1.0d-16``; see the note on units below)
+- ``sd_temp`` - Temperature (default: 0)
+- ``alpha`` - Gilbert damping :math:`\alpha` (default: 0)
+
+``integrator``, ``nt``, ``t_i`` and ``t_f`` are read but ignored. The run is
+selected with ``processing = 'sd'`` in ``&calculation``. The unit of ``dt``
+is not settled: the source comment says fs, while the code multiplies ``dt``
+by ``1.0d-12`` (``ps_to_s``) before calling the integrator.
 
 Example Input
 =============
 
 .. code-block:: fortran
 
-   &control
-      nsp = 2                  ! Spin-polarized
-      processing = 'sd'        ! Spin dynamics
-      asd_nsteps = 10000
-      asd_dt = 0.1             ! 0.1 fs time step
-      asd_temp = 300.0         ! 300 K
-      asd_damping = 0.1        ! Gilbert damping
-      asd_integrator = 'depondt'
+   &calculation
+      processing = 'sd'
+   /
+
+   &sd
+      asd_step = 100
+      sd_temp = 300.0
+      alpha = 0.1
    /
 
 Output Files
 ============
 
-**asd_moments.dat**
+**output.lammpstrj**
 
-Magnetic moments at each time step:
-
-.. code-block:: text
-
-   # Time(fs)  mx_1   my_1   mz_1   mx_2   my_2   mz_2  ...
-   0.0         0.0    0.0    1.0    0.0    0.0    -1.0
-   0.1         0.01   0.0    0.999  -0.01  0.0    -0.999
-   ...
-
-**asd_magnetization.dat**
-
-Total magnetization vs time:
-
-.. code-block:: text
-
-   # Time(fs)  Mx     My     Mz     |M|
-   0.0         0.0    0.0    1.0    1.0
-   0.1         0.0    0.0    0.998  0.998
-   ...
-
-**asd_energy.dat**
-
-System energy vs time:
-
-.. code-block:: text
-
-   # Time(fs)  E_exchange  E_anisotropy  E_total
-   0.0         -10.5       0.0           -10.5
-   0.1         -10.4       0.01          -10.39
-   ...
-
-Performance Considerations
-==========================
-
-**Time step selection:**
-
-- Too large: Numerical instability, moments not conserved
-- Too small: Computationally expensive
-- Typical: 0.01-1 fs depending on exchange strength
-
-**Scaling:**
-
-- Memory: :math:`O(N)` for :math:`N` atoms
-- Compute: :math:`O(N^2)` for full exchange matrix
-- Can use cutoff radius for :math:`O(N)` scaling
-
-**Parallelization:**
-
-- OpenMP parallelization over atomic sites
-- MPI for large systems (domain decomposition)
+LAMMPS dump written after each step: timestep, number of atoms, and per atom
+the atomic number, position and unit spin vector (``ITEM: ATOMS type x y z vx
+vy vz``). The usual SCF report is also written.
 
 Provenance
 ==========
@@ -304,6 +179,6 @@ See Also
 ========
 
 - :doc:`../user_guide/examples` - Spin dynamics examples
-- :ref:`keywords/control_parameters` - ASD input parameters
+- :ref:`keywords/control_parameters` - Control parameters
 - :doc:`green_functions` - Green's function formalism
 - ``source/exchange.f90`` - Exchange calculation details

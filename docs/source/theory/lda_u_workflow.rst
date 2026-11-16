@@ -95,6 +95,8 @@ Implementation status
   comparison at U=2 eV gave an E_F difference of 9.75e-4 Ry (limit 1.84e-3) and an E_Hub relative
   difference of 4.1e-3 (limit 1e-2); and in local mode Tr(M1)=q0*(c'+t/q0) holds to 1e-15 in a
   Chebyshev bulk and a magnetic Ni impurity run (see ``tests/KNOWN_ISSUES.md``).
+- ``acbn0`` potential path and ``+V`` stop with a fatal unless
+  ``hubbard_experimental = .true.`` is set in ``&hamiltonian``.
 - ``acbn0`` potential path:
   optional path is available, but should currently be treated as an
   implementation-in-progress path for validation studies.
@@ -115,8 +117,8 @@ Impurity radial-moment mode
    ``local`` takes the moments of the LDA part only, with V_U's own contribution removed, and is the only route with the
    routed total energy, for the bulk and for impurity and surface clusters (cluster sites only, host types excluded), with or
    without ``hoh``. ``spectral`` takes the moments of the Green function of the full H = H_LDA + V_U. An explicit
-   ``spectral`` or ``local`` is never changed. Inputs that ``local`` does not implement (``lmax`` other than 2, a
-   non-Liechtenstein form, self-consistent U, intersite V, SOC at ``nsp=1`` or 3, ``hoh`` on a cluster outside the spinor
+   ``spectral`` or ``local`` is never changed. Fixed U/J requires ``lmax=2`` (any other ``lmax`` stops with a fatal).
+   Inputs that ``local`` does not implement (a non-Liechtenstein form, self-consistent U, intersite V, SOC at ``nsp=1`` or 3, ``hoh`` on a cluster outside the spinor
    routes) run in ``spectral`` and the ``HUBBARD_RUN`` log line gives the reason in ``radial_reason``; an explicit ``local``
    stops with that message.
 
@@ -165,8 +167,7 @@ With ``hubbard_radial_moments='local'`` at first order the surface energy includ
 surface-layer P_out (host types excluded; ``tests/ldau/test_cluster_energy_u.py``); with ``spectral`` it excludes the Hubbard term; with ``hoh`` the same energy is routed (``tests/ldau/test_hoh_energy_u.py``). Surface density support is experimental. A Ni(001) probe showed a narrow-window
 non-finite/NaN projected-DOS observation; widening the energy window did not
 remove it. See the C6 records in
-``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`` and
-``C6_AMENDMENT.md``.
+``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md``.
 
 SOC+U for bulk (nsp=2)
 ======================
@@ -300,7 +301,7 @@ switched on (``ni_host_soc`` in ``decks`` (archive tag ``archive/fable_v4b_u-202
 
 Surface energies exclude the Hubbard term, so U enters them only through the density.
 
-Measured (Ni(001), U=3/J=0.7, short runs; per-step tables in the ``ni001_soc_u3``, ``ni001_soc_u0`` and ``ni_host_soc`` READMEs): with
+Measured (Ni(001), U=3/J=0.7, short runs; per-step tables in ``tests/ldau/decks/ni001_soc_u3/README``; the ``ni001_soc_u0`` and ``ni_host_soc`` READMEs are at tag ``archive/fable_v4b_u-2026-11-05``): with
 ``soc_scale=0`` and ``fix_soc`` the nsp=2 surface reproduces the nsp=1 surface at iteration 1 (``ql`` 6.9e-18, Diff 3.1737e-6 in both;
 a host converged independently at nsp=1 differs by 2.5e-10 in ``ql``). A surface along x against the exactly rotated z state differs at
 iteration 1 by 7.0e-9 in ``ql`` and 1.5e-8 Ry in ``etot``; no converged rotation floor or surface anisotropy was computed. With SOC on, 5
@@ -313,8 +314,8 @@ shows Diff rising from 1.2e-4 to 2.1e-4, a jump in the layer occupation at step 
 surface SCF instability (``tests/KNOWN_ISSUES.md``). Frozen hosts must be converged; the testing policy is
 ``docs/validation/fixed_ldau/TESTING_POLICY.md``.
 
-Validated ordinary on-site scope
-================================
+Ordinary on-site scope
+======================
 
 Base ASA stationarity measurement
 ---------------------------------
@@ -449,7 +450,7 @@ Units
 
 - ``hubbard_u*``, ``hubbard_j*`` and ``hubbard_v`` in ``input.nml`` are interpreted in **eV**.
 - Internally, RS-LMTO-ASA stores and applies these values in **Ry**.
-- Conversion is done during namelist load in ``source/hamiltonian.f90`` via division by ``ry2ev``.
+- Conversion is done during namelist load in ``source/hamiltonian_build.f90`` via division by ``ry2ev``.
 
 1. Fixed on-site U/J (recommended baseline)
 -------------------------------------------
@@ -482,6 +483,7 @@ Units
    &hamiltonian
      hubbard_u_sc(1,3) = 1
      hubbard_u_potential_form = 'acbn0'
+     hubbard_experimental = .true.
    /
 
 4. Add nearest-neighbor +V
@@ -494,6 +496,7 @@ Units
      hubbard_j_general(1,:) = 0.0, 0.0, 0.9, 0.0
      ! Example: V between type 1 d and type 1 d (l-index: s=1, p=2, d=3, f=4)
      hubbard_v(1,1,3,3) = 0.6
+     hubbard_experimental = .true.
    /
 
 Notes and constraints
@@ -501,7 +504,6 @@ Notes and constraints
 
 - Internal energy unit is Ry; Hubbard inputs in namelists are interpreted in eV and converted on read.
 - ``hubbard_u_sc`` and explicit ``hubbard_u_general/hubbard_j_general`` are mutually exclusive in the current flow.
-- For ``lmax=3`` (spdf), orbital blocks are sized from the active basis dimensions (no hardwired spd-only matrix extents in the current implementation path).
 - ``+V`` currently lacks the inter-site density-matrix machinery required for the
   full matrix expression. The implemented path uses nearest-neighbor, orbital-diagonal
   shifts derived from local occupations. Treat ``+V`` as a proxy/experimental correction
@@ -535,6 +537,6 @@ the full diagnostic stream.
 ``hubbard_spinor_dm_diagnostic`` (default ``.false.``) extracts the full 10x10
 spinor d-shell occupation ``P`` and energy-weighted ``M1`` at ``nsp>=2`` (RS and
 KS) and logs ``HUBBARD_SPINOR_DM`` per site. It is a diagnostic: the Hamiltonian
-does not use these matrices and fixed U with ``nsp>=2`` still stops. The spin-off-diagonal
+does not use these matrices. The spin-off-diagonal
 blocks of ``P`` are written to the dm file when the array is present
 (see ``docs/validation/fixed_ldau/SPINOR_DM_CONTRACT.md``).
