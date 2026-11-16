@@ -134,8 +134,8 @@ contains
       integer :: ii, jj
       real(rp) :: recMaxA, recMaxB, valrec
       real(rp) :: maxQ, maxB2r
-      real(rp) :: qMax, wMax, b2Max
-      real(rp) :: qval, wval, b2val
+      real(rp) :: qMax
+      real(rp) :: qval
       logical :: qHasNaN
       logical :: recNaN
       logical :: found_nan
@@ -156,9 +156,6 @@ contains
       integer, dimension(nb) :: m_tab
       !
       integer :: n_glob
-      logical, save :: dump_done = .false.
-      character(len=200) :: dump_fname
-      integer :: dump_unit, dump_iostat
       !
       g_out = (0.0d0, 0.0d0)
       !
@@ -172,10 +169,6 @@ contains
       if (size(g_out, 1) /= nb .or. size(g_out, 2) /= nb .or. size(g_out, 3) < size(z_grid)) then
          error stop 'bgreen_complex: output and complex-energy batch dimensions are incompatible'
       end if
-
-      ! Lightweight runtime shapes/logging (once per green instance call)
-      ! call g_logger%info('DEBUG:bgreen shapes nb='//int2str(nb)//' ldim='//int2str(ldim), __FILE__, __LINE__)
-      ! call g_logger%info('DEBUG:bgreen a_b dims=('//int2str(size(this%recursion%a_b,1))//','//int2str(size(this%recursion%a_b,2))//','//int2str(size(this%recursion%a_b,3))//','//int2str(size(this%recursion%a_b,4))//')', __FILE__, __LINE__)
 
       ! Unchanged code
       ll_t = ll
@@ -214,7 +207,7 @@ contains
     !!!$omp parallel do default(shared) private(ei, Z, Ze, Q, B2z, i, ea, eb, det, zoff, l, ln, j, P , ipiv, info, work, lwork, W)
       !$omp parallel do default(shared) &
       !$omp          private(ei, Z, Ze, Q, B2z, i, etop, ebot, ea, eb, det, zoff, l, ln, j, P, ipiv, info, work, lwork, W, &
-      !$omp                  found_nan, qHasNaN, qMax, wMax, b2Max, qval, wval, b2val, ii, jj, &
+      !$omp                  found_nan, qHasNaN, qMax, qval, ii, jj, &
       !$omp                  recMaxA, recMaxB, recNaN, valrec, vv, maxQ, maxB2r, z_eval, eta_local)
       do ei = 1, size(z_grid)
          z_eval = z_grid(ei)
@@ -305,59 +298,6 @@ contains
             end do
             if (qHasNaN) then
                call g_logger%error('Pre-LU Q contains NaN (site='//int2str(i_site)//' ie='//int2str(ei)//' Q_max='//real2str(qMax)//')', __FILE__, __LINE__)
-               !$omp critical
-               if (.not. dump_done) then
-                  dump_done = .true.
-                  dump_fname = 'debug_bgreen_preLU_site'//int2str(i_site)//'_ie'//int2str(ei)//'.txt'
-                  dump_unit = 901
-                  open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
-                  if (dump_iostat == 0) then
-                     write(dump_unit, '(A)') 'PRE-LU DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
-                        write(dump_unit, '(A)') 'SHAPES: nb='//int2str(nb)//' ldim='//int2str(ldim)//' ll='//int2str(ll)
-                        write(dump_unit, '(A)') 'Small P (real imag) first 4x4:'
-                        do jj = 1, min(4,ldim)
-                           do ii = 1, min(4,ldim)
-                              write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(P(ii,jj)), aimag(P(ii,jj))
-                           end do
-                        end do
-                        write(dump_unit, '(A)') 'Small Dfac_mat (real imag) first 4x4:'
-                        do jj = 1, min(4,ldim)
-                           do ii = 1, min(4,ldim)
-                              write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Dfac_mat(ii,jj)), aimag(Dfac_mat(ii,jj))
-                           end do
-                        end do
-                        write(dump_unit, '(A)') 'Small Cshi_mat (real imag) first 4x4:'
-                        do jj = 1, min(4,ldim)
-                           do ii = 1, min(4,ldim)
-                              write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Cshi_mat(ii,jj)), aimag(Cshi_mat(ii,jj))
-                           end do
-                        end do
-                        write(dump_unit, '(A)') 'Sample recursion contributions (ln=1..min(4,ll)):'
-                        do ln = 1, min(4,ll)
-                           write(dump_unit, '(A,I0)') 'ln=', ln
-                           do jj = 1, min(4,ldim)
-                              do ii = 1, min(4,ldim)
-                                 write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16,1X,ES24.16,1X,ES24.16)') ii, jj, real(this%recursion%a_b(ii,jj,ln,i_site)), aimag(this%recursion%a_b(ii,jj,ln,i_site)), real(this%recursion%b2_b(ii,jj,ln,i_site)), aimag(this%recursion%b2_b(ii,jj,ln,i_site))
-                              end do
-                           end do
-                        end do
-                        write(dump_unit, '(A)') '--- continuing with full Q/B2z dump below ---'
-                     write(dump_unit, '(A)') 'Q matrix (real imag):'
-                     do jj = 1, ldim
-                        do ii = 1, ldim
-                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Q(ii,jj)), aimag(Q(ii,jj))
-                        end do
-                     end do
-                     write(dump_unit, '(A)') 'B2z matrix (real imag):'
-                     do jj = 1, ldim
-                        do ii = 1, ldim
-                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(B2z(ii,jj)), aimag(B2z(ii,jj))
-                        end do
-                     end do
-                     close(dump_unit)
-                  end if
-               end if
-               !$omp end critical
                found_nan = .true.
                exit
             end if
@@ -417,30 +357,6 @@ contains
             end do
             if (qHasNaN) then
                call g_logger%error('Post-inverse Q contains NaN (site='//int2str(i_site)//' ie='//int2str(ei)//' Q_max='//real2str(qMax)//' zgetri_info='//fmt('I0', info)//')', __FILE__, __LINE__)
-               !$omp critical
-               if (.not. dump_done) then
-                  dump_done = .true.
-                  dump_fname = 'debug_bgreen_postInv_site'//int2str(i_site)//'_ie'//int2str(ei)//'.txt'
-                  dump_unit = 902
-                  open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
-                  if (dump_iostat == 0) then
-                     write(dump_unit, '(A)') 'POST-INV DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
-                     write(dump_unit, '(A)') 'Q matrix (real imag):'
-                     do jj = 1, ldim
-                        do ii = 1, ldim
-                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Q(ii,jj)), aimag(Q(ii,jj))
-                        end do
-                     end do
-                     write(dump_unit, '(A)') 'B2z matrix (real imag):'
-                     do jj = 1, ldim
-                        do ii = 1, ldim
-                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(B2z(ii,jj)), aimag(B2z(ii,jj))
-                        end do
-                     end do
-                     close(dump_unit)
-                  end if
-               end if
-               !$omp end critical
                found_nan = .true.
                exit
             end if
@@ -483,98 +399,7 @@ contains
                if (real(vv) /= real(vv) .or. aimag(vv) /= aimag(vv)) then
                   call g_logger%warning('NaN detected in g_out at site '//fmt('I0', i_site)//' ie='//fmt('I0', ei), __FILE__, __LINE__)
                   found_nan = .true.
-                        ! Collect recursion coefficient summaries for this site
-                        recMaxA = 0.0_rp
-                        recMaxB = 0.0_rp
-                        recNaN = .false.
-                        do ln = 1, ll
-                           do ii = 1, ldim
-                              do jj = 1, ldim
-                                 valrec = abs(this%recursion%a_b(ii, jj, ln, i_site))
-                                 if (valrec > recMaxA) recMaxA = valrec
-                                 if (IsNaN(real(this%recursion%a_b(ii, jj, ln, i_site))) .or. IsNaN(aimag(this%recursion%a_b(ii, jj, ln, i_site)))) recNaN = .true.
-                                 valrec = abs(this%recursion%b2_b(ii, jj, ln, i_site))
-                                 if (valrec > recMaxB) recMaxB = valrec
-                                 if (IsNaN(real(this%recursion%b2_b(ii, jj, ln, i_site))) .or. IsNaN(aimag(this%recursion%b2_b(ii, jj, ln, i_site)))) recNaN = .true.
-                              end do
-                           end do
-                        end do
-                        ! call g_logger%info('DEBUG:bgreen recursion site='//int2str(i_site)//' ie='//int2str(ei)//' maxA='//real2str(recMaxA)//' maxB='//real2str(recMaxB)//' recNaN='//log2str(recNaN), __FILE__, __LINE__)
-                        ! ! Log diagonal of a_inf/b_inf and Dfac_mat for quick inspection
-                        ! do ii = 1, ldim
-                        !    call g_logger%info('DEBUG:bgreen a_inf('//int2str(ii)//')='//real2str(a_inf(ii,ii))//' b_inf='//real2str(b_inf(ii,ii))//' Dfac='//real2str(real(Dfac_mat(ii,ii))), __FILE__, __LINE__)
-                        ! end do
-                        ! Additional diagnostics: check Q, W and B2z for NaNs/large values
-                        qMax = 0.0_rp
-                        qHasNaN = .false.
-                        wMax = 0.0_rp
-                        b2Max = 0.0_rp
-                        do jj = 1, ldim
-                           do ii = 1, ldim
-                              qval = abs(Q(ii,jj))
-                              if (qval == qval) then
-                                 if (qval > qMax) qMax = qval
-                              else
-                                 qHasNaN = .true.
-                              end if
-                              wval = abs(W(ii,jj))
-                              if (wval == wval) then
-                                 if (wval > wMax) wMax = wval
-                              end if
-                              b2val = abs(B2z(ii,jj))
-                              if (b2val == b2val) then
-                                 if (b2val > b2Max) b2Max = b2val
-                              end if
-                           end do
-                        end do
-                        ! call g_logger%info('DEBUG:bgreen Q_max='//real2str(qMax)//' Q_hasNaN='//log2str(qHasNaN)//' W_max='//real2str(wMax)//' B2z_max='//real2str(b2Max), __FILE__, __LINE__)
-                       !$omp critical
-                       if (.not. dump_done) then
-                          dump_done = .true.
-                          dump_fname = 'debug_bgreen_site'//int2str(i_site)//'_ie'//int2str(ei)//'.txt'
-                          dump_unit = 900
-                          open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
-                          if (dump_iostat == 0) then
-                             write(dump_unit, '(A)') 'DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
-                             write(dump_unit, '(A)') 'Q matrix (real imag):'
-                             do jj = 1, ldim
-                                do ii = 1, ldim
-                                   write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Q(ii,jj)), aimag(Q(ii,jj))
-                                end do
-                             end do
-                             write(dump_unit, '(A)') 'W matrix (real imag):'
-                             do jj = 1, ldim
-                                do ii = 1, ldim
-                                   write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(W(ii,jj)), aimag(W(ii,jj))
-                                end do
-                             end do
-                             write(dump_unit, '(A)') 'B2z matrix (real imag):'
-                             do jj = 1, ldim
-                                do ii = 1, ldim
-                                   write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(B2z(ii,jj)), aimag(B2z(ii,jj))
-                                end do
-                             end do
-                             write(dump_unit, '(A)') 'recursion a_b (ln, i, j, real imag):'
-                             do ln = 1, ll
-                                do jj = 1, ldim
-                                   do ii = 1, ldim
-                                      write(dump_unit, '(I4,1X,I4,1X,I4,1X,ES24.16,1X,ES24.16)') ln, ii, jj, real(this%recursion%a_b(ii,jj,ln,i_site)), aimag(this%recursion%a_b(ii,jj,ln,i_site))
-                                   end do
-                                end do
-                             end do
-                             write(dump_unit, '(A)') 'recursion b2_b (ln, i, j, real imag):'
-                             do ln = 1, ll
-                                do jj = 1, ldim
-                                   do ii = 1, ldim
-                                      write(dump_unit, '(I4,1X,I4,1X,I4,1X,ES24.16,1X,ES24.16)') ln, ii, jj, real(this%recursion%b2_b(ii,jj,ln,i_site)), aimag(this%recursion%b2_b(ii,jj,ln,i_site))
-                                   end do
-                                end do
-                             end do
-                             close(dump_unit)
-                          end if
-                       end if
-                       !$omp end critical
-                        exit
+                  exit
                end if
             end do
             if (found_nan) exit
