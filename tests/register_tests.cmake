@@ -111,6 +111,10 @@ set(PY "${EXAMPLE_PYTHON_EXECUTABLE}")
 rslmto_add_test(NAME CheckTestData TIER quick LABELS tooling
   COMMAND "${PY}" "${TestDIR}/check_test_data.py")
 
+# Every key of a namelist group in source/ has an entry in docs/source/keywords/*.rst.
+rslmto_add_test(NAME KeywordDocCoverage TIER quick LABELS tooling
+  COMMAND "${PY}" "${TestDIR}/check_keyword_docs.py" "${CMAKE_SOURCE_DIR}")
+
 ##############################################################################################
 # Regression (backend variants) and route-agnostic estimator triads
 ##############################################################################################

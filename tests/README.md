@@ -23,6 +23,7 @@ for example `ctest -L 'lda_u'` or `ctest -L '^standard$' -LE gbt`.
 | `test_inventory.csv` | one row per registered test: tier, labels, runtime, family, every file or directory it reads |
 | `test_triage.csv` | record of the slimming: what each earlier test became (kept, retired, consolidated into) |
 | `check_test_data.py` | quick test: every path in `test_inventory.csv` exists |
+| `check_keyword_docs.py` | quick test: every namelist key in `source/` has an entry in `docs/source/keywords/*.rst` |
 | `KNOWN_ISSUES.md` | open items only |
 
 ## Adding a test
