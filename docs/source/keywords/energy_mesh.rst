@@ -326,7 +326,7 @@ The imaginary part ``η`` in Green's function:
 
 Controls spectral broadening. Smaller η -> sharper features -> slower convergence.
 
-Typical: $\eta = 0.001$ to $0.01$ Ry.
+Typical: :math:`\eta = 0.001` to :math:`0.01` Ry.
 
 (Set in recursion or green's function routines; not direct keyword.)
 

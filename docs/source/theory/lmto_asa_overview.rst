@@ -29,9 +29,9 @@ The LMTO method expands the electronic wavefunction in terms of *muffin-tin orbi
 
 where:
 
-- $\mathbf{R}$ indexes atomic sites
-- $n$ indexes orbital quantum numbers (s, p, d)
-- $\chi_{R,n}(\mathbf{r})$ are the muffin-tin orbitals (MTOs)
+- :math:`\mathbf{R}` indexes atomic sites
+- :math:`n` indexes orbital quantum numbers (s, p, d)
+- :math:`\chi_{R,n}(\mathbf{r})` are the muffin-tin orbitals (MTOs)
 
 **Each MTO** consists of:
 
@@ -69,12 +69,12 @@ Hamiltonian in LMTO
 
 In the LMTO basis, the effective Hamiltonian matrix elements are constructed from:
 
-1. **One-electron energies** (orbital center $C_l$ and band width $\sqrt{\Delta_l}$)
+1. **One-electron energies** (orbital center :math:`C_l` and band width :math:`\sqrt{\Delta_l}`)
 2. **Madelung/Coulomb corrections** (monopole, dipole, etc.)
 3. **Spin-orbit coupling** (if included)
 4. **Exchange-correlation potential** (LDA, GGA, etc.)
 
-The **Hamiltonian matrix** $H_{ij}$ includes:
+The **Hamiltonian matrix** :math:`H_{ij}` includes:
 
 - **On-site (diagonal)** terms: orbital energies and local potential
 - **Hopping (off-diagonal)** terms: LMTO hopping integrals between neighboring atoms
@@ -87,7 +87,7 @@ The LMTO Hamiltonian can be cast as a tight-binding model:
 
    H_{ij} = \epsilon_i \delta_{ij} + t_{ij} (1 - \delta_{ij})
 
-where hopping integrals $t_{ij}$ depend on inter-atomic distances and directions.
+where hopping integrals :math:`t_{ij}` depend on inter-atomic distances and directions.
 
 ASA and Potential Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -100,9 +100,9 @@ Within the ASA, the effective crystal potential is represented by:
 
 The potential is characterized by few parameters:
 
-- **Orbital centers** $C_l$ (energy reference for each $l$)
-- **Band widths** $\sqrt{\Delta_l}$ (bandwidth)
-- **Wigner-Seitz radius** $s$ (defines sphere size)
+- **Orbital centers** :math:`C_l` (energy reference for each :math:`l`)
+- **Band widths** :math:`\sqrt{\Delta_l}` (bandwidth)
+- **Wigner-Seitz radius** :math:`s` (defines sphere size)
 
 These are pre-computed or fitted to first-principles or ab-initio data.
 
@@ -115,14 +115,14 @@ Instead of diagonalizing the Hamiltonian, RS-LMTO computes the **single-particle
 
    G_{ij}(E) = \langle i | (E - H + i\eta)^{-1} | j \rangle
 
-where $E$ is energy and $\eta$ is a broadening parameter.
+where :math:`E` is energy and :math:`\eta` is a broadening parameter.
 
 **Key Properties:**
 
 - Encodes all spectral information (eigenvalues, eigenvectors)
 - Efficient recursion schemes available (see :ref:`theory/recursion_method`)
 - Real-space formulation: direct access to local and inter-site quantities
-- Imaginary part gives density of states: $\rho(E) = -\frac{1}{\pi} \text{Im} G(E)$
+- Imaginary part gives density of states: :math:`\rho(E) = -\frac{1}{\pi} \text{Im} G(E)`
 
 Charge Density and Self-Consistency
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -133,7 +133,7 @@ The charge density is obtained by integrating the imaginary part of the Green's 
 
    n_i = \int_{-\infty}^{E_F} dE \, \text{Im} G_{ii}(E) \, f(E)
 
-where $E_F$ is the Fermi energy and $f(E)$ is the Fermi-Dirac distribution.
+where :math:`E_F` is the Fermi energy and :math:`f(E)` is the Fermi-Dirac distribution.
 
 The self-consistent field (SCF) procedure:
 
@@ -148,7 +148,7 @@ Reciprocal vs. Real-Space Representation
 
 **Traditional k-space LMTO:**
 
-- Computes electronic bands $E_n(\mathbf{k})$ on a k-point mesh
+- Computes electronic bands :math:`E_n(\mathbf{k})` on a k-point mesh
 - Requires Brillouin zone integration
 - Best for perfect periodic crystals
 

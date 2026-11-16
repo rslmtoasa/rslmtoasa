@@ -140,7 +140,7 @@ The XC functional is implemented in ``source/xc.f90`` with functions:
 **During SCF:**
 
 1. Charge density integrated from Green's function
-2. XC potential computed: $V_{XC} = \delta E_{XC} / \delta n$
+2. XC potential computed: :math:`V_{XC} = \delta E_{XC} / \delta n`
 3. Added to total Hamiltonian
 4. New Green's functions computed
 5. Iterate

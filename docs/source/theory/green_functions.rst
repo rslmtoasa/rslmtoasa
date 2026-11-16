@@ -22,10 +22,10 @@ The **retarded single-particle Green's function** is defined as:
 
 where:
 
-- $E$ is the energy (real)
-- $\eta > 0$ is an infinitesimal broadening (convergence parameter)
-- $H$ is the effective one-electron Hamiltonian
-- $i, j$ index spatial positions or orbital states
+- :math:`E` is the energy (real)
+- :math:`\eta > 0` is an infinitesimal broadening (convergence parameter)
+- :math:`H` is the effective one-electron Hamiltonian
+- :math:`i, j` index spatial positions or orbital states
 
 **Compact Matrix Form:**
 
@@ -33,7 +33,7 @@ where:
 
    \mathbf{G}(E) = [E \mathbf{S} - \mathbf{H} + i\eta]^{-1}
 
-where $\mathbf{S}$ is the overlap matrix.
+where :math:`\mathbf{S}` is the overlap matrix.
 
 Physical Interpretation
 =======================
@@ -52,7 +52,7 @@ The imaginary part of the Green's function gives the density of states (DOS):
 
    \rho_i(E) = -\frac{1}{\pi} \text{Im} G_{ii}(E)
 
-Shows the contribution to DOS from orbital $i$.
+Shows the contribution to DOS from orbital :math:`i`.
 
 **Charge Density:**
 
@@ -62,7 +62,7 @@ Integrate LDOS below the Fermi energy:
 
    n_i = \int_{-\infty}^{E_F} dE \, \rho_i(E) \, f(E)
 
-where $f(E)$ is the Fermi-Dirac distribution.
+where :math:`f(E)` is the Fermi-Dirac distribution.
 
 **Response Functions:**
 
@@ -85,11 +85,11 @@ Contains eigenvalue spectrum of local site.
 
    G_{ij}(E) = \langle i | (E - H + i\eta)^{-1} | j \rangle \quad (i \neq j)
 
-Describes hopping between sites $i$ and $j$.
+Describes hopping between sites :math:`i` and :math:`j`.
 
 **Block Green's Function:**
 
-For multi-orbital systems, the full matrix $G$ with dimension (# atoms) $\times$ (# orbitals per atom).
+For multi-orbital systems, the full matrix :math:`G` with dimension (# atoms) :math:`\times` (# orbitals per atom).
 
 Real-Space Calculation
 ======================
@@ -97,7 +97,7 @@ Real-Space Calculation
 **Advantage of Real-Space Approach:**
 
 Instead of computing eigenvalues and eigenvectors, RS-LMTO uses the **recursion method**
-to compute $G_{ij}(E)$ at desired energies directly, without diagonalization.
+to compute :math:`G_{ij}(E)` at desired energies directly, without diagonalization.
 
 **Key Benefits:**
 
@@ -115,7 +115,7 @@ The Green's function can be recursively built using a continued-fraction represe
 
    G_{00}(E) = \frac{1}{E - a_0 - \frac{b_1^2}{E - a_1 - \frac{b_2^2}{E - a_2 - \cdots}}}
 
-where $a_n$ and $b_n$ are **recursion coefficients** computed via the Lanczos algorithm.
+where :math:`a_n` and :math:`b_n` are **recursion coefficients** computed via the Lanczos algorithm.
 
 This avoids explicit matrix inversion; see :ref:`theory/recursion_method` for details.
 
@@ -138,7 +138,7 @@ Green's function spectral function expanded in Chebyshev polynomials:
 
    \rho(E) = \frac{1}{\sqrt{(E_{\max} - E)(E - E_{\min})}} \sum_n \mu_n T_n\left(\frac{2E - E_{\max} - E_{\min}}{E_{\max} - E_{\min}}\right)
 
-where $\mu_n$ are Chebyshev moments (computed recursively).
+where :math:`\mu_n` are Chebyshev moments (computed recursively).
 
 **Advantages:**
 
@@ -177,7 +177,7 @@ Implementation in RS-LMTO
 Energy Dependent Broadening
 ===========================
 
-The code supports **energy-dependent broadening** via parameter $\eta(E)$:
+The code supports **energy-dependent broadening** via parameter :math:`\eta(E)`:
 
 .. math::
 
@@ -193,19 +193,19 @@ Controlled by keyword ``ieta`` in input namelists (see :ref:`keywords/energy_mes
 Fermi Level Determination
 =========================
 
-The **Fermi level** $E_F$ is found by integrating the DOS:
+The **Fermi level** :math:`E_F` is found by integrating the DOS:
 
 .. math::
 
    N_e = \int_{-\infty}^{E_F} dE \, \rho(E) \, f(E)
 
-where $N_e$ is the target number of electrons.
+where :math:`N_e` is the target number of electrons.
 
 **Options:**
 
 1. **Fixed Fermi level:** Specify ``fix_fermi = .true.`` in input
-2. **Self-consistent:** Iteratively adjust $E_F$ to match electron count
-3. **Temperature effects:** Include Fermi-Dirac distribution with temperature $T$
+2. **Self-consistent:** Iteratively adjust :math:`E_F` to match electron count
+3. **Temperature effects:** Include Fermi-Dirac distribution with temperature :math:`T`
 
 Magnetic Response and Spin-Resolved Functions
 ==============================================
@@ -213,7 +213,7 @@ Magnetic Response and Spin-Resolved Functions
 For magnetic systems:
 
 - Compute **separate Green's functions** for spin-up and spin-down
-- Extract **spin magnetization**: $m_z = n_{\uparrow} - n_{\downarrow}$
+- Extract **spin magnetization**: :math:`m_z = n_{\uparrow} - n_{\downarrow}`
 - Calculate **magnetic moments** per atom from integrated DOS
 
 For **non-collinear** magnetism:
@@ -230,7 +230,7 @@ Computing Transport Properties
 
    \sigma_{\alpha\beta}(E) = \frac{e^2}{2\pi} \text{Im} \text{Tr}[v_\alpha G(E) v_\beta G(E)]
 
-where $v_\alpha$ are velocity operators, derived from Hamiltonian.
+where :math:`v_\alpha` are velocity operators, derived from Hamiltonian.
 
 See ``conductivity.f90`` for implementation.
 
@@ -257,7 +257,7 @@ Advantages and Limitations
 
 [X] More complex than eigenvalue approach for simple systems
 [X] Requires careful energy mesh choices
-[X] Convergence depends on broadening parameter $\eta$
+[X] Convergence depends on broadening parameter :math:`\eta`
 
 Provenance
 ==========

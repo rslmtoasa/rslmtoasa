@@ -22,16 +22,16 @@ The SCF cycle implements:
 
 **Iterative procedure:**
 
-1. **Input charge density** $n^{(i)}$
-2. **Construct effective potential** $V_{\text{eff}}(n^{(i)})$ from:
+1. **Input charge density** :math:`n^{(i)}`
+2. **Construct effective potential** :math:`V_{\text{eff}}(n^{(i)})` from:
    
    - Exchange-correlation energy/potential
    - Hartree (Coulomb) potential
    - External potential (fixed nuclei)
 
-3. **Build Hamiltonian** $H$ with potential $V_{\text{eff}}$
+3. **Build Hamiltonian** :math:`H` with potential :math:`V_{\text{eff}}`
 4. **Compute electronic structure** (Green's functions, DOS)
-5. **Integrate DOS** to get new charge density $n^{(i+1)}$
+5. **Integrate DOS** to get new charge density :math:`n^{(i+1)}`
 6. **Mix densities** to improve convergence:
    
    .. math::
@@ -53,9 +53,9 @@ From Green's function (DOS integration below Fermi level):
 
 where:
 
-- $\rho_i(E)$ is local density of states
-- $f(E - \mu)$ is Fermi-Dirac distribution (includes temperature)
-- $E_F$ is Fermi energy determined from electron count
+- :math:`\rho_i(E)` is local density of states
+- :math:`f(E - \mu)` is Fermi-Dirac distribution (includes temperature)
+- :math:`E_F` is Fermi energy determined from electron count
 
 **Effective Potential:**
 
@@ -65,9 +65,9 @@ where:
 
 where:
 
-- $V_{\text{XC}}$ - Exchange-correlation (from XC functional)
-- $V_{\text{Hartree}}$ - Coulomb potential from charge distribution
-- $V_{\text{ext}}$ - External potential (fixed in ground state)
+- :math:`V_{\text{XC}}` - Exchange-correlation (from XC functional)
+- :math:`V_{\text{Hartree}}` - Coulomb potential from charge distribution
+- :math:`V_{\text{ext}}` - External potential (fixed in ground state)
 
 **Energy Functional:**
 
@@ -77,7 +77,7 @@ Total energy (to be minimized):
 
    E[\{n_i\}, V] = T[G(E)] + E_{\text{XC}}[n] + E_{\text{Hartree}}[n] + \mu N_e
 
-where $T$ is kinetic energy derived from Green's function moments.
+where :math:`T` is kinetic energy derived from Green's function moments.
 
 Implementation in RS-LMTO
 =========================
@@ -136,7 +136,7 @@ SCF Convergence Criteria
 
       \Delta q = \sum_i |q_i^{(i+1)} - q_i^{(i)}| < \text{tolerance}
 
-   Input: ``conv_thr`` in ``&self`` (default $0.5\times 10^{-8}$), compared with the printed ``Diff``
+   Input: ``conv_thr`` in ``&self`` (default :math:`0.5\times 10^{-8}`), compared with the printed ``Diff``
 
 2. **Potential difference:**
    
@@ -163,7 +163,7 @@ Pure **linear mixing** (often too slow):
 
    n^{(i+1/2)} = \alpha n_{\text{new}}^{(i+1)} + (1 - \alpha) n_{\text{old}}^{(i)}
 
-where mixing parameter $\alpha \in (0, 1]$ controls step size.
+where mixing parameter :math:`\alpha \in (0, 1]` controls step size.
 
 **Broyden Mixing** (more efficient):
 
@@ -175,9 +175,9 @@ Uses information from multiple previous iterations to predict better mix:
 
 where:
 
-- $\Delta n^{(i)} = n_{\text{new}} - n_{\text{old}}$
-- $u_j$ are residual vectors from previous iterations
-- $c_j$ are optimized coefficients (solve least-squares problem)
+- :math:`\Delta n^{(i)} = n_{\text{new}} - n_{\text{old}}`
+- :math:`u_j` are residual vectors from previous iterations
+- :math:`c_j` are optimized coefficients (solve least-squares problem)
 
 **Implementation in code:**
 
@@ -204,13 +204,13 @@ Convergence Acceleration
 
 **Techniques used:**
 
-1. **Variable mixing parameter** - Increase $\alpha$ as convergence improves
+1. **Variable mixing parameter** - Increase :math:`\alpha` as convergence improves
 2. **Residual norm weighting** - Weight recent residuals more heavily
 3. **Extrapolation** - Predict next density from trend
 
 **When convergence stalls:**
 
-- Reduce mixing parameter $\alpha$
+- Reduce mixing parameter :math:`\alpha`
 - Increase Broyden history length
 - Check for oscillations between states
 - Ensure recursion cutoff is adequate
@@ -242,7 +242,7 @@ For each atom type and spin:
 
 **Implementation:**
 
-``bands.f90::calculate_fermi()`` searches for the correct $E_F$.
+``bands.f90::calculate_fermi()`` searches for the correct :math:`E_F`.
 
 Temperature Effects
 ===================
@@ -256,7 +256,7 @@ At **finite temperature**, use Fermi-Dirac distribution:
 **Effects on charge density:**
 
 - Smears out Fermi surface
-- Electrons excite above $E_F$
+- Electrons excite above :math:`E_F`
 - Changes magnetic moments and stability
 
 **Control:**
@@ -272,7 +272,7 @@ The **total energy** at each SCF iteration includes:
 
    E_{\text{tot}} = T[G] + E_{\text{XC}}[n] + E_{\text{Hartree}}[n] - \mu N_e + \text{const}
 
-where $T[G]$ is kinetic energy from Green's function:
+where :math:`T[G]` is kinetic energy from Green's function:
 
 .. math::
 
@@ -302,10 +302,10 @@ are local spin eigenchannels rather than globally collinear spin axes.
 
 **Constraints:**
 
-- **Fixed magnetization** - Constrain $m_z$ per atom (exchange-field approach)
+- **Fixed magnetization** - Constrain :math:`m_z` per atom (exchange-field approach)
 - **Constrained moments** - For magnetic impurity problems
 
-Implemented via exchange field: additional $\pm B_{\text{exch}} \sigma_z$ term in Hamiltonian.
+Implemented via exchange field: additional :math:`\pm B_{\text{exch}} \sigma_z` term in Hamiltonian.
 
 Non-Collinear Magnetism
 ~~~~~~~~~~~~~~~~~~~~~~~

@@ -86,7 +86,7 @@ Generate tridiagonal Hamiltonian via Lanczos algorithm.
 **Implementation:**
 
 - ``source/recursion.f90::recur()`` - Full loop
-- ``source/recursion.f90::hop()`` - Single step (compute $a_n$, $b_n$)
+- ``source/recursion.f90::hop()`` - Single step (compute :math:`a_n`, :math:`b_n`)
 - ``source/recursion.f90::crecal()`` - Coefficient recurrence
 
 Chebyshev Recursion
@@ -127,7 +127,7 @@ Compute spectral moments using Chebyshev polynomials.
 Green's Function Evaluation
 ============================
 
-Compute $G(E) = (E - H + i\eta)^{-1}$ using continued fraction.
+Compute :math:`G(E) = (E - H + i\eta)^{-1}` using continued fraction.
 
 **From recursion coefficients:**
 

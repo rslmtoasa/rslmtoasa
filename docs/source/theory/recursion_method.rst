@@ -37,7 +37,7 @@ Starting with an initial vector :math:`|0\rangle`:
 
 - Produces tridiagonal Hamiltonian in recursion basis
 - Requires only Hamiltonian-vector products (no matrix storage or inversion)
-- $O(N)$ memory and $O(N)$ per step (for sparse matrices)
+- :math:`O(N)` memory and :math:`O(N)` per step (for sparse matrices)
 - Converges quickly for physical properties (first few moments are important)
 
 Green's Function from Recursion Coefficients
@@ -57,7 +57,7 @@ This is evaluated numerically without explicit inversion, hence "recursion."
 
    G(E) = (E - H + i\eta)^{-1}
 
-expanded using coefficients $a_0, a_1, \ldots, a_N$ and $b_1, b_2, \ldots, b_N$.
+expanded using coefficients :math:`a_0, a_1, \ldots, a_N` and :math:`b_1, b_2, \ldots, b_N`.
 
 **Block Form (multi-orbital):**
 
@@ -76,7 +76,7 @@ Implementation: Lanczos vs. Chebyshev
 **Chebyshev Recursion:**
 
 - Uses Chebyshev polynomial basis
-- Requires energy rescaling to $[-1, 1]$ interval
+- Requires energy rescaling to :math:`[-1, 1]` interval
 - Better numerical stability
 - More suitable for DOS and moment calculations
 
@@ -88,7 +88,7 @@ Implementation: Lanczos vs. Chebyshev
 Chebyshev Moments and DOS
 =========================
 
-Instead of computing $\rho(E)$ directly from Green's function, RS-LMTO computes **Chebyshev moments**:
+Instead of computing :math:`\rho(E)` directly from Green's function, RS-LMTO computes **Chebyshev moments**:
 
 .. math::
 
@@ -102,9 +102,9 @@ These are then expanded:
 
 where:
 
-- $T_n$ are Chebyshev polynomials
-- $W$ is a bandwidth parameter for scaling
-- $N_{\text{cheb}}$ is the number of moments (typically 100-500)
+- :math:`T_n` are Chebyshev polynomials
+- :math:`W` is a bandwidth parameter for scaling
+- :math:`N_{\text{cheb}}` is the number of moments (typically 100-500)
 
 **Advantages:**
 
@@ -156,7 +156,7 @@ Implementation in RS-LMTO
 
 1. **``hop()`` and ``hop_b()``**
    
-   Single recursion step: compute $a_n$, $b_n$, and next Lanczos vector.
+   Single recursion step: compute :math:`a_n`, :math:`b_n`, and next Lanczos vector.
 
 2. **``recur()`` and ``recur_b()``**
    
@@ -190,11 +190,11 @@ Typical values balance accuracy and speed; see examples in ``example/`` director
 Stochastic Trace Evaluation
 ============================
 
-For large systems, computing exact Chebyshev moments $\mu_n = \text{Tr}[H^n]$ is expensive.
+For large systems, computing exact Chebyshev moments :math:`\mu_n = \text{Tr}[H^n]` is expensive.
 
 **Stochastic approach:**
 
-Use random vectors $|r\rangle$ to estimate the trace:
+Use random vectors :math:`|r\rangle` to estimate the trace:
 
 .. math::
 
@@ -202,7 +202,7 @@ Use random vectors $|r\rangle$ to estimate the trace:
 
 **Advantages:**
 
-- Scales as $O(N_{\text{random}})$ independent of system size
+- Scales as :math:`O(N_{\text{random}})` independent of system size
 - Unbiased estimate with statistical error
 
 **Control:**
@@ -214,23 +214,23 @@ Numerical Aspects
 
 **Broadening Parameter (eta):**
 
-Added as $i\eta$ to avoid singularities:
+Added as :math:`i\eta` to avoid singularities:
 
 .. math::
 
    G(E) = (E - H + i\eta)^{-1}
 
-Controls spectral resolution. Typical: $\eta \sim 10^{-3}$ to $10^{-2}$ Ry.
+Controls spectral resolution. Typical: :math:`\eta \sim 10^{-3}` to :math:`10^{-2}` Ry.
 
 **Energy Rescaling for Chebyshev:**
 
-To use Chebyshev polynomials ($T_n : [-1,1] \to \mathbb{R}$), energies are rescaled:
+To use Chebyshev polynomials (:math:`T_n : [-1,1] \to \mathbb{R}`), energies are rescaled:
 
 .. math::
 
    E_{\text{scaled}} = \frac{2E - (E_{\max} + E_{\min})}{E_{\max} - E_{\min}}
 
-where $E_{\min}$, $E_{\max}$ define the spectral window.
+where :math:`E_{\min}`, :math:`E_{\max}` define the spectral window.
 
 Chebyshev Bounds Workflow
 =========================
@@ -257,7 +257,7 @@ Example (``&hamiltonian``):
 **Convergence Criteria:**
 
 - Check when Chebyshev moments drop below numerical noise
-- Typical convergence: $\mu_n < 10^{-12}$ for machine precision
+- Typical convergence: :math:`\mu_n < 10^{-12}` for machine precision
 
 Hopping Region and Cluster Truncation
 =====================================
@@ -287,9 +287,9 @@ Instead of scalar recursion for single orbital, perform recursion on full matrix
 
    \mathbf{a}_n \in \mathbb{C}^{(n_{\text{orb}} \times n_{\text{orb}})}
 
-Each $a_n$ is now a matrix, $b_n^2$ is a matrix product.
+Each :math:`a_n` is now a matrix, :math:`b_n^2` is a matrix product.
 
-Computational cost: $O(n_{\text{orb}}^3)$ higher per step, but fewer iterations needed.
+Computational cost: :math:`O(n_{\text{orb}}^3)` higher per step, but fewer iterations needed.
 
 **Implementation:**
 
@@ -308,11 +308,11 @@ Comparison: Direct Diagonalization vs. Recursion
      - Direct Diagonalization
      - Recursion Method
    * - Memory
-     - $O(N^2)$
-     - $O(N \times L)$
+     - :math:`O(N^2)`
+     - :math:`O(N \times L)`
    * - Time (per energy)
-     - $O(N^3)$
-     - $O(N \times L)$
+     - :math:`O(N^3)`
+     - :math:`O(N \times L)`
    * - Spectral resolution
      - Fixed by eigenvalues
      - Flexible
@@ -326,7 +326,7 @@ Comparison: Direct Diagonalization vs. Recursion
      - Low
      - High
 
-where $L$ is recursion cutoff (``llsp`` or ``lld``).
+where :math:`L` is recursion cutoff (``llsp`` or ``lld``).
 
 Provenance
 ==========

@@ -134,13 +134,13 @@ Atom-resolved magnetic moments:
 
 **Interpretation:**
 
-- $m_z$ is the z-component of magnetization
-- $|m|$ is total magnetic moment
+- :math:`m_z` is the z-component of magnetization
+- :math:`|m|` is total magnetic moment
 - Negative values indicate opposite spin direction
 
 **For non-collinear magnetism (nsp=3,4):**
 
-All three components ($m_x, m_y, m_z$) have meaning; they define the spin direction.
+All three components (:math:`m_x, m_y, m_z`) have meaning; they define the spin direction.
 
 Exchange Interactions
 =====================
@@ -161,8 +161,8 @@ Magnetic exchange interactions:
 
 **Interpretation:**
 
-- $J > 0$ -> Ferromagnetic coupling
-- $J < 0$ -> Antiferromagnetic coupling
+- :math:`J > 0` -> Ferromagnetic coupling
+- :math:`J < 0` -> Antiferromagnetic coupling
 - Magnitude indicates strength
 
 **Use for:**
@@ -220,16 +220,16 @@ Convergence Diagnostics
 
 **Typical signs of good convergence:**
 
-- $\Delta Q$ decreases monotonically
+- :math:`\Delta Q` decreases monotonically
 - Fermi energy stabilizes
-- Energy change becomes very small (< $10^{-6}$ Ry)
+- Energy change becomes very small (< :math:`10^{-6}` Ry)
 - Usually achieved in 10-100 iterations
 
 **Warning signs (non-convergence):**
 
 - Charge density oscillates
 - Energy increases in some iterations
-- $\Delta Q$ plateaus at high value
+- :math:`\Delta Q` plateaus at high value
 - Forces/torques don't decrease
 
 **Action if non-convergent:**

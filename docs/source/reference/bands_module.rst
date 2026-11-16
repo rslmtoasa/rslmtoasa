@@ -73,15 +73,15 @@ The **density of states (DOS)** is obtained from the imaginary part of the Green
 
    \rho(E) = -\frac{1}{\pi} \text{Im}\left[ \text{Tr} G^+(E) \right]
 
-where $G^+(E) = (E - H + i\eta)^{-1}$ is the retarded Green's function.
+where :math:`G^+(E) = (E - H + i\eta)^{-1}` is the retarded Green's function.
 
-For the **local DOS (LDOS)** at atom $i$:
+For the **local DOS (LDOS)** at atom :math:`i`:
 
 .. math::
 
    \rho_i(E) = -\frac{1}{\pi} \sum_L \text{Im}\left[ G_{iL,iL}^+(E) \right]
 
-where $L = (l, m, \sigma)$ combines orbital and spin indices.
+where :math:`L = (l, m, \sigma)` combines orbital and spin indices.
 
 Projected Density of States
 ----------------------------
@@ -93,7 +93,7 @@ Projected Density of States
    \rho_{i,l}(E) = -\frac{1}{\pi} \sum_{m=-l}^{l} \sum_{\sigma} 
    \text{Im}\left[ G_{i(lm\sigma), i(lm\sigma)}^+(E) \right]
 
-giving contributions from $s, p, d, f$ orbitals.
+giving contributions from :math:`s, p, d, f` orbitals.
 
 **Spin-resolved DOS:**
 
@@ -111,7 +111,7 @@ giving contributions from $s, p, d, f$ orbitals.
 Non-Collinear DOS Projections
 ------------------------------
 
-For **non-collinear magnetism**, the DOS is projected along local magnetic moment direction $\hat{\mathbf{m}}_i = (m_x, m_y, m_z)$:
+For **non-collinear magnetism**, the DOS is projected along local magnetic moment direction :math:`\hat{\mathbf{m}}_i = (m_x, m_y, m_z)`:
 
 **Spin projection operator:**
 
@@ -119,9 +119,9 @@ For **non-collinear magnetism**, the DOS is projected along local magnetic momen
 
    P_i^{\pm} = \frac{1}{2}(1 \pm \hat{\mathbf{m}}_i \cdot \boldsymbol{\sigma})
 
-where $\boldsymbol{\sigma} = (\sigma_x, \sigma_y, \sigma_z)$ are Pauli matrices.
+where :math:`\boldsymbol{\sigma} = (\sigma_x, \sigma_y, \sigma_z)` are Pauli matrices.
 
-**Projected DOS along $\hat{\mathbf{m}}_i$:**
+**Projected DOS along** :math:`\hat{\mathbf{m}}_i`:
 
 .. math::
 
@@ -170,35 +170,35 @@ where ``simpson_m`` performs energy-weighted Simpson integration.
 Total Valence Electrons
 ------------------------
 
-The **number of valence electrons** $Q_v$:
+The **number of valence electrons** :math:`Q_v`:
 
 .. math::
 
    Q_v = \int_{-\infty}^{E_F} dE \, \rho_{\text{tot}}(E)
 
-**Fermi level** $E_F$ is determined self-consistently by:
+**Fermi level** :math:`E_F` is determined self-consistently by:
 
 .. math::
 
    \int_{-\infty}^{E_F} dE \, \rho(E) = N_{\text{electrons}}
 
-where $N_{\text{electrons}}$ is the target electron count.
+where :math:`N_{\text{electrons}}` is the target electron count.
 
 Fermi Level Determination
 --------------------------
 
 **Procedure** ``fermi()``:
 
-1. **Simpson integration** of DOS from $E_{\min}$ upward:
+1. **Simpson integration** of DOS from :math:`E_{\min}` upward:
 
 .. math::
 
    Q(E) = \int_{E_{\min}}^{E} dE' \, \rho(E')
 
-2. **Find $E_F$** where $Q(E_F) = Q_v$:
+2. **Find** :math:`E_F` where :math:`Q(E_F) = Q_v`:
 
-   - If exact match found: $E_F = E_i$
-   - Otherwise: Linear interpolation between $E_i$ and $E_{i+1}$
+   - If exact match found: :math:`E_F = E_i`
+   - Otherwise: Linear interpolation between :math:`E_i` and :math:`E_{i+1}`
 
 .. math::
 
@@ -212,7 +212,7 @@ Magnetic Moments
 Spin Magnetic Moment
 --------------------
 
-The **spin magnetic moment** $\mu_s^i$ at atom $i$:
+The **spin magnetic moment** :math:`\mu_s^i` at atom :math:`i`:
 
 .. math::
 
@@ -225,7 +225,7 @@ In **non-collinear case**, project onto local quantization axis:
    \mu_s^{i,\alpha} = \int_{-\infty}^{E_F} dE \, 
    m_i^{\alpha} \left[ \rho_i^{\uparrow}(E) - \rho_i^{\downarrow}(E) \right]
 
-for $\alpha \in \{x, y, z\}$.
+for :math:`\alpha \in \{x, y, z\}`.
 
 **Implementation** (``calculate_magnetic_moments``):
 
@@ -244,13 +244,13 @@ for $\alpha \in \{x, y, z\}$.
 Orbital Magnetic Moment
 ------------------------
 
-The **orbital magnetic moment** $\mu_L^i$ arises from spin-orbit coupling:
+The **orbital magnetic moment** :math:`\mu_L^i` arises from spin-orbit coupling:
 
 .. math::
 
    \mu_L^i = -\mu_B \langle \mathbf{L} \rangle_i
 
-where $\mathbf{L}$ is the orbital angular momentum operator and $\mu_B$ is the Bohr magneton.
+where :math:`\mathbf{L}` is the orbital angular momentum operator and :math:`\mu_B` is the Bohr magneton.
 
 **In LMTO**, calculated from off-diagonal Green's function elements:
 
@@ -258,7 +258,7 @@ where $\mathbf{L}$ is the orbital angular momentum operator and $\mu_B$ is the B
 
    \langle L_z \rangle = \sum_{lm} m \int_{-\infty}^{E_F} dE \, \rho_{lm}(E)
 
-where $m$ is the magnetic quantum number.
+where :math:`m` is the magnetic quantum number.
 
 **General direction** (non-collinear):
 
@@ -281,7 +281,7 @@ where $m$ is the magnetic quantum number.
 Magnetic Torques
 ----------------
 
-The **magnetic torque** $\mathbf{T}_i = \mathbf{m}_i \times \mathbf{B}_i^{\text{eff}}$ represents the force trying to rotate the magnetic moment.
+The **magnetic torque** :math:`\mathbf{T}_i = \mathbf{m}_i \times \mathbf{B}_i^{\text{eff}}` represents the force trying to rotate the magnetic moment.
 
 **Effective field** from energy gradient:
 
@@ -295,7 +295,7 @@ The **magnetic torque** $\mathbf{T}_i = \mathbf{m}_i \times \mathbf{B}_i^{\text{
 
    T_i^{\alpha} = \sum_{\beta\gamma} \epsilon_{\alpha\beta\gamma} m_i^{\beta} B_i^{\gamma}
 
-where $\epsilon$ is the Levi-Civita tensor.
+where :math:`\epsilon` is the Levi-Civita tensor.
 
 **Used for:**
 
@@ -316,11 +316,11 @@ Simpson's Rule
    \int_a^b f(x) dx \approx \frac{h}{3} \sum_{i=0}^{N/2-1} 
    \left[ f(x_{2i}) + 4f(x_{2i+1}) + f(x_{2i+2}) \right]
 
-where $h = (b-a)/N$ and $N$ is even.
+where :math:`h = (b-a)/N` and :math:`N` is even.
 
 **Implementation:** ``simpson_f(result, x, x_upper, npts, y, ...)``
 
-**Accuracy:** $\mathcal{O}(h^4)$ for smooth functions.
+**Accuracy:** :math:`\mathcal{O}(h^4)` for smooth functions.
 
 Gauss-Legendre Quadrature
 --------------------------
@@ -331,17 +331,17 @@ For **higher accuracy** with fewer points, use **Gauss-Legendre**:
 
    \int_{-1}^{1} f(x) dx \approx \sum_{i=1}^{N} w_i f(x_i)
 
-where $x_i$ are roots of Legendre polynomial $P_N(x)$ and $w_i$ are weights.
+where :math:`x_i` are roots of Legendre polynomial :math:`P_N(x)` and :math:`w_i` are weights.
 
 **Advantages:**
 
-- Exact for polynomials up to degree $2N-1$
+- Exact for polynomials up to degree :math:`2N-1`
 - Fewer points needed for given accuracy
 - Optimal for smooth integrands
 
 **Implementation:** ``calculate_moments_gauss_legendre()``
 
-**Transform** to arbitrary interval $[a, b]$:
+**Transform** to arbitrary interval :math:`[a, b]`:
 
 .. math::
 
@@ -356,7 +356,7 @@ For **oscillatory** or **nearly singular** functions, use **Chebyshev-Gauss**:
 
    \int_{-1}^{1} \frac{f(x)}{\sqrt{1-x^2}} dx \approx \sum_{i=1}^{N} w_i f(x_i)
 
-where $x_i = \cos\frac{(2i-1)\pi}{2N}$ and $w_i = \frac{\pi}{N}$.
+where :math:`x_i = \cos\frac{(2i-1)\pi}{2N}` and :math:`w_i = \frac{\pi}{N}`.
 
 **Implementation:** ``calculate_moments_chebgauss()``
 
@@ -373,7 +373,7 @@ calculate_projected_dos
 **Algorithm:**
 
 1. Loop over all atoms and energy points
-2. For each atom $i$ and energy $E$:
+2. For each atom :math:`i` and energy :math:`E`:
 
 .. code-block:: text
 
@@ -398,7 +398,7 @@ calculate_projected_dos
 calculate_moments
 -----------------
 
-**Purpose:** Calculate electronic moments $m^{(q)}$ with $q = 0, 1, 2$.
+**Purpose:** Calculate electronic moments :math:`m^{(q)}` with :math:`q = 0, 1, 2`.
 
 **Definition:**
 
@@ -406,9 +406,9 @@ calculate_moments
 
    m^{(q)} = \int_{-\infty}^{E_F} dE \, E^q \rho(E)
 
-- $m^{(0)} = Q$ - Total electron count
-- $m^{(1)} = E_{\text{band}}$ - Band energy
-- $m^{(2)}$ - Second moment (related to kinetic energy)
+- :math:`m^{(0)} = Q` - Total electron count
+- :math:`m^{(1)} = E_{\text{band}}` - Band energy
+- :math:`m^{(2)}` - Second moment (related to kinetic energy)
 
 **Implementation:**
 
@@ -440,7 +440,7 @@ calculate_magnetic_moments
 
    \mu_s^i = \sum_l \left( Q_{l,\uparrow}^i - Q_{l,\downarrow}^i \right)
 
-3. **Orbital moment:** From $L$-operator expectation value
+3. **Orbital moment:** From :math:`L`-operator expectation value
 
 4. **Total moment:**
 
@@ -482,14 +482,14 @@ calculate_fermi_gauss
 
 **Algorithm:**
 
-1. Transform DOS to Gauss-Legendre points $\{x_i, w_i\}$
+1. Transform DOS to Gauss-Legendre points :math:`\{x_i, w_i\}`
 2. Integrate charge:
 
 .. math::
 
    Q(E) = \sum_{i: E_i < E} w_i \rho(E_i)
 
-3. Find $E_F$ where $Q(E_F) = Q_v$ by interpolation
+3. Find :math:`E_F` where :math:`Q(E_F) = Q_v` by interpolation
 4. More accurate than Simpson for given number of points
 
 Output Files
@@ -512,7 +512,7 @@ Total DOS as function of energy:
 dos_atom_<i>.dat
 ----------------
 
-DOS projected onto atom $i$:
+DOS projected onto atom :math:`i`:
 
 .. code-block:: text
 
@@ -522,8 +522,8 @@ DOS projected onto atom $i$:
 
 **Columns:**
 
-- Total LDOS at atom $i$
-- $s$, $p$, $d$ orbital projections
+- Total LDOS at atom :math:`i`
+- :math:`s`, :math:`p`, :math:`d` orbital projections
 - Spin-up and spin-down contributions
 
 moments.out
@@ -544,7 +544,7 @@ Magnetic moments per atom:
 - Spin magnetic moment
 - Orbital magnetic moment
 - Total magnetic moment
-- Direction cosines $(m_x, m_y, m_z)$
+- Direction cosines :math:`(m_x, m_y, m_z)`
 
 band_energy.out
 ---------------
@@ -579,10 +579,10 @@ Workflow
 Connection to Other Modules
 ----------------------------
 
-**Green's function** $\to$ **Bands module** $\to$ **Properties**:
+**Green's function** :math:`\to` **Bands module** :math:`\to` **Properties**:
 
-- ``green.f90`` provides $G^+(E)$ at each energy
-- ``bands.f90`` extracts DOS: $\rho(E) = -\text{Im}[G^+]/\pi$
+- ``green.f90`` provides :math:`G^+(E)` at each energy
+- ``bands.f90`` extracts DOS: :math:`\rho(E) = -\text{Im}[G^+]/\pi`
 - Properties calculated from DOS integrals
 
 **Self-consistency:**
@@ -604,9 +604,9 @@ Computational Cost
 
 **DOS calculation:**
 
-- $\mathcal{O}(N_{\text{atoms}} \times N_E \times N_L^2)$
-- $N_E \sim 200-500$: Energy mesh points
-- $N_L \sim 9-16$: Orbital basis size
+- :math:`\mathcal{O}(N_{\text{atoms}} \times N_E \times N_L^2)`
+- :math:`N_E \sim 200-500`: Energy mesh points
+- :math:`N_L \sim 9-16`: Orbital basis size
 - **Typical:** Few seconds to minutes
 
 **Moment integration:**
@@ -619,10 +619,10 @@ Accuracy Tips
 
 **For converged results:**
 
-1. **Dense energy mesh:** ``channels_ldos`` $\geq 300$
-2. **Proper Fermi smearing:** ``temp`` $\sim 0.001-0.01$ eV (if using)
-3. **Converged SCF:** $\Delta Q < 10^{-5}$
-4. **Sufficient recursion:** ``ll_gf`` $\geq 50$
+1. **Dense energy mesh:** ``channels_ldos`` :math:`\geq 300`
+2. **Proper Fermi smearing:** ``temp`` :math:`\sim 0.001-0.01` eV (if using)
+3. **Converged SCF:** :math:`\Delta Q < 10^{-5}`
+4. **Sufficient recursion:** ``ll_gf`` :math:`\geq 50`
 
 Provenance
 ==========

@@ -7,13 +7,13 @@ Conductivity Module
 Overview
 ========
 
-The **conductivity module** (``conductivity.f90``) calculates the **electrical conductivity tensor** $\sigma_{\alpha\beta}(\omega)$ using the **Kubo-Bastin formalism** combined with **Chebyshev polynomial expansion** within the LMTO-ASA framework.
+The **conductivity module** (``conductivity.f90``) calculates the **electrical conductivity tensor** :math:`\sigma_{\alpha\beta}(\omega)` using the **Kubo-Bastin formalism** combined with **Chebyshev polynomial expansion** within the LMTO-ASA framework.
 
 **Key features:**
 
-- Optical conductivity $\sigma(\omega)$ as function of frequency
-- DC conductivity $\sigma(0)$
-- Full $3 \times 3$ conductivity tensor (anisotropic transport)
+- Optical conductivity :math:`\sigma(\omega)` as function of frequency
+- DC conductivity :math:`\sigma(0)`
+- Full :math:`3 \times 3` conductivity tensor (anisotropic transport)
 - Orbital-resolved conductivity contributions
 - Chebyshev recursion for efficient computation
 - Stochastic trace evaluation for large systems
@@ -68,15 +68,15 @@ The **Kubo formula** for electrical conductivity relates the current response to
 
 where:
 
-- $\Omega$ is the system volume
-- $\hat{j}_\alpha$ is the current operator in direction $\alpha$
-- $\langle \ldots \rangle$ denotes quantum/thermal average
-- $\eta \to 0^+$ is a positive infinitesimal
+- :math:`\Omega` is the system volume
+- :math:`\hat{j}_\alpha` is the current operator in direction :math:`\alpha`
+- :math:`\langle \ldots \rangle` denotes quantum/thermal average
+- :math:`\eta \to 0^+` is a positive infinitesimal
 
 Velocity Operator and Current
 ------------------------------
 
-The **current operator** is related to the **velocity operator** $\hat{v}$:
+The **current operator** is related to the **velocity operator** :math:`\hat{v}`:
 
 .. math::
 
@@ -101,18 +101,18 @@ The **Kubo-Bastin formula** expresses conductivity in terms of Green's functions
 
 where:
 
-- $G^+(E) = (E - \hat{H} + i\eta)^{-1}$ is the retarded Green's function
-- $\mu$ is the chemical potential (Fermi energy)
-- $\text{Im}[G^+] = A(E)/(2\pi)$ is the spectral function
+- :math:`G^+(E) = (E - \hat{H} + i\eta)^{-1}` is the retarded Green's function
+- :math:`\mu` is the chemical potential (Fermi energy)
+- :math:`\text{Im}[G^+] = A(E)/(2\pi)` is the spectral function
 
-For **DC conductivity** ($\omega = 0$):
+For **DC conductivity** (:math:`\omega = 0`):
 
 .. math::
 
    \sigma_{\alpha\beta}(0) = \frac{e^2\hbar}{\pi\Omega} \int_{-\infty}^{\mu} dE \, 
    \text{Tr}\left[ \hat{v}_\alpha A(E) \hat{v}_\beta A(E) \right]
 
-where $A(E) = -2\pi \text{Im}[G^+(E)]$ is the spectral function.
+where :math:`A(E) = -2\pi \text{Im}[G^+(E)]` is the spectral function.
 
 Chebyshev Polynomial Expansion
 ===============================
@@ -122,13 +122,13 @@ Kernel Polynomial Method (KPM)
 
 To avoid expensive direct evaluation, the **Chebyshev expansion** approximates the Green's function:
 
-**Energy rescaling:** First, map the Hamiltonian spectrum $[E_{\min}, E_{\max}]$ to $[-1, 1]$:
+**Energy rescaling:** First, map the Hamiltonian spectrum :math:`[E_{\min}, E_{\max}]` to :math:`[-1, 1]`:
 
 .. math::
 
    \tilde{H} = \frac{H - b}{a}, \quad a = \frac{E_{\max} - E_{\min}}{2 - \epsilon}, \quad b = \frac{E_{\max} + E_{\min}}{2}
 
-where $\epsilon \sim 0.3$ provides margin.
+where :math:`\epsilon \sim 0.3` provides margin.
 
 **Chebyshev expansion** of Green's function:
 
@@ -138,12 +138,12 @@ where $\epsilon \sim 0.3$ provides margin.
 
 where:
 
-- $T_n(x)$ are Chebyshev polynomials of the first kind
-- $\mu_n = 2 - \delta_{n,0}$ are normalization factors
-- $g_n$ are Jackson kernel damping factors (smoothing)
-- $N$ is the expansion order (recursion depth)
+- :math:`T_n(x)` are Chebyshev polynomials of the first kind
+- :math:`\mu_n = 2 - \delta_{n,0}` are normalization factors
+- :math:`g_n` are Jackson kernel damping factors (smoothing)
+- :math:`N` is the expansion order (recursion depth)
 
-**Moments** $\mu_n$ are calculated via recursion:
+**Moments** :math:`\mu_n` are calculated via recursion:
 
 .. math::
 
@@ -163,7 +163,7 @@ Gamma Function :math:`\Gamma_{nm}`
 
 -------------------------------
 
-The conductivity involves **products of two Green's functions**, leading to the $\Gamma_{nm}$ function:
+The conductivity involves **products of two Green's functions**, leading to the :math:`\Gamma_{nm}` function:
 
 .. math::
 
@@ -172,9 +172,9 @@ The conductivity involves **products of two Green's functions**, leading to the 
 
 where:
 
-- $C_n(E) = \frac{1}{\pi} \frac{(-1)^{n+1} \sin(n \arccos \tilde{E})}{\sqrt{1 - \tilde{E}^2}}$ is a Chebyshev derivative
-- $w_n$ are integration weights
-- $g_n$ are Jackson kernel factors
+- :math:`C_n(E) = \frac{1}{\pi} \frac{(-1)^{n+1} \sin(n \arccos \tilde{E})}{\sqrt{1 - \tilde{E}^2}}` is a Chebyshev derivative
+- :math:`w_n` are integration weights
+- :math:`g_n` are Jackson kernel factors
 
 **Jackson kernel** (smoothing to reduce Gibbs oscillations):
 
@@ -214,18 +214,18 @@ where:
 Stochastic Trace Evaluation
 ----------------------------
 
-For large systems, exact trace evaluation $\text{Tr}[\ldots]$ is prohibitive. Instead, use **stochastic trace estimation**:
+For large systems, exact trace evaluation :math:`\text{Tr}[\ldots]` is prohibitive. Instead, use **stochastic trace estimation**:
 
 .. math::
 
    \text{Tr}[A] \approx \frac{1}{N_r} \sum_{r=1}^{N_r} \langle \xi_r | A | \xi_r \rangle
 
-where $|\xi_r\rangle$ are **random vectors** with elements drawn from:
+where :math:`|\xi_r\rangle` are **random vectors** with elements drawn from:
 
-- Complex normal distribution: $\xi_{i,r} \sim \mathcal{N}(0, 1) + i\mathcal{N}(0, 1)$
-- Or: Random phase: $\xi_{i,r} = e^{i\phi_r}$
+- Complex normal distribution: :math:`\xi_{i,r} \sim \mathcal{N}(0, 1) + i\mathcal{N}(0, 1)`
+- Or: Random phase: :math:`\xi_{i,r} = e^{i\phi_r}`
 
-**Variance** decreases as $\mathcal{O}(1/\sqrt{N_r})$, so typically $N_r = 10-50$ random vectors suffice.
+**Variance** decreases as :math:`\mathcal{O}(1/\sqrt{N_r})`, so typically :math:`N_r = 10-50` random vectors suffice.
 
 Conductivity Tensor Calculation
 ================================
@@ -233,7 +233,7 @@ Conductivity Tensor Calculation
 Full Tensor Formula
 -------------------
 
-The **conductivity tensor** $\sigma_{\alpha\beta}(E)$ has 9 components (for 3D):
+The **conductivity tensor** :math:`\sigma_{\alpha\beta}(E)` has 9 components (for 3D):
 
 .. math::
 
@@ -242,9 +242,9 @@ The **conductivity tensor** $\sigma_{\alpha\beta}(E)$ has 9 components (for 3D):
 
 where:
 
-- $\mu_{nm}$ are the Chebyshev moments of the velocity operator products
-- $\Delta E = E_{\max} - E_{\min}$ is the energy span
-- Factor $16/\pi$ comes from Chebyshev normalization
+- :math:`\mu_{nm}` are the Chebyshev moments of the velocity operator products
+- :math:`\Delta E = E_{\max} - E_{\min}` is the energy span
+- Factor :math:`16/\pi` comes from Chebyshev normalization
 
 **Velocity operator matrix elements:**
 
@@ -265,7 +265,7 @@ The trace can be decomposed:
 
    \sigma_{\alpha\beta}^{(l)}(E) = \sum_{m=-l}^{l} \langle l,m | \hat{v}_\alpha G \hat{v}_\beta G | l,m \rangle
 
-giving $s$, $p$, $d$ contributions.
+giving :math:`s`, :math:`p`, :math:`d` contributions.
 
 2. **By atomic type:**
 
@@ -273,7 +273,7 @@ giving $s$, $p$, $d$ contributions.
 
    \sigma_{\alpha\beta}^{(\text{type})}(E) = \sum_{i \in \text{type}} \langle i | \ldots | i \rangle
 
-3. **By energy range:** Integrate from $E_{\min}$ to variable upper limit $E$
+3. **By energy range:** Integrate from :math:`E_{\min}` to variable upper limit :math:`E`
 
 Implementation Details
 ======================
@@ -283,8 +283,8 @@ Algorithm Overview
 
 **Main procedure:** ``calculate_conductivity_tensor()``
 
-1. **Precompute $\Gamma_{nm}$:** Call ``calculate_gamma_nm()``
-2. **Stochastic recursion:** Compute Chebyshev moments $\mu_{nm}^{\alpha\beta}$ via recursion module
+1. **Precompute** :math:`\Gamma_{nm}`: Call ``calculate_gamma_nm()``
+2. **Stochastic recursion:** Compute Chebyshev moments :math:`\mu_{nm}^{\alpha\beta}` via recursion module
 3. **Construct integrand:**
 
 .. code-block:: text
@@ -326,11 +326,11 @@ Key Control Parameters
 
 **In namelist &control:**
 
-- ``cond_ll`` (default: 100): Chebyshev expansion order $N$
+- ``cond_ll`` (default: 100): Chebyshev expansion order :math:`N`
   
-  - Larger $N$ -> better energy resolution, smoother curves
+  - Larger :math:`N` -> better energy resolution, smoother curves
   - Typical: 50-200
-  - Convergence: check $\sigma(E)$ vs $N$
+  - Convergence: check :math:`\sigma(E)` vs :math:`N`
 
 - ``cond_calctype`` (default: 'average'): Calculation mode
   
@@ -359,7 +359,7 @@ Convergence Criteria
 2. **Energy mesh** ``channels_ldos``:
 
    - Default: 200-500 points
-   - Must resolve features near $E_F$
+   - Must resolve features near :math:`E_F`
 
 3. **Random vectors** ``random_vec_num``:
 
@@ -374,7 +374,7 @@ Main Procedures
 calculate_gamma_nm
 ------------------
 
-**Purpose:** Precompute the $\Gamma_{nm}(E)$ coefficients for Chebyshev expansion.
+**Purpose:** Precompute the :math:`\Gamma_{nm}(E)` coefficients for Chebyshev expansion.
 
 **Inputs:**
 
@@ -384,11 +384,11 @@ calculate_gamma_nm
 
 **Algorithm:**
 
-1. Rescale energies: $\tilde{E} = (E - b)/a$
-2. Compute Chebyshev polynomials $T_n(\tilde{E})$ recursively
-3. Compute $C_n(E)$ coefficients
-4. Apply Jackson kernel $g_n$
-5. Construct $\Gamma_{nm}(E)$ matrix
+1. Rescale energies: :math:`\tilde{E} = (E - b)/a`
+2. Compute Chebyshev polynomials :math:`T_n(\tilde{E})` recursively
+3. Compute :math:`C_n(E)` coefficients
+4. Apply Jackson kernel :math:`g_n`
+5. Construct :math:`\Gamma_{nm}(E)` matrix
 
 **Output:**
 
@@ -397,16 +397,16 @@ calculate_gamma_nm
 calculate_conductivity_tensor
 ------------------------------
 
-**Purpose:** Compute full $3 \times 3$ conductivity tensor $\sigma_{\alpha\beta}(E)$.
+**Purpose:** Compute full :math:`3 \times 3` conductivity tensor :math:`\sigma_{\alpha\beta}(E)`.
 
 **Algorithm:**
 
-1. Loop over energy points $E$
-2. For each $E$:
+1. Loop over energy points :math:`E`
+2. For each :math:`E`:
 
-   a. Sum over Chebyshev indices: $\sum_{nm} \Gamma_{nm}(E) \mu_{nm}^{\alpha\beta}$
-   b. Multiply by prefactor: $(16 e^2)/(\pi \Omega \Delta E^2)$
-   c. Simpson integrate from $E_{\min}$ to $E$: $\sigma(E) = \int^E$ 
+   a. Sum over Chebyshev indices: :math:`\sum_{nm} \Gamma_{nm}(E) \mu_{nm}^{\alpha\beta}`
+   b. Multiply by prefactor: :math:`(16 e^2)/(\pi \Omega \Delta E^2)`
+   c. Simpson integrate from :math:`E_{\min}` to :math:`E`: :math:`\sigma(E) = \int^E` 
 
 3. Output:
 
@@ -438,7 +438,7 @@ Total conductivity as function of energy:
 
 **Columns:**
 
-1. Energy relative to Fermi level $(E - E_F)$
+1. Energy relative to Fermi level :math:`(E - E_F)`
 2. Real part of conductivity (dissipation)
 3. Imaginary part (dispersion)
 
@@ -455,7 +455,7 @@ Orbital-resolved real conductivity:
 
 **18 components:**
 
-- Spin-up: $s, p_x, p_y, p_z, d_{z^2}, d_{xz}, d_{yz}, d_{x^2-y^2}, d_{xy}$ (9 orbitals)
+- Spin-up: :math:`s, p_x, p_y, p_z, d_{z^2}, d_{xz}, d_{yz}, d_{x^2-y^2}, d_{xy}` (9 orbitals)
 - Spin-down: Same 9 orbitals
 
 <element>_cond.out
@@ -473,13 +473,13 @@ Physical Interpretation
 DC Conductivity
 ---------------
 
-**At Fermi level** $E = E_F$, $\sigma(E_F)$ gives **DC conductivity**:
+**At Fermi level** :math:`E = E_F`, :math:`\sigma(E_F)` gives **DC conductivity**:
 
 .. math::
 
    \sigma_{DC} = \sigma(E_F, \omega=0)
 
-**Units:** Typically in $(e^2/\hbar) \cdot a_0^{-1}$ or converted to SI.
+**Units:** Typically in :math:`(e^2/\hbar) \cdot a_0^{-1}` or converted to SI.
 
 **Conversion:** To S/m (Siemens per meter):
 
@@ -487,23 +487,23 @@ DC Conductivity
 
    \sigma[\text{S/m}] = \sigma[\text{code units}] \times \frac{e^2}{\hbar a_0 \Omega}
 
-where $\Omega$ is the unit cell volume.
+where :math:`\Omega` is the unit cell volume.
 
 Optical Conductivity
 --------------------
 
-**For finite frequency** $\omega \neq 0$, the **optical conductivity** describes:
+**For finite frequency** :math:`\omega \neq 0`, the **optical conductivity** describes:
 
 - Absorption spectrum
 - Dielectric function via Kramers-Kronig
 - Optical transitions
 
-**Real part $\text{Re}[\sigma(\omega)]$:**
+**Real part** :math:`\text{Re}[\sigma(\omega)]`:
 
 - Absorption/dissipation
 - Peaks at interband transitions
 
-**Imaginary part $\text{Im}[\sigma(\omega)]$:**
+**Imaginary part** :math:`\text{Im}[\sigma(\omega)]`:
 
 - Dispersion/reactive response
 - Related to plasma frequency
@@ -517,13 +517,13 @@ At low frequencies, metallic systems follow **Drude model**:
 
    \sigma(\omega) = \frac{\sigma_0}{1 - i\omega\tau}
 
-where $\tau$ is the scattering time. From LMTO:
+where :math:`\tau` is the scattering time. From LMTO:
 
 .. math::
 
    \sigma_0 = \frac{ne^2\tau}{m^*}
 
-can be extracted by fitting near $E_F$.
+can be extracted by fitting near :math:`E_F`.
 
 Integration and Usage
 =====================
@@ -594,8 +594,8 @@ Workflow
 1. **Complete SCF calculation** first
 2. **Enable conductivity:** Set ``calc_conductivity = .true.``
 3. **Run calculation:** Conductivity computed in post-processing
-4. **Check convergence:** Vary ``cond_ll``, check $\sigma(E_F)$ stability
-5. **Analyze output:** Plot $\sigma(E)$, identify features
+4. **Check convergence:** Vary ``cond_ll``, check :math:`\sigma(E_F)` stability
+5. **Analyze output:** Plot :math:`\sigma(E)`, identify features
 
 Example: Conductivity of Cu
 ----------------------------
@@ -616,7 +616,7 @@ Example: Conductivity of Cu
       energy_max = 3.0
    /
 
-**Expected result:** $\sigma_{DC} \sim 10^7$ S/m for Cu (literature: $5.96 \times 10^7$ S/m)
+**Expected result:** :math:`\sigma_{DC} \sim 10^7` S/m for Cu (literature: :math:`5.96 \times 10^7` S/m)
 
 Performance Considerations
 ==========================
@@ -632,10 +632,10 @@ Computational Cost
 
 where:
 
-- $N_E$: Energy points (200-500)
-- $N_{ll}$: Recursion depth (50-200)
-- $N_{orb}$: Orbital basis ($\sim 10-20$)
-- $N_r$: Random vectors (10-50)
+- :math:`N_E`: Energy points (200-500)
+- :math:`N_{ll}`: Recursion depth (50-200)
+- :math:`N_{orb}`: Orbital basis (:math:`\sim 10-20`)
+- :math:`N_r`: Random vectors (10-50)
 
 **Typical timings:**
 
@@ -647,7 +647,7 @@ Memory Requirements
 
 **Main arrays:**
 
-- ``gamma_nm(N_E, N_ll, N_ll)``: ~500 MB for $N_E=500$, $N_{ll}=200$
+- ``gamma_nm(N_E, N_ll, N_ll)``: ~500 MB for :math:`N_E=500`, :math:`N_{ll}=200`
 - ``mu_nm(18, 18, N_ll, N_ll, N_{type})``: ~100 MB
 
 **Tips for large systems:**

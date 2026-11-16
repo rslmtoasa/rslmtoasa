@@ -9,11 +9,11 @@ Overview
 
 The **exchange module** (``exchange.f90``) calculates magnetic exchange interactions using the **Liechtenstein-Katsnelson-Antropov-Guslienko (LKAG) formalism** within the LMTO-ASA framework. This module computes:
 
-- Isotropic Heisenberg exchange interactions $J_{ij}$
-- Dzyaloshinskii-Moriya interactions (DMI) $\mathbf{D}_{ij}$
-- Magnetic anisotropy tensors $\mathbf{A}_{ij}$
-- Gilbert damping parameters $\alpha_{ij}$
-- Spin-lattice coupling parameters $J_{ijk}$
+- Isotropic Heisenberg exchange interactions :math:`J_{ij}`
+- Dzyaloshinskii-Moriya interactions (DMI) :math:`\mathbf{D}_{ij}`
+- Magnetic anisotropy tensors :math:`\mathbf{A}_{ij}`
+- Gilbert damping parameters :math:`\alpha_{ij}`
+- Spin-lattice coupling parameters :math:`J_{ijk}`
 - Moment of inertia tensors
 
 **Key features:**
@@ -58,7 +58,7 @@ Liechtenstein-Katsnelson-Antropov-Guslienko Formula
 
 The exchange interactions are calculated using the LKAG approach, which expresses the exchange parameters as energy integrals over Green's functions.
 
-**Isotropic Heisenberg exchange** $J_{ij}$:
+**Isotropic Heisenberg exchange** :math:`J_{ij}`:
 
 .. math::
 
@@ -68,10 +68,10 @@ The exchange interactions are calculated using the LKAG approach, which expresse
 
 where:
 
-- $\Delta_i = P_i^{\uparrow} - P_i^{\downarrow}$ is the spin-split potential function
-- $P_i^{\sigma}$ are the potential functions for spin $\sigma$
-- $G_{ij}^{\sigma\sigma'}(E)$ is the intersite Green's function from site $j$ to site $i$
-- $E_F$ is the Fermi energy
+- :math:`\Delta_i = P_i^{\uparrow} - P_i^{\downarrow}` is the spin-split potential function
+- :math:`P_i^{\sigma}` are the potential functions for spin :math:`\sigma`
+- :math:`G_{ij}^{\sigma\sigma'}(E)` is the intersite Green's function from site :math:`j` to site :math:`i`
+- :math:`E_F` is the Fermi energy
 - Tr denotes the trace over orbital indices
 
 **Alternative tensor formulation:**
@@ -83,7 +83,7 @@ For non-collinear systems, the exchange can be expressed as a tensor:
    J_{ij}^{\alpha\beta} = -\frac{1}{2\pi} \text{Im} \int_{-\infty}^{E_F} dE \, 
    \text{Tr}\left[ \Delta_i G_{ij}^{\alpha}(E) \Delta_j G_{ji}^{\beta}(E) \right]
 
-where $\alpha, \beta \in \{x, y, z\}$ label spatial directions and:
+where :math:`\alpha, \beta \in \{x, y, z\}` label spatial directions and:
 
 .. math::
 
@@ -91,12 +91,12 @@ where $\alpha, \beta \in \{x, y, z\}$ label spatial directions and:
    + \frac{\mathbf{m}_i \cdot \mathbf{e}_\alpha}{2} 
    \left( G_{ij}^{\uparrow\uparrow} - G_{ij}^{\downarrow\downarrow} \right)
 
-The isotropic exchange is then $J_{ij} = \frac{1}{3}(J_{ij}^{xx} + J_{ij}^{yy} + J_{ij}^{zz})$.
+The isotropic exchange is then :math:`J_{ij} = \frac{1}{3}(J_{ij}^{xx} + J_{ij}^{yy} + J_{ij}^{zz})`.
 
 Dzyaloshinskii-Moriya Interaction (DMI)
 ----------------------------------------
 
-The **DMI vector** $\mathbf{D}_{ij}$ arises from spin-orbit coupling and broken inversion symmetry:
+The **DMI vector** :math:`\mathbf{D}_{ij}` arises from spin-orbit coupling and broken inversion symmetry:
 
 .. math::
 
@@ -115,19 +115,19 @@ The three components are:
    D_{ij}^y &= -\frac{1}{2\pi} \text{Im} \int dE \, \text{Tr}\left[ 
    \Delta_i G_{ij}^{z} \Delta_j G_{ji}^{x} - \Delta_i G_{ij}^{z} \Delta_j G_{ji}^{x} \right]
 
-DMI contributions to the spin Hamiltonian: $\mathcal{H}_{\text{DMI}} = \sum_{ij} \mathbf{D}_{ij} \cdot (\mathbf{S}_i \times \mathbf{S}_j)$
+DMI contributions to the spin Hamiltonian: :math:`\mathcal{H}_{\text{DMI}} = \sum_{ij} \mathbf{D}_{ij} \cdot (\mathbf{S}_i \times \mathbf{S}_j)`
 
 Magnetic Anisotropy Tensor
 ---------------------------
 
-The **anisotropy tensor** $\mathbf{A}_{ij}$ describes direction-dependent exchange:
+The **anisotropy tensor** :math:`\mathbf{A}_{ij}` describes direction-dependent exchange:
 
 .. math::
 
    A_{ij}^{\alpha\beta} = -\frac{1}{2\pi} \text{Im} \int_{-\infty}^{E_F} dE \, 
    \text{Tr}\left[ \Delta_i G_{ij}^{\alpha}(E) \Delta_j G_{ji}^{\beta}(E) \right]
 
-For $\alpha, \beta \in \{x, y, z\}$, giving a $3 \times 3$ tensor.
+For :math:`\alpha, \beta \in \{x, y, z\}`, giving a :math:`3 \times 3` tensor.
 
 **Anisotropy contribution** to spin Hamiltonian:
 
@@ -138,7 +138,7 @@ For $\alpha, \beta \in \{x, y, z\}$, giving a $3 \times 3$ tensor.
 On-Site Exchange J₀
 -------------------
 
-For the **on-site term** ($i = j$), a modified formula is used:
+For the **on-site term** (:math:`i = j`), a modified formula is used:
 
 .. math::
 
@@ -146,7 +146,7 @@ For the **on-site term** ($i = j$), a modified formula is used:
    \text{Tr}\left[ \Delta_i \left( G_{ii}^{\uparrow\uparrow}(E) - G_{ii}^{\downarrow\downarrow}(E) \right) 
    + \Delta_i G_{ii}^{\uparrow\uparrow}(E) \Delta_i G_{ii}^{\downarrow\downarrow}(E) \right]
 
-This represents the energy cost of flipping the spin at site $i$.
+This represents the energy cost of flipping the spin at site :math:`i`.
 
 Implementation Details
 ======================
@@ -192,7 +192,7 @@ The code uses **auxiliary Green's functions** to evaluate the LKAG formulas. The
 Angular Decomposition for Tensor Components
 --------------------------------------------
 
-For tensor components $J_{ij}^{\alpha\beta}$, the code uses rotation angles to project onto different directions:
+For tensor components :math:`J_{ij}^{\alpha\beta}`, the code uses rotation angles to project onto different directions:
 
 **Rotation angles** (from ``calculate_jij_auxgreen``):
 
@@ -201,35 +201,35 @@ For tensor components $J_{ij}^{\alpha\beta}$, the code uses rotation angles to p
    :widths: 10 15 15 15 15
 
    * - Component
-     - $\theta$ (rad)
-     - $\theta'$ (rad)
-     - $\phi$ (rad)
-     - $\phi'$ (rad)
-   * - $J_{ij}^{xx}$
-     - $\pi/2$
-     - $\pi/2$
-     - $0$
-     - $0$
-   * - $J_{ij}^{xy}$
-     - $\pi/2$
-     - $\pi/2$
-     - $0$
-     - $\pi/2$
-   * - $J_{ij}^{xz}$
-     - $\pi/2$
-     - $0$
-     - $0$
-     - $0$
-   * - $J_{ij}^{yy}$
-     - $\pi/2$
-     - $\pi/2$
-     - $\pi/2$
-     - $\pi/2$
-   * - $J_{ij}^{zz}$
-     - $0$
-     - $0$
-     - $0$
-     - $0$
+     - :math:`\theta` (rad)
+     - :math:`\theta'` (rad)
+     - :math:`\phi` (rad)
+     - :math:`\phi'` (rad)
+   * - :math:`J_{ij}^{xx}`
+     - :math:`\pi/2`
+     - :math:`\pi/2`
+     - :math:`0`
+     - :math:`0`
+   * - :math:`J_{ij}^{xy}`
+     - :math:`\pi/2`
+     - :math:`\pi/2`
+     - :math:`0`
+     - :math:`\pi/2`
+   * - :math:`J_{ij}^{xz}`
+     - :math:`\pi/2`
+     - :math:`0`
+     - :math:`0`
+     - :math:`0`
+   * - :math:`J_{ij}^{yy}`
+     - :math:`\pi/2`
+     - :math:`\pi/2`
+     - :math:`\pi/2`
+     - :math:`\pi/2`
+   * - :math:`J_{ij}^{zz}`
+     - :math:`0`
+     - :math:`0`
+     - :math:`0`
+     - :math:`0`
 
 **Angular integration formula:**
 
@@ -238,7 +238,7 @@ For tensor components $J_{ij}^{\alpha\beta}$, the code uses rotation angles to p
    J_{ij}^{\alpha\beta} = \sum_{k} \cos\theta \cos\theta' \, T_{\uparrow\uparrow} 
    + \sin\theta \sin\theta' e^{i(\phi'-\phi)} \, T_{\downarrow\downarrow} + \ldots
 
-where $T$ represents the traces of Green's function products.
+where :math:`T` represents the traces of Green's function products.
 
 Main Procedures
 ===============
@@ -250,16 +250,16 @@ calculate_jij_auxgreen
 
 **Algorithm:**
 
-1. Loop over all atom pairs $(i,j)$ specified in input
+1. Loop over all atom pairs :math:`(i,j)` specified in input
 2. For each pair:
    
-   a. Get potential functions $P_i^{\sigma}$, $P_j^{\sigma}$
-   b. Construct $\Delta P_i = P_i^{\uparrow} - P_i^{\downarrow}$
-   c. Get auxiliary Green's functions $G_{ij}$, $G_{ji}$
-   d. Calculate 9 tensor components $J_{ij}^{\alpha\beta}$
-   e. For $i = j$: calculate on-site $J_{00}$
+   a. Get potential functions :math:`P_i^{\sigma}`, :math:`P_j^{\sigma}`
+   b. Construct :math:`\Delta P_i = P_i^{\uparrow} - P_i^{\downarrow}`
+   c. Get auxiliary Green's functions :math:`G_{ij}`, :math:`G_{ji}`
+   d. Calculate 9 tensor components :math:`J_{ij}^{\alpha\beta}`
+   e. For :math:`i = j`: calculate on-site :math:`J_{00}`
 
-3. Energy integration: Simpson's rule from $-\infty$ to $E_F$
+3. Energy integration: Simpson's rule from :math:`-\infty` to :math:`E_F`
 4. Output to ``exchange.out``
 
 **Formula implemented:**
@@ -270,7 +270,7 @@ calculate_jij_auxgreen
    \int_{-\infty}^{E_F} dE \sum_{LL'MM'} 
    \Delta P_{iL}^{\alpha L'} G_{ij,L'M}(E) \Delta P_{jM}^{\beta M'} G_{ji,M'L}(E)
 
-where $L, L', M, M'$ are combined orbital-spin indices.
+where :math:`L, L', M, M'` are combined orbital-spin indices.
 
 calculate_exchange_twoindex
 ----------------------------
@@ -304,15 +304,15 @@ calculate_gilbert_damping
 
 where:
 
-- $\mathbf{T}_i^{\alpha}$ is the torque operator on site $i$ in direction $\alpha$
-- $A_{ij}(E) = G_{ij}(E) - G_{ij}^{\dagger}(E)$ is the anti-Hermitian part of Green's function
-- $M_i$ is the magnetic moment on site $i$
-- $g$ is the Landé g-factor
+- :math:`\mathbf{T}_i^{\alpha}` is the torque operator on site :math:`i` in direction :math:`\alpha`
+- :math:`A_{ij}(E) = G_{ij}(E) - G_{ij}^{\dagger}(E)` is the anti-Hermitian part of Green's function
+- :math:`M_i` is the magnetic moment on site :math:`i`
+- :math:`g` is the Landé g-factor
 
 **Implementation details:**
 
 1. Calculate torque operators for each atom type
-2. Compute anti-Hermitian parts: $A_{ij} = G_{ij} - G_{ji}^{\dagger}$
+2. Compute anti-Hermitian parts: :math:`A_{ij} = G_{ij} - G_{ji}^{\dagger}`
 3. For each pair and energy:
 
 .. code-block:: text
@@ -322,7 +322,7 @@ where:
    temp3 = matmul(temp1, temp2)
    damping^αβ(E) = Re[Tr(temp3)]
 
-4. Integrate over energy up to $E_F$
+4. Integrate over energy up to :math:`E_F`
 5. Output damping tensor to ``damping-energy.out``
 
 calculate_jijk
@@ -330,7 +330,7 @@ calculate_jijk
 
 **Purpose:** Calculate three-body spin-lattice coupling parameters.
 
-**Formula:** Extension to include lattice distortions $\mathbf{u}$:
+**Formula:** Extension to include lattice distortions :math:`\mathbf{u}`:
 
 .. math::
 
@@ -365,19 +365,19 @@ Physical Interpretation
 
 **Heisenberg J:**
 
-- $J_{ij} > 0$: Ferromagnetic coupling (parallel spins favored)
-- $J_{ij} < 0$: Antiferromagnetic coupling (antiparallel spins favored)
+- :math:`J_{ij} > 0`: Ferromagnetic coupling (parallel spins favored)
+- :math:`J_{ij} < 0`: Antiferromagnetic coupling (antiparallel spins favored)
 
-**DMI $\mathbf{D}_{ij}$:**
+**DMI** :math:`\mathbf{D}_{ij}`:
 
 - Chiral interaction favoring non-collinear spin textures
 - Important for skyrmions, spin spirals
-- Typically $\|\mathbf{D}\| \ll \|J\|$ unless strong SOC + inversion breaking
+- Typically :math:`\|\mathbf{D}\| \ll \|J\|` unless strong SOC + inversion breaking
 
-**Anisotropy $\mathbf{A}_{ij}$:**
+**Anisotropy** :math:`\mathbf{A}_{ij}`:
 
 - Direction-dependent exchange
-- $A_{ij}^{zz} - \frac{1}{2}(A_{ij}^{xx} + A_{ij}^{yy})$ gives uniaxial anisotropy
+- :math:`A_{ij}^{zz} - \frac{1}{2}(A_{ij}^{xx} + A_{ij}^{yy})` gives uniaxial anisotropy
 - Important for magnetic domain orientation
 
 Output Files
@@ -395,8 +395,8 @@ exchange.out
      1    3   -2.156      ...   ...   ...   ...   ...   ...   ...   ...   ...   4.050
 
 - Atom indices ``i, j``
-- Isotropic exchange $J_{ij}$ in meV
-- Full $3 \times 3$ tensor components
+- Isotropic exchange :math:`J_{ij}` in meV
+- Full :math:`3 \times 3` tensor components
 - Distance between atoms
 
 dmi.out
@@ -472,14 +472,14 @@ Computational Cost
 
 **Scaling:**
 
-- $\mathcal{O}(N_{\text{pairs}} \times N_E \times N_L^3)$
-- $N_{\text{pairs}}$: Number of exchange pairs
-- $N_E$: Energy mesh points (~200-500)
-- $N_L$: Orbital basis size ($\sim (l_{\max}+1)^2 \approx 9-16$)
+- :math:`\mathcal{O}(N_{\text{pairs}} \times N_E \times N_L^3)`
+- :math:`N_{\text{pairs}}`: Number of exchange pairs
+- :math:`N_E`: Energy mesh points (~200-500)
+- :math:`N_L`: Orbital basis size (:math:`\sim (l_{\max}+1)^2 \approx 9-16`)
 
 **Typical timings:**
 
-- 10 pairs, 400 energy points, $l_{\max}=2$: ~5-10 minutes
+- 10 pairs, 400 energy points, :math:`l_{\max}=2`: ~5-10 minutes
 - 100 pairs: ~1-2 hours
 
 Parallelization
@@ -496,7 +496,7 @@ Parallelization
    end do
    #endif
 
-Good scaling up to $N_{\text{cores}} = N_{\text{pairs}}$.
+Good scaling up to :math:`N_{\text{cores}} = N_{\text{pairs}}`.
 
 Numerical Stability
 -------------------
@@ -504,8 +504,8 @@ Numerical Stability
 **Tips for accurate results:**
 
 1. **Dense energy mesh:** Use 300-500 energy points
-2. **Converged SCF:** Tight convergence ($\Delta Q < 10^{-5}$)
-3. **Sufficient recursion:** ``ll_gf`` $\geq$ 50 for good real-space decay
+2. **Converged SCF:** Tight convergence (:math:`\Delta Q < 10^{-5}`)
+3. **Sufficient recursion:** ``ll_gf`` :math:`\geq` 50 for good real-space decay
 4. **Check Im[Tr]:** Should be well-defined (not oscillating wildly)
 
 Provenance
