@@ -1070,7 +1070,7 @@ contains
       !.. Local Scalars ..
       integer :: I
       real(rp) :: DVCDN, DVCUP, EC, EX, EXI, FK, G, H, KF, MUXI, NABLA, &
-                  NABLA2, NDDI, NDI, NI, PI, RS, S, SK, T, U, UU, VCDN, &
+                  NABLA2, NDDI, NDI, NI, RS, S, SK, T, U, UU, VCDN, &
                   VCUP, VV, WW, ZET
       !
       !.. Local Arrays ..
@@ -1085,7 +1085,6 @@ contains
       ! ... Executable Statements ...
       !
       !
-      PI = 0.25d0*(4*pi)
       !
       !     Exchange energy and potential
       !
