@@ -32,6 +32,7 @@ module exchange_mod
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
+   use basis_mod, only: lmax_basis
 #ifdef USE_MPI
    use mpi
 #endif
@@ -123,6 +124,9 @@ contains
       obj%hamiltonian => bands_obj%recursion%hamiltonian
 
       call obj%restore_to_default()
+      ! The exchange kernels index the spin blocks as 1:9 / 10:18 (spd basis only).
+      if (lmax_basis /= 2) call g_logger%fatal('exchange: implemented only for an spd basis (lmax_basis = 2), got lmax_basis = '// &
+                                               int2str(lmax_basis), __FILE__, __LINE__)
       ! initialize constraining if requested for exchange calculations
       if (associated(obj%control)) then
          if (obj%control%constraints_enable) then
