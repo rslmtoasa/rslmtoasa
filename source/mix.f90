@@ -36,7 +36,8 @@ module mix_mod
    use scf_guard_mod, only: guard_q0_capacity, guard_nonfinite_scalar
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 #ifdef USE_MPI
-   use mpi, only: MPI_COMM_WORLD, MPI_DOUBLE_PRECISION, MPI_INTEGER, MPI_MAX, MPI_MIN, MPI_IN_PLACE, MPI_ALLREDUCE
+   ! Intel MPI does not expose MPI_ALLREDUCE through an ONLY import.
+   use mpi
 #endif
    implicit none
 
