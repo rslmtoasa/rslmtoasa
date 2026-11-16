@@ -313,7 +313,6 @@ contains
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
       tetra_symmetry_mode = this%tetra_symmetry_mode
-      use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
       dos_energy_max = this%dos_energy_range(2)

@@ -40,7 +40,6 @@ channels_ldos = 2500
    ! Symmetry reduction (highly recommended)
    use_symmetry_reduction = .true. ! Use crystal symmetry
    use_time_reversal = .true.      ! Use time-reversal symmetry
-   use_shift = .false.             ! Don't apply additional Monkhorst-Pack shift
    
    ! DOS calculation settings
    dos_method = 'tetrahedron'      ! Use tetrahedron method (more accurate)

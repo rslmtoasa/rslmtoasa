@@ -49,7 +49,6 @@
     k_offset_z = 0.0
     use_symmetry_reduction = .false.
     use_time_reversal = .false.
-    use_shift = .false.
     dos_method = 'tetrahedron'
     gaussian_sigma = 0.005
     temperature = 300.0

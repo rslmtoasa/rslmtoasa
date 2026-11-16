@@ -53,7 +53,6 @@ def patch_case(case_root: Path, workdir: Path, txc: int, use_kspace: bool) -> No
             "nk3": 4,
             "use_symmetry_reduction": False,
             "use_time_reversal": True,
-            "use_shift": False,
             "dos_method": "gaussian",
             "gaussian_sigma": 0.01,
             "temperature": 300.0,

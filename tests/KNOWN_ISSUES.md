@@ -502,7 +502,3 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### `fort.*` files written by legacy routines — 2026-11-16
 - **Measured:** after a quick-tier run, `build_base/Testing` holds `fort.800` (136 directories), `fort.805` (135), `fort.99` (28), `fort.120` (8) and `fort.1122`/`fort.2122`/`fort.4122` (16, `recursion_haydock.f90` `recur_b`, one file per rank). Writers: `lattice_lifecycle.f90` (800), `lattice_cluster.f90` (805), `exchange.f90` (99), `charge.f90` (120), `recursion_haydock.f90` (1122+). All pre-AI; kept deliberately.
 - **Proposal:** remove or put behind a flag; developer decision.
-
-### `&reciprocal use_shift` is read and discarded — 2026-11-16
-- **Read:** `source/reciprocal_lifecycle.f90` sets `use_shift = .false.` after the read ("Derived from k_offset") and never copies it. Ten decks, three `tests/scf/cases.json` overrides, two test scripts and three reference `meta.json` files set it.
-- **Proposal:** remove the key together with those inputs (the reference metadata is developer-owned).

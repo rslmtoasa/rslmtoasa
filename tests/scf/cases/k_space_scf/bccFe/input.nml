@@ -41,7 +41,6 @@ k_offset_z = 0.0
 ! Symmetry reduction (highly recommended)
 use_symmetry_reduction = .false.   ! Use crystal symmetry
 use_time_reversal = .true.        ! Use time-reversal symmetry
-use_shift = .false.               ! Don't apply additional Monkhorst-Pack shift
 
 ! DOS calculation settings
 !dos_method = 'gaussian'

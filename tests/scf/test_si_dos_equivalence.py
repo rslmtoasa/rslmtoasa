@@ -67,7 +67,6 @@ def patch_fixture(case_root: Path, workdir: Path, use_kspace: bool) -> None:
             "nk3": KS_NK,
             "use_symmetry_reduction": False,
             "use_time_reversal": True,
-            "use_shift": False,
             "n_energy_points": DOS_CHANNELS,
             "dos_method": "gaussian",
             "gaussian_sigma": GAUSSIAN_SIGMA,

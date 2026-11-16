@@ -1030,7 +1030,6 @@
           "nk3": 2,
           "use_symmetry_reduction": false,
           "use_time_reversal": true,
-          "use_shift": false,
           "n_energy_points": 200,
           "dos_method": "gaussian",
           "gaussian_sigma": 0.01
@@ -1167,7 +1166,6 @@
           "nk3": 4,
           "use_symmetry_reduction": false,
           "use_time_reversal": true,
-          "use_shift": false,
           "n_energy_points": 2001,
           "dos_method": "tetrahedron",
           "gaussian_sigma": 0.01
@@ -1359,7 +1357,6 @@
           "nk3": 2,
           "use_symmetry_reduction": false,
           "use_time_reversal": true,
-          "use_shift": false,
           "n_energy_points": 200,
           "dos_method": "gaussian",
           "gaussian_sigma": 0.01
