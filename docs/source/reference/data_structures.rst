@@ -23,7 +23,7 @@ calculation
    type :: calculation
       character(len=sl) :: pre_processing    ! 'none', 'bravais', 'buildsurf', etc.
       character(len=sl) :: processing        ! 'none', 'sd', etc.
-      character(len=sl) :: post_processing   ! 'none', 'dos', 'bands', 'exchange', etc.
+      character(len=sl) :: post_processing   ! 'none', 'exchange', 'conductivity', 'density_of_states', etc.
       logical :: verbose                     ! Enable verbose output
       character(len=sl) :: fname             ! Input namelist filename
    end type calculation
@@ -46,7 +46,6 @@ control
       integer :: nlim, npold                 ! Cluster/history settings
       integer :: mext                        ! Spin acceleration
       logical :: lrot, incorb                ! Rotation settings
-      logical :: verbose                     ! Verbose output
    end type control
 
 lattice
@@ -64,7 +63,7 @@ lattice
       real(rp) :: alat                       ! Lattice constant (Å)
       real(rp) :: r2                         ! Hopping cutoff (Å²)
       integer :: nbulk                       ! Atoms per unit cell
-      integer :: nx, ny, nz                  ! Cluster dimensions
+      integer :: n1, n2, n3                  ! Cluster repetitions along a(:,1..3)
       ! ... atomic positions, lattice vectors, etc.
    end type lattice
 
@@ -103,7 +102,7 @@ recursion
       real(rp), allocatable :: b2(:,:,:,:)        ! Lanczos coeff b_n²
       complex(rp), allocatable :: a_b(:,:,:,:)    ! Block form
       complex(rp), allocatable :: b2_b(:,:,:,:)   ! Block form
-      complex(rp), allocatable :: psi(:,:,:)      ! Lanczos vectors
+      complex(rp), allocatable :: psi(:,:)        ! Lanczos vectors
       complex(rp), allocatable :: mu_n(:,:,:,:)   ! Chebyshev moments
    end type recursion
 
@@ -154,7 +153,7 @@ charge
 
    type :: charge
       real(rp), allocatable :: dq(:)              ! Charge neutrality corrections
-      real(rp) :: cht, trq                        ! Charge transfer, torque
+      real(rp) :: cht, trq                        ! Charge transfer (cht), mixed-charge transfer (trq)
       ! ... monopole, dipole, higher multipole moments
       ! ... Madelung/Coulomb potential components
    end type charge
@@ -195,9 +194,11 @@ mix
 .. code-block:: fortran
 
    type :: mix
-      character(len=sl) :: mixing_type            ! 'linear' or 'broyden'
-      real(rp) :: alpha                           ! Mixing parameter
-      integer :: n_history                        ! Broyden history length
+      character(len=7) :: mixtype                 ! 'linear' or 'broyden'
+      real(rp) :: beta                            ! Mixing parameter (default 0.1)
+      real(rp), allocatable :: magbeta(:)         ! Magnetic mixing parameters
+      real(rp) :: ldm_beta                        ! Density-matrix mixing parameter
+      integer :: nmix                             ! Broyden setting
       ! ... arrays for old densities and residuals
    end type mix
 
@@ -214,9 +215,9 @@ element
 
    type :: element
       character(len=10) :: symbol                 ! Element name
-      integer :: atomic_number, f_core, core
-      real(rp) :: valence
-      integer :: num_quant_s, num_quant_p, num_quant_d
+      integer :: f_core
+      real(rp) :: atomic_number, core, valence
+      integer :: num_quant_s, num_quant_p, num_quant_d, num_quant_f
    end type element
 
 potential
@@ -268,11 +269,15 @@ symbolic_atom
 .. code-block:: fortran
 
    type :: symbolic_atom
-      integer :: atom_index                       ! Position in cluster
-      integer :: type                             ! Atom type (element)
-      real(rp) :: position(3)                     ! Cartesian position
-      integer :: neighbors                        ! Number of neighbors
-      ! ... magnetic moment, charge, etc.
+      real(rp) :: mix, mixmag                     ! Mixing settings
+      integer :: rb
+      logical :: force_nonmagnetic
+      real(rp), dimension(3) :: mag_cfield        ! Constraining field
+      real(rp) :: dq, qc, qv                      ! Charges
+      type(element) :: element
+      type(potential) :: potential
+      type(radial_ground_state) :: radial_ground_state
+      ! ... constraint_* members
    end type symbolic_atom
 
 xc
@@ -289,7 +294,7 @@ xc
    type :: xc
       character(len=3) :: txch                    ! Functional type
       integer :: txc, nss                         ! Functional ID, spin settings
-      real(rp) :: exchf, alpm, aa, bb, cc, ...    ! Functional parameters
+      real(rp) :: exchf, alpm, aa, bb, cca, cw, ... ! Functional parameters
    end type xc
 
 bands
@@ -345,18 +350,20 @@ Memory Layout
 
 **Array dimensions (typical):**
 
-- ``ee(norb, norb, natom, natom)`` - Inter-atomic Hamiltonian blocks
-- ``hall(norb, norb, nclust, 1)`` - Local Hamiltonian
-- ``g0(norb, norb, 1, nclust)`` - On-site Green's function
-- ``gij(norb, norb, nclust, nclust)`` - Inter-site Green's function
-- ``a(nclust, nclust, norb, ll_max)`` - Recursion coefficients
-- ``doscheb(nclust, norb, channels_ldos)`` - DOS
+- ``ee(nb, nb, nn+1, ntype)`` - Inter-atomic Hamiltonian blocks
+- ``hall(nb, nb, nn+1, nmax)`` - Local Hamiltonian
+- ``g0(nb, nb, ne, nrec)`` - On-site Green's function
+- ``gij(nb, nb, ne, atoms_per_process)`` - Inter-site Green's function
+- ``a(ll_max, nb, nrec, 3)`` - Recursion coefficients
+- ``psi(nb, kk)`` - Lanczos vector
+- ``doscheb(nb, ne, nrec)`` - DOS
 
 where:
 
-- ``norb`` ≈ 3×lmax (typically 9 for lmax=2)
-- ``nclust`` ≈ nbulk × nx × ny × nz
-- ``ll_max`` = llsp or lld
+- ``norb = (lmax+1)**2`` (9 for lmax=2), ``nb = 2*norb`` (18 for lmax=2)
+- ``nn+1`` = neighbours of a site plus the site itself
+- ``ne`` = ``channels_ldos + 10``
+- ``ll_max`` = max(llsp, lld)
 
 Complex vs. Real
 ================
@@ -378,7 +385,7 @@ All floating-point variables use ``rp`` from precision.f90:
    real(rp) :: fermi, charge
    complex(rp) :: green_function
 
-Default: ``rp = kind(1.0d0)`` (double precision)
+Default: ``rp = selected_real_kind(15, 307)`` (double precision)
 
 Allocation Patterns
 ===================
@@ -387,8 +394,8 @@ Allocation Patterns
 
 .. code-block:: fortran
 
-   allocate(this%a(natom, natom, norb, ll_max))
-   allocate(this%g0(norb, norb, 1, natom))
+   allocate(this%a(ll_max, nb, nrec, 3))
+   allocate(this%g0(nb, nb, ne, nrec))
 
 **Deallocation (in destructor):**
 

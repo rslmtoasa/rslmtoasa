@@ -13,8 +13,10 @@ The **exchange module** (``exchange.f90``) calculates magnetic exchange interact
 - Dzyaloshinskii-Moriya interactions (DMI) :math:`\mathbf{D}_{ij}`
 - Magnetic anisotropy tensors :math:`\mathbf{A}_{ij}`
 - Gilbert damping parameters :math:`\alpha_{ij}`
-- Spin-lattice coupling parameters :math:`J_{ijk}`
 - Moment of inertia tensors
+
+``calculate_jijk`` (spin-lattice coupling :math:`J_{ijk}`) is a type-bound
+procedure with no caller in the production driver.
 
 **Key features:**
 
@@ -74,60 +76,7 @@ where:
 - :math:`E_F` is the Fermi energy
 - Tr denotes the trace over orbital indices
 
-**Alternative tensor formulation:**
-
-For non-collinear systems, the exchange can be expressed as a tensor:
-
-.. math::
-
-   J_{ij}^{\alpha\beta} = -\frac{1}{2\pi} \text{Im} \int_{-\infty}^{E_F} dE \, 
-   \text{Tr}\left[ \Delta_i G_{ij}^{\alpha}(E) \Delta_j G_{ji}^{\beta}(E) \right]
-
-where :math:`\alpha, \beta \in \{x, y, z\}` label spatial directions and:
-
-.. math::
-
-   G_{ij}^{\alpha}(E) = \frac{1}{2}\left( G_{ij}^{\uparrow\uparrow} + G_{ij}^{\downarrow\downarrow} \right) 
-   + \frac{\mathbf{m}_i \cdot \mathbf{e}_\alpha}{2} 
-   \left( G_{ij}^{\uparrow\uparrow} - G_{ij}^{\downarrow\downarrow} \right)
-
-The isotropic exchange is then :math:`J_{ij} = \frac{1}{3}(J_{ij}^{xx} + J_{ij}^{yy} + J_{ij}^{zz})`.
-
-Dzyaloshinskii-Moriya Interaction (DMI)
-----------------------------------------
-
-The **DMI vector** :math:`\mathbf{D}_{ij}` arises from spin-orbit coupling and broken inversion symmetry:
-
-.. math::
-
-   \mathbf{D}_{ij} = -\frac{1}{2\pi} \text{Im} \int_{-\infty}^{E_F} dE \, 
-   \text{Tr}\left[ \Delta_i G_{ij}^{x}(E) \Delta_j G_{ji}^{y}(E) - 
-   \Delta_i G_{ij}^{y}(E) \Delta_j G_{ji}^{x}(E), \ldots \right]
-
-The three components are:
-
-.. math::
-
-   D_{ij}^z &= -\frac{1}{2\pi} \text{Im} \int dE \, \text{Tr}\left[ 
-   \Delta_i G_{ij}^{x} \Delta_j G_{ji}^{y} - \Delta_i G_{ij}^{y} \Delta_j G_{ji}^{x} \right] \\
-   D_{ij}^x &= -\frac{1}{2\pi} \text{Im} \int dE \, \text{Tr}\left[ 
-   \Delta_i G_{ij}^{y} \Delta_j G_{ji}^{z} - \Delta_i G_{ij}^{z} \Delta_j G_{ji}^{y} \right] \\
-   D_{ij}^y &= -\frac{1}{2\pi} \text{Im} \int dE \, \text{Tr}\left[ 
-   \Delta_i G_{ij}^{z} \Delta_j G_{ji}^{x} - \Delta_i G_{ij}^{z} \Delta_j G_{ji}^{x} \right]
-
 DMI contributions to the spin Hamiltonian: :math:`\mathcal{H}_{\text{DMI}} = \sum_{ij} \mathbf{D}_{ij} \cdot (\mathbf{S}_i \times \mathbf{S}_j)`
-
-Magnetic Anisotropy Tensor
----------------------------
-
-The **anisotropy tensor** :math:`\mathbf{A}_{ij}` describes direction-dependent exchange:
-
-.. math::
-
-   A_{ij}^{\alpha\beta} = -\frac{1}{2\pi} \text{Im} \int_{-\infty}^{E_F} dE \, 
-   \text{Tr}\left[ \Delta_i G_{ij}^{\alpha}(E) \Delta_j G_{ji}^{\beta}(E) \right]
-
-For :math:`\alpha, \beta \in \{x, y, z\}`, giving a :math:`3 \times 3` tensor.
 
 **Anisotropy contribution** to spin Hamiltonian:
 
@@ -138,7 +87,7 @@ For :math:`\alpha, \beta \in \{x, y, z\}`, giving a :math:`3 \times 3` tensor.
 On-Site Exchange J₀
 -------------------
 
-For the **on-site term** (:math:`i = j`), a modified formula is used:
+For the **on-site term** (:math:`i = j`), ``calculate_jij_auxgreen`` uses:
 
 .. math::
 
@@ -148,53 +97,63 @@ For the **on-site term** (:math:`i = j`), a modified formula is used:
 
 This represents the energy cost of flipping the spin at site :math:`i`.
 
-Implementation Details
-======================
+Implemented Kernels
+===================
 
-Auxiliary Green's Function Method
-----------------------------------
+``calculate_exchange`` evaluates three separate kernels at every energy point
+of the mesh (``dGdG_Jnc``, ``dGdG_Dnc``, ``dGdG_Anc``). With
+:math:`\Delta_i` the ``d_matrix`` of the type of atom :math:`i`,
+:math:`G^0` the charge part (``Ginmag``, ``Gjnmag``) and :math:`G^\alpha`
+(:math:`\alpha = x, y, z`) the spin parts (``Gix``... ``Gjz``) of the
+intersite Green function:
 
-The code uses **auxiliary Green's functions** to evaluate the LKAG formulas. These are constructed from the full Green's function matrices by projecting onto specific spin channels:
+.. math::
 
-**Implementation in** ``calculate_jij_auxgreen()``:
+   J_{ij}(E) &= \text{Im}\,\text{Tr}\Big[ \Delta_i G_i^0 \Delta_j G_j^0
+              - \sum_\alpha \Delta_i G_i^\alpha \Delta_j G_j^\alpha \Big] \\
+   D_{ij}^\alpha(E) &= \text{Re}\,\text{Tr}\Big[ \Delta_i G_i^0 \Delta_j G_j^\alpha
+              - \Delta_j G_j^0 \Delta_i G_i^\alpha \Big] \\
+   A_{ij}^{\alpha\beta}(E) &= \text{Im}\,\text{Tr}\Big[ \tfrac{1}{2}\big(
+              \Delta_i G_i^\alpha \Delta_j G_j^\beta
+              + \Delta_j G_j^\alpha \Delta_i G_i^\beta \big) \Big]
 
-.. code-block:: fortran
+Each kernel is integrated with ``simpson_f`` up to the Fermi energy with
+the Fermi weight at ``en%temperature`` and multiplied by
+:math:`10^3/(4\pi)`. :math:`J` is not a trace of :math:`A`.
+``jtens.out`` holds :math:`J\,\mathbb{1}` plus the skew-symmetric matrix of
+:math:`\mathbf{D}` plus :math:`A`.
 
-   ! Calculate potential functions P for atoms i and j
-   call symbolic_atom(iz(i))%p_matrix(pmatrix_i, lmaxi, en%ene)
-   call symbolic_atom(iz(j))%p_matrix(pmatrix_j, lmaxj, en%ene)
-   
-   ! Get auxiliary Green's functions
-   call green%auxiliary_gij(green%gij(:,:,:,njij), aux_gij, i, j)
-   call green%auxiliary_gij(green%gji(:,:,:,njij), aux_gji, j, i)
-   
-   ! Construct ΔP = P↑ - P↓
-   deltap_i(:,:,:) = pmatrix_i(1:nup, 1:nup, :) - 
-                     pmatrix_i(nup+1:2*nup, nup+1:2*nup, :)
-   deltap_j(:,:,:) = pmatrix_j(1:nup, 1:nup, :) - 
-                     pmatrix_j(nup+1:2*nup, nup+1:2*nup, :)
+calculate_exchange_twoindex
+---------------------------
 
-**Energy integration** using Simpson's rule:
+Splits each kernel into four parts built from the two-index Green functions
+(``g00ij``/``g00ji``, ``g01ij``/``g01ji``, ``gx0ij``... ``gz1ji``):
 
-.. code-block:: fortran
+- **CD:** charge-density part (``g00ij``, ``g00ji``)
+- **CC:** charge-current part (``g01ij``, ``g01ji``)
+- **SD:** spin-density part (``gx0ij``, ``gy0ij``, ``gz0ij`` and their ``ji`` partners, summed)
+- **SC:** spin-current part (``gx1ij``, ``gy1ij``, ``gz1ij`` and their ``ji`` partners, summed)
 
-   ! Calculate integrand at each energy point
-   do nv = 1, en%channels_ldos
-      temp1(:,:,nv) = matmul(deltap_i(:,:,nv), aux_gij_up(:,:,nv))
-      temp2(:,:,nv) = matmul(deltap_j(:,:,nv), aux_gji_dn(:,:,nv))
-      integrand(nv) = imtrace(matmul(temp1(:,:,nv), temp2(:,:,nv)))
-   end do
-   
-   ! Simpson integration up to Fermi level
-   call simpson_f(jij, en%ene, en%fermi, en%nv1, integrand, ...)
-   jij = jij / (4.0 * pi)  ! Normalize
+and combines them into second-order (SO) and first-order (FO) results:
 
-Angular Decomposition for Tensor Components
---------------------------------------------
+.. math::
 
-For tensor components :math:`J_{ij}^{\alpha\beta}`, the code uses rotation angles to project onto different directions:
+   J^{\text{SO}} &= J^{\text{CD}} - J^{\text{SD}} + J^{\text{CC}} - J^{\text{SC}}, &
+   J^{\text{FO}} &= J^{\text{CD}} + J^{\text{SD}} - J^{\text{CC}} - J^{\text{SC}} \\
+   D^{\text{SO}} &= 2\,(D^{\text{SC}} + D^{\text{CC}}), &
+   D^{\text{FO}} &= 2\,(D^{\text{SC}} - D^{\text{CC}}) \\
+   A^{\text{SO}} &= A^{\text{SD}} + A^{\text{SC}}, &
+   A^{\text{FO}} &= -A^{\text{SD}} + A^{\text{SC}}
 
-**Rotation angles** (from ``calculate_jij_auxgreen``):
+Here the D parts use the real part of the trace, J and A the imaginary part.
+
+calculate_jij_auxgreen
+----------------------
+
+LKAG formula with auxiliary Green functions (``green%auxiliary_gij``) and
+potential-function differences :math:`\Delta P = P^\uparrow - P^\downarrow`.
+It has no caller in ``post_processing='exchange'`` and writes only to
+standard output. For tensor components it uses rotation angles:
 
 .. list-table::
    :header-rows: 1
@@ -240,125 +199,38 @@ For tensor components :math:`J_{ij}^{\alpha\beta}`, the code uses rotation angle
 
 where :math:`T` represents the traces of Green's function products.
 
-Main Procedures
-===============
-
-calculate_jij_auxgreen
-----------------------
-
-**Purpose:** Calculate Heisenberg exchange using auxiliary Green's function formalism.
-
-**Algorithm:**
-
-1. Loop over all atom pairs :math:`(i,j)` specified in input
-2. For each pair:
-   
-   a. Get potential functions :math:`P_i^{\sigma}`, :math:`P_j^{\sigma}`
-   b. Construct :math:`\Delta P_i = P_i^{\uparrow} - P_i^{\downarrow}`
-   c. Get auxiliary Green's functions :math:`G_{ij}`, :math:`G_{ji}`
-   d. Calculate 9 tensor components :math:`J_{ij}^{\alpha\beta}`
-   e. For :math:`i = j`: calculate on-site :math:`J_{00}`
-
-3. Energy integration: Simpson's rule from :math:`-\infty` to :math:`E_F`
-4. Output to ``exchange.out``
-
-**Formula implemented:**
-
-.. math::
-
-   J_{ij}^{\alpha\beta}(\mathbf{e}_i, \mathbf{e}_j) = -\frac{1}{2\pi} \text{Im} 
-   \int_{-\infty}^{E_F} dE \sum_{LL'MM'} 
-   \Delta P_{iL}^{\alpha L'} G_{ij,L'M}(E) \Delta P_{jM}^{\beta M'} G_{ji,M'L}(E)
-
-where :math:`L, L', M, M'` are combined orbital-spin indices.
-
-calculate_exchange_twoindex
-----------------------------
-
-**Purpose:** Calculate all exchange interactions (J, D, A) in non-collinear formalism.
-
-**Decomposition into spin-dependent contributions:**
-
-- **CD:** Core-core and down-down cross terms
-- **SD:** Spin-dependent terms with opposite spins
-- **CC:** Core-core with same spin
-- **SC:** Spin-core mixing terms
-
-**Output quantities:**
-
-- ``jijcd, jijsd, jijcc, jijsc`` - J components
-- ``dmi(3)`` - DMI vector components
-- ``aij(3,3)`` - Full anisotropy tensor
-
 calculate_gilbert_damping
---------------------------
+-------------------------
 
-**Purpose:** Calculate Gilbert damping parameters using torque-correlation method.
+Torque-correlation Gilbert damping (``exchange_dynamics.f90``; see
+PRM 2, 013801 (2018)). Runs only when ``control%nsp == 2``; otherwise it
+does nothing. Called when ``&calculation do_damping = .true.``.
 
-**Formula:** Based on Kamberský's torque-correlation model (PRM 2, 013801 (2018)):
+For each pair, with torque matrices :math:`T` from
+``hamiltonian%torque_operator_collinear`` and
+:math:`A_{ij} = G_{ij} - G_{ji}^\dagger`:
 
 .. math::
 
-   \alpha_{ij}^{\alpha\beta} = \frac{g}{2\pi M_i} \int_{-\infty}^{E_F} dE \, 
-   \text{Tr}\left[ \mathbf{T}_i^{\alpha} A_{ij}(E) \mathbf{T}_j^{\beta\dagger} A_{ji}(E) \right]
+   \alpha_{ij}^{\alpha\beta} = -\frac{1}{2\pi S_i}\,
+   \text{Re}\,\text{Tr}\left[ T_i^{\alpha} A_{ij}(E) T_j^{\beta\dagger} A_{ji}(E) \right]_{E = E_k}
 
-where:
+where :math:`E_k` is the energy-mesh point nearest to :math:`E_F` (no energy
+integral) and :math:`S_i = \sum_l (q_{l}^{\uparrow} - q_{l}^{\downarrow})`
+is taken from ``potential%ql`` of atom :math:`i`. No g factor is applied.
 
-- :math:`\mathbf{T}_i^{\alpha}` is the torque operator on site :math:`i` in direction :math:`\alpha`
-- :math:`A_{ij}(E) = G_{ij}(E) - G_{ij}^{\dagger}(E)` is the anti-Hermitian part of Green's function
-- :math:`M_i` is the magnetic moment on site :math:`i`
-- :math:`g` is the Landé g-factor
+calculate_moment_of_inertia
+---------------------------
 
-**Implementation details:**
-
-1. Calculate torque operators for each atom type
-2. Compute anti-Hermitian parts: :math:`A_{ij} = G_{ij} - G_{ji}^{\dagger}`
-3. For each pair and energy:
-
-.. code-block:: text
-
-   temp1 = matmul(T_i^α, A_ij)
-   temp2 = matmul(T_j^β†, A_ji)
-   temp3 = matmul(temp1, temp2)
-   damping^αβ(E) = Re[Tr(temp3)]
-
-4. Integrate over energy up to :math:`E_F`
-5. Output damping tensor to ``damping-energy.out``
+Torque-correlation moment-of-inertia kernel (Sci. Rep. 7, 931 (2017)),
+called when ``&calculation do_inertia = .true.``; requires ``nsp = 2``.
 
 calculate_jijk
 --------------
 
-**Purpose:** Calculate three-body spin-lattice coupling parameters.
-
-**Formula:** Extension to include lattice distortions :math:`\mathbf{u}`:
-
-.. math::
-
-   J_{ijk}^{\alpha\beta\gamma} = \frac{\partial^2 J_{ij}^{\alpha\beta}}{\partial u_k^{\gamma}}
-
-Used for **magnetoelastic coupling** and spin-phonon interactions.
-
-Exchange Interaction Contributions
-===================================
-
-First-Order and Second-Order Perturbation
-------------------------------------------
-
-The code decomposes exchange into perturbative orders:
-
-**Second-order (SO):**
-
-.. math::
-
-   J_{ij}^{\text{SO}} = J_{ij}^{\text{SD}} + J_{ij}^{\text{SC}}
-
-**First-order (FO):**
-
-.. math::
-
-   J_{ij}^{\text{FO}} = J_{ij}^{\text{SC}} - J_{ij}^{\text{CC}}
-
-These correspond to different orders in the spin-orbit coupling perturbation expansion.
+Spin-lattice coupling :math:`J_{ijk}`. The routine has no caller in the
+production driver; with ``njijk > 0`` ``post_processing='exchange'`` runs no
+exchange routine. It writes only to standard output.
 
 Physical Interpretation
 -----------------------
@@ -383,71 +255,46 @@ Physical Interpretation
 Output Files
 ============
 
-exchange.out
-------------
-
-**Format:**
-
-.. code-block:: text
-
-   # i    j    Jij(meV)   Jxx   Jxy   Jxz   Jyx   Jyy   Jyz   Jzx   Jzy   Jzz   Rij(Å)
-     1    2    15.243     ...   ...   ...   ...   ...   ...   ...   ...   ...   2.866
-     1    3   -2.156      ...   ...   ...   ...   ...   ...   ...   ...   ...   4.050
-
-- Atom indices ``i, j``
-- Isotropic exchange :math:`J_{ij}` in meV
-- Full :math:`3 \times 3` tensor components
-- Distance between atoms
-
-dmi.out
--------
-
-DMI vectors for each pair:
+J, D and A are :math:`10^3/(4\pi)` times an energy integral in Ry (mRy
+scale); no conversion to meV is applied. The files have no header line.
+Each record is:
 
 .. code-block:: text
 
-   # i    j    Dx(meV)   Dy(meV)   Dz(meV)   |D|(meV)   Rij(Å)
-     1    2    0.234     -0.156     1.234     1.267      2.866
+   type_i  type_j  dx  dy  dz  <values>  distance
 
-anisotropy.out
---------------
+where ``type_i``, ``type_j`` are the atom types (``iz``), ``dx dy dz`` is
+:math:`\mathbf{r}_j - \mathbf{r}_i` and ``distance`` its norm.
 
-Full anisotropy tensors:
-
-.. code-block:: text
-
-   # i    j    Axx   Axy   Axz   Ayx   Ayy   Ayz   Azx   Azy   Azz   (meV)
-     1    1    2.3   0.0   0.0   0.0   2.3   0.0   0.0   0.0   2.8
-
-damping-energy.out
-------------------
-
-Gilbert damping as function of energy:
-
-.. code-block:: text
-
-   # E-EF(eV)   α_xx   α_xy   α_xz   ...   α_zz
-     -0.500     0.012  0.000  0.000  ...   0.015
+- From ``calculate_exchange``: ``jij.out`` (J), ``dij.out`` (3 D
+  components), ``aij.out`` (9 A components), ``jtens.out``.
+- From ``calculate_exchange_twoindex``: ``jijso.out``, ``jijfo.out``,
+  ``dijso.out``, ``dijfo.out``, ``aijso.out``, ``aijfo.out``,
+  ``jtensso.out``, ``jtensfo.out``, ``jijparts.out``, ``dijparts.out``,
+  ``aijparts.out``.
+- From ``calculate_gilbert_damping``: ``alldampings.out`` (per pair, atom
+  indices i, j) and ``damping-energy.out`` (energy-resolved sum; first
+  column :math:`E - E_F` in Ry; scaled by the prefactor of the last pair).
 
 Integration and Usage
 =====================
 
-Workflow
---------
-
 1. **SCF convergence** must be completed first
-2. **Set exchange calculation flag** in input:
+2. Select the exchange post-processing and the pairs:
 
 .. code-block:: fortran
 
-   &control
-      calc_exchange = .true.
-      njij = 10           ! Number of pairs
+   &calculation
+      post_processing = 'exchange'
+   /
+   &lattice
+      njij = 2
+      ijpair(1,:) = 1, 2
+      ijpair(2,:) = 1, 3
    /
 
-3. **Specify atom pairs** in ``clust`` file or via namelist
-4. **Run calculation:** Exchange computed during post-processing
-5. **Output files** written to working directory
+3. ``post_processing_exchange`` calls ``calculate_exchange`` and
+   ``calculate_exchange_twoindex`` when ``njij /= 0`` and ``njijk == 0``.
 
 Connection to Spin Dynamics
 ----------------------------
@@ -489,14 +336,12 @@ Parallelization
 
 .. code-block:: fortran
 
-   #ifdef USE_MPI
-   do njij_glob = start_pair, end_pair
-      njij = g2l_pair_map(njij_glob)
+   do njij_glob = start_atom, end_atom
+      njij = g2l_map(njij_glob)
       ! Calculate exchange for this pair
    end do
-   #endif
 
-Good scaling up to :math:`N_{\text{cores}} = N_{\text{pairs}}`.
+Results are combined with ``MPI_ALLREDUCE``.
 
 Numerical Stability
 -------------------
@@ -505,7 +350,7 @@ Numerical Stability
 
 1. **Dense energy mesh:** Use 300-500 energy points
 2. **Converged SCF:** Tight convergence (:math:`\Delta Q < 10^{-5}`)
-3. **Sufficient recursion:** ``ll_gf`` :math:`\geq` 50 for good real-space decay
+3. **Sufficient recursion:** ``lld`` / ``llsp`` large enough for good real-space decay
 4. **Check Im[Tr]:** Should be well-defined (not oscillating wildly)
 
 Provenance
@@ -513,18 +358,21 @@ Provenance
 
 **Implementation:**
 
-- ``source/exchange.f90`` - Main exchange module (1917 lines)
+- ``source/exchange.f90`` - Main exchange module
+- ``source/exchange_dynamics.f90`` - Gilbert damping and moment of inertia
 - ``source/green.f90`` - Auxiliary Green's function construction
 - ``source/hamiltonian.f90`` - Torque operators for damping
 
 **Key procedures:**
 
-- ``calculate_jij_auxgreen()`` - LKAG formula with auxiliary GFs
-- ``calculate_exchange_twoindex()`` - Full non-collinear exchange
+- ``calculate_exchange()`` - J, D, A kernels
+- ``calculate_exchange_twoindex()`` - CD/CC/SD/SC decomposition
 - ``calculate_gilbert_damping()`` - Torque-correlation damping
-- ``calculate_dij()`` - DMI calculation
-- ``calculate_aij()`` - Anisotropy calculation
-- ``calculate_jijk()`` - Spin-lattice coupling
+- ``calculate_moment_of_inertia()`` - Torque-correlation inertia kernel
+- ``calculate_jij_auxgreen()`` - LKAG formula with auxiliary GFs (no caller)
+- ``calculate_jijk()`` - Spin-lattice coupling (no caller)
+
+``calculate_dij()`` and ``calculate_aij()`` are empty.
 
 **Authors:**
 

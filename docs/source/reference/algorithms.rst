@@ -13,45 +13,43 @@ The self-consistent field cycle is the core of RS-LMTO.
 
 .. code-block:: text
 
-   function scf_loop(control, lattice, hamiltonian, charge, mixing)
-       for iteration = 1 to nstep
-           ! 1. Build Hamiltonian with current potential
-           H ← build_hamiltonian(lattice, charge, control)
-           
-           ! 2. Compute recursion coefficients
-           a, b² ← recursion_lanczos(H, llsp, lld)
-           
-           ! 3. Calculate Green's functions
-           G(E) ← green_from_recursion(a, b², E)
-           
-           ! 4. Integrate DOS below Fermi energy
-           ρ(E) ← -Im[G(E)] / π
-           n_new ← ∫ dE ρ(E) f(E - E_F)
-           
-           ! 5. Update charge and potential
-           charge_new ← n_new
-           V_eff ← V_xc[charge_new] + V_Hartree[charge_new]
-           
-           ! 6. Mix charge densities
-           charge ← (1-α)·charge + α·charge_new   (linear)
-                  or broyden_mix(charge, charge_new, history)
-           
-           ! 7. Check convergence
-           ΔQ ← || charge - charge_old ||
-           if ΔQ < conv_thr
-               return success
-           
-       return failure (max iterations reached)
+   for iteration = 1 to nstep
+       ! 1. Build Hamiltonian with current potential
+       build_bulkham (and build_lsham with SOC)
+
+       ! 2. Recursion, selected by control%recur (default 'block')
+       'lanczos'  : recur
+       'block'    : recur_b
+       'chebyshev': chebyshev_recur
+
+       ! 3. Green function / DOS
+       'lanczos'  : sgreen
+       'block'    : zsqr, block_green
+       'chebyshev': chebyshev_dos_dispatch
+
+       ! 4. Fermi level, band moments (pl, ql)
+       bands%calculate_fermi, bands%calculate_moments
+
+       ! 5. Mix moments, then new potential by calctype
+       mixpq
+       'B': bulkpot   'S': surfpot   'I': imppot   'L': interfacepot
+
+       ! 6. Convergence: delta = RMS difference of old and new packed
+       !    (pl, ql) moments before mixing; converged if delta < conv_thr
+       !    (and constraint / fixed-U residual checks when active)
+       if converged: exit
+
+   ! Loop ends after nstep iterations without a failure return.
 
 **Implementation:**
 
-- ``source/self.f90::run()`` - Main loop (one pass per iteration, with the convergence test)
-- ``source/hamiltonian.f90::build_bulkham()`` - Step 1
-- ``source/recursion.f90::recur()`` - Step 2
-- ``source/green.f90::bgreen()`` - Step 3
-- ``source/density_of_states.f90::density()`` - Step 4
-- ``source/charge.f90::bulkpot()`` - Step 5
-- ``source/mix.f90::mixpq()`` - Step 6
+- ``source/self.f90`` - Main loop and per-iteration dispatch
+- ``source/hamiltonian_build.f90::build_bulkham()`` - Step 1
+- ``source/recursion_haydock.f90::recur()``, ``recur_b()``;
+  ``source/recursion_chebyshev.f90::chebyshev_recur()`` - Step 2
+- ``source/green_lanczos.f90::sgreen()``, ``source/green_block.f90::block_green()`` - Step 3
+- ``source/bands.f90::calculate_fermi()``, ``calculate_moments()`` - Step 4
+- ``source/mix.f90::mixpq()``, ``source/charge.f90::bulkpot()`` - Step 5
 
 Lanczos Recursion
 =================
@@ -66,7 +64,7 @@ Generate tridiagonal Hamiltonian via Lanczos algorithm.
        |v1⟩ = v0 / ||v0||
        for n = 1 to l_max
            a[n] ← ⟨vn | H | vn⟩
-           |w⟩ ← (H - a[n]) |vn⟩ - b[n]² |vn-1⟩
+           |w⟩ ← (H - a[n]) |vn⟩ - b[n] |vn-1⟩
            b[n+1] ← ||w||
            if b[n+1] < ε (breakdown)
                return
@@ -85,9 +83,9 @@ Generate tridiagonal Hamiltonian via Lanczos algorithm.
 
 **Implementation:**
 
-- ``source/recursion.f90::recur()`` - Full loop
-- ``source/recursion.f90::hop()`` - Single step (compute :math:`a_n`, :math:`b_n`)
-- ``source/recursion.f90::crecal()`` - Coefficient recurrence
+- ``source/recursion_haydock.f90::recur()`` - Full loop
+- ``source/recursion_haydock.f90::hop()`` - Single step (compute :math:`a_n`, :math:`b_n`)
+- ``source/recursion_haydock.f90::crecal()`` - Coefficient recurrence
 
 Chebyshev Recursion
 ===================
@@ -100,10 +98,11 @@ Compute spectral moments using Chebyshev polynomials.
 
    μ[n] = chebyshev_moment(H, n, E_min, E_max)
        ! Rescale energy to [-1, 1]
-       H_scaled ← 2(H - E_min)/(E_max - E_min) - 1
+       a ← (E_max - E_min)/(2 - 0.3),  b ← (E_max + E_min)/2
+       H_scaled ← (H - b)/a
        
        ! Chebyshev polynomial recursion: T_{n+1} = 2x T_n - T_{n-1}
-       |ψ0⟩ ← random vector
+       |ψ0⟩ ← unit orbital block on the site (SCF and DOS)
        |ψ1⟩ ← H_scaled |ψ0⟩
        
        μ[0] ← ⟨ψ0 | ψ0⟩
@@ -117,11 +116,15 @@ Compute spectral moments using Chebyshev polynomials.
 
 .. math::
 
-   \rho(E) = \frac{1}{\pi\sqrt{1-(E/W)^2}} \sum_n T_n(E/W) \mu_n
+   \rho(E) = \frac{1}{\pi\sqrt{a^2-(E-b)^2}} \left[ g_0 \mu_0 + 2 \sum_{n \ge 1} g_n \mu_n T_n\!\left(\frac{E-b}{a}\right) \right]
+
+with :math:`g_n` the Jackson kernel (``jackson_kernel``). Random-phase
+starting vectors are used only for transport with
+``cond_calctype = 'random_vec'``.
 
 **Implementation:**
 
-- ``source/recursion.f90::chebyshev_recur_ll()`` - Moment calculation
+- ``source/recursion_chebyshev.f90::chebyshev_recur()`` - Moment calculation
 - ``source/density_of_states.f90::chebyshev_dos()`` - DOS from moments
 
 Green's Function Evaluation
@@ -150,44 +153,27 @@ Compute :math:`G(E) = (E - H + i\eta)^{-1}` using continued fraction.
 
 **Implementation:**
 
-- ``source/green.f90::sgreen()`` - On-site
-- ``source/green.f90::bgreen()`` - Block (multi-orbital)
+- ``source/green_lanczos.f90::sgreen()`` - On-site
+- ``source/green_lanczos.f90::bgreen()`` - Block (multi-orbital)
 
 Density Integration
 ===================
 
-Convert DOS to charge density by integrating below Fermi level.
-
-**Algorithm:**
+The Fermi level is found from the total DOS (``bands%fermi``):
 
 .. code-block:: text
 
-   n = integrate_dos(ρ(E), E_F, T)
-       ! Fermi-Dirac distribution
-       f(E) = 1 / (exp((E - E_F) / k_B T) + 1)
-       
-       n ← ∫_{-∞}^{∞} dE ρ(E) f(E)
-       
-       ! Numerical integration (trapezoidal rule on energy mesh)
-       n = 0
-       for i = 1 to n_energy
-           dE = energy_mesh[i] - energy_mesh[i-1]
-           weight = f(energy_mesh[i])
-           n += ρ[i] × weight × dE
+   integral ← 0
+   for each pair of mesh intervals (Simpson's rule)
+       integral ← integral + h (y[i-1] + 4 y[i] + y[i+1]) / 3
+       if integral ≥ qqv (valence count): stop
+   E_F ← linear interpolation inside the last interval
 
-**Fermi level determination:**
-
-.. code-block:: text
-
-   E_F = calculate_fermi(ρ(E), N_target, T)
-       ! Binary search or Newton-Raphson
-       do while |n(E_F) - N_target| > tolerance
-           dEdq ← dN/dE_F from DOS derivative
-           E_F ← E_F - (n(E_F) - N_target) / dEdq
+There is no temperature in this search. ``calculate_fermi`` runs it only
+when ``fix_fermi`` is false and ``calctype`` is 'B' or 'L'.
 
 **Implementation:**
 
-- ``source/density_of_states.f90::density()`` - Integration
 - ``source/bands.f90::calculate_fermi()`` - Fermi level search
 
 Density Mixing
@@ -231,88 +217,52 @@ Density Mixing
 Exchange Interaction Calculation
 =================================
 
-Compute Heisenberg exchange using :math:`J_{ij} = \langle i | H_\text{eff} | j \rangle`.
+For each pair :math:`(i, j)` in ``ijpair``, ``calculate_exchange``
+integrates
 
-**Algorithm:**
+.. math::
 
-.. code-block:: text
+   J_{ij} = \frac{10^3}{4\pi} \int^{E_F} dE \,
+   \text{Im}\,\text{Tr}\Big[ \Delta_i G_i^0 \Delta_j G_j^0
+   - \sum_\alpha \Delta_i G_i^\alpha \Delta_j G_j^\alpha \Big]
 
-   J[i,j] = exchange_interaction(G_ij, ε_F)
-       ! For each pair of atoms i, j
-       
-       ! 1. Compute inter-site Green's function
-       G_ij(E) ← green_function(i, j)
-       
-       ! 2. Extract exchange coupling via:
-       J_ij ← ∫ dE [Im(G_ij⁺⁻(E)) - Im(G_ij⁻⁺(E))] Θ(E_F - E)
-       
-       or via magnetic response:
-       χ_ij ← derivative of Green function
-       J_ij ← χ_ij²
-   
-   ! Output list of J vs. distance
+with Simpson's rule and the Fermi weight (:math:`G^0`, :math:`G^\alpha`:
+the ``Ginmag``/``Gjnmag`` and ``Gix``... ``Gjz`` arrays). See
+:doc:`exchange_module` for D, A and the output files.
 
 **Implementation:**
 
-- ``source/exchange.f90::calculate()`` - Main routine
+- ``source/exchange.f90::calculate_exchange()`` - Main routine
 - Uses ``green.f90`` for inter-site Green's functions
 
 Conductivity Calculation
 ========================
 
-Compute conductivity tensor using Kubo-Greenwood formula.
+Chebyshev expansion of the Kubo-Bastin formula:
 
-**Algorithm:**
+.. math::
 
-.. code-block:: text
+   \sigma_{\alpha\beta}(E) = \frac{16}{\pi \Delta E^2} \sum_{n,m}
+   \Gamma_{nm}(E) \mu_{nm}^{\alpha\beta}
 
-   σ_αβ(E) = (e²/2π) Im ⟨v_α G(E) v_β G(E)⟩
-   
-   where v_α = ∂H/∂k_α (velocity operator)
-   
-   For each energy point:
-   1. Compute velocity operators from Hamiltonian derivatives
-   2. Construct: v_α G(E) v_β G(E)
-   3. Take imaginary part
-   4. Multiply by (e²/2π)
-   
-   Transport coefficient at temperature T:
-   σ(T) = ∫ dE σ(E) (-∂f/∂E)
+followed by a zero-temperature Fermi-weighted cumulative Simpson integral
+over energy. See :doc:`conductivity_module`.
 
 **Implementation:**
 
-- ``source/conductivity.f90::calculate()`` - Main routine
-- ``source/hamiltonian.f90::build_realspace_velocity_operators()`` - Velocity ops
+- ``source/conductivity.f90::calculate_conductivity_tensor()`` - Main routine
+- ``source/hamiltonian_build.f90::build_realspace_velocity_operators()`` - Velocity ops
 
 Cluster Geometry Construction
 =============================
 
-Build atomic cluster from lattice parameters.
-
-**Algorithm:**
-
-.. code-block:: text
-
-   function build_cluster(alat, nx, ny, nz, r2)
-       atoms = []
-       
-       ! Generate atoms in supercell
-       for i = 1 to nbulk
-           for ix = -nx/2 to nx/2
-               for iy = -ny/2 to ny/2
-                   for iz = -nz/2 to nz/2
-                       ! Lattice position
-                       R = (ix, iy, iz) × alat + R_basis[i]
-                       
-                       ! Check if within cutoff
-                       if |R - R_center| < sqrt(r2)
-                           atoms.append(R)
-       
-       return atoms
+``lattice%bravais`` builds the cluster from the lattice vectors ``a``
+and the repetition counts ``n1``, ``n2``, ``n3``, keeping sites within the
+cutoff.
 
 **Implementation:**
 
-- ``source/lattice_cluster.f90`` - Cluster generation
+- ``source/lattice_lifecycle.f90::bravais()`` - Cluster generation
 - ``source/math.f90`` - Distance/geometry utilities
 
 Hamiltonian Construction
@@ -348,9 +298,9 @@ Build electronic Hamiltonian from TB parameters.
 
 **Implementation:**
 
-- ``source/hamiltonian.f90::build_bulkham()`` - Bulk
-- ``source/hamiltonian.f90::build_locham()`` - Local
-- ``source/hamiltonian.f90::build_lsham()`` - Spin-orbit
+- ``source/hamiltonian_build.f90::build_bulkham()`` - Bulk
+- ``source/hamiltonian_build.f90::build_locham()`` - Local
+- ``source/hamiltonian_build.f90::build_lsham()`` - Spin-orbit
 
 Provenance
 ==========

@@ -106,9 +106,9 @@ whose potential parameters are imported rather than converged. This is why
 features like exchange coupling or Gilbert damping work identically
 regardless of which geometry produced the underlying Green's function.
 
-Substitutional disorder within a geometry (alloy-like concentration
-mixing on a site or sublattice) is available through the Ruban-Abrikosov
-concentration treatment (``control%ruban``, ``conca``/``concb``).
+The keys ``ruban``, ``conca`` and ``concb`` in ``&control`` are read and
+stored but no other module uses them; there is no substitutional-disorder
+treatment.
 
 Magnetic and electronic structure
 ==================================
@@ -154,13 +154,13 @@ route, been diagonalized), the following properties can be computed:
   structure to a system with disorder- or correlation-broadened states.
 - **Magnetic exchange interactions**: isotropic Heisenberg couplings
   :math:`J_{ij}`, Dzyaloshinskii-Moriya vectors :math:`\mathbf{D}_{ij}`,
-  magnetic anisotropy tensors, and spin-lattice coupling parameters
-  :math:`J_{ijk}`, from the real-space LKAG formalism; computable from
+  and magnetic anisotropy tensors, from the real-space LKAG formalism; computable from
   real-space recursion or from either k-space Green's-function backend.
 - **Gilbert damping**: the same torque-correlation machinery that
   produces exchange parameters also yields a damping tensor
   :math:`\alpha_{ij}`, on whichever route (recursion, k-space Lehmann, or
-  k-space Dyson) produced the underlying Green's function.
+  k-space Dyson) produced the underlying Green's function. Requires
+  ``nsp = 2``; for other ``nsp`` the routine does nothing.
 - **Electrical conductivity**: the full :math:`3\times3` conductivity
   tensor via the Kubo-Bastin formalism and Chebyshev expansion, including
   DC and frequency-dependent (optical) conductivity, orbital-resolved

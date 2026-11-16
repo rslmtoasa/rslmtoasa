@@ -6,8 +6,8 @@ Module Overview
 
 .. note::
 
-   The modules ``lattice``, ``hamiltonian``, ``recursion``, and ``reciprocal``
-   declare their derived type and procedure interfaces in a parent file
+   The modules ``lattice``, ``hamiltonian``, ``recursion``, ``reciprocal``,
+   ``green``, ``charge``, ``exchange``, ``calculation`` and ``self`` declare their derived type and procedure interfaces in a parent file
    (e.g. ``hamiltonian.f90``) and carry the implementations in Fortran
    submodules (``hamiltonian_build.f90``, ``hamiltonian_ccor.f90``, ...). The
    type and its public interface are documented here against the parent
@@ -37,7 +37,11 @@ Key members:
 
 - ``pre_processing`` - Setup type ('none', 'bravais', 'buildsurf', etc.)
 - ``processing`` - Main calculation ('none', 'sd', etc.)
-- ``post_processing`` - Output type ('none', 'dos', 'bands', etc.)
+- ``post_processing`` - Output type ('none', 'paoflow2rs', 'exchange',
+  'exchange_p2rs', 'conductivity', 'conductivity_p2rs', 'orbital_modern',
+  'band_structure', 'bsf', 'density_of_states', 'fermi_surface',
+  'spin_response', 'kspace_green', 'frozen_magnon'); any other value stops
+  the run
 
 **control.f90**
 
@@ -56,7 +60,6 @@ Major parameters:
 - ``llsp, lld`` - Recursion cutoffs
 - the SCF limit and tolerance are ``nstep`` and ``conv_thr`` in the ``self`` module
 - ``idos`` - LDOS output flag
-- ``verbose`` - Verbosity flag
 
 See :ref:`keywords/control_parameters` for complete listing.
 
@@ -80,7 +83,7 @@ Key members:
 
 - ``alat`` - Lattice constant
 - ``nbulk`` - Atoms per unit cell
-- ``nx, ny, nz`` - Cluster dimensions
+- ``n1, n2, n3`` - Cluster repetitions along the lattice vectors
 - ``r2`` - Hopping cutoff radius²
 
 **hamiltonian.f90**
@@ -187,7 +190,7 @@ Major procedures:
 
 Key members:
 
-- Pointers to lattice, charge, control, hamiltonian, recursion, green, dos, bands, exchange
+- Pointers to lattice, charge, control, symbolic_atom, recursion, dos, bands, en, mix, hamiltonian, green
 
 **recursion.f90**
 
@@ -205,8 +208,8 @@ Major procedures:
 - ``recur()`` - Full Lanczos recursion
 - ``hop()`` - Single Lanczos step
 - ``crecal()`` - Recursion coefficient calculation
+- ``recur_b()`` - Block Lanczos recursion
 - ``chebyshev_recur_ll()`` - Chebyshev moments
-- ``block_green()`` - Block recursion for Green's function
 
 Key members:
 
@@ -231,7 +234,7 @@ Major procedures:
 - ``sgreen()`` - On-site Green's function
 - ``bgreen()`` - Block Green's function
 - ``block_green()`` - Full block computation
-- ``chebyshev_green()`` - Chebyshev expansion
+- ``chebyshev_green_ij()``, ``chebyshev_green_eta()`` - Chebyshev expansion
 - ``calculate_intersite_gf()`` - Inter-site Green's functions
 
 Key members:
@@ -278,8 +281,10 @@ Members:
 
 Procedures:
 
-- ``density()`` - Calculate band structure
-- ``write_bands()`` - Output bands
+- ``calculate_fermi()`` - Fermi level
+- ``calculate_moments()`` - Band moments
+- ``calculate_band_energy()`` - Band energy
+- ``calculate_magnetic_moments()`` - Magnetic moments
 
 **exchange.f90**
 
@@ -294,8 +299,10 @@ Procedures:
 
 Procedures:
 
-- ``calculate()`` - Compute exchange interactions
-- ``write_exchange()`` - Output J values
+- ``calculate_exchange()`` - J, D, A
+- ``calculate_exchange_twoindex()`` - CD/CC/SD/SC decomposition
+- ``calculate_gilbert_damping()`` - Gilbert damping
+- ``calculate_moment_of_inertia()`` - Moment of inertia
 
 Key members:
 
@@ -356,8 +363,10 @@ generalized-Bloch-theorem fix.
 
 Procedures:
 
-- ``calculate()`` - Compute conductivity tensor
-- ``write_conductivity()`` - Output σ values
+- ``calculate_gamma_nm()`` - Chebyshev expansion coefficients
+- ``calculate_conductivity_tensor()`` - Compute conductivity tensor
+- ``response_normalization()`` - Units and volume normalisation
+- ``write_physical_response()`` - Output in physical units
 
 Utility Modules
 ===============
@@ -416,7 +425,7 @@ Utility Modules
 - Generates frozen potential parameters for a semi-infinite vacuum
   (empty-sphere) lattice by running the code's own radial solver at
   constant V(r), replacing hand-set empty-sphere stacks
-- Validated against an analytic spherical-Bessel oracle
+- Compared with an analytic spherical-Bessel reference
   (``tests/unit/test_vacuum_lead.f90``)
 - Consumed via ``&lattice region_b_kind='vacuum'``
   (see :ref:`keywords/lattice_geometry`)
@@ -449,8 +458,7 @@ Utility Modules
 
 **energy.f90**
 
-- Energy mesh management
-- Fermi level calculation
+- Energy mesh management (``e_mesh``)
 
 **symbolic_atom.f90**
 

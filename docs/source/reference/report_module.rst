@@ -83,15 +83,16 @@ Data Retrieval
 
 .. code-block:: fortran
 
-   values = my_report%get_values()           ! All values
-   values = my_report%get_values(label)      ! Values for sub-section
+   call my_report%get_values(values)         ! All values (subroutine)
+   call my_report%get_values(label, values)  ! Values for sub-section
 
 **Get child reports:**
 
 .. code-block:: fortran
 
-   child = my_report%get_child(label)
-   child = my_report%get_valid_child(label)  ! Returns valid child or empty
+   type(report), pointer :: child
+   found = my_report%get_child(label, child)        ! logical result; child is set
+   found = my_report%get_valid_child(label, child)  ! logical result; child is set
 
 **Query structure:**
 
@@ -129,103 +130,18 @@ Output and Formatting
 
 .. code-block:: fortran
 
-   call my_report%print_report(unit, indent_level)
+   call my_report%print_report(title)
+   call my_report%print_report(title, fields)
 
-Prints formatted report to file unit with proper indentation.
+Prints a table to standard output. ``fields`` is a comma-separated list;
+the default is ``'MEAN,MAX,MIN,TOTAL,TOTAL (%),NCALLS,TOTAL NCALLS'``.
 
 **Get labels:**
 
 .. code-block:: fortran
 
-   labels = my_report%get_labels()           ! All labels in hierarchy
-   parent_label = my_report%get_parent()     ! Parent section name
-
-Use Cases
-=========
-
-Performance Profiling
----------------------
-
-Track timing for different code sections:
-
-.. code-block:: fortran
-
-   type(report) :: timing_report
-   
-   timing_report = report('RS-LMTO Timing')
-   
-   ! Add timing for main sections
-   call timing_report%add_value('SCF Iteration', scf_time)
-   call timing_report%add_value('Hamiltonian Build', ham_time)
-   call timing_report%add_value('Green Function', gf_time)
-   
-   ! Create sub-report for detailed breakdown
-   scf_report = report('SCF Details')
-   call scf_report%add_value('Recursion', recursion_time)
-   call scf_report%add_value('DOS Integration', dos_time)
-   call timing_report%add_child(scf_report)
-   
-   ! Print hierarchical timing report
-   call timing_report%print_report(6, 0)  ! To stdout
-
-Output:
-
-.. code-block:: text
-
-   RS-LMTO Timing:
-     SCF Iteration: 45.2 s (65%)
-       SCF Details:
-         Recursion: 30.1 s (67%)
-         DOS Integration: 15.1 s (33%)
-     Hamiltonian Build: 12.3 s (18%)
-     Green Function: 11.9 s (17%)
-
-Convergence Tracking
---------------------
-
-Monitor SCF convergence:
-
-.. code-block:: fortran
-
-   type(report) :: scf_report
-   
-   scf_report = report('SCF Convergence')
-   
-   do iteration = 1, nstep
-      ! Do SCF iteration
-      call scf_report%add_value('Iteration', real(iteration))
-      call scf_report%add_value('ΔQ', charge_diff)
-      call scf_report%add_value('Energy', total_energy)
-   end do
-   
-   ! Statistics
-   mean_delta_q = scf_report%get_child('ΔQ')%mean()
-   final_energy = scf_report%get_child('Energy')%get_values()
-   final_energy = final_energy(size(final_energy))
-
-Property Summaries
-------------------
-
-Organize calculation results:
-
-.. code-block:: fortran
-
-   type(report) :: results
-   
-   results = report('Calculation Results')
-   
-   ! Magnetic properties
-   mag_report = report('Magnetic Properties')
-   call mag_report%add_value('Total moment', total_moment)
-   call mag_report%add_value('Spin moment', spin_moment)
-   call mag_report%add_value('Orbital moment', orbital_moment)
-   call results%add_child(mag_report)
-   
-   ! Electronic properties
-   elec_report = report('Electronic Properties')
-   call elec_report%add_value('Fermi energy', fermi_energy)
-   call elec_report%add_value('DOS at EF', dos_at_ef)
-   call results%add_child(elec_report)
+   call my_report%get_labels(labels)                ! All labels in hierarchy (subroutine)
+   found = my_report%get_parent(label, parent)      ! logical result; parent is set
 
 Hierarchical Data Structure
 ============================
@@ -281,132 +197,17 @@ Integration with RS-LMTO
 
 **Timer integration:**
 
-The report module works closely with ``timer_mod`` for performance profiling:
+``timer_mod`` (``g_timer``) has ``start``, ``stop`` and ``print_report``:
 
 .. code-block:: fortran
 
    use timer_mod, only: g_timer
-   use report_mod
    
    call g_timer%start('SCF Loop')
    ! ... SCF calculation ...
    call g_timer%stop('SCF Loop')
    
-   ! Export to report
-   timing_report = g_timer%get_report()
-
-**Logger integration:**
-
-Works with ``logger_mod`` for structured output:
-
-.. code-block:: fortran
-
-   use logger_mod, only: g_logger
-   
-   call results_report%print_report(g_logger%unit, indent=2)
-
-Example: Complete Reporting Workflow
-=====================================
-
-.. code-block:: fortran
-
-   program report_example
-      use report_mod
-      use precision_mod
-      implicit none
-      
-      type(report) :: main_report, scf_report, dos_report
-      integer :: iter
-      real(rp) :: charge_diff, energy
-      
-      ! Create main report
-      main_report = report('RS-LMTO Calculation')
-      
-      ! SCF section
-      scf_report = report('Self-Consistent Field')
-      do iter = 1, 10
-         ! Simulate SCF
-         charge_diff = 0.1_rp / iter
-         energy = -100.0_rp + 1.0_rp / iter
-         
-         call scf_report%add_value('ΔQ', charge_diff)
-         call scf_report%add_value('Energy', energy)
-      end do
-      call main_report%add_child(scf_report)
-      
-      ! DOS section
-      dos_report = report('Density of States')
-      call dos_report%add_value('DOS at EF', 2.3_rp)
-      call dos_report%add_value('Integrated DOS', 24.0_rp)
-      call main_report%add_child(dos_report)
-      
-      ! Print full report
-      call main_report%print_report(6, 0)
-      
-      ! Extract specific information
-      print *, 'Final ΔQ:', scf_report%get_child('ΔQ')%mean()
-      print *, 'Converged energy:', energy
-      print *, 'Total items:', main_report%total_ncalls()
-      
-   end program report_example
-
-Output Format
-=============
-
-**Standard format:**
-
-.. code-block:: text
-
-   RS-LMTO Calculation:
-     Self-Consistent Field:
-       ΔQ: 0.0100 (mean over 10 iterations)
-       Energy: -99.10 eV (final value)
-     Density of States:
-       DOS at EF: 2.30 states/eV
-       Integrated DOS: 24.00 electrons
-
-**With percentages:**
-
-.. code-block:: text
-
-   Timing Report:
-     Total time: 125.5 s (100%)
-       SCF: 89.3 s (71%)
-         Recursion: 45.2 s (51% of SCF, 36% of total)
-         Green's function: 30.1 s (34% of SCF, 24% of total)
-         Mixing: 14.0 s (16% of SCF, 11% of total)
-       Post-processing: 36.2 s (29%)
-
-Advanced Features
-=================
-
-**Filtering:**
-
-Extract specific data based on labels:
-
-.. code-block:: fortran
-
-   scf_times = main_report%get_child('Timing')%get_child('SCF')%get_values()
-
-**Comparison:**
-
-Compare reports from different calculations:
-
-.. code-block:: fortran
-
-   calc1_energy = report1%get_child('Energy')%get_values()
-   calc2_energy = report2%get_child('Energy')%get_values()
-   energy_diff = calc2_energy - calc1_energy
-
-**Serialization:**
-
-Reports can be written to files for later analysis:
-
-.. code-block:: fortran
-
-   open(unit=10, file='report.dat')
-   call my_report%print_report(10, 0)
-   close(10)
+   call g_timer%print_report()
 
 Best Practices
 ==============
@@ -423,7 +224,7 @@ Provenance
 
 **Implementation:**
 
-- ``source/report.f90`` - Main report module (1100+ lines)
+- ``source/report.f90`` - Main report module
 - ``source/timer.f90`` - Timing integration
 - ``source/logger.f90`` - Output integration
 - ``source/string.f90`` - String utilities for formatting

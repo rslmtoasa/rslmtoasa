@@ -48,7 +48,7 @@ Type: conductivity
       
       ! Pre-computed coefficients
       complex(rp), dimension(:,:,:), allocatable :: gamma_nm
-         ! Dimension: (energy_points, ll_cond, ll_cond)
+         ! Dimension: (channels_ldos+10, cond_ll, cond_ll)
          ! Chebyshev expansion coefficients
    end type
 
@@ -140,7 +140,7 @@ where:
 
 - :math:`T_n(x)` are Chebyshev polynomials of the first kind
 - :math:`\mu_n = 2 - \delta_{n,0}` are normalization factors
-- :math:`g_n` are Jackson kernel damping factors (smoothing)
+- :math:`g_n` are kernel damping factors (smoothing; the code uses the Lorentz kernel, see below)
 - :math:`N` is the expansion order (recursion depth)
 
 **Moments** :math:`\mu_n` are calculated via recursion:
@@ -168,19 +168,23 @@ The conductivity involves **products of two Green's functions**, leading to the 
 .. math::
 
    \Gamma_{nm}(E) = \frac{1}{(1 - \tilde{E}^2)^2} 
-   \left[ C_n(E) T_m(\tilde{E}) + C_m(E) T_n(\tilde{E}) \right] g_n g_m w_n w_m
+   \left[ C_n(\tilde{E}) T_m(\tilde{E}) + \bar{C}_m(\tilde{E}) T_n(\tilde{E}) \right] g_n g_m w_n w_m
 
-where:
+where, for orders :math:`n, m = 0, \ldots, N-1`:
 
-- :math:`C_n(E) = \frac{1}{\pi} \frac{(-1)^{n+1} \sin(n \arccos \tilde{E})}{\sqrt{1 - \tilde{E}^2}}` is a Chebyshev derivative
-- :math:`w_n` are integration weights
-- :math:`g_n` are Jackson kernel factors
+- :math:`C_n(x) = \left(x - i n \sqrt{1 - x^2}\right) e^{i n \arccos x}`
+- :math:`\bar{C}_m(x) = \left(x + i m \sqrt{1 - x^2}\right) e^{-i m \arccos x}`
+- :math:`w_0 = 1/2`, :math:`w_n = 1` otherwise
+- :math:`g_n` are Lorentz kernel factors
 
-**Jackson kernel** (smoothing to reduce Gibbs oscillations):
+**Lorentz kernel** (``lorentz_kernel`` with :math:`\lambda = 6`):
 
 .. math::
 
-   g_n = \frac{1}{N+1} \left[ (N - n + 1)\cos\frac{\pi n}{N+1} + \sin\frac{\pi n}{N+1} \cot\frac{\pi}{N+1} \right]
+   g_n = \frac{\sinh\left[\lambda (1 - n/N)\right]}{\sinh \lambda}
+
+The run stops if ``cond_ll`` < 2 or any scaled energy lies outside
+:math:`(-1, 1)`.
 
 **Implementation** in ``calculate_gamma_nm()``:
 
@@ -194,19 +198,20 @@ where:
    ! Chebyshev polynomials
    T_0 = 1.0
    T_1 = wscale
-   do n = 2, ll_cond
+   do n = 2, cond_ll
       T_n = 2 * wscale * T_{n-1} - T_{n-2}
    end do
    
    ! Cn coefficients
    acos_x = acos(wscale)
    sqrt_term = sqrt(1.0 - wscale**2)
-   cn(n) = ((-1)**(n+1)) * sin(n * acos_x) / (pi * sqrt_term)
+   cn(:,n) = (wscale - i*(n-1)*sqrt_term) * exp( i*(n-1)*acos_x)
+   cm(:,n) = (wscale + i*(n-1)*sqrt_term) * exp(-i*(n-1)*acos_x)
    
    ! Gamma_nm matrix
-   do n = 1, ll_cond
-      do m = 1, ll_cond
-         gamma_nm(:,n,m) = (cn(:,n) * T_m + cn(:,m) * T_n) / (1 - wscale**2)**2
+   do n = 1, cond_ll
+      do m = 1, cond_ll
+         gamma_nm(:,n,m) = (cn(:,n) * T_m + cm(:,m) * T_n) / (1 - wscale**2)**2
          gamma_nm(:,n,m) = gamma_nm(:,n,m) * g_n * g_m * w_n * w_m
       end do
    end do
@@ -237,14 +242,17 @@ The **conductivity tensor** :math:`\sigma_{\alpha\beta}(E)` has 9 components (fo
 
 .. math::
 
-   \sigma_{\alpha\beta}(E) = \frac{16 e^2}{\pi \Omega \Delta E^2} \sum_{n,m}^{N} 
-   \text{Tr}\left[ \hat{v}_\alpha \Gamma_{nm}(E) \hat{v}_\beta \mu_{nm} \right]
+   \sigma_{\alpha\beta}(E) = \frac{16}{\pi \Delta E^2} \sum_{n,m}^{N} 
+   \Gamma_{nm}(E) \mu_{nm}^{\alpha\beta}
 
 where:
 
 - :math:`\mu_{nm}` are the Chebyshev moments of the velocity operator products
 - :math:`\Delta E = E_{\max} - E_{\min}` is the energy span
-- Factor :math:`16/\pi` comes from Chebyshev normalization
+
+The raw ``cond_*.out`` files carry only the factor :math:`16/(\pi \Delta E^2)`.
+:math:`e^2/\hbar` and the cell volume or area enter only in
+``write_physical_response`` (``response_*.out``, ``response_units.txt``).
 
 **Velocity operator matrix elements:**
 
@@ -304,9 +312,9 @@ Algorithm Overview
 Per-Type Calculation
 --------------------
 
-**Option 1:** Conductivity averaged over all atoms (``cond_calctype = 'average'``)
-
-**Option 2:** Conductivity per atomic species (``cond_calctype = 'per_type'``):
+``cond_calctype`` takes ``'per_type'`` (traces per atomic type) or
+``'random_vec'`` (random starting vectors). Per type
+(``cond_calctype = 'per_type'``):
 
 .. code-block:: fortran
 
@@ -326,19 +334,18 @@ Key Control Parameters
 
 **In namelist &control:**
 
-- ``cond_ll`` (default: 100): Chebyshev expansion order :math:`N`
+- ``cond_ll`` (default: 200): Chebyshev expansion order :math:`N`
   
   - Larger :math:`N` -> better energy resolution, smoother curves
   - Typical: 50-200
   - Convergence: check :math:`\sigma(E)` vs :math:`N`
 
-- ``cond_calctype`` (default: 'average'): Calculation mode
+- ``cond_calctype`` (default: 'per_type'): Calculation mode
   
-  - ``'average'``: Total conductivity
   - ``'per_type'``: Per-atomic-species conductivity
   - ``'random_vec'``: With random vectors (stochastic)
 
-- ``random_vec_num`` (default: 10): Number of stochastic vectors
+- ``random_vec_num`` (default: 1): Number of stochastic vectors
   
   - Typical: 10-50
   - More vectors -> better statistics, slower
@@ -358,7 +365,7 @@ Convergence Criteria
 
 2. **Energy mesh** ``channels_ldos``:
 
-   - Default: 200-500 points
+   - Default: 6000 points (``calctype`` B, S, L), 3000 (I)
    - Must resolve features near :math:`E_F`
 
 3. **Random vectors** ``random_vec_num``:
@@ -379,7 +386,7 @@ calculate_gamma_nm
 **Inputs:**
 
 - Energy mesh ``en%ene(:)``
-- Recursion depth ``ll_cond``
+- Expansion order ``cond_ll``
 - Energy bounds ``e_min, e_max``
 
 **Algorithm:**
@@ -387,7 +394,7 @@ calculate_gamma_nm
 1. Rescale energies: :math:`\tilde{E} = (E - b)/a`
 2. Compute Chebyshev polynomials :math:`T_n(\tilde{E})` recursively
 3. Compute :math:`C_n(E)` coefficients
-4. Apply Jackson kernel :math:`g_n`
+4. Apply Lorentz kernel :math:`g_n`
 5. Construct :math:`\Gamma_{nm}(E)` matrix
 
 **Output:**
@@ -405,7 +412,7 @@ calculate_conductivity_tensor
 2. For each :math:`E`:
 
    a. Sum over Chebyshev indices: :math:`\sum_{nm} \Gamma_{nm}(E) \mu_{nm}^{\alpha\beta}`
-   b. Multiply by prefactor: :math:`(16 e^2)/(\pi \Omega \Delta E^2)`
+   b. Multiply by prefactor: :math:`16/(\pi \Delta E^2)`
    c. Simpson integrate from :math:`E_{\min}` to :math:`E`: :math:`\sigma(E) = \int^E` 
 
 3. Output:
@@ -422,50 +429,24 @@ calculate_conductivity_tensor
 Output Files
 ============
 
-cond_total.out
---------------
+cond_*.out (raw kernels)
+------------------------
 
-Total conductivity as function of energy:
+``cond_total.out``, ``cond_total_orb_real.out``, ``cond_total_orb_im.out``
+and, per type, ``<element>_cond.out``, ``<element>_cond_orb_real.out``,
+``<element>_cond_orb_im.out``. No header line. Column 1 is :math:`E - E_F`
+in Ry. ``cond_total.out`` then has Re and Im of :math:`\sigma(E)`; the
+``_orb_`` files have 18 spin-orbital columns. Values carry only the factor
+:math:`16/(\pi \Delta E^2)` (no volume, no physical constants).
 
-.. code-block:: text
+response_*.out (physical units)
+-------------------------------
 
-   # E-EF(eV)   Re[σ(E)] (arbitrary units)   Im[σ(E)]
-     -5.000    125.43                         2.34
-     -4.990    126.12                         2.45
-     ...
-      0.000    145.67                         5.21  ← Fermi level
-     ...
-
-**Columns:**
-
-1. Energy relative to Fermi level :math:`(E - E_F)`
-2. Real part of conductivity (dissipation)
-3. Imaginary part (dispersion)
-
-cond_total_orb_real.out
------------------------
-
-Orbital-resolved real conductivity:
-
-.. code-block:: text
-
-   # E-EF  σ_s↑↑  σ_px↑↑  σ_py↑↑  σ_pz↑↑  σ_d_z2↑↑  ...  σ_d_xy↓↓
-     -5.0  5.2    12.3    12.3    12.3    18.4      ...  15.2
-     ...
-
-**18 components:**
-
-- Spin-up: :math:`s, p_x, p_y, p_z, d_{z^2}, d_{xz}, d_{yz}, d_{x^2-y^2}, d_{xy}` (9 orbitals)
-- Spin-down: Same 9 orbitals
-
-<element>_cond.out
-------------------
-
-Per-atomic-species conductivity (if ``cond_calctype = 'per_type'``):
-
-**Files:** ``Fe_cond.out``, ``Pt_cond.out``, etc.
-
-**Format:** Same as ``cond_total.out`` but for specific element
+``response_total.out``, ``response_orbitals_real.out``,
+``response_orbitals_imag.out`` and, per type, ``<element>_response.out``.
+Column 1 is :math:`E - E_F` in eV; one header line names the units (S/cm
+for the charge conductivity). ``response_units.txt`` records the
+normalisation.
 
 Physical Interpretation
 =======================
@@ -479,15 +460,10 @@ DC Conductivity
 
    \sigma_{DC} = \sigma(E_F, \omega=0)
 
-**Units:** Typically in :math:`(e^2/\hbar) \cdot a_0^{-1}` or converted to SI.
-
-**Conversion:** To S/m (Siemens per meter):
-
-.. math::
-
-   \sigma[\text{S/m}] = \sigma[\text{code units}] \times \frac{e^2}{\hbar a_0 \Omega}
-
-where :math:`\Omega` is the unit cell volume.
+**Units:** ``response_total.out`` is in S/cm. ``write_physical_response``
+multiplies by :math:`e^2/\hbar \times 10^{8}` and by :math:`1/\Omega`, with
+:math:`\Omega` the cell volume in Å\ :sup:`3` (or area in Å\ :sup:`2` for
+``response_geometry = 'sheet'``).
 
 Optical Conductivity
 --------------------
@@ -531,35 +507,23 @@ Integration and Usage
 Input Namelist (&conductivity)
 -------------------------------
 
-The ``&conductivity`` namelist accepts a single parameter that controls the
-accuracy of the Chebyshev expansion used inside the transport calculation.
+The ``&conductivity`` namelist has three keys.
 
-**ll_cond**
-
-**Type:** Integer
-
-**Purpose:** Chebyshev polynomial expansion order (recursion depth) for the
-conductivity tensor calculation.
-
-**Typical range:** 100–600
-
-**Note:** ``ll_cond`` is read but not used by the code. The expansion order
-is ``cond_ll`` in ``&control``.
+- ``ll_cond`` (integer): read but not used by the code. The expansion order
+  is ``cond_ll`` in ``&control``.
+- ``response_geometry`` (default ``'bulk'``): ``'bulk'`` or ``'sheet'``;
+  any other value stops the run.
+- ``response_measure`` (default 0): cell volume (Å\ :sup:`3`) or area
+  (Å\ :sup:`2`) used for the ``response_*.out`` normalisation; 0 derives it
+  from the lattice vectors and ``alat``.
 
 **Example:**
 
 .. code-block:: fortran
 
    &conductivity
-     ll_cond = 400
+     response_geometry = 'bulk'
    /
-
-**Notes:**
-
-- Higher values produce a smoother, more converged conductivity spectrum but
-  increase computational cost as :math:`\mathcal{O}(N_{ll}^2)`.
-- A convergence test is recommended: increase ``ll_cond`` until
-  :math:`\sigma(E_F)` changes by less than ~1%.
 
 **See also:** ``cond_ll``, ``linear_in``, ``linear_out``, ``cond_calctype`` in
 :ref:`keywords/control_parameters`.
@@ -571,11 +535,12 @@ Input Parameters
 
 .. code-block:: fortran
 
+   &calculation
+      post_processing = 'conductivity'
+   /
    &control
-      calc_conductivity = .true.
-      cond_ll = 100             ! Chebyshev expansion order
-      cond_calctype = 'average' ! or 'per_type'
-      random_vec_num = 20       ! Stochastic vectors
+      cond_ll = 200              ! Chebyshev expansion order
+      cond_calctype = 'per_type' ! or 'random_vec'
    /
 
 **Advanced:**
@@ -584,15 +549,15 @@ Input Parameters
 
    &energy
       channels_ldos = 500       ! Energy mesh points
-      energy_min = -10.0        ! eV below EF
-      energy_max = +5.0         ! eV above EF
+      energy_min = -1.0         ! absolute energy, Ry
+      energy_max = 0.5          ! absolute energy, Ry
    /
 
 Workflow
 --------
 
 1. **Complete SCF calculation** first
-2. **Enable conductivity:** Set ``calc_conductivity = .true.``
+2. **Enable conductivity:** Set ``&calculation post_processing = 'conductivity'``
 3. **Run calculation:** Conductivity computed in post-processing
 4. **Check convergence:** Vary ``cond_ll``, check :math:`\sigma(E_F)` stability
 5. **Analyze output:** Plot :math:`\sigma(E)`, identify features
@@ -603,12 +568,12 @@ Example: Conductivity of Cu
 .. code-block:: fortran
 
    &calculation
-      calctype = 'S'
+      post_processing = 'conductivity'
    /
    &control
-      calc_conductivity = .true.
+      calctype = 'S'
       cond_ll = 150
-      cond_calctype = 'average'
+      cond_calctype = 'per_type'
    /
    &energy
       channels_ldos = 400
@@ -647,21 +612,21 @@ Memory Requirements
 
 **Main arrays:**
 
-- ``gamma_nm(N_E, N_ll, N_ll)``: ~500 MB for :math:`N_E=500`, :math:`N_{ll}=200`
+- ``gamma_nm(N_E, N_ll, N_ll)`` (complex, double precision, :math:`N_E` = ``channels_ldos`` + 10): ~330 MB for ``channels_ldos`` = 500, :math:`N_{ll}=200`
 - ``mu_nm(18, 18, N_ll, N_ll, N_{type})``: ~100 MB
 
 **Tips for large systems:**
 
 1. Use stochastic method (``random_vec_num = 20-50``)
 2. Reduce ``cond_ll`` to 100-150
-3. Use ``cond_calctype = 'average'`` (not 'per_type')
+3. Use ``cond_calctype = 'random_vec'``
 
 Provenance
 ==========
 
 **Implementation:**
 
-- ``source/conductivity.f90`` - Main conductivity module (379 lines)
+- ``source/conductivity.f90`` - Main conductivity module
 - ``source/recursion.f90`` - Chebyshev recursion and moments
 - ``source/green.f90`` - Green's function and velocity operator
 

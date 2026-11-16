@@ -21,8 +21,12 @@ Directory Layout
    ├── source/                       # Fortran source code
    │   ├── main.f90                   # Program entry point
    │   ├── calculation.f90            # Top-level driver: pre/processing/post select-cases
+   │   ├── calculation_preprocessing.f90 #   submodule: pre_processing_* drivers
+   │   ├── calculation_reciprocal.f90 #   submodule: post-processing object stack, band structure, BSF
    │   ├── control.f90                # Control parameters and settings
    │   ├── self.f90                   # Self-consistent field (SCF) loop core (legacy, off-limits)
+   │   ├── self_reciprocal.f90        #   submodule: k-space SCF helpers
+   │   ├── ldau_diagnostics.f90       #   submodule (of self): fixed-U trace output
    │   │
    │   ├── lattice.f90                # Crystal structure & geometry — parent module (type + interfaces)
    │   ├── lattice_lifecycle.f90      #   submodule: constructor / restore_to_default / build_from_file
@@ -37,17 +41,23 @@ Directory Layout
    │   ├── hamiltonian_paoflow_io.f90 #   submodule: PAOFLOW-format import/export
    │   │
    │   ├── recursion.f90              # Recursion method — parent module (type + interfaces)
-   │   ├── recursion_core.f90         #   submodule: Lanczos (recur / crecal)
-   │   ├── recursion_haydock.f90      #   submodule: block-Lanczos (recur_b / crecal_b)
+   │   ├── recursion_core.f90         #   submodule: lifecycle, GPU upload, block_lanczos_fast_nohoh
+   │   ├── recursion_haydock.f90      #   submodule: Lanczos (recur / hop / crecal) and block-Lanczos (recur_b / hop_b / crecal_b)
    │   ├── recursion_chebyshev.f90    #   submodule: Chebyshev moment recursion
    │   ├── recursion_transport.f90    #   submodule: intersite / transport variants
    │   ├── chebyshev_fast.f90         # Fast Chebyshev CPU kernels (fast/batched/MKL)
    │   ├── haydock_fast.f90           # Fast block-Lanczos CPU kernels
    │   ├── rsrec_cuda_plugin.f90      # CUDA plugin wrapper (iso_c_binding); kernels in source/cuda/
    │   │
-   │   ├── green.f90                  # Green's function calculations
-   │   ├── energy.f90                 # Energy mesh and Fermi level
-   │   ├── charge.f90                 # Charge density and electrostatics (+ B7 interfacepot/align_regions)
+   │   ├── green.f90                  # Green's function calculations — parent module
+   │   ├── green_lifecycle.f90        #   submodule: constructor / restore_to_default
+   │   ├── green_lanczos.f90          #   submodule: sgreen / bgreen
+   │   ├── green_block.f90            #   submodule: block_green*, calculate_intersite_gf_twoindex
+   │   ├── green_chebyshev.f90        #   submodule: chebyshev_green_*, chebyshev_dos_dispatch
+   │   ├── energy.f90                 # Energy mesh
+   │   ├── charge.f90                 # Charge density and electrostatics — parent module
+   │   ├── charge_interface.f90       #   submodule: interfacepot / align_regions
+   │   ├── charge_madelung_2d.f90     #   submodule: 2D Madelung sums (surfmat)
    │   ├── region_registry.f90        # B7: per-site region bookkeeping + alignment solver
    │   ├── vacuum_lead.f90            # B7: frozen potential parameters for a semi-infinite vacuum lead
    │   ├── electrostatics_multipole.f90 # B6: l=1 dipole moments (Q10) for surface/interface electrostatics
@@ -66,12 +76,17 @@ Directory Layout
    │   ├── reciprocal_green.f90       #   submodule: B2 k-space Green's-function engine (2 backends)
    │   ├── reciprocal_bsf.f90         #   submodule: B3 Bloch spectral function A(k,E)
    │   ├── reciprocal_moments.f90     #   submodule: B5.1 exact k-space Chebyshev moment generator
+   │   ├── reciprocal_backend.f90     #   submodule: execution backend implementations
+   │   ├── reciprocal_gbt.f90         #   submodule: generalized-Bloch-theorem assembler
+   │   ├── reciprocal_occupations.f90 #   submodule: occupations, Fermi level, band energy
+   │   ├── reciprocal_spin_density.f90 #  submodule: k-space spin density, band moments
    │   ├── lehmann_kernel.f90         # B2: strict Lehmann representation kernel (Sigma=0)
    │   ├── dyson_kernel.f90           # B2/B3: direct Dyson inversion kernel, batched per (k,z)
    │   ├── bsf_kernel.f90             # B3: spectral-trace kernel for reciprocal_bsf
    │   ├── moment_kernel.f90          # B5.1: exact Chebyshev moment kernel for reciprocal_moments
    │   │
    │   ├── exchange.f90               # Heisenberg exchange (J_ij / D_ij)
+   │   ├── exchange_dynamics.f90      #   submodule: Gilbert damping, moment of inertia
    │   ├── conductivity.f90           # Real-space transport / conductivity tensor
    │   ├── spin_dynamics.f90          # Atomistic spin dynamics (LLG integrator)
    │   ├── xc.f90                     # Exchange-correlation functionals
@@ -118,8 +133,8 @@ Directory Layout
    │   │   ├── theory/                # Theoretical foundations
    │   │   ├── user_guide/            # User documentation
    │   │   ├── keywords/              # Input parameter reference
-   │   │   └── reference/             # Code reference
-   │   ├── conf.py
+   │   │   ├── reference/             # Code reference
+   │   │   └── conf.py
    │   └── DEVELOPER_MAP.md           # Task-oriented developer cheat-sheet
    │
    ├── CMakeLists.txt                 # Root CMake configuration
@@ -137,7 +152,9 @@ Directory Layout
    that carry the implementations. This splits *implementation* across files
    without flattening the class — the public type and its interface stay in
    one place. The families are ``lattice_*``, ``hamiltonian_*``,
-   ``recursion_*``, and ``reciprocal_*``.
+   ``recursion_*``, ``reciprocal_*``, ``green_*``, ``charge_*``,
+   ``calculation_*``, ``exchange_dynamics`` and, with parent ``self_mod``,
+   ``self_reciprocal`` and ``ldau_diagnostics``.
 
 Build System (CMake)
 ====================
@@ -154,7 +171,8 @@ Build System (CMake)
 The core sources compile into a static library (``rslmto``) which is linked
 into the ``rslmto.x`` executable (built from ``source/main.f90``). Optional
 components are gated by CMake options: ``ENABLE_MKL_KERNELS`` (MKL Chebyshev
-kernels) and the CUDA plugin (``USE_CUDA_PLUGIN``).
+kernels), ``ENABLE_CUDA_PLUGIN`` (CUDA plugin; sets the compile definition
+``USE_CUDA_PLUGIN``) and ``ENABLE_CUDA_RECIPROCAL``.
 
 **Key Build Targets:**
 
@@ -327,8 +345,8 @@ A typical RS-LMTO-ASA calculation follows:
 
    a. Construct Hamiltonian (``hamiltonian_build.f90``)
    b. Compute recursion coefficients (``recursion_*``, dispatched on ``control%recur``)
-   c. Calculate Green's functions (``green.f90``)
-   d. Integrate DOS to get charge density (``density_of_states.f90``)
+   c. Calculate Green's functions (``green_*``; ``block_green`` for the default ``recur='block'``)
+   d. Fermi level and band moments (``bands.f90``: ``calculate_fermi``, ``calculate_moments``)
    e. Update effective potential (``charge.f90``)
    f. Apply mixing (``mix.f90``)
    g. Check convergence
@@ -379,7 +397,7 @@ All floating-point calculations use ``precision_mod`` to ensure consistent preci
 
 .. code-block:: fortran
 
-   use precision_mod, only: rp  ! rp = kind(1.0d0) for double precision
+   use precision_mod, only: rp  ! rp = selected_real_kind(15, 307), double precision
 
 Key Files for Common Tasks
 ===========================

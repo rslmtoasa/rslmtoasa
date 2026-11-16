@@ -78,7 +78,7 @@ Key Procedures by Topic
 
 **SCF Loop:**
 
-- ``self::process()`` - Main SCF iteration loop
+- ``calculation::process()`` - Runs pre-, main and post-processing
 - ``self::run()`` - SCF loop, including the convergence check
 
 **Hamiltonian Construction:**
@@ -98,9 +98,9 @@ Key Procedures by Topic
 **Properties:**
 
 - ``density_of_states::density()`` - Integrate DOS
-- ``bands::calculate()`` - Band structure
-- ``exchange::calculate()`` - Exchange interactions
-- ``conductivity::calculate()`` - Conductivity tensor
+- ``bands::calculate_fermi()``, ``bands::calculate_moments()`` - Fermi level, band moments
+- ``exchange::calculate_exchange()`` - Exchange interactions
+- ``conductivity::calculate_conductivity_tensor()`` - Conductivity tensor
 
 Quick Code Navigation
 =====================
