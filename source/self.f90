@@ -67,7 +67,7 @@ module self_mod
    ! residual observables. Production defaults remain historical unless the
    ! explicitly named test-only ATOMSC controls are supplied.
    public :: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
-   public :: fixed_u_r05_targets, atomsc_inner_controls
+   public :: fixed_u_r05_targets
    public :: vxc0sp_pbe_origin_derivatives
    public :: vxc0sp
    public :: poiss0
@@ -230,11 +230,6 @@ module self_mod
       ! Optional R05 fixed-U tolerances. Nonpositive values select backend defaults.
       real(rp) :: r05_p_tolerance
       real(rp) :: r05_v_tolerance
-
-      ! Test-only atomsc settings; all three must be supplied together.
-      real(rp) :: atomsc_test_tol
-      real(rp) :: atomsc_test_tolrsq
-      integer :: atomsc_test_inner_cap
 
       ! Constrains variables
 
@@ -582,27 +577,22 @@ contains
       complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
       complex(rp) :: p_d(5, 5), v_d(5, 5)
       real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
-      real(rp) :: site_int, site_dc, site_hub, site_t, site_external, direct_t, etot_site
+      real(rp) :: site_int, site_dc, site_hub, site_t, direct_t, etot_site
       real(rp) :: nup_site, ndn_site
-      real(rp) :: total_int, total_dc, total_hub, total_t, total_external, total_t_actual, value_a, value_b, value_c
+      real(rp) :: total_int, total_dc, total_hub, total_t, total_t_actual, value_a, value_b, value_c
       real(rp) :: entropy, ts, value_a_f, value_b_f, value_c_f
-      real(rp) :: test_energy, test_f_local, test_f_spectral
       real(rp) :: production_hub, base_physical_energy
       real(rp), allocatable :: local_weights(:)
-      complex(rp) :: test_operator(5, 5)
       integer :: ik_global
       logical :: entropy_available
       integer :: ia, plusbulk, itype, spin, i, j, flat, status, orbital_i, orbital_j
       character(len=40) :: p_residual_text, v_residual_text
       character(len=64) :: candidate_a, candidate_b, candidate_c
       character(len=64) :: entropy_text, ts_text, candidate_a_f_text, candidate_b_f_text, candidate_c_f_text
-      character(len=64) :: test_energy_text, test_f_local_text, test_f_spectral_text
 
-      if (.not. (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check .or. &
-                 this%hamiltonian%hubbard_test_operator_check)) return
+      if (.not. (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check)) return
       entropy = 0.0_rp
       ts = 0.0_rp
-      test_energy = 0.0_rp
       entropy_available = .false.
       if (this%use_kspace .and. allocated(this%reciprocal_scf_cache)) then
          if (allocated(this%reciprocal_scf_cache%eigenvalues) .and. &
@@ -633,9 +623,6 @@ contains
       if (rank /= 0) return
       production_hub = this%fixed_hubbard_energy_pout()
       base_physical_energy = this%physical_total_energy - production_hub
-      test_operator = cmplx(0.0_rp, 0.0_rp, rp)
-      if (this%hamiltonian%hubbard_test_operator_check) &
-         call this%hamiltonian%get_hubbard_test_operator(test_operator)
       allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
       allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
                e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
@@ -645,7 +632,6 @@ contains
       total_dc = 0.0_rp
       total_hub = 0.0_rp
       total_t = 0.0_rp
-      total_external = 0.0_rp
       total_t_actual = 0.0_rp
 
       do ia = 1, this%lattice%nrec
@@ -659,14 +645,12 @@ contains
          if (size(this%symbolic_atom(plusbulk)%potential%hubbard_u) < 3 .or. &
              size(this%symbolic_atom(plusbulk)%potential%hubbard_j) < 3) cycle
          if (abs(this%symbolic_atom(plusbulk)%potential%hubbard_u(3)) <= 1.0e-10_rp .and. &
-             abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(3)) <= 1.0e-10_rp .and. &
-             .not. this%hamiltonian%hubbard_test_operator_check) cycle
+             abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(3)) <= 1.0e-10_rp) cycle
          density = cmplx(0.0_rp, 0.0_rp, rp)
          potential = cmplx(0.0_rp, 0.0_rp, rp)
          p_d = cmplx(0.0_rp, 0.0_rp, rp)
          v_d = cmplx(0.0_rp, 0.0_rp, rp)
          direct_t = 0.0_rp
-         site_external = 0.0_rp
          nup_site = 0.0_rp
          ndn_site = 0.0_rp
          do spin = 1, 2
@@ -679,20 +663,11 @@ contains
                   v_d(i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
                   density(itype, 3, spin, i, j) = p_d(i, j)
                   potential(itype, 3, spin, i, j) = v_d(i, j)
-                  if (this%hamiltonian%hubbard_test_operator_check .and. &
-                      (this%hamiltonian%hubbard_test_spin == 0 .or. this%hamiltonian%hubbard_test_spin == spin)) &
-                     potential(itype, 3, spin, i, j) = v_d(i, j) - &
-                        this%hamiltonian%hubbard_test_lambda*test_operator(i, j)
                end do
             end do
             do i = 1, 5
                do j = 1, 5
                   direct_t = direct_t + real(v_d(i, j)*p_d(j, i), rp)
-                  if (this%hamiltonian%hubbard_test_operator_check .and. &
-                      (this%hamiltonian%hubbard_test_spin == 0 .or. this%hamiltonian%hubbard_test_spin == spin)) then
-                     site_external = site_external + this%hamiltonian%hubbard_test_lambda * &
-                        real(test_operator(i, j)*p_d(j, i), rp)
-                  end if
                end do
             end do
             if (spin == 1) then
@@ -727,7 +702,7 @@ contains
             candidate_a = trim(fmt('e24.16', value_a))
             candidate_c = trim(fmt('e24.16', value_c))
          else
-            value_b = etot_site + site_hub + site_external
+            value_b = etot_site + site_hub
             candidate_b = trim(fmt('e24.16', value_b))
          end if
          if (this%hamiltonian%hubbard_log_level == 'summary') then
@@ -743,9 +718,9 @@ contains
             ' P_res='//trim(p_residual_text)//' V_res='//trim(v_residual_text)// &
             ' E_int='//fmt('e24.16', site_int)//' E_DC='//fmt('e24.16', site_dc)// &
             ' E_Hub='//fmt('e24.16', site_hub)//' t_in_out='//fmt('e24.16', site_t)// &
-            ' t_U='//fmt('e24.16', site_t)//' e_external='//fmt('e24.16', site_external)// &
+            ' t_U='//fmt('e24.16', site_t)// &
             ' t_total_actual_Vin='//fmt('e24.16', direct_t)// &
-            ' direct_trace_check='//fmt('e24.16', direct_t-site_t-site_external)// &
+            ' direct_trace_check='//fmt('e24.16', direct_t-site_t)// &
             ' ETOT_selected='//fmt('e24.16', etot_site)//' candidate_a='//trim(candidate_a)// &
             ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
             ' candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE'// &
@@ -755,9 +730,7 @@ contains
          total_dc = total_dc + site_dc
          total_hub = total_hub + site_hub
          total_t = total_t + site_t
-         total_external = total_external + site_external
          total_t_actual = total_t_actual + direct_t
-         test_energy = test_energy + site_external
       end do
 
       candidate_a = 'UNAVAILABLE'
@@ -776,9 +749,9 @@ contains
       else
          if (this%is_eligible_local_hubbard() .and. &
              trim(this%hamiltonian%hubbard_radial_moments) == 'local') then
-            value_b = this%physical_total_energy + total_external
+            value_b = this%physical_total_energy
          else
-            value_b = this%physical_total_energy + total_hub + total_external
+            value_b = this%physical_total_energy + total_hub
          end if
          candidate_b = trim(fmt('e24.16', value_b))
          value_b_f = value_b - ts
@@ -788,31 +761,18 @@ contains
       candidate_a_f_text = 'UNAVAILABLE'
       candidate_b_f_text = 'UNAVAILABLE'
       candidate_c_f_text = 'UNAVAILABLE'
-      test_energy_text = 'UNAVAILABLE'
-      test_f_local_text = 'UNAVAILABLE'
-      test_f_spectral_text = 'UNAVAILABLE'
       if (entropy_available) then
          entropy_text = trim(fmt('e24.16', entropy))
          ts_text = trim(fmt('e24.16', ts))
          if (candidate_a /= 'UNAVAILABLE') candidate_a_f_text = trim(fmt('e24.16', value_a_f))
          if (candidate_b /= 'UNAVAILABLE') candidate_b_f_text = trim(fmt('e24.16', value_b_f))
          if (candidate_c /= 'UNAVAILABLE') candidate_c_f_text = trim(fmt('e24.16', value_c_f))
-         if (this%hamiltonian%hubbard_test_operator_check) then
-            test_energy_text = trim(fmt('e24.16', test_energy))
-            test_f_local = this%physical_total_energy + test_energy - ts
-            test_f_spectral = this%physical_total_energy - ts
-            if (trim(this%hamiltonian%hubbard_radial_moments) == 'local') then
-               test_f_local_text = trim(fmt('e24.16', test_f_local))
-            else
-               test_f_spectral_text = trim(fmt('e24.16', test_f_spectral))
-            end if
-         end if
       end if
       call g_logger%info('HUBBARD_MOMENT_ENERGY_TOTAL E_int='//fmt('e24.16', total_int)// &
          ' E_DC='//fmt('e24.16', total_dc)//' E_Hub='//fmt('e24.16', total_hub)// &
          ' E_Hub_P_OUT='//fmt('e24.16', production_hub)// &
          ' t_in_out='//fmt('e24.16', total_t)//' t_U='//fmt('e24.16', total_t)// &
-         ' e_external='//fmt('e24.16', total_external)//' t_total_actual_Vin='//fmt('e24.16', total_t_actual)// &
+         ' t_total_actual_Vin='//fmt('e24.16', total_t_actual)// &
          ' base_physical_total_energy='//fmt('e24.16', base_physical_energy)// &
          ' physical_total_energy='// &
          fmt('e24.16', this%physical_total_energy)//' candidate_a='//trim(candidate_a)// &
@@ -820,8 +780,6 @@ contains
          ' entropy='//trim(entropy_text)//' TS='//trim(ts_text)// &
          ' candidate_a_F='//trim(candidate_a_f_text)//' candidate_b_F='//trim(candidate_b_f_text)// &
          ' candidate_c_F='//trim(candidate_c_f_text)// &
-         ' test_lambda_trace_wp='//trim(test_energy_text)//' test_F_local='//trim(test_f_local_text)// &
-         ' test_F_spectral='//trim(test_f_spectral_text)// &
          ' candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation', &
          __FILE__, __LINE__)
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
@@ -850,8 +808,6 @@ contains
       else if (this%control%calctype /= 'I' .and. this%control%calctype /= 'S') then
          return
       end if
-      ! test operator: only at zero strength
-      if (this%hamiltonian%hubbard_test_operator_check .and. this%hamiltonian%hubbard_test_lambda /= 0.0_rp) return
       eligible = .true.
    end function is_eligible_local_hubbard
 
@@ -1117,8 +1073,8 @@ contains
       call hubbard_d_tensor(site%hubbard_u(3), site%hubbard_j(3), t)
       call hubbard_spinor_functional(t, site%hubbard_u(3), site%hubbard_j(3), site%ldm_spinor, e_int, e_dc, e_hub, v10)
    end subroutine spinor_site_hubbard_energy
-   pure subroutine fixed_u_r05_targets(use_kspace, p_override, v_override, test_tighten, p_target, v_target)
-      logical, intent(in) :: use_kspace, test_tighten
+   pure subroutine fixed_u_r05_targets(use_kspace, p_override, v_override, p_target, v_target)
+      logical, intent(in) :: use_kspace
       real(rp), intent(in) :: p_override, v_override
       real(rp), intent(out) :: p_target, v_target
 
@@ -1129,27 +1085,7 @@ contains
       if (.not. use_kspace) p_target = 5.0e-7_rp
       if (p_override > 0.0_rp) p_target = p_override
       if (v_override > 0.0_rp) v_target = v_override
-      if (test_tighten) then
-         p_target = fixed_u_test_tight_density_tolerance
-         v_target = fixed_u_test_tight_potential_tolerance
-      end if
    end subroutine fixed_u_r05_targets
-
-   pure subroutine atomsc_inner_controls(test_tol, test_tolrsq, test_cap, tol, tolrsq, niter)
-      real(rp), intent(in) :: test_tol, test_tolrsq
-      integer, intent(in) :: test_cap
-      real(rp), intent(out) :: tol, tolrsq
-      integer, intent(out) :: niter
-
-      tol = 1.0e-6_rp
-      tolrsq = 1.0e-8_rp
-      niter = 80
-      if (test_cap > 0) then
-         tol = test_tol
-         tolrsq = test_tolrsq
-         niter = test_cap
-      end if
-   end subroutine atomsc_inner_controls
 
    pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
       integer, intent(in) :: iteration
@@ -1852,9 +1788,6 @@ contains
       this%nstep = 1
       this%r05_p_tolerance = -1.0_rp
       this%r05_v_tolerance = -1.0_rp
-      this%atomsc_test_tol = 0.0_rp
-      this%atomsc_test_tolrsq = 0.0_rp
-      this%atomsc_test_inner_cap = 0
 
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
@@ -2198,8 +2131,6 @@ contains
             call this%update_fixed_u_residuals()
             call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
             call this%mix%mix_ldm_spinor_linear() ! Same mixing for the spinor P that builds V at nsp>=2.
-         else if (this%hamiltonian%hubbard_test_operator_check) then
-            call this%mix%save_ldm_to('new') ! W1 at U=J=0: P_out for the logged Tr(W P) only.
          end if
    
          !=========================================================================
@@ -2547,7 +2478,7 @@ contains
          ! before the band center/second moment are mapped to radial state.
          ! Keep the historical spectral ordering exactly as before.
          if (trim(this%hamiltonian%hubbard_radial_moments) == 'local' .and. &
-             (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check)) then
+             this%hamiltonian%hubbard_u_general_check) then
             allocate(local_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=.true., m1_out=local_m1)
@@ -2701,11 +2632,10 @@ contains
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
 
          if ((this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. &
-              this%hamiltonian%hubbard_v_check .or. this%hamiltonian%hubbard_test_operator_check) &
+              this%hamiltonian%hubbard_v_check) &
              .and. .not. allocated(local_m1)) then
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
-               fixed_liechtenstein=(this%hamiltonian%hubbard_u_general_check .or. &
-                  this%hamiltonian%hubbard_test_operator_check) .and. &
+               fixed_liechtenstein=this%hamiltonian%hubbard_u_general_check .and. &
                   trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein', m1_out=m1_out)
             if (rank == 0) then
                do ia = 1, this%lattice%nrec
@@ -3244,8 +3174,7 @@ contains
       tol = 1.d-6
       tolrsq = 1.d-8
       beta = 0.3d0
-      call atomsc_inner_controls(this%atomsc_test_tol, this%atomsc_test_tolrsq, &
-         this%atomsc_test_inner_cap, tol, tolrsq, niter)
+      niter = 80
 
       ! Backward-compatible guard: legacy spd potential files promoted to lmax=3
       ! may not provide valid f-channel PL. Seed invalid channels from element

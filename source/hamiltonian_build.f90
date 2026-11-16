@@ -19,8 +19,7 @@ contains
 
       spinor_bulk = this%hubbard_soc_experimental .and. this%control%nsp == 2
       reason = ''
-      if (.not. has_general .and. .not. has_legacy .and. .not. has_impurity .and. &
-          .not. this%hubbard_test_operator_check) then
+      if (.not. has_general .and. .not. has_legacy .and. .not. has_impurity) then
          reason = "hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
             'numeric U=J=0 is allowed and remains a no-op.'
          return
@@ -36,7 +35,7 @@ contains
       ! With hoh V_U sits in enim and the moments come from the orthonormal-basis Green function; the correction
       ! H0 = H - V_U holds for any H = H0 + V_U. The impurity and surface routes (V_in captured at the enim insertion)
       ! cover scalar-spin nsp=1 and the spinor routes at nsp=2 and 3 (which read V_in by type, as in the bulk).
-      if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. .not. this%fixed_u_test_allow_hoh_w1_u0 .and. &
+      if (this%hoh .and. trim(this%control%calctype) /= 'B' .and. &
           .not. ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. spinor_bulk .or. this%control%nsp >= 3)) then
          reason = "hubbard_radial_moments='local' with hoh=.true. requires calctype='B', nsp=1 without SOC, "// &
             'or the nsp=2, 3 or 4 spinor route.'
@@ -74,27 +73,6 @@ contains
       if (this%hubbard_radial_moments == 'local') then
          reason = local_radial_unsupported(this, has_general, has_legacy, has_impurity)
          if (len_trim(reason) > 0) call g_logger%fatal(trim(reason), __FILE__, __LINE__)
-      end if
-
-      ! Test-only bypass of the hoh guard of the local route: U=J=0 local W1 runs only.
-      if (this%fixed_u_test_allow_hoh_w1_u0) then
-         if (.not. this%hoh .or. .not. this%hubbard_test_operator_check .or. &
-             trim(this%hubbard_test_operator) /= 'w1' .or. trim(this%hubbard_radial_moments) /= 'local' .or. &
-             .not. has_general .or. has_legacy .or. has_impurity .or. &
-             this%hubbard_u_sc_check .or. this%hubbard_v_check .or. &
-             (abs(this%hubbard_test_lambda) > 1.0e-15_rp .and. &
-              abs(abs(this%hubbard_test_lambda) - 0.005_rp) > 1.0e-15_rp)) then
-            call g_logger%fatal('A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.', &
-                                __FILE__, __LINE__)
-         end if
-         do i = 1, this%lattice%ntype
-            if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) > 0.0_rp .or. &
-                maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) > 0.0_rp) then
-               call g_logger%fatal('A5 HOH bypass requires exactly U=J=0 on every atom and shell.', __FILE__, __LINE__)
-            end if
-         end do
-         if (rank == 0) call g_logger%info('A5 test-only HOH guard bypass active for U=J=0 local W1 path.', &
-                                           __FILE__, __LINE__)
       end if
 
       ! Fixed Liechtenstein U/J, any radial-moment route.
@@ -153,8 +131,6 @@ contains
       if (trim(this%hubbard_radial_moments) /= 'local') return
       ! spin: collinear scalar-relativistic
       if (this%control%nsp /= 1 .or. this%control%has_soc()) return
-      ! no test operator or hoh bypass
-      if (this%hubbard_test_operator_check .or. this%fixed_u_test_allow_hoh_w1_u0) return
       eligible = .true.
    end function rd1_local_impurity_eligible
 
@@ -771,8 +747,7 @@ contains
       ! marks "spinor U active" for the code below and the solvers.
       if (hubbard_soc_experimental .and. rank == 0) &
          call g_logger%info('hubbard_soc_experimental is a no-op: SOC+U bulk is now default.', __FILE__, __LINE__)
-      this%hubbard_soc_experimental = this%control%nsp >= 2 .and. &
-         (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)
+      this%hubbard_soc_experimental = this%control%nsp >= 2 .and. this%hubbard_u_general_check
 
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
@@ -795,21 +770,6 @@ contains
 
       call validate_fixed_u_scope(this, has_hubbard_general, has_legacy_uj, has_impurity_uj)
 
-      if (rank == 0) then
-         if (this%hubbard_test_operator_check) then
-            call g_logger%info('HUBBARD test-only onsite operator='//trim(this%hubbard_test_operator)// &
-               ' lambda_Ry='//fmt('e24.16', this%hubbard_test_lambda), __FILE__, __LINE__)
-         end if
-         if (this%fixed_u_test_tighten_r05) then
-            if (this%hubbard_u_general_check) then
-               call g_logger%info('FIXED_U test-only R05 tightening active: density and potential targets are each 1.0e-8; '// &
-                  'three consecutive updates remain required.', __FILE__, __LINE__)
-            else
-               call g_logger%info('FIXED_U test-only R05 tightening requested but NOT APPLICABLE: fixed-U R05 is inactive.', &
-                  __FILE__, __LINE__)
-            end if
-         end if
-      end if
       if (this%hubbard_u_sc_check) then
          do i = 1, size(this%hubbard_u_sc, 1)
             if (rank == 0) then
@@ -976,12 +936,6 @@ contains
       ! us whether this calculation uses the reciprocal KS backend.
       this%hubbard_radial_moments = 'auto'
       this%hubbard_radial_auto_reason = ''
-      this%hubbard_test_operator = 'none'
-      this%hubbard_test_lambda = 0.0_rp
-      this%hubbard_test_spin = 0
-      this%hubbard_test_operator_check = .false.
-      this%fixed_u_test_tighten_r05 = .false.
-      this%fixed_u_test_allow_hoh_w1_u0 = .false.
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
       this%hubbard_u_sc_check = .false.
@@ -1310,7 +1264,6 @@ contains
       if (this%hubbard_u_general_check) then
          call this%calculate_hubbard_u_potential_general()
       end if
-      call this%add_hubbard_test_operator()
       if (this%hubbard_v_check) then
          call this%calculate_hubbard_v_potential()
       end if
@@ -1333,7 +1286,7 @@ contains
                end do ! end of orbital j loop
             end do ! end of orbital i loop
          end do ! end of neighbour number
-         if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
+         if (this%hubbard_u_general_check .and. .not. this%hoh) then
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
@@ -1389,7 +1342,7 @@ contains
          end if
       end do ! end of atom type number
       ! With hoh, H = h - h o h + enim + lsham: V_U is an additive on-site term like E_nu and L.S, not part of h.
-      if (this%hoh .and. (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)) then
+      if (this%hoh .and. this%hubbard_u_general_check) then
          this%enim = this%enim + this%hubbard_u_pot
          if (this%local_axis) this%enim_glob = this%enim
          ! Surface recursion: capture the exact operand at this insertion so RD1 uses the same V_in (as for ee without hoh).
@@ -1465,7 +1418,6 @@ contains
       call validate_gbt_reference_moments(this)
 
       if (this%hubbard_u_general_check) call this%calculate_hubbard_u_potential_general()
-      call this%add_hubbard_test_operator()
       this%ee = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%ccor_2c) this%eecc = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%hoh) this%eeo = cmplx(0.0_rp, 0.0_rp, rp)
@@ -1579,7 +1531,7 @@ contains
          deallocate(ham_vec)
 
          ! Without hoh V_U goes into ee; with hoh it goes into enim below, since in ee it would also enter h o h.
-         if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
+         if (this%hubbard_u_general_check .and. .not. this%hoh) then
             ! Hubbard-U is onsite (spin-diagonal in the collinear rotating
             ! frame, from potential%ldm) and is added at bond slot m=1, where
             ! d=0 and the endpoint link G_ii=I by construction. It therefore
@@ -1605,7 +1557,7 @@ contains
          call this%build_obarm()
          call this%build_enim()
          ! V_U is an additive onsite term in the same rotating frame as enim: H = h - h o h + enim + V_U.
-         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) this%enim = this%enim + this%hubbard_u_pot
+         if (this%hubbard_u_general_check) this%enim = this%enim + this%hubbard_u_pot
          do ntype = 1, this%lattice%ntype
             ia = this%lattice%atlist(ntype)
             nr = this%lattice%nn(ia, 1)
@@ -1756,7 +1708,6 @@ contains
       if (this%hubbard_u_general_check) then
          call this%calculate_hubbard_u_potential_general()
       end if
-      call this%add_hubbard_test_operator()
       if (this%hubbard_v_check) then
          call this%calculate_hubbard_v_potential()
       end if
@@ -1785,7 +1736,7 @@ contains
                end do
             end do
          end do
-         if ((this%hubbard_u_general_check .or. this%hubbard_test_operator_check) .and. .not. this%hoh) then
+         if (this%hubbard_u_general_check .and. .not. this%hoh) then
             do i = 1, nb
                do j = 1, nb
                   this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + &
@@ -1834,7 +1785,7 @@ contains
       end do
     !!$omp end parallel do
       ! With hoh, V_U enters as an additive on-site term (see build_bulkham), indexed by type like enim.
-      if (this%hoh .and. (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)) then
+      if (this%hoh .and. this%hubbard_u_general_check) then
          this%enim = this%enim + this%hubbard_u_pot
          if (this%local_axis) this%enim_glob = this%enim
          ! Impurity recursion: capture the exact operand per cluster site at this insertion (as at the hall insertion without hoh).

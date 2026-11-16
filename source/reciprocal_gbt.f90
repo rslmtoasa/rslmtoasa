@@ -47,7 +47,7 @@ contains
          call this%hamiltonian%validate_ccor_inputs()
          lam = this%hamiltonian%ccor_vmt_scalar() - this%hamiltonian%ccor_elin
       end if
-      u_on = this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check
+      u_on = this%hamiltonian%hubbard_u_general_check
       if (u_on .and. this%use_orthogonal) &
          call g_logger%fatal("kspace_ham_order='orthogonal' does not support onsite U.", __FILE__, __LINE__)
       if (this%hamiltonian%hubbard_v_check) &

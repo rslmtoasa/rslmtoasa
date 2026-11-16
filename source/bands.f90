@@ -957,10 +957,8 @@ contains
       !print *,’AB debug: Finished orbital moments, starting Hubbard U check’
       hubbard_active = this%recursion%hamiltonian%hubbard_u_general_check .or. &
                        this%recursion%hamiltonian%hubbard_u_sc_check .or. &
-                       this%recursion%hamiltonian%hubbard_v_check .or. &
-                       this%recursion%hamiltonian%hubbard_test_operator_check
-      fixed_liechtenstein_active = (this%recursion%hamiltonian%hubbard_u_general_check .or. &
-         this%recursion%hamiltonian%hubbard_test_operator_check) .and. &
+                       this%recursion%hamiltonian%hubbard_v_check
+      fixed_liechtenstein_active = this%recursion%hamiltonian%hubbard_u_general_check .and. &
          trim(lower(this%recursion%hamiltonian%hubbard_u_potential_form)) == 'liechtenstein'
       local_moments_active = trim(this%recursion%hamiltonian%hubbard_radial_moments) == 'local'
       nullify(m1_target)
@@ -1265,7 +1263,6 @@ contains
             if (this%control%calctype == 'I' .and. &
                 .not. this%recursion%hamiltonian%hubbard_u_general_check .and. &
                 .not. this%recursion%hamiltonian%hubbard_u_sc_check .and. &
-                .not. this%recursion%hamiltonian%hubbard_test_operator_check .and. &
                 allocated(this%recursion%hamiltonian%hubbard_u_impurity) .and. &
                 allocated(this%recursion%hamiltonian%hubbard_j_impurity)) then
                if (na_glob <= size(this%recursion%hamiltonian%hubbard_u_impurity, 1) .and. &
@@ -1284,7 +1281,7 @@ contains
                      ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
                end if
             else if ((this%control%calctype == 'I' .or. this%control%calctype == 'S') .and. &
-                     (this%recursion%hamiltonian%hubbard_test_operator_check .or. spinor_local)) then
+                     spinor_local) then
                call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
                   cluster_site_local, itype_local, status_local)
                if (status_local /= 0) then

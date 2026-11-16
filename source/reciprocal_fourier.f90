@@ -108,8 +108,7 @@ contains
       case ('second'); assembler%use_second_order = .true.
       case ('first')
          ! With hoh, V_U lives in enim, which only the second-order path adds.
-         if (this%hamiltonian%hoh .and. (this%hamiltonian%hubbard_u_general_check .or. &
-                                         this%hamiltonian%hubbard_test_operator_check)) then
+         if (this%hamiltonian%hoh .and. this%hamiltonian%hubbard_u_general_check) then
             call g_logger%fatal("Fixed-U LDA+U with hoh=.true. requires kspace_ham_order='second' in k-space.", __FILE__, __LINE__)
          end if
          assembler%use_second_order = .false.

@@ -291,8 +291,7 @@ contains
       type(symbolic_atom), allocatable :: saved_surface_symbols(:)
       character :: saved_calctype
       character(len=16) :: saved_radial_mode, saved_potential_form
-      character(len=16) :: saved_test_operator
-      logical :: saved_constraints, saved_general, saved_impurity, saved_sc, saved_v, saved_test, saved_hoh, saved_hoh_bypass
+      logical :: saved_constraints, saved_general, saved_impurity, saved_sc, saved_v, saved_hoh
       external :: zheev
 
       nspinorb = nsites*norb
@@ -311,10 +310,7 @@ contains
       saved_impurity = ham%hubbard_u_impurity_check
       saved_sc = ham%hubbard_u_sc_check
       saved_v = ham%hubbard_v_check
-      saved_test = ham%hubbard_test_operator_check
-      saved_test_operator = ham%hubbard_test_operator
       saved_hoh = ham%hoh
-      saved_hoh_bypass = ham%fixed_u_test_allow_hoh_w1_u0
       saved_ib = lat%ib
       saved_iz = lat%iz
       if (allocated(lat%irec)) saved_irec = lat%irec
@@ -339,22 +335,15 @@ contains
       ham%hubbard_u_impurity_check = .false.
       ham%hubbard_u_sc_check = .false.
       ham%hubbard_v_check = .false.
-      ham%hubbard_test_operator_check = .false.
-      ham%fixed_u_test_allow_hoh_w1_u0 = .false.
       ham%hoh = .false.
       ham%hubbard_u_general_check = .false.
       ham%hubbard_u_impurity_check = .true.
       if (.not. ham%rd1_local_impurity_eligible()) failed = .true.
       ham%hubbard_u_general_check = .true.
       ham%hubbard_u_impurity_check = .false.
-      ham%hubbard_test_operator = 'w1'
-      ham%hubbard_test_operator_check = .true.
-      if (ham%rd1_local_impurity_eligible()) failed = .true.
       call ham%get_rd1_recursion_site_type(1, mapped_cluster, mapped_type, status)
       if (status /= rd1_vin_ok .or. mapped_cluster /= 2 .or. mapped_type /= recursive_type) failed = .true.
       write(*,'(a,4(i0,1x))') 'RD1_CAPTURE map rec-index cluster type status=', 1, mapped_cluster, mapped_type, status
-      ham%hubbard_test_operator = saved_test_operator
-      ham%hubbard_test_operator_check = .false.
       ham%hubbard_u_general_check = .true.
       ham%hubbard_u_impurity_check = .true.
 
@@ -593,10 +582,7 @@ contains
       ham%hubbard_u_impurity_check = saved_impurity
       ham%hubbard_u_sc_check = saved_sc
       ham%hubbard_v_check = saved_v
-      ham%hubbard_test_operator_check = saved_test
-      ham%hubbard_test_operator = saved_test_operator
       ham%hoh = saved_hoh
-      ham%fixed_u_test_allow_hoh_w1_u0 = saved_hoh_bypass
       deallocate(spin_h, h_total, hbare, eigenvalues, rwork)
    end subroutine test_rd1_recursive_vin_oracle
 

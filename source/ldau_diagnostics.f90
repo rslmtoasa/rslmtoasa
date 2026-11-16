@@ -37,7 +37,7 @@ contains
          call get_environment_variable('RSLMTO_FIXED_U_TRACE', trace_path, status=ios)
          if (ios == 0 .and. len_trim(trace_path) > 0 .and. &
              this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
-             (.not. this%hamiltonian%hoh .or. this%hamiltonian%fixed_u_test_allow_hoh_w1_u0)) then
+             .not. this%hamiltonian%hoh) then
             ! Explicit trace opt-in also enables the M0 no-U reference.
             ! Ordinary no-U runs still take the untouched path when the
             ! environment variable is absent. Other Hubbard modes remain out.
@@ -141,8 +141,8 @@ contains
 
    module procedure write_fixed_u_trace
       integer :: unit, ios, ia, l, spin, i, j, site_type, plusbulk
-      complex(rp) :: z, m1_trace, test_operator(5, 5)
-      real(rp) :: center, q0, q2, test_q0_trace, test_trace_wp
+      complex(rp) :: z, m1_trace
+      real(rp) :: center, q0, q2
 
       if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
       if (this%fixed_u_trace_selected_iteration > 0 .and. &
@@ -167,10 +167,6 @@ contains
          close(unit)
          return
       end if
-
-      test_operator = cmplx(0.0_rp, 0.0_rp, rp)
-      if (this%fixed_u_trace_moments_only .and. this%hamiltonian%hubbard_test_operator_check) &
-         call this%hamiltonian%get_hubbard_test_operator(test_operator)
 
       call this%write_fixed_u_csv_row(unit, 'ldm_availability', this%fixed_u_trace_iteration, trim(stage), &
          -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
@@ -203,31 +199,6 @@ contains
                            real(z, rp), aimag(z))
                      end do
                   end do
-               end if
-               if (this%fixed_u_trace_moments_only .and. this%hamiltonian%hubbard_test_operator_check .and. &
-                   trim(stage) == 'P_OUT' .and. l == 2) then
-                  test_q0_trace = 0.0_rp
-                  test_trace_wp = 0.0_rp
-                  do i = 1, 5
-                     do j = 1, 5
-                        z = this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, i, j)
-                        call this%write_fixed_u_csv_row(unit, 'test_density_matrix', &
-                           this%fixed_u_trace_iteration, 'P_OUT', ia - 1, this%lattice%iz(ia), l, spin - 1, &
-                           -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, real(z, rp), aimag(z))
-                        if (i == j) test_q0_trace = test_q0_trace + real(z, rp)
-                        if (this%hamiltonian%hubbard_test_spin == 0 .or. &
-                            this%hamiltonian%hubbard_test_spin == spin) then
-                           test_trace_wp = test_trace_wp + real(test_operator(i, j) * &
-                              this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, j, i), rp)
-                        end if
-                     end do
-                  end do
-                  call this%write_fixed_u_csv_row(unit, 'test_q0_trace', this%fixed_u_trace_iteration, &
-                     'P_OUT', ia - 1, this%lattice%iz(ia), l, spin - 1, -1, -1, -1, -1, 0, &
-                     0.0_rp, 0.0_rp, test_q0_trace, 0.0_rp, 0.0_rp)
-                  call this%write_fixed_u_csv_row(unit, 'test_trace_wp', this%fixed_u_trace_iteration, &
-                     'P_OUT', ia - 1, this%lattice%iz(ia), l, spin - 1, -1, -1, -1, -1, 0, &
-                     0.0_rp, 0.0_rp, test_trace_wp, 0.0_rp, 0.0_rp)
                end if
                if (present(m1_out)) then
                   if (l < size(m1_out, 2)) then
@@ -1535,8 +1506,7 @@ contains
       this%fixed_u_worst_site = worst_site
       this%fixed_u_worst_l = worst_l
       this%fixed_u_residual_physical = physical
-      call fixed_u_r05_targets(this%use_kspace, this%r05_p_tolerance, this%r05_v_tolerance, &
-         this%hamiltonian%fixed_u_test_tighten_r05, rp_target, rv_target)
+      call fixed_u_r05_targets(this%use_kspace, this%r05_p_tolerance, this%r05_v_tolerance, rp_target, rv_target)
       call this%mix%advance_fixed_u_convergence(rp_abs, rv_abs, physical, this%fixed_u_residual_converged, &
                                                 rp_target, rv_target)
       if (rank == 0) then

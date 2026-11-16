@@ -47,8 +47,6 @@ module mix_mod
    ! floors; production discretization refinement must verify attainability.
    real(rp), parameter, public :: fixed_u_density_tolerance = 1.0e-7_rp
    real(rp), parameter, public :: fixed_u_potential_tolerance = 1.0e-7_rp
-   real(rp), parameter, public :: fixed_u_test_tight_density_tolerance = 1.0e-8_rp
-   real(rp), parameter, public :: fixed_u_test_tight_potential_tolerance = 1.0e-8_rp
    integer, parameter, public :: fixed_u_required_stable_updates = 3
    public :: fixed_u_residual_metrics
 
