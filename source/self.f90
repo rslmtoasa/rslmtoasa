@@ -1754,8 +1754,7 @@ contains
 
       read (funit, nml=self, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &self namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 

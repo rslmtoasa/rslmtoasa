@@ -328,8 +328,7 @@ contains
 
       read (funit, nml=mix, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus) .and. iostatus /= 5010) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &mix namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       else if (iostatus == 5010) then
          call g_logger%warning('Non-fatal namelist read value mismatch in '//trim(fname)//' (iostatus=5010).', __FILE__, __LINE__)
       end if

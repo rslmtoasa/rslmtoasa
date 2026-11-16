@@ -350,16 +350,14 @@ contains
 
       read (funit, nml=reciprocal, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         ! Namelist not found or error - use defaults
-         call root_info('reciprocal namelist not found in input file, using defaults', __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &reciprocal namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       
       ! Read kpath namelist
       rewind(funit)
       read (funit, nml=kpath, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         ! Namelist not found or error - use defaults
-         call root_info('kpath namelist not found in input file, using defaults', __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &kpath namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 

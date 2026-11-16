@@ -359,8 +359,7 @@ contains
       rewind (funit)
       read (funit, nml=lattice, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &lattice namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -615,8 +614,7 @@ contains
       rewind (funit)
       read (funit, nml=lattice, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &lattice namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
       if (allocated(ct_first)) then

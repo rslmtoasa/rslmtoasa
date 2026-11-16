@@ -154,8 +154,7 @@ contains
 
       read (funit, nml=element, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &element namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 

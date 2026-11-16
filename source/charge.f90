@@ -591,6 +591,9 @@ contains
       end if
 
       read (funit, nml=charge, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+         call g_logger%fatal('Invalid &charge namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+      end if
       close (funit)
 
       if (size(wssurf) .ne. this%lattice%nbas) then

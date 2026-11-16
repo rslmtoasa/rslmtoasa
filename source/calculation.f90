@@ -302,8 +302,7 @@ contains
 
       read (funit, nml=calculation, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &calculation namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
 
       if (trim(post_processing) == 'linear_response' .or. trim(post_processing) == 'exchange_q' &
