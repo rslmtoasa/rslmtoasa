@@ -98,6 +98,18 @@ latex_elements = {
 \newunicodechar{ₙ}{\ensuremath{_{n}}}
 \newunicodechar{ₘ}{\ensuremath{_{m}}}
 \newunicodechar{°}{\ensuremath{^\circ}}
+\newunicodechar{↑}{\ensuremath{\uparrow}}
+\newunicodechar{↓}{\ensuremath{\downarrow}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{Σ}{\ensuremath{\Sigma}}
+\newunicodechar{−}{\ensuremath{-}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{✘}{\ensuremath{\times}}
+\newunicodechar{†}{\ensuremath{\dagger}}
+\newunicodechar{─}{-}
+\newunicodechar{│}{|}
+\newunicodechar{├}{+}
+\newunicodechar{└}{+}
 ''',
 }
 
