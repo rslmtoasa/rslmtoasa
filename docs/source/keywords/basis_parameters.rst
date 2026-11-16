@@ -21,9 +21,16 @@ lmax
 
 **Purpose:** Maximum orbital angular momentum
 
-**Allowed values:** 0 (s only), 1 (s,p), 2 (s,p,d), 3 (s,p,d,f)
+**Allowed values:** 1 (s,p), 2 (s,p,d), 3 (s,p,d,f)
 
 **Default:** 2
+
+.. note::
+
+   The basis of the run is set by ``lmax`` in ``&control``. ``lmax`` in ``&par``
+   records the potential file's own value; a file with a smaller ``lmax`` is
+   promoted to the basis with a warning. ``lmax = 3`` needs
+   ``strux_backend = 'strux_lib'`` (:ref:`keywords/lattice_geometry`).
 
 **Example:**
 

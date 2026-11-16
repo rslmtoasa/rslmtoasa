@@ -288,6 +288,150 @@ Several structure-related parameters are in ``&lattice`` or ``&charge``:
 
 **a, b, c** - Direct/reciprocal lattice constants (for low-symmetry systems)
 
+Structure constants (strux_lib)
+===============================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``strux_backend``
+     - character
+     - ``'legacy'``
+     - ``'legacy'`` or ``'strux_lib'``. ``strux_lib`` is required for ``lmax = 3`` (f basis) and
+       for ``magnetic_representation = 'gbt_single_q'``.
+   * - ``screening``
+     - character
+     - ``'default'``
+     - Screening of the ``strux_lib`` structure constants: ``'default'`` and ``'manual'`` use
+       ``screening_alpha``; ``'sigma'`` uses ``screening_sigma``; ``'fitted'`` fits the
+       screening constants. Other values stop the run.
+   * - ``screening_alpha(l)``
+     - real (lmax+1)
+     - built-in table
+     - l-resolved screening constants for ``'default'``/``'manual'``.
+   * - ``screening_sigma(l)``
+     - real (lmax+1)
+     - unset
+     - l-resolved hard-core radii in units of the sphere radius, for ``'sigma'``.
+   * - ``strux_want_sdot``
+     - logical
+     - ``.false.``
+     - Also compute the energy derivative of the structure constants; needs
+       ``screening = 'sigma'`` or ``'fitted'``.
+   * - ``strux_solve_scale``
+     - real
+     - 9.0
+     - Multiplier of the squared radius of the cluster on which the structure constants are
+       solved.
+
+Periodic cluster
+================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``pbc``, ``b1``, ``b2``, ``b3``
+     - logical
+     - ``.false.``
+     - Periodic boundary conditions; with all four true the cluster is a periodic supercell.
+   * - ``n1``, ``n2``, ``n3``
+     - integer
+     - 0
+     - Repeats of the primitive vectors ``a(:, 1..3)`` that span the periodic supercell.
+   * - ``morton_sfc``
+     - logical
+     - ``.false.``
+     - Reorder the bulk cluster along a Morton (Z-order) curve for memory locality in the
+       recursion and Chebyshev kernels; results are unchanged up to round-off.
+
+Cluster and bookkeeping keys
+============================
+
+These ``&lattice`` keys describe the cluster that pre-processing builds. Most are
+written by the code to the output namelist and read back by later runs; they are
+rarely set by hand. Where the code documents no further meaning, the table says so.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - Key
+     - Meaning
+   * - ``crystal_sym``
+     - Crystal symmetry: ``'bcc'``, ``'fcc'``, ``'hcp'`` or ``'nsy'``.
+   * - ``celldm``
+     - Cell parameter written with the lattice; no further meaning documented in the code.
+   * - ``primcell``
+     - Coordinates of the atoms of the primitive cell.
+   * - ``crd``
+     - Basis (primitive-cell) coordinates, shape (3, ntot); the starting point of the cluster
+       expansion.
+   * - ``cr``
+     - Cartesian coordinates of the expanded cluster, shape (3, kk).
+   * - ``kk``
+     - Number of cluster sites.
+   * - ``ndim``, ``npe``
+     - Size limits of the cluster before the cut (defaults 9900000 and 49); rarely changed.
+   * - ``rc``
+     - Cut radius of the cluster.
+   * - ``ct``
+     - Nearest-neighbour cut radii (Å).
+   * - ``nmax``
+     - Number of cluster sites with their own local Hamiltonian (impurities); 0 for
+       ``calctype`` B and L.
+   * - ``ntot``
+     - Number of atoms in the primitive cell (1 for fcc and bcc without relaxation, 2 for hcp).
+   * - ``ntype``
+     - Number of inequivalent atoms, ``nbulk + nrec``.
+   * - ``nbas``
+     - Number of shells or atoms over which charge is distributed; ``reduced_nbas`` is the
+       reduced count.
+   * - ``nbulk_bulk``
+     - Auxiliary count used to set ``ntype``, ``nbulk`` and ``ntot``.
+   * - ``iz``
+     - Atom type of each cluster site.
+   * - ``izp``
+     - Type label of each primitive-cell atom (species labels used by ``strux_lib``).
+   * - ``num``
+     - Bravais type of each atom.
+   * - ``no``
+     - Prototype class of each cluster site, used for the Wigner-Seitz radius lookup.
+   * - ``ib``, ``iu``
+     - Cluster site of each atom of the primitive cell (1 for a bulk material; chosen from
+       the cluster for surfaces).
+   * - ``irec``
+     - Cluster sites treated self-consistently (one per inequivalent recursion atom).
+   * - ``wav``
+     - Wigner-Seitz radius (Å).
+   * - ``njij``, ``ijpair``
+     - Number of atom pairs and the pairs (i, j) for exchange interactions.
+   * - ``njijk``, ``ijktrio``
+     - Number of atom trios and the trios (i, j, k) for spin-lattice interactions.
+   * - ``nclu``, ``inclu``
+     - Number of impurity sites and their coordinates (impurity cluster build).
+   * - ``acr``, ``reduced_acr``
+     - Cluster bookkeeping from the impurity build; no further meaning documented in the code.
+   * - ``surftype``
+     - Surface orientation: ``'111'``, ``'110'`` or ``'001'``.
+   * - ``nlay``, ``z``
+     - Number of layers and the layer coordinates of a surface cluster.
+   * - ``zmin``, ``zmax``, ``zstep``
+     - Range and step of the layer coordinate in the surface cluster build.
+   * - ``dx``, ``dy``, ``dz``, ``dw``
+     - Surface indices of the surface cluster build.
+   * - ``crsurf``, ``izsurf``, ``izpsurf``, ``nosurf``, ``izpo``
+     - Surface-cluster bookkeeping; no further meaning documented in the code.
+
 Provenance
 ==========
 
