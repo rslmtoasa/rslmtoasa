@@ -139,7 +139,6 @@ Alphabetical Listing (All Parameters)
 - ``center_band`` - LMTO orbital center energy
 - ``channels_ldos`` - Number of energy mesh points
 - ``cold`` - Cold start (ASA potential extraction)
-- ``compensation_profile`` - Charge-compensation weighting for interface electrostatics (B7)
 - ``cond_calctype`` - Conductivity sub-type
 - ``cond_ll`` - Conductivity Chebyshev cutoff (in &control)
 - ``conca``, ``concb`` - Alloy concentrations

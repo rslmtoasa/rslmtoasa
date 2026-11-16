@@ -209,39 +209,6 @@ alignment consistency check (``align_regions``, gate G-B7-2).
 
 **Related code:** ``source/charge.f90``, ``docs/conventions/CONTRACT_FROZEN_REGION.md``
 
-compensation_profile, bias (B7, calctype='L')
-------------------------------------------------
-
-**Type:** Character string / Real (Ry)
-
-**Purpose:** ``compensation_profile`` selects the charge-compensation
-weighting scheme used by ``interfacepot`` when balancing the two-sided
-electrostatics (B7 §1.5, gate G-B7-3 — tolerance calibration still open,
-see ``tests/KNOWN_ISSUES.md``). ``bias`` is a B7 §6 hook for an applied
-bias (``target_step = contact_potential + bias``); namelist plumbing only,
-not yet wired to a physical effect.
-
-**Allowed values (compensation_profile):** ``'nef_weighted'`` (the only
-implemented profile — side-resolved :math:`N(E_F)` weighting)
-
-**Default:** ``compensation_profile = 'nef_weighted'``, ``bias = 0.0``
-
-**Example:**
-
-.. code-block:: fortran
-
-   compensation_profile = 'nef_weighted'
-   bias = 0.0
-
-**Notes:**
-
-- In ``&charge`` namelist.
-- ``bias`` is exposed now so it is a namelist choice rather than a future
-  new code path, but it is inactive until a dedicated task wires it to
-  the PM kernel — do not expect it to do anything yet.
-
-**Related code:** ``source/charge.f90`` (``interfacepot``)
-
 edel
 ----
 

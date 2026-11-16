@@ -469,10 +469,6 @@ module reciprocal_mod
       logical :: auto_kpath
       !> Number of k-points per segment in band structure
       integer :: nk_per_segment
-      !> Override space group number (0 = auto-detect)
-      integer :: override_space_group
-      !> Custom k-path specification string
-      character(len=200) :: custom_kpath_spec
       !> Use symmetry reduction for k-mesh
       logical :: use_symmetry_reduction
       !> Enforce strict symmetry consistency checks

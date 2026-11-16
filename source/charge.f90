@@ -180,10 +180,6 @@ module charge_mod
       !> and consistency check (B7 §1.3). Sentinel: not supplied.
       real(rp) :: fermi_a = huge(1.0_rp)
       real(rp) :: fermi_b = huge(1.0_rp)
-      !> B7.5: compensation weight profile selector (B7 §1.5, G-B7-3).
-      character(len=32) :: compensation_profile = 'nef_weighted'
-      !> B7 §6 hook: applied bias (Ry), inactive placeholder.
-      real(rp) :: bias = 0.0_rp
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -438,8 +434,6 @@ contains
       nlay_b = this%nlay_b
       fermi_a = this%fermi_a
       fermi_b = this%fermi_b
-      compensation_profile = this%compensation_profile
-      bias = this%bias
 
       if (.not. allocated(this%wssurf) .or. size(this%wssurf) .ne. this%lattice%nbas) then
 #ifdef USE_SAFE_ALLOC
@@ -611,8 +605,6 @@ contains
       this%nlay_b = nlay_b
       this%fermi_a = fermi_a
       this%fermi_b = fermi_b
-      this%compensation_profile = compensation_profile
-      this%bias = bias
       call move_alloc(wssurf, this%wssurf)
    end subroutine build_from_file
 
@@ -645,8 +637,6 @@ contains
       this%nlay_b = 0
       this%fermi_a = huge(1.0_rp)
       this%fermi_b = huge(1.0_rp)
-      this%compensation_profile = 'nef_weighted'
-      this%bias = 0.0_rp
       ! For surfmat
       this%wssurf(:) = this%lattice%wav*ang2au
 

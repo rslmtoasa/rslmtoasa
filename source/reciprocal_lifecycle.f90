@@ -189,8 +189,6 @@ contains
       ! Default k-path settings
       this%auto_kpath = .true.  ! Use automatic k-path generation by default
       this%nk_per_segment = 40  ! Default 40 k-points per segment
-      this%override_space_group = 0  ! 0 = auto-detect
-      this%custom_kpath_spec = ''  ! Empty = use automatic
       this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
 
       ! k-space Green’s-function engine (milestone B2, reciprocal_green).
@@ -339,8 +337,6 @@ contains
       ! K-path settings
       auto_kpath = this%auto_kpath
       nk_per_segment = this%nk_per_segment
-      override_space_group = this%override_space_group
-      custom_kpath_spec = this%custom_kpath_spec
 
       ! Read reciprocal namelist
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -439,8 +435,6 @@ contains
       ! K-path settings
       this%auto_kpath = auto_kpath
       this%nk_per_segment = nk_per_segment
-      this%override_space_group = override_space_group
-      this%custom_kpath_spec = custom_kpath_spec
 
       ! Log what was read
       call root_info('reciprocal%build_from_file: Read k-mesh = ' // &
