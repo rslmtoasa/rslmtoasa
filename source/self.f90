@@ -300,14 +300,6 @@ module self_mod
       !> exported from NEWRHO for the B6 multipole (l=1 dipole) radial matrix
       !> elements. Runs parallel to fun2 (which stores the |amplitude|^2 density).
       real(rp), dimension(:, :, :), allocatable :: phi_amp
-      ! Exact core pieces accumulated by RHOCOR for the LR-02N valence/core
-      ! bookkeeping.  The first array retains the accepted scalar-relativistic
-      ! core density; the second is its large-component-only diagnostic.
-      real(rp), dimension(:, :), allocatable :: core_rho_weighted, core_pauli_weighted
-      ! Optional l-resolved copy of the same frozen-core accumulation for the
-      ! DRESP-09W core provenance audit.  It is diagnostic-only and does not
-      ! feed the production density.
-      real(rp), dimension(:, :, :), allocatable :: core_rho_weighted_l, core_pauli_weighted_l
 
       ! TODO
       real(rp), dimension(:), allocatable :: bxc
@@ -1251,18 +1243,10 @@ contains
       if (allocated(this%vzt)) call g_safe_alloc%deallocate('self.vzt', this%vzt)
       if (allocated(this%fun2)) call g_safe_alloc%deallocate('self.fun2', this%fun2)
       if (allocated(this%phi_amp)) call g_safe_alloc%deallocate('self.phi_amp', this%phi_amp)
-      if (allocated(this%core_rho_weighted)) call g_safe_alloc%deallocate('self.core_rho_weighted', this%core_rho_weighted)
-      if (allocated(this%core_pauli_weighted)) call g_safe_alloc%deallocate('self.core_pauli_weighted', this%core_pauli_weighted)
-      if (allocated(this%core_rho_weighted_l)) call g_safe_alloc%deallocate('self.core_rho_weighted_l', this%core_rho_weighted_l)
-      if (allocated(this%core_pauli_weighted_l)) call g_safe_alloc%deallocate('self.core_pauli_weighted_l', this%core_pauli_weighted_l)
 #else
       if (allocated(this%ws)) deallocate (this%ws)
       if (allocated(this%mixmag)) deallocate (this%mixmag)
       if (allocated(this%rb)) deallocate (this%rb)
-      if (allocated(this%core_rho_weighted)) deallocate (this%core_rho_weighted)
-      if (allocated(this%core_pauli_weighted)) deallocate (this%core_pauli_weighted)
-      if (allocated(this%core_rho_weighted_l)) deallocate (this%core_rho_weighted_l)
-      if (allocated(this%core_pauli_weighted_l)) deallocate (this%core_pauli_weighted_l)
 #endif
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       if (allocated(this%gbt_scf_in_moment)) deallocate(this%gbt_scf_in_moment)
@@ -1958,24 +1942,14 @@ contains
       call g_safe_alloc%allocate('self.vzt', this%vzt, (/8001, 2/))
       call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, nfun_l, 2/))
       call g_safe_alloc%allocate('self.phi_amp', this%phi_amp, (/8001, nfun_l, 2/))
-      call g_safe_alloc%allocate('self.core_rho_weighted', this%core_rho_weighted, (/8001, 2/))
-      call g_safe_alloc%allocate('self.core_pauli_weighted', this%core_pauli_weighted, (/8001, 2/))
-      call g_safe_alloc%allocate('self.core_rho_weighted_l', this%core_rho_weighted_l, (/8001, nfun_l, 2/))
-      call g_safe_alloc%allocate('self.core_pauli_weighted_l', this%core_pauli_weighted_l, (/8001, nfun_l, 2/))
 #else
       nfun_l = max(3, this%control%lmax + 1)
       allocate (this%bxc(this%lattice%nrec))
       allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
       allocate (this%phi_amp(8001, nfun_l, 2))
-      allocate (this%core_rho_weighted(8001, 2), this%core_pauli_weighted(8001, 2))
-      allocate (this%core_rho_weighted_l(8001, nfun_l, 2), this%core_pauli_weighted_l(8001, nfun_l, 2))
 #endif
       this%fun2(:, :, :) = 0.0_rp
       this%phi_amp(:, :, :) = 0.0_rp
-      this%core_rho_weighted(:, :) = 0.0_rp
-      this%core_pauli_weighted(:, :) = 0.0_rp
-      this%core_rho_weighted_l(:, :, :) = 0.0_rp
-      this%core_pauli_weighted_l(:, :, :) = 0.0_rp
 
    end subroutine restore_to_default
 
@@ -3058,16 +3032,6 @@ contains
          close(newunit)
          close(10)
          close(20)
-         ! Persist the exact radial ground-state contract for audit and for
-         ! consumers running after the atomic temporaries have expired.  The
-         ! in-memory copy on symbolic_atom is the primary accessor; these
-         ! files are a small, machine-readable evidence seam.
-         do ia = 1, this%lattice%nrec
-            call this%symbolic_atom(this%lattice%nbulk + ia)%radial_ground_state%set_reported_moment(magmom(ia, :))
-            call this%symbolic_atom(this%lattice%nbulk + ia)%radial_ground_state%write_file( &
-               'radial_ground_state_'//trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol)//'_'// &
-               trim(fmt('i0', ia))//'.dat', ia)
-         end do
       end if
 
       ! Print angle betweens magnetic and orbital moments
@@ -3512,12 +3476,6 @@ contains
             if (allocated(v_trace_base)) deallocate(v_trace_base)
             if (allocated(rofi_trace_base)) deallocate(rofi_trace_base)
          end if
-         if (LAST) then
-            call atom%radial_ground_state%capture_core_density(this%core_rho_weighted(1:nr, :), &
-                                                               this%core_pauli_weighted(1:nr, :), &
-                                                               this%core_rho_weighted_l(1:nr, :, :), &
-                                                               this%core_pauli_weighted_l(1:nr, :, :))
-         end if
          DRHO_CONTROL = 0.d0
          DRHO_INTEGRATED = 0.d0
          SUM = 0.d0
@@ -3537,9 +3495,6 @@ contains
             end do
          end do
          if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
-         if (LAST) then
-            call atom%radial_ground_state%mark_accepted(ITER, DRHO_CONTROL)
-         end if
          if (LAST) exit
          if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO_CONTROL < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
             write (6, 10004) ITER, SUM, DRHO_CONTROL, VNUCL, RHO0T, VSUM, BETA1
@@ -4017,13 +3972,6 @@ contains
       C = 274.074d0
       PI = 4.d0*ATAN(1.d0)
       OBPI = 4.0D0*PI
-      ! Keep the core contribution separate for the LR-02N comparison.  The
-      ! production scalar-relativistic density below still receives both
-      ! components exactly as before.
-      if (allocated(this%core_rho_weighted) .and. allocated(this%core_pauli_weighted)) then
-         this%core_rho_weighted(1:NR, :) = 0.0_rp
-         this%core_pauli_weighted(1:NR, :) = 0.0_rp
-      end if
       !C = 274.071979d00
       ! ----------------------------
       ICORE = 0
@@ -4062,18 +4010,6 @@ contains
                   TMC = C - (V(IR, ISP) - 2.d0*Z/R - ECORE)/C
                   GFAC = 1.d0 + FLLP1/(TMC*R)**2
                   RHO(IR, ISP) = RHO(IR, ISP) + DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
-                  if (allocated(this%core_rho_weighted) .and. allocated(this%core_pauli_weighted)) then
-                     this%core_rho_weighted(IR, ISP) = this%core_rho_weighted(IR, ISP) + &
-                        DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
-                     this%core_pauli_weighted(IR, ISP) = this%core_pauli_weighted(IR, ISP) + &
-                        DEG*G(IR, 1)**2
-                     if (LP1 <= size(this%core_rho_weighted_l, 2)) then
-                        this%core_rho_weighted_l(IR, LP1, ISP) = this%core_rho_weighted_l(IR, LP1, ISP) + &
-                           DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
-                        this%core_pauli_weighted_l(IR, LP1, ISP) = this%core_pauli_weighted_l(IR, LP1, ISP) + &
-                           DEG*G(IR, 1)**2
-                     end if
-                  end if
                end do
                RORIM = 0.d0
                if (NRE == NR) then
@@ -4183,18 +4119,6 @@ contains
                   TMC = C - (V(IR, ISP) - 2.d0*Z/R - ECORE)/C
                   GFAC = 1.d0 + FLLP1/(TMC*R)**2
                   RHO(IR, ISP) = RHO(IR, ISP) + DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
-                  if (allocated(this%core_rho_weighted) .and. allocated(this%core_pauli_weighted)) then
-                     this%core_rho_weighted(IR, ISP) = this%core_rho_weighted(IR, ISP) + &
-                        DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
-                     this%core_pauli_weighted(IR, ISP) = this%core_pauli_weighted(IR, ISP) + &
-                        DEG*G(IR, 1)**2
-                     if (LP1 <= size(this%core_rho_weighted_l, 2)) then
-                        this%core_rho_weighted_l(IR, LP1, ISP) = this%core_rho_weighted_l(IR, LP1, ISP) + &
-                           DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
-                        this%core_pauli_weighted_l(IR, LP1, ISP) = this%core_pauli_weighted_l(IR, LP1, ISP) + &
-                           DEG*G(IR, 1)**2
-                     end if
-                  end if
                end do
                RORIM = 0.d0
                if (NRE == NR) then
@@ -5058,10 +4982,8 @@ contains
          end if
       end do
 
-      ! Keep the exact multiplicative XC arrays available until the caller
-      ! decides whether this is the accepted final radial iteration.  They
-      ! are otherwise automatic temporaries, which was the LR-01 lifetime
-      ! blocker.
+      ! Keep the multiplicative XC arrays until the radial ground state is
+      ! captured at the end of this routine.
       allocate (vxc_up_radial(NR), vxc_down_radial(NR))
       if (use_libxc_gga) then
          allocate (exc_radial(NR))
@@ -5219,30 +5141,7 @@ contains
          if (n_radial_spin_channels /= 2) then
             error stop 'VXC0SP snapshot requires two local radial spin channels'
          end if
-         call snapshot%capture(A, B, rofi, RHO, RHO0, vxc_up_radial, vxc_down_radial, V, B_fsm)
-         snapshot%xc_provenance%backend_name = xc_obj%backend_name
-         snapshot%xc_provenance%txch = xc_obj%TXCH
-         snapshot%xc_provenance%functional_name = xc_obj%functional_name
-         snapshot%xc_provenance%mapping_quality = xc_obj%mapping_quality
-         snapshot%xc_provenance%txc = xc_obj%txc
-         snapshot%xc_provenance%libxc_family = xc_obj%libxc_family
-         snapshot%xc_provenance%libxc_nspin = xc_obj%libxc_nspin
-         snapshot%xc_provenance%use_libxc = xc_obj%use_libxc
-         snapshot%xc_provenance%spin_polarized = (n_radial_spin_channels == 2)
-         snapshot%xc_provenance%radial_gga = use_libxc_gga .or. use_legacy_gga
-         if (allocated(xc_obj%libxc_func_id)) then
-            snapshot%xc_provenance%n_components = size(xc_obj%libxc_func_id)
-            allocate(snapshot%xc_provenance%component_ids(size(xc_obj%libxc_func_id)))
-            snapshot%xc_provenance%component_ids = xc_obj%libxc_func_id
-            if (allocated(xc_obj%libxc_component_family)) then
-               allocate(snapshot%xc_provenance%component_families(size(xc_obj%libxc_component_family)))
-               snapshot%xc_provenance%component_families = xc_obj%libxc_component_family
-            end if
-            if (allocated(xc_obj%libxc_component_kind)) then
-               allocate(snapshot%xc_provenance%component_kinds(size(xc_obj%libxc_component_kind)))
-               snapshot%xc_provenance%component_kinds = xc_obj%libxc_component_kind
-            end if
-         end if
+         call snapshot%capture(A, B, rofi, RHO, RHO0, vxc_up_radial, vxc_down_radial)
       end if
    end subroutine VXC0SP
 
@@ -5432,7 +5331,7 @@ contains
       intrinsic ATAN, EXP, SQRT, TAN
       !
       real(rp), dimension(:, :), allocatable :: G, GP, GPP
-      real(rp), dimension(:), allocatable :: sr_correction, sr_gfac, sr_tmc
+      real(rp), dimension(:), allocatable :: sr_gfac
       integer :: NSP, NR
       ! ... Executable Statements ...
       !
@@ -5448,7 +5347,7 @@ contains
       nr = size(ROFI)
       lmax = atom%potential%lmax
       allocate (G(NR, NSP), GP(NR, NSP), GPP(NR, NSP))
-      allocate (sr_correction(NR), sr_gfac(NR), sr_tmc(NR))
+      allocate (sr_gfac(NR))
       if (atom%radial_ground_state%valid) call atom%radial_ground_state%begin_pauli_basis(lmax)
       do I = 1, nsp
          do L = 0, lmax
@@ -5479,21 +5378,15 @@ contains
             VAL = VAL/SQRT(SUMM)
             SLO = SLO/SQRT(SUMM)
             call PHDFSR(atom%element%atomic_number, L, V(:, I), E, atom%A, B, ROFI, NR, G, VAL, SLO, GP, GPP, PHI, DPHI, PHIP, DPHIP, P, TOL, NN)
-            sr_correction = 0.0_rp
             sr_gfac = 1.0_rp
-            sr_tmc = 274.074_rp
             do IR = 2, NR
                if (abs(ROFI(IR)) > tiny(1.0_rp)) then
                   TMC = 274.074_rp - (V(IR, I) - 2.0_rp*atom%element%atomic_number/ROFI(IR) - E)/274.074_rp
-                  sr_tmc(IR) = TMC
                   sr_gfac(IR) = 1.0_rp + real(L*(L + 1), rp)/(TMC*ROFI(IR))**2
-                  sr_correction(IR) = real(L*(L + 1), rp)/(TMC*ROFI(IR))**2*G(IR, 1)**2 + G(IR, 2)**2
                end if
             end do
             if (atom%radial_ground_state%valid) then
-               call atom%radial_ground_state%set_pauli_basis_channel(L, I, E, G(:, 1), GP(:, 1), G(:, 2), sr_correction)
-               call atom%radial_ground_state%set_scalar_relativistic_basis_channel(L, I, E, GP(:, 1), GP(:, 2), &
-                  GPP(:, 1), GPP(:, 2), sr_gfac, sr_tmc, V(:, I))
+               call atom%radial_ground_state%set_basis_channel(L, I, E, G(:, 1), G(:, 2), GP(:, 1), GP(:, 2), sr_gfac)
             end if
         !!write(876, ´(f18.8)´) G(1:NR*2)
             !print ´(a, 6f12.6)´, ´PHI´, PHI, DPHI, PHIP, DPHIP, val
@@ -5526,7 +5419,7 @@ contains
             !      write (660, 10002) L, E, VL(L, I), C(L, I), SRDEL(L, I), QPAR(L, I), PPAR(L, I)
          end do
       end do
-      deallocate (sr_correction, sr_gfac, sr_tmc)
+      deallocate (sr_gfac)
       return
       !
       ! ... Format Declarations ...
