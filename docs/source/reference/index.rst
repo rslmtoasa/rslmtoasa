@@ -16,6 +16,7 @@ Code documentation and module overview.
    exchange_module
    conductivity_module
    bands_module
+   environment_variables
 
 Overview
 ========
