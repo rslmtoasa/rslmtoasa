@@ -375,24 +375,6 @@ contains
       call this%build_strux_inputs(nspec, nl, species_labels(1:nspec), alpha_in, hcr, rmt)
       write (17, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
 
-      ! DEBUG_STRUX_DIAG_BEGIN (temporary instrumentation; safe to remove as one block)
-      write (17, '(a)') 'DEBUG_STRUX_DIAG: begin'
-      write (17, '(a,a)') 'DEBUG_STRUX_DIAG: effective_screening=', trim(effective_screening)
-      write (17, '(a,i0)') 'DEBUG_STRUX_DIAG: opts%screening_mode=', opts%screening_mode
-      write (17, '(a,l1)') 'DEBUG_STRUX_DIAG: opts%auto_alpha=', opts%auto_alpha
-      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: hcr[min,max]=', minval(hcr), ',', maxval(hcr)
-      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: alpha_in[min,max]=', minval(alpha_in), ',', maxval(alpha_in)
-      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: rmt[min,max]=', minval(rmt), ',', maxval(rmt)
-      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: avw_bohr, solve_cutoff_bohr=', wav_bohr, ',', solve_cutoff_bohr
-      write (17, '(a)') 'DEBUG_STRUX_DIAG: end'
-      flush(17)
-      if (rank == 0) then
-         call g_logger%info('DEBUG_STRUX_DIAG effective_screening='//trim(effective_screening)// &
-                            ' mode='//int2str(opts%screening_mode)// &
-                            ' auto='//merge('T','F',opts%auto_alpha), __FILE__, __LINE__)
-      end if
-      ! DEBUG_STRUX_DIAG_END
-
       if (effective_screening == 'manual' .or. effective_screening == 'default') then
          if (this%strux_want_sdot) then
             call g_logger%fatal('strux manual/default screening with sdot is unsupported; use sigma or fitted', __FILE__, __LINE__)
