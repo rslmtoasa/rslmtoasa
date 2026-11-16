@@ -196,7 +196,7 @@ Alphabetical Listing (All Parameters)
 **L**
 
 - ``linear_in``, ``linear_out`` - Linear-response input and output operators (in &control)
-- ``ll_cond`` - Conductivity Chebyshev cutoff (in &conductivity)
+- ``ll_cond`` - Read but not used; the conductivity cutoff is ``cond_ll`` (in &control)
 - ``lld`` - Recursion cutoff for d electrons
 - ``llsp`` - Recursion cutoff for s/p electrons
 - ``lmax`` - Maximum orbital angular momentum

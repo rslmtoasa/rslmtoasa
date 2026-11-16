@@ -543,7 +543,8 @@ conductivity tensor calculation.
 
 **Typical range:** 100–600
 
-**Default:** set by ``cond_ll`` in ``&control`` if not specified here
+**Note:** ``ll_cond`` is read but not used by the code. The expansion order
+is ``cond_ll`` in ``&control``.
 
 **Example:**
 
@@ -559,8 +560,6 @@ conductivity tensor calculation.
   increase computational cost as :math:`\mathcal{O}(N_{ll}^2)`.
 - A convergence test is recommended: increase ``ll_cond`` until
   :math:`\sigma(E_F)` changes by less than ~1%.
-- ``ll_cond`` in this namelist takes precedence over ``cond_ll`` in
-  ``&control``; either can be used.
 
 **See also:** ``cond_ll``, ``linear_in``, ``linear_out``, ``cond_calctype`` in
 :ref:`keywords/control_parameters`.

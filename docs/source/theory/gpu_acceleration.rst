@@ -148,7 +148,7 @@ re-upload or re-pack, mirroring the CPU ``cheb_cache_t`` lifecycle.
 Testing
 =======
 
-Real-GPU consistency is validated out-of-CI via ``tests/run_gpu_matrix.sh``
+Real-GPU consistency is checked out-of-CI with ``tests/run_gpu_matrix.sh``
 (compares GPU output against the CPU reference across the recursion matrix).
 CI itself only *compiles* the plugin (the ``cuda_compile`` job) since the
 runners have no GPU. See ``docs/DEVELOPER_MAP.md`` for the kernel-level plugin

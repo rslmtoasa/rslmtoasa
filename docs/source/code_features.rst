@@ -123,7 +123,7 @@ Magnetic and electronic structure
   reports a magnon dispersion :math:`\omega(q)`, either from a single
   force-theorem SCF convergence (``mode = 'mft'``) or from independent SCF
   convergence at every q-point (``mode = 'scf'``); a multi-sublattice
-  branch construction is available alongside the validated
+  branch construction is available alongside the
   single-sublattice route.
 - **Constraining fields**: site-dependent fields that steer the local
   magnetization toward a prescribed reference direction during SCF,

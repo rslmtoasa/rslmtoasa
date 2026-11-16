@@ -219,7 +219,8 @@ edel
 **Meaning:**
 
 - Computed from energy_min, energy_max, channels_ldos
-- edel = (energy_max - energy_min) / (channels_ldos - 1)
+- edel = (energy_max - energy_min) / channels_ldos, then adjusted so that
+  E_F (``fermi``) falls on a mesh point
 
 **Example calculation:**
 

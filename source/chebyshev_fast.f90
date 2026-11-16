@@ -1,6 +1,6 @@
 !------------------------------------------------------------------------------
 ! Optimized CPU replacements for chebyshev_recur (recursion_mod) and
-! chebyshev_green (bands_mod), applying the validated KPM tricks:
+! chebyshev_green (bands_mod), applying the KPM tricks:
 !
 !  1. The window scaling (H-b)/a is folded ONCE into local copies of
 !     ee/hall (lsham included), so the inner loop is psi2 = 2*Ht*psi1 - psi0

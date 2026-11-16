@@ -471,7 +471,7 @@ see :ref:`keywords/output_options`).
   (``buildinterface``, B7 — see :doc:`../user_guide/examples/interface_fcccu111`
   for ``region_b_kind='metal'``/``'vacuum'`` and the alignment machinery).
 - Consumed throughout ``lattice_cluster.f90``, ``calculation.f90``,
-  ``bands.f90``, and ``energy.f90``; validated in
+  ``bands.f90``, and ``energy.f90``; checked in
   ``control.f90::check_all`` (fatal on any other value).
 - This entry previously listed post-processing values (``'bulk'``,
   ``'surface'``, ``'bands'``, ``'exchange'``, ``'conductivity'``, ``'dos'``)

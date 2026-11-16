@@ -3233,7 +3233,7 @@ contains
       xc_obj = xc(this%lattice%control)
       b = atom%B()
 
-      call g_logger%info('XC functional: '//trim(xc_obj%TXCH)//' '//int2str(xc_obj%txc)//real2str(B), __FILE__, __LINE__)
+      call g_logger%info('XC functional: '//trim(xc_obj%TXCH)//' txc='//int2str(xc_obj%txc)//' mesh_b='//real2str(B), __FILE__, __LINE__)
 
       lmax = atom%potential%lmax
       qval(:) = 0

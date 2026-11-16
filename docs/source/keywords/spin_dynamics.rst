@@ -28,6 +28,9 @@ For the underlying LLG theory see :ref:`theory/spin_dynamics`.
 Parameters
 ==========
 
+``t_i``, ``t_f``, ``nt`` and ``integrator`` are read from ``&sd`` but not used by
+the current code (``source/spin_dynamics.f90``).
+
 t_i
 ---
 

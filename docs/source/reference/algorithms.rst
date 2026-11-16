@@ -312,7 +312,7 @@ Build atomic cluster from lattice parameters.
 
 **Implementation:**
 
-- ``source/lattice_cluster.f90::build_clusup()`` - Cluster generation
+- ``source/lattice_cluster.f90`` - Cluster generation
 - ``source/math.f90`` - Distance/geometry utilities
 
 Hamiltonian Construction

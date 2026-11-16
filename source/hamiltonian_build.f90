@@ -104,7 +104,7 @@ contains
             if (abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u(l)) <= 1.0e-10_rp .and. &
                 abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j(l)) <= 1.0e-10_rp) cycle
             if (l /= 3) then
-               call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+               call g_logger%fatal('Fixed-U LDA+U is implemented only for the d shell.', __FILE__, __LINE__)
             end if
             if (this%control%lmax /= 2) then
                call g_logger%fatal('Fixed d-shell LDA+U currently requires control lmax=2 (spd basis); '// &
@@ -608,7 +608,7 @@ contains
                end if
                if (abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) then
                   if (l /= 3) then
-                     call g_logger%fatal('Fixed-U LDA+U is validated only for the d channel (hubbard_*_general(type,3)).', &
+                     call g_logger%fatal('Fixed-U LDA+U is implemented only for the d channel (hubbard_*_general(type,3)).', &
                                           __FILE__, __LINE__)
                   end if
                end if
@@ -652,7 +652,7 @@ contains
                      call g_logger%fatal('Fixed Hubbard inputs require U >= 0 and J >= 0, in eV.', __FILE__, __LINE__)
                   end if
                   if ((abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) .and. l /= 3) then
-                     call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+                     call g_logger%fatal('Fixed-U LDA+U is implemented only for the d shell.', __FILE__, __LINE__)
                   end if
                   this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = u_ev/ry2ev
                   this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = j_ev/ry2ev
@@ -684,7 +684,7 @@ contains
                      call g_logger%fatal('Fixed Hubbard inputs require U >= 0 and J >= 0, in eV.', __FILE__, __LINE__)
                   end if
                   if ((abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) .and. l /= 3) then
-                     call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+                     call g_logger%fatal('Fixed-U LDA+U is implemented only for the d shell.', __FILE__, __LINE__)
                   end if
                   this%hubbard_u_impurity(i, l) = u_ev/ry2ev
                   this%hubbard_j_impurity(i, l) = j_ev/ry2ev

@@ -74,7 +74,6 @@ See :ref:`keywords/control_parameters` for complete listing.
 Major procedures:
 
 - ``build_from_file(fname)`` - Load structure
-- ``build_clusup()`` - Generate cluster geometry
 - ``print_state()`` - Display structure info
 
 Key members:
@@ -100,7 +99,6 @@ Major procedures:
 - ``build_bulkham()`` - Construct bulk Hamiltonian
 - ``build_locham()`` - Local Hamiltonian
 - ``build_lsham()`` - Spin-orbit coupling terms
-- ``build_from_paoflow()`` - Interface with PAOflow
 
 Key members:
 
@@ -149,16 +147,12 @@ Mode behavior:
 
 Major procedures:
 
-- ``fill_green(green_obj, mesh, pairs, sigma_provider)`` - populate the
+- ``fill_green(green_obj)`` - populate the
   Green's-function arrays via ``green_backend='lehmann'`` or ``'dyson'``
   (see :ref:`keywords/output_options` for ``gf_route``/``green_backend``/``green_eta``)
 
 Related files:
 
-- ``sigma_provider.f90`` - abstract self-energy provider interface
-  (``sigma_zero`` is the only concrete implementation so far; the
-  interface exists so a future CPA/DMFT Σ(z) provider slots in without
-  changing ``fill_green``'s call sites)
 - ``lehmann_kernel.f90`` - strict Lehmann representation kernel (Σ=0, one
   eigensolve per k, amortized over energies and pairs)
 - ``dyson_kernel.f90`` - direct Dyson inversion kernel

@@ -302,7 +302,6 @@ Minimal Example
       nk1 = 16, nk2 = 16, nk3 = 16
       use_symmetry_reduction = .true.
       use_time_reversal = .true.
-      kspace_diagnostics = .true.
       suppress_internal_logs = .true.
    /
 

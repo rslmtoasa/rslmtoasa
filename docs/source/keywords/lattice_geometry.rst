@@ -131,7 +131,7 @@ r2
 - r2 = 15.13 Å² ≈ distance to second neighbors
 - Use "5 th neighs." as comment suggests (code note) for bulk limit
 
-**Related code:** ``source/lattice_cluster.f90::build_clusup()``
+**Related code:** ``source/lattice_cluster.f90``
 
 **See also:** :doc:`../code_structure` for details on cluster construction
 
@@ -269,7 +269,7 @@ vacuum, with frozen potential parameters generated per run by
   barrier height; see ``source/lattice_lifecycle.f90``, B7.6 comment).
 - With ``'vacuum'``, ``vacuum_lead.f90`` generates the frozen empty-sphere
   potential parameters by running the code's own radial solver at constant
-  V(r), validated against an analytic spherical-Bessel oracle
+  V(r), checked against an analytic spherical-Bessel oracle
   (``tests/unit/test_vacuum_lead.f90``).
 - See :doc:`../user_guide/examples/interface_fcccu111` for a worked
   ``A|vacuum`` example and the alignment-convergence behavior with buffer
@@ -295,7 +295,7 @@ Lattice parameters defined and used in:
 
 - **Definition:** ``source/lattice.f90::type lattice``
 - **Reading:** ``source/lattice.f90::build_from_file()``
-- **Cluster setup:** ``source/lattice_cluster.f90::build_clusup()``
+- **Cluster setup:** ``source/lattice_cluster.f90``
 - **Geometry utilities:** ``source/math.f90`` (distance, angles)
 
 See Also

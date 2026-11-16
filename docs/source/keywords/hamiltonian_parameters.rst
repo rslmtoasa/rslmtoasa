@@ -145,7 +145,7 @@ Spin-spiral / non-collinear
      nonzero ``q_ss`` without selecting one of the two spiral representations
      is therefore **fatal** at ``build_bulkham``; the two live interpretations
      are different physics (the gauge trick versus the real-space texture it is
-     validated against), so the code names all three exits rather than guessing.
+     compared with), so the code names all three exits rather than guessing.
      ``theta_ss`` alone does not trigger it: a cone angle at ``q = 0`` is a
      global spin rotation and is energy-invariant without SOC.
      ``post_processing='frozen_magnon'`` selects ``'gbt_single_q'`` itself and

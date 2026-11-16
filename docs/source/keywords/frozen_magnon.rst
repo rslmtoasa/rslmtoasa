@@ -33,7 +33,7 @@ The namelist is **optional**. It only has an effect when
    /
 
 **Known limitation:** the single-sublattice (``branch_mode='acoustic'``)
-route is validated. The multi-sublattice ``branch_mode='auto'`` route's
+route is implemented. The multi-sublattice ``branch_mode='auto'`` route's
 acoustic branch is **not yet gapless at** :math:`\Gamma` (a Goldstone-mode
 violation of roughly 0.28 Ry on two-sublattice bcc FeCo, unexplained,
 deferred to B11) — see ``tests/KNOWN_ISSUES.md``.
@@ -99,7 +99,7 @@ branch_mode
 
 - ``'acoustic'``: single-sublattice adiabatic dispersion,
   :math:`\omega(q) = \Delta E(q) / \Delta m_z` with :math:`\Delta m_z
-  \propto M_{\text{tot}} \sin^2\theta` (small cone) — the validated route.
+  \propto M_{\text{tot}} \sin^2\theta` (small cone) — the single-sublattice route.
 - ``'auto'``: multi-sublattice magnon branches via the direct GBT
   frozen-magnon method (second derivatives of the force-theorem
   band-energy surface with respect to sublattice cone angles; Essenberger

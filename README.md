@@ -128,7 +128,7 @@ cmake --install build --prefix "$HOME/.local"
 
 ### libXC integration
 
-RS-LMTO-ASA provides an optional, validated [libXC](https://libxc.gitlab.io/)
+RS-LMTO-ASA provides an optional [libXC](https://libxc.gitlab.io/)
 interface for spherical-ASA LDA and GGA functionals while preserving the
 historical XC implementation.  Meta-GGA, hybrid, orbital-dependent, and
 kinetic-density-dependent families are rejected explicitly because the ASA

@@ -66,7 +66,6 @@ Directory Layout
    │   ├── reciprocal_green.f90       #   submodule: B2 k-space Green's-function engine (2 backends)
    │   ├── reciprocal_bsf.f90         #   submodule: B3 Bloch spectral function A(k,E)
    │   ├── reciprocal_moments.f90     #   submodule: B5.1 exact k-space Chebyshev moment generator
-   │   ├── sigma_provider.f90         # B2: abstract self-energy provider interface (sigma_zero)
    │   ├── lehmann_kernel.f90         # B2: strict Lehmann representation kernel (Sigma=0)
    │   ├── dyson_kernel.f90           # B2/B3: direct Dyson inversion kernel, batched per (k,z)
    │   ├── bsf_kernel.f90             # B3: spectral-trace kernel for reciprocal_bsf

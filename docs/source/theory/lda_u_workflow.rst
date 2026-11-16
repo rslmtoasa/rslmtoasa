@@ -72,7 +72,7 @@ Simplified Dudarev form:
    E_U - E_{dc} = \frac{U}{2}\sum_{\sigma}
    \mathrm{Tr}\left[n^{\sigma}(1-n^{\sigma})\right].
 
-The validated implementation limit is ``J=0`` with nonzero ``U``; the full
+The tested implementation limit is ``J=0`` with nonzero ``U``; the full
 Liechtenstein U/J implementation is described above.
 
 Extended +V correction (nearest-neighbor inter-site contribution):
@@ -90,7 +90,7 @@ Implementation status
 - ``liechtenstein`` potential path:
   the ordinary on-site U/J potential is wired; the scope and the measured agreement of the tests are in
   ``docs/LDAU_STATUS.md``. The finite-difference check of the energy against U is exact in the ``J=0`` limit only.
-  Chebyshev recursion with fixed U is validated for collinear bulk and impurity runs: the
+  Chebyshev recursion with fixed U is tested for collinear bulk and impurity runs: the
   on-site Green function and occupation matrices are deterministic; a bcc Fe block-versus-Chebyshev
   comparison at U=2 eV gave an E_F difference of 9.75e-4 Ry (limit 1.84e-3) and an E_Hub relative
   difference of 4.1e-3 (limit 1e-2); and in local mode Tr(M1)=q0*(c'+t/q0) holds to 1e-15 in a
@@ -103,7 +103,7 @@ Implementation status
   uses local occupations and a practical diagonal-in-m approximation.  This
   is a **proxy** implementation: the full inter-site matrix form
   :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active and must not be
-  described as a validated inter-site DFT+U+V implementation.
+  described as an inter-site DFT+U+V implementation.
 
 Impurity radial-moment mode
 ---------------------------
