@@ -25,6 +25,7 @@ Quick Navigation
    element_parameters
    frozen_magnon
    reciprocal
+   spin_response
 
 Parameters by Namelist
 ======================
@@ -56,6 +57,10 @@ LMTO tight-binding potential parameters. See :ref:`keywords/basis_parameters`.
 **&reciprocal**, **&kpath**
 
 k-space SCF, band structure, DOS, Fermi surface and k-space Green functions. See :ref:`keywords/reciprocal`.
+
+**&spin_response**
+
+Transverse spin susceptibility on the k-space route. See :ref:`keywords/spin_response`.
 
 **&constraints**
 
