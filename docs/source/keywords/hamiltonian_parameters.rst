@@ -194,6 +194,34 @@ Provenance
 - **Namelist:** ``source/include_codes/namelists/hamiltonian.f90``
 - **Reading:** ``source/hamiltonian_build.f90::build_from_file()``
 
+Spectral bounds and velocity scaling
+====================================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``bounds_algorithm``
+     - character
+     - ``'none'``
+     - Spectral bounds of the Chebyshev scaling: ``'none'`` (use ``energy_min``/``energy_max``),
+       ``'gershgorin'``, ``'hgamma'`` or ``'sturm'`` (H(Gamma) estimate with Gershgorin
+       fallback), or ``'both'`` (envelope of both). See :ref:`theory/recursion_method`.
+   * - ``bounds_scaling``
+     - real
+     - 1.05
+     - Symmetric widening factor applied to the selected interval; values ``<= 0`` use
+       1.05.
+   * - ``velocity_scale(itype)``
+     - real (ntype)
+     - 1.0
+     - Scale factor of the velocity operators per atom type; a bond uses the larger of
+       its two types.
+
 See Also
 ========
 

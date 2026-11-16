@@ -230,6 +230,32 @@ Sublattices below threshold are excluded from the probe set.
 
 ----
 
+Constrained-mode controller
+===========================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``constraint_max_iterations``
+     - integer
+     - 100
+     - Maximum controller updates per q point in the constrained mode.
+   * - ``constraint_tolerance``
+     - real
+     - -1.0
+     - Override of ``constraints_tolerance`` in ``&control``; values ``<= 0`` use that
+       value.
+   * - ``constraint_start_from_zero``
+     - logical
+     - ``.true.``
+     - Reset the constraining field and controller at every q point, so results do not
+       depend on the order of the q list.
+
 See Also
 ========
 

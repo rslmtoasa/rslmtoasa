@@ -320,17 +320,10 @@ npold
 
 **Type:** Integer
 
-**Purpose:** Number of old densities to store (mixing history)
+**Purpose:** Orbital dimension of the structure-constant arrays; the code uses
+``max(norb, npold)``. Rarely set by hand.
 
-**Typical range:** 5-20
-
-**Default:** 10
-
-**Notes:**
-
-- Related to the Broyden mixing selected by ``mixtype`` in ``&mix``
-- Allows Broyden mixing to use multiple previous iterations
-- More history -> better convergence but more memory
+**Default:** ``norb`` (orbitals per spin channel of the basis: 4, 9 or 16)
 
 orb_pol
 -------
@@ -939,6 +932,47 @@ Control parameters defined and used in:
   - SCF loop: ``source/self.f90::run()``
   - Recursion: ``source/recursion.f90::recur()``
   - Output: ``source/density_of_states.f90``
+
+Transport and GPU options (&control, &conductivity)
+===================================================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``cpu_reconstruction_precision``
+     - character
+     - ``'fp64'``
+     - Precision of the CPU reconstruction of the transport response: ``'fp64'`` or
+       ``'fp32'``.
+   * - ``gpu_precision``
+     - character
+     - ``'fp32'``
+     - Arithmetic precision of the CUDA Chebyshev kernels: ``'fp32'`` or ``'fp64'``. The
+       reconstructed output stays double precision.
+   * - ``fresh_start``
+     - logical
+     - ``.false.``
+     - Start from the named elemental files even when a ``<element>_out.nml`` restart
+       is present.
+   * - ``cpp_plugin``, ``gpu_moment_download``, ``gpu_stochastic_block``
+     - logical, logical, integer
+     - ``.false.``, ``.false.``, 1
+     - Read but not used.
+   * - ``response_geometry``
+     - character
+     - ``'bulk'``
+     - ``&conductivity``: normalise the response per volume (``'bulk'``) or per area
+       (``'sheet'``).
+   * - ``response_measure``
+     - real (Å³ or Å²)
+     - 0.0
+     - ``&conductivity``: cell volume or area used for the normalisation; 0 derives it
+       from the lattice vectors and ``alat``.
 
 See Also
 ========

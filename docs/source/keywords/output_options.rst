@@ -477,6 +477,24 @@ Output control parameters found in:
   - ``source/conductivity.f90`` (conductivity files)
   - ``source/self.f90`` (convergence file)
 
+Magnetic inertia (&calculation)
+===============================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``do_inertia``
+     - logical
+     - ``.false.``
+     - With ``post_processing = 'exchange'`` and ``nsp = 2``, also write the raw
+       torque-correlation inertia kernel per pair (``allinertias.out``, ``inertia-energy.out``,
+       ``example-real.out``, ``example-imag.out``). Needs at least three energy points.
+
 See Also
 ========
 

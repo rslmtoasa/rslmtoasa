@@ -137,13 +137,13 @@ core).
 - For rare-earth elements, setting ``f_core = 14`` (fully filled 4f in core)
   gives a good approximation for most structural and magnetic properties.
 
-num_quant_s / num_quant_p / num_quant_d
-----------------------------------------
+num_quant_s / num_quant_p / num_quant_d / num_quant_f
+-----------------------------------------------------
 
 **Type:** Integer
 
-**Purpose:** Principal quantum numbers :math:`n` for the s, p, and d orbitals
-included in the LMTO basis.
+**Purpose:** Principal quantum numbers :math:`n` for the s, p, d and f orbitals
+included in the LMTO basis; ``num_quant_f`` is used with an f basis (``lmax = 3``).
 
 **Example for Fe (3d transition metal):**
 

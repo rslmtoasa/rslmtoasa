@@ -424,6 +424,54 @@ SCF parameters defined in:
 - **Mixing:** ``source/mix.f90::type mix``, ``mix.f90::mixpq()``
 - **SCF loop and convergence check:** ``source/self.f90::run()``
 
+Magnetic seed and per-atom options (&self)
+==========================================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 16 48
+
+   * - Key
+     - Type
+     - Default
+     - Meaning
+   * - ``magnetic_seed_enable``
+     - logical
+     - ``.false.``
+     - Add a temporary field to the exchange splitting of every atomic solve during the
+       first ``magnetic_seed_steps`` SCF iterations, to break the symmetry of a nonmagnetic
+       start. Cannot be combined with ``&constraints``.
+   * - ``magnetic_seed_steps``
+     - integer
+     - 0
+     - Number of SCF iterations with the seed; must be at least 1 when the seed is on and
+       leave at least one iteration without it.
+   * - ``magnetic_seed_field``
+     - real (Ry)
+     - 0.0
+     - Seed field, in the same convention as the constraining field ``B_fsm``; must be
+       nonzero when the seed is on.
+   * - ``force_nonmagnetic(i)``
+     - logical (nrec)
+     - ``.false.``
+     - Keep recursion atom i nonmagnetic throughout the SCF.
+   * - ``r05_p_tolerance``
+     - real
+     - -1.0
+     - Fixed-U convergence target for the occupation matrix; values ``<= 0`` use the
+       built-in target (1e-7 k-space, 5e-7 real space), values above 1 stop the run.
+   * - ``r05_v_tolerance``
+     - real (Ry)
+     - -1.0
+     - Fixed-U convergence target for the U potential; values ``<= 0`` use 1e-7 Ry,
+       values above 1 stop the run.
+   * - ``rb(i)``
+     - integer (nrec)
+     - 2
+     - Read but not used.
+
+``var`` in ``&mix`` is read but not used.
+
 See Also
 ========
 
