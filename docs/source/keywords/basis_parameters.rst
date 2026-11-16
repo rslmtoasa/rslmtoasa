@@ -237,7 +237,7 @@ spin 1 = up, 2 = down, unless stated otherwise. The Hubbard keys of ``&par`` are
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 70
+   :widths: 38 62
 
    * - Key
      - Meaning

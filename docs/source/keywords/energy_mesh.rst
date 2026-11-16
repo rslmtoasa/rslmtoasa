@@ -359,7 +359,7 @@ set by hand.
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 70
+   :widths: 38 62
 
    * - Key
      - Meaning

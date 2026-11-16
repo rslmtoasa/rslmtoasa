@@ -200,142 +200,89 @@ it, an example deck where one exists, and the main source files.
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 24 18 17 17
+   :class: longtable
+   :widths: 30 34 36
 
-   * - Feature
+   * - Feature (keywords)
      - Input
-     - Keywords
-     - Example
-     - Source
-   * - Real-space recursion (Lanczos, block, Chebyshev)
+     - Example; source
+   * - Real-space recursion (Lanczos, block, Chebyshev) (:ref:`keywords/control_parameters`)
      - ``recur`` (``&control``)
-     - :ref:`keywords/control_parameters`
-     - ``example/bulk/bccFe``
-     - ``recursion*.f90``
-   * - Chebyshev kernels, linear prediction, damping
+     - ``example/bulk/bccFe``; ``recursion*.f90``
+   * - Chebyshev kernels, linear prediction, damping (:ref:`keywords/control_parameters`)
      - ``cheb_backend``, ``cheb_lp``, ``cheb_kernel``
-     - :ref:`keywords/control_parameters`
-     - ``example/bulk/bccFe_chebyshev_lp``
-     - ``recursion_chebyshev.f90``, ``chebyshev_fast.f90``
-   * - Spectral bounds of the Chebyshev scaling
+     - ``example/bulk/bccFe_chebyshev_lp``; ``recursion_chebyshev.f90``, ``chebyshev_fast.f90``
+   * - Spectral bounds of the Chebyshev scaling (:ref:`keywords/hamiltonian_parameters`)
      - ``bounds_algorithm``
-     - :ref:`keywords/hamiltonian_parameters`
-     - —
      - ``bounds.f90``
-   * - Surface and impurity clusters
+   * - Surface and impurity clusters (:ref:`keywords/lattice_geometry`)
      - ``pre_processing`` (``buildsurf``, ``newclubulk``, ``newclusurf``), ``calctype`` S/I
-     - :ref:`keywords/lattice_geometry`
-     - ``example/surface``, ``example/impurity``
-     - ``lattice_cluster.f90``
-   * - Two-sided interface (layered) SCF
+     - ``example/surface``, ``example/impurity``; ``lattice_cluster.f90``
+   * - Two-sided interface (layered) SCF (:ref:`keywords/lattice_geometry`, :ref:`keywords/energy_mesh`)
      - ``pre_processing = 'buildinterface'``, ``calctype = 'L'``
-     - :ref:`keywords/lattice_geometry`, :ref:`keywords/energy_mesh`
-     - ``example/interface/fccCu111_AA``
-     - ``charge_interface.f90``, ``region_registry.f90``
-   * - Dipole surface electrostatics
+     - ``example/interface/fccCu111_AA``; ``charge_interface.f90``, ``region_registry.f90``
+   * - Dipole surface electrostatics (:ref:`keywords/control_parameters`)
      - ``dipole_electrostatics``
-     - :ref:`keywords/control_parameters`
-     - —
      - ``charge.f90``
-   * - strux_lib structure constants, f basis
+   * - strux_lib structure constants, f basis (:ref:`keywords/lattice_geometry`)
      - ``strux_backend``, ``lmax``
-     - :ref:`keywords/lattice_geometry`
-     - ``example/bulk/hcpCo-folder``
-     - ``lattice_strux.f90``
-   * - k-space SCF
+     - ``example/bulk/hcpCo-folder``; ``lattice_strux.f90``
+   * - k-space SCF (:ref:`keywords/reciprocal`)
      - ``use_kspace`` (``&self``), ``&reciprocal``
-     - :ref:`keywords/reciprocal`
-     - ``example/k_space_scf/bccFe``
-     - ``self_reciprocal.f90``, ``reciprocal*.f90``
-   * - Band structure, DOS, Fermi surface, Bloch spectral function
+     - ``example/k_space_scf/bccFe``; ``self_reciprocal.f90``, ``reciprocal*.f90``
+   * - Band structure, DOS, Fermi surface, Bloch spectral function (:ref:`keywords/reciprocal`, :ref:`keywords/output_options`)
      - ``post_processing`` (``band_structure``, ``density_of_states``, ``fermi_surface``, ``bsf``)
-     - :ref:`keywords/reciprocal`, :ref:`keywords/output_options`
-     - ``example/band_structure/bccFe``, ``example/density_of_states/bccFe``
-     - ``reciprocal_bands.f90``, ``reciprocal_dos.f90``, ``reciprocal_export.f90``
-   * - k-space Green functions for exchange and transport
+     - ``example/band_structure/bccFe``, ``example/density_of_states/bccFe``; ``reciprocal_bands.f90``, ``reciprocal_dos.f90``, ``reciprocal_export.f90``
+   * - k-space Green functions for exchange and transport (:ref:`keywords/output_options`, :ref:`keywords/reciprocal`)
      - ``gf_route``, ``green_backend``
-     - :ref:`keywords/output_options`, :ref:`keywords/reciprocal`
-     - ``example/exchange/bccFe_kspace_green``
-     - ``reciprocal_green.f90``, ``lehmann_kernel.f90``
-   * - Exchange :math:`J_{ij}`, DMI
+     - ``example/exchange/bccFe_kspace_green``; ``reciprocal_green.f90``, ``lehmann_kernel.f90``
+   * - Exchange :math:`J_{ij}`, DMI (:ref:`keywords/output_options`)
      - ``post_processing = 'exchange'``
-     - :ref:`keywords/output_options`
-     - ``example/exchange/bccFe``
-     - ``exchange.f90``
-   * - Gilbert damping, magnetic inertia
+     - ``example/exchange/bccFe``; ``exchange.f90``
+   * - Gilbert damping, magnetic inertia (:ref:`keywords/output_options`)
      - ``do_damping``, ``do_inertia``
-     - :ref:`keywords/output_options`
-     - —
      - ``exchange_dynamics.f90``
-   * - Kubo transport (charge and spin)
+   * - Kubo transport (charge and spin) (:ref:`keywords/control_parameters`)
      - ``post_processing = 'conductivity'``, ``cond_*``, ``linear_in``/``linear_out``
-     - :ref:`keywords/control_parameters`
-     - ``example/conductivity``
-     - ``conductivity.f90``, ``recursion_transport.f90``
-   * - LDA+U (fixed U/J, spinor, +V, self-consistent U)
+     - ``example/conductivity``; ``conductivity.f90``, ``recursion_transport.f90``
+   * - LDA+U (fixed U/J, spinor, +V, self-consistent U) (:ref:`keywords/lda_u`)
      - ``hubbard_*`` (``&hamiltonian``)
-     - :ref:`keywords/lda_u`
-     - ``example/impurity/u_imp_comparison``
-     - ``hamiltonian_hubbard.f90``, ``hamiltonian_build.f90``
-   * - Two-centre combined correction (CCOR)
+     - ``example/impurity/u_imp_comparison``; ``hamiltonian_hubbard.f90``, ``hamiltonian_build.f90``
+   * - Two-centre combined correction (CCOR) (:ref:`keywords/hamiltonian_parameters`)
      - ``ccor_2c``
-     - :ref:`keywords/hamiltonian_parameters`
-     - —
      - ``hamiltonian_ccor.f90``
-   * - Spin spirals (generalised Bloch theorem)
+   * - Spin spirals (generalised Bloch theorem) (:ref:`keywords/hamiltonian_parameters`)
      - ``q_ss``, ``theta_ss``, ``magnetic_representation``
-     - :ref:`keywords/hamiltonian_parameters`
-     - ``example/k_space_spiral``
-     - ``reciprocal_gbt.f90``
-   * - Frozen-magnon dispersion
+     - ``example/k_space_spiral``; ``reciprocal_gbt.f90``
+   * - Frozen-magnon dispersion (:ref:`keywords/frozen_magnon`)
      - ``post_processing = 'frozen_magnon'``
-     - :ref:`keywords/frozen_magnon`
-     - ``example/bulk/bccFe/input_frozen_magnon_constrained.nml``
-     - ``frozen_magnon.f90``
-   * - Transverse spin response
+     - ``example/bulk/bccFe/input_frozen_magnon_constrained.nml``; ``frozen_magnon.f90``
+   * - Transverse spin response (:ref:`keywords/spin_response`)
      - ``post_processing = 'spin_response'``
-     - :ref:`keywords/spin_response`
-     - —
      - ``spin_response.f90``
-   * - Constraining fields
+   * - Constraining fields (:ref:`keywords/constraints`)
      - ``&constraints``
-     - :ref:`keywords/constraints`
-     - ``example/bulk/bccFe/input_frozen_magnon_constrained.nml``
-     - ``include_codes/abspinlib/constrain.f90``
-   * - Magnetic seed field, forced nonmagnetic atoms
+     - ``example/bulk/bccFe/input_frozen_magnon_constrained.nml``; ``include_codes/abspinlib/constrain.f90``
+   * - Magnetic seed field, forced nonmagnetic atoms (:ref:`keywords/scf_settings`)
      - ``magnetic_seed_*``, ``force_nonmagnetic`` (``&self``)
-     - :ref:`keywords/scf_settings`
-     - —
      - ``self.f90``
-   * - Atomistic spin dynamics
+   * - Atomistic spin dynamics (:ref:`keywords/spin_dynamics`)
      - ``processing = 'sd'``, ``&sd``
-     - :ref:`keywords/spin_dynamics`
-     - —
      - ``spin_dynamics.f90``
-   * - Exchange-correlation functionals, libXC
+   * - Exchange-correlation functionals, libXC (:ref:`keywords/exchange_correlation`)
      - ``txc``; build option ``ENABLE_LIBXC``
-     - :ref:`keywords/exchange_correlation`
-     - —
      - ``xc.f90``
-   * - Tight-binding Hamiltonian export and PAOFLOW import
+   * - Tight-binding Hamiltonian export and PAOFLOW import (:ref:`keywords/hamiltonian_parameters`)
      - ``export``; ``post_processing = 'paoflow2rs'``
-     - :ref:`keywords/hamiltonian_parameters`
-     - —
      - ``hamiltonian_paoflow_io.f90``
-   * - CUDA recursion plugin
+   * - CUDA recursion plugin (:ref:`keywords/control_parameters`, :ref:`theory/gpu_acceleration`)
      - ``gpu_plugin``; build option ``ENABLE_CUDA_PLUGIN``
-     - :ref:`keywords/control_parameters`, :ref:`theory/gpu_acceleration`
-     - —
      - ``rsrec_cuda_plugin.f90``
-   * - CUDA reciprocal eigensolver
+   * - CUDA reciprocal eigensolver (:ref:`keywords/reciprocal`)
      - ``reciprocal_backend = 'cuda'``; build option ``ENABLE_CUDA_RECIPROCAL``
-     - :ref:`keywords/reciprocal`
-     - —
      - ``reciprocal_backend.f90``
-   * - Environment variables (traces, CUDA device, transport seed)
+   * - Environment variables (traces, CUDA device, transport seed) (:ref:`reference/environment_variables`)
      - ``RSLMTO_*``
-     - :ref:`reference/environment_variables`
-     - —
      - see that page
 
 See Also

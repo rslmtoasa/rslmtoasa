@@ -293,7 +293,7 @@ Structure constants (strux_lib)
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 14 16 48
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -334,7 +334,7 @@ Periodic cluster
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 14 16 48
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -363,7 +363,7 @@ rarely set by hand. Where the code documents no further meaning, the table says 
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 78
+   :widths: 38 62
 
    * - Key
      - Meaning

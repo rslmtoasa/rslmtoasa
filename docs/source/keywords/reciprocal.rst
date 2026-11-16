@@ -41,7 +41,7 @@ K-point mesh and symmetry
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 18 46
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -84,7 +84,7 @@ Density of states
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 18 46
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -125,7 +125,7 @@ Fermi surface export
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 18 46
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -157,7 +157,7 @@ Hamiltonian and solver
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 18 46
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -192,7 +192,7 @@ Diagnostics
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 18 46
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -220,7 +220,7 @@ K-path (&kpath)
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 12 18 46
+   :widths: 34 10 18 38
 
    * - Key
      - Type

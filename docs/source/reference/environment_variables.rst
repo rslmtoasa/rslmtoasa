@@ -9,7 +9,7 @@ all are optional.
 
 .. list-table::
    :header-rows: 1
-   :widths: 34 66
+   :widths: 38 62
 
    * - Variable
      - Effect

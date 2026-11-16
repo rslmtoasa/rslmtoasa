@@ -34,7 +34,7 @@ The orbital index ``l`` of every array runs 1..4 for s, p, d, f.
 
 .. list-table::
    :header-rows: 1
-   :widths: 26 16 14 44
+   :widths: 34 10 18 38
 
    * - Key
      - Shape
@@ -100,7 +100,7 @@ Occupation-matrix mixing (&mix)
 
 .. list-table::
    :header-rows: 1
-   :widths: 26 16 14 44
+   :widths: 34 10 18 38
 
    * - Key
      - Type
@@ -120,7 +120,7 @@ edited by hand.
 
 .. list-table::
    :header-rows: 1
-   :widths: 26 16 58
+   :widths: 32 14 54
 
    * - Key
      - Type
@@ -158,7 +158,7 @@ read.
 
 .. list-table::
    :header-rows: 1
-   :widths: 26 16 58
+   :widths: 32 14 54
 
    * - Key
      - Type

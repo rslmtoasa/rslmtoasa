@@ -938,7 +938,7 @@ Transport and GPU options (&control, &conductivity)
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 14 16 48
+   :widths: 34 10 18 38
 
    * - Key
      - Type
