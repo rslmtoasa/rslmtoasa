@@ -24,6 +24,7 @@ Quick Navigation
    spin_dynamics
    element_parameters
    frozen_magnon
+   reciprocal
 
 Parameters by Namelist
 ======================
@@ -51,6 +52,10 @@ Atomic parameters (element database).
 **&par**
 
 LMTO tight-binding potential parameters. See :ref:`keywords/basis_parameters`.
+
+**&reciprocal**, **&kpath**
+
+k-space SCF, band structure, DOS, Fermi surface and k-space Green functions. See :ref:`keywords/reciprocal`.
 
 **&constraints**
 
