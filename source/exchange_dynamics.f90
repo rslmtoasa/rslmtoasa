@@ -14,6 +14,7 @@ contains
    !> Revised by Ivan Miranda on 29.04.2025
    !---------------------------------------------------------------------------
    module subroutine calculate_gilbert_damping(this)
+      use mpi_mod
       !
       class(exchange) :: this
       !
@@ -22,9 +23,10 @@ contains
       complex(rp), allocatable, dimension(:, :, :) :: tmati, tmatj ! Torque matrices
       !
       ! Local Variables
-      integer :: i, j, k, l, m, njij, nv, lmaxi, lmaxj, ief
+      integer :: i, j, k, l, m, njij, njij_glob, nv, lmaxi, lmaxj, ief
       real(rp) :: spin_i, orbital_i, gfac, diff, factor, distance_alat
       real(rp), allocatable, dimension(:, :) :: dtott, dtottim, total_damping
+      real(rp), allocatable :: pair_re(:, :), pair_im(:, :), pair_factor(:)
       real(rp), dimension(3, 3) :: damping_tensor, damping_tensor_im
 
       if (this%control%nsp .eq. 2) then ! check if spin-orbit (l.s) is enabled
@@ -32,21 +34,24 @@ contains
          call this%hamiltonian%torque_operator_collinear() ! calculate the torque operators for all NTYPE
          allocate (total_damping(9, size(this%en%ene)))
          total_damping(:, :) = 0.0_rp
+         allocate (pair_re(9, this%lattice%njij), pair_im(9, this%lattice%njij), pair_factor(this%lattice%njij))
+         pair_re = 0.0_rp; pair_im = 0.0_rp; pair_factor = 0.0_rp
 
-         ! Open the files for writing the results
-         open (UNIT=103, FILE='damping-energy.out', STATUS='replace', ACTION='write')
-         open (UNIT=104, FILE='alldampings.out', STATUS='replace', ACTION='write')
+         ! Find the closest energy point of the Fermi level
+         ief = 0; diff = 1000.0_rp
+         do nv = 1, size(this%en%ene)
+            if (abs(this%en%ene(nv) - this%en%fermi) .lt. diff) then
+               diff = abs(this%en%ene(nv) - this%en%fermi)
+               ief = nv
+            end if
+         end do
 
-         write (104, *) '    #i     #j   #xx          #xy           #xz           '// &
-            '#yx           #yy           #yz           #zx           #zy           '// &
-            '#zz          #0.5*(xx + yy)     #Dist           #rij = (ri - rj)'
-
-         do njij = 1, this%lattice%njij
+         ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
+         do njij_glob = start_atom, end_atom
+            njij = g2l_map(njij_glob)
             ! Obtain which are the atoms in the current pair
-            i = this%lattice%ijpair(njij, 1) ! Atom number in the clust file, atom i
-            j = this%lattice%ijpair(njij, 2) ! Atom number in the clust file, atom j
-            ! Find the distance between the atoms
-            distance_alat = norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
+            i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
+            j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
             ! Find the lmax value for each atom
             lmaxi = this%symbolic_atom(this%lattice%iz(i))%potential%lmax ! l_max for atom i
             lmaxj = this%symbolic_atom(this%lattice%iz(j))%potential%lmax ! l_max for atom j
@@ -96,25 +101,10 @@ contains
                   total_damping(m, nv) = total_damping(m, nv) + dtott(m, nv)
                end do
             end do
-            ! Now find the closest energy point of the Fermi level
-            ief = 0; diff = 1000.0_rp
-            do nv = 1, size(this%en%ene)
-               if (abs(this%en%ene(nv) - this%en%fermi) .lt. diff) then
-                  diff = abs(this%en%ene(nv) - this%en%fermi)
-                  ief = nv
-               end if
-            end do
-            ! Calculates the prefactor of the damping formula
-            factor = (-0.25_rp)*(2.0_rp/(pi*spin_i))
-            ! Finally calculates the damping term and write the results on screen
-            write (*, '(A,I6,A,I6,A)') 'Damping tensor between pair', i, ' and ', j, ' is'
-            write (*, '(3F14.9)') factor*dtott(:, ief)
-            write (*, '(A,I6,A,I6,A)') 'Imaginary part of the tensor between pair', i, ' and ', j, ' is'
-            write (*, '(3F14.9)') factor*dtottim(:, ief)
-            write (*, *) '----------------------'
-            write (104, '(2I7,11F14.9,3F10.6)') i, j, factor*dtott(:, ief), 0.5*factor*(dtott(1, ief) + dtott(5, ief)), &
-               distance_alat, this%lattice%cr(:, i) - this%lattice%cr(:, j)
-            write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
+            ! Prefactor of the damping formula
+            pair_factor(njij_glob) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
+            pair_re(:, njij_glob) = dtott(:, ief)
+            pair_im(:, njij_glob) = dtottim(:, ief)
 
             ! Deallocate all
             deallocate (Aij)
@@ -129,18 +119,46 @@ contains
 
          end do
 
-         ! Write the results in output files
-         write (103, *) '#Energy (E-Ef)         #xx         #xy           #xz           '// &
-            '#yx           #yy           #yz           #zx           #zy           #zz'
-         do nv = 1, size(this%en%ene)
-            write (103, '(10F14.9)') this%en%ene(nv) - this%en%fermi, factor*total_damping(:, nv)
-         end do
+#ifdef USE_MPI
+         call MPI_ALLREDUCE(MPI_IN_PLACE, total_damping, size(total_damping), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, pair_re, size(pair_re), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, pair_im, size(pair_im), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, pair_factor, size(pair_factor), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
 
-         deallocate (total_damping)
+         if (rank == 0) then
+            open (UNIT=103, FILE='damping-energy.out', STATUS='replace', ACTION='write')
+            open (UNIT=104, FILE='alldampings.out', STATUS='replace', ACTION='write')
+            write (104, *) '    #i     #j   #xx          #xy           #xz           '// &
+               '#yx           #yy           #yz           #zx           #zy           '// &
+               '#zz          #0.5*(xx + yy)     #Dist           #rij = (ri - rj)'
+            do njij_glob = 1, this%lattice%njij
+               i = this%lattice%ijpair(njij_glob, 1)
+               j = this%lattice%ijpair(njij_glob, 2)
+               distance_alat = norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
+               factor = pair_factor(njij_glob)
+               write (*, '(A,I6,A,I6,A)') 'Damping tensor between pair', i, ' and ', j, ' is'
+               write (*, '(3F14.9)') factor*pair_re(:, njij_glob)
+               write (*, '(A,I6,A,I6,A)') 'Imaginary part of the tensor between pair', i, ' and ', j, ' is'
+               write (*, '(3F14.9)') factor*pair_im(:, njij_glob)
+               write (*, *) '----------------------'
+               write (104, '(2I7,11F14.9,3F10.6)') i, j, factor*pair_re(:, njij_glob), &
+                  0.5*factor*(pair_re(1, njij_glob) + pair_re(5, njij_glob)), &
+                  distance_alat, this%lattice%cr(:, i) - this%lattice%cr(:, j)
+               write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
+            end do
 
-         ! Close the files
-         close (103)
-         close (104)
+            ! Energy-resolved total, scaled by the factor of the last pair (see tests/KNOWN_ISSUES.md)
+            write (103, *) '#Energy (E-Ef)         #xx         #xy           #xz           '// &
+               '#yx           #yy           #yz           #zx           #zy           #zz'
+            do nv = 1, size(this%en%ene)
+               write (103, '(10F14.9)') this%en%ene(nv) - this%en%fermi, factor*total_damping(:, nv)
+            end do
+            close (103)
+            close (104)
+         end if
+
+         deallocate (total_damping, pair_re, pair_im, pair_factor)
 
       end if
 
@@ -157,6 +175,7 @@ contains
    !> Implemented by Ivan Miranda on 22.11.2023
    !---------------------------------------------------------------------------
    module subroutine calculate_moment_of_inertia(this)
+      use mpi_mod
       !
       class(exchange) :: this
       !
@@ -172,7 +191,8 @@ contains
       real(rp), allocatable :: sBij_real(:, :, :), sBji_real(:, :, :)
       real(rp), allocatable :: sBij_imag(:, :, :), sBji_imag(:, :, :)
       real(rp), allocatable :: itott(:, :), itottim(:, :), total_inertia(:, :)
-      integer :: i, j, k, l, m, njij, nv, lmaxi, lmaxj, ief, nenergy
+      real(rp), allocatable :: pair_b(:, :, :), pair_re(:, :), pair_im(:, :)
+      integer :: i, j, k, l, m, njij, njij_glob, nv, lmaxi, lmaxj, ief, nenergy
       real(rp) :: distance_alat, step_size, diff
 
       if (this%control%nsp .ne. 2) return
@@ -189,18 +209,20 @@ contains
 
       call this%hamiltonian%torque_operator_collinear()
       allocate (total_inertia(9, nenergy), source=0.0_rp)
-      open (UNIT=105, FILE='example-real.out', STATUS='replace', ACTION='write')
-      open (UNIT=106, FILE='example-imag.out', STATUS='replace', ACTION='write')
-      open (UNIT=107, FILE='inertia-energy.out', STATUS='replace', ACTION='write')
-      open (UNIT=108, FILE='allinertias.out', STATUS='replace', ACTION='write')
-      write (105, '(A)') '# i j E Re(Bij_11) Re(d2Bij_11/dE2)'
-      write (106, '(A)') '# i j E Im(Bij_11) Im(d2Bij_11/dE2)'
-      write (107, '(A)') '# E-Ef total raw inertia kernel: 9 real components'
-      write (108, '(A)') '# i j 9 real components 9 imaginary components distance'
+      allocate (pair_b(4, nenergy, this%lattice%njij), source=0.0_rp)
+      allocate (pair_re(9, this%lattice%njij), pair_im(9, this%lattice%njij), source=0.0_rp)
+      diff = huge(1.0_rp); ief = 1
+      do nv = 1, nenergy
+         if (abs(this%en%ene(nv) - this%en%fermi) < diff) then
+            diff = abs(this%en%ene(nv) - this%en%fermi); ief = nv
+         end if
+      end do
 
-      do njij = 1, this%lattice%njij
-         i = this%lattice%ijpair(njij, 1)
-         j = this%lattice%ijpair(njij, 2)
+      ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
+      do njij_glob = start_atom, end_atom
+         njij = g2l_map(njij_glob)
+         i = this%lattice%ijpair(njij_glob, 1)
+         j = this%lattice%ijpair(njij_glob, 2)
          lmaxi = this%symbolic_atom(this%lattice%iz(i))%potential%lmax
          lmaxj = this%symbolic_atom(this%lattice%iz(j))%potential%lmax
          allocate (Aij(2*(lmaxi + 1)**2, 2*(lmaxi + 1)**2, nenergy))
@@ -239,9 +261,9 @@ contains
          sBij = cmplx(sBij_real, sBij_imag, kind=rp)
          sBji = cmplx(sBji_real, sBji_imag, kind=rp)
 
+         pair_b(1, :, njij_glob) = real(Bij(1, 1, :)); pair_b(2, :, njij_glob) = real(sBij(1, 1, :))
+         pair_b(3, :, njij_glob) = aimag(Bij(1, 1, :)); pair_b(4, :, njij_glob) = aimag(sBij(1, 1, :))
          do nv = 1, nenergy
-            write (105, '(2I7,3ES18.8)') i, j, this%en%ene(nv), real(Bij(1, 1, nv)), real(sBij(1, 1, nv))
-            write (106, '(2I7,3ES18.8)') i, j, this%en%ene(nv), aimag(Bij(1, 1, nv)), aimag(sBij(1, 1, nv))
             m = 0
             do k = 1, 3
                do l = 1, 3
@@ -258,27 +280,48 @@ contains
             end do
          end do
          total_inertia = total_inertia + itott
-         diff = huge(1.0_rp); ief = 1
-         do nv = 1, nenergy
-            if (abs(this%en%ene(nv) - this%en%fermi) < diff) then
-               diff = abs(this%en%ene(nv) - this%en%fermi); ief = nv
-            end if
-         end do
-         distance_alat = norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
-         write (108, '(2I7,18ES18.8,F12.6)') i, j, itott(:, ief), itottim(:, ief), distance_alat
-         write (*, '(A,I6,A,I6,A,ES14.6)') 'Raw inertia kernel pair ', i, ' and ', j, ' at Ef = ', this%en%ene(ief)
-         write (*, '(3ES14.6)') itott(1:3, ief)
-         write (*, '(3ES14.6)') itott(4:6, ief)
-         write (*, '(3ES14.6)') itott(7:9, ief)
+         pair_re(:, njij_glob) = itott(:, ief)
+         pair_im(:, njij_glob) = itottim(:, ief)
          deallocate (Aij, Aji, Bij, Bji, sBij, sBji, sBij_real, sBji_real, sBij_imag, sBji_imag)
          deallocate (temp1, temp2, temp3, temp4, temp5, temp6, tmati, tmatj, itott, itottim)
       end do
 
-      do nv = 1, nenergy
-         write (107, '(10ES18.8)') this%en%ene(nv) - this%en%fermi, total_inertia(:, nv)
-      end do
-      deallocate (total_inertia)
-      close (105); close (106); close (107); close (108)
+#ifdef USE_MPI
+      call MPI_ALLREDUCE(MPI_IN_PLACE, total_inertia, size(total_inertia), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, pair_b, size(pair_b), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, pair_re, size(pair_re), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, pair_im, size(pair_im), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+
+      if (rank == 0) then
+         open (UNIT=105, FILE='example-real.out', STATUS='replace', ACTION='write')
+         open (UNIT=106, FILE='example-imag.out', STATUS='replace', ACTION='write')
+         open (UNIT=107, FILE='inertia-energy.out', STATUS='replace', ACTION='write')
+         open (UNIT=108, FILE='allinertias.out', STATUS='replace', ACTION='write')
+         write (105, '(A)') '# i j E Re(Bij_11) Re(d2Bij_11/dE2)'
+         write (106, '(A)') '# i j E Im(Bij_11) Im(d2Bij_11/dE2)'
+         write (107, '(A)') '# E-Ef total raw inertia kernel: 9 real components'
+         write (108, '(A)') '# i j 9 real components 9 imaginary components distance'
+         do njij_glob = 1, this%lattice%njij
+            i = this%lattice%ijpair(njij_glob, 1)
+            j = this%lattice%ijpair(njij_glob, 2)
+            do nv = 1, nenergy
+               write (105, '(2I7,3ES18.8)') i, j, this%en%ene(nv), pair_b(1, nv, njij_glob), pair_b(2, nv, njij_glob)
+               write (106, '(2I7,3ES18.8)') i, j, this%en%ene(nv), pair_b(3, nv, njij_glob), pair_b(4, nv, njij_glob)
+            end do
+            distance_alat = norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
+            write (108, '(2I7,18ES18.8,F12.6)') i, j, pair_re(:, njij_glob), pair_im(:, njij_glob), distance_alat
+            write (*, '(A,I6,A,I6,A,ES14.6)') 'Raw inertia kernel pair ', i, ' and ', j, ' at Ef = ', this%en%ene(ief)
+            write (*, '(3ES14.6)') pair_re(1:3, njij_glob)
+            write (*, '(3ES14.6)') pair_re(4:6, njij_glob)
+            write (*, '(3ES14.6)') pair_re(7:9, njij_glob)
+         end do
+         do nv = 1, nenergy
+            write (107, '(10ES18.8)') this%en%ene(nv) - this%en%fermi, total_inertia(:, nv)
+         end do
+         close (105); close (106); close (107); close (108)
+      end if
+      deallocate (total_inertia, pair_b, pair_re, pair_im)
    end subroutine calculate_moment_of_inertia
 
 
