@@ -263,7 +263,7 @@ contains
                call this%chebyshev_green_ij(ja_temp)
             end if
          end select
-         if (this%lattice%ijpair(ia, 1) .eq. this%lattice%ijpair(ia, 2)) then
+         if (this%lattice%ijpair(ia_glob, 1) .eq. this%lattice%ijpair(ia_glob, 2)) then
             this%gij(:, :, :, ia) = this%g0(:, :, :, 1)
             this%gji(:, :, :, ia) = this%g0(:, :, :, 1)
          else
