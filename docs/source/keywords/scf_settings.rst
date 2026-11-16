@@ -8,7 +8,7 @@ Overview
 ========
 
 The ``&self`` namelist controls self-consistent field (SCF) loop settings,
-including the iteration limit, the convergence threshold and magnetic mixing.
+including the iteration limit, the convergence threshold and the spin-orbit options.
 The density mixing parameters ``mixtype`` and ``beta`` are in the ``&mix`` namelist.
 
 Parameters
@@ -21,7 +21,7 @@ mixtype (in ``&mix``)
 
 **Purpose:** Type of density mixing algorithm
 
-**Allowed values:** 'linear', 'broyden'
+**Allowed values:** 'linear', 'broyden'. Any other value is not rejected: the mixed ``qia`` is then left unmixed, without an error message.
 
 **Default:** 'linear'
 
@@ -156,7 +156,7 @@ This usually indicates non-convergent SCF.
 Solutions:
 - Ensure conv_thr is tight enough
 - Check Hamiltonian parameters
-- Verify cluster size adequate (increase r2 or nx,ny,nz)
+- Verify cluster size adequate (increase r2)
 
 Additional &self Parameters
 ===========================
@@ -169,32 +169,16 @@ ws
 
 **Type:** Real array (one value per inequivalent atom)
 
-**Purpose:** Wigner-Seitz sphere radii (in Bohr) for each inequivalent atom,
-overriding the lattice-derived value
-
-**Example:**
-
-.. code-block:: fortran
-
-   ws(1) = 2.67
-   ws(2) = 2.40
-
-**Notes:**
-
-- If not set, WS radii are derived from the lattice constant and structure.
-- Useful when atoms have different sizes (e.g. surface or impurity calculations).
-
-**See also:** ``ws_all`` below; ``sws`` in ``&lattice``
+Read but currently not used.
 
 ws_all
 ------
 
 **Type:** Logical
 
-**Default:** ``.false.``
+**Default:** ``.true.``
 
-**Purpose:** Apply a single uniform Wigner-Seitz radius (from ``&lattice``) to
-all atoms, overriding per-atom values
+Read but currently not used.
 
 conv_thr
 --------
@@ -249,13 +233,8 @@ orbital_polarization
 
 **Default:** ``.false.``
 
-**Purpose:** Apply an orbital polarization correction (Brooks-Gunnarsson mean-field)
-to enhance the orbital magnetic moment
-
-**Notes:**
-
-- Only relevant for magnetic calculations (``nsp > 1``).
-- Can improve agreement with experiment for strongly correlated 3d/4f systems.
+Read but currently not used. The orbital-polarization switch in use is
+``orb_pol`` in ``&hamiltonian`` (:ref:`keywords/hamiltonian_parameters`).
 
 magnetic_mixing
 ---------------
@@ -264,48 +243,34 @@ magnetic_mixing
 
 **Default:** ``.false.``
 
-**Purpose:** Apply a separate mixing step for the magnetic (exchange-correlation)
-part of the potential, decoupled from the charge mixing
-
-**Notes:**
-
-- Useful when the spin channels converge at different rates.
-- Can stabilise calculations where the spin density oscillates but the charge
-  density is already converged.
+Read but currently not used. The magnetic moments are mixed with ``magbeta``
+in ``&mix``.
 
 mixmag
 ------
 
 **Type:** Real array (one value per inequivalent atom)
 
-**Purpose:** Per-atom mixing parameter for the magnetic potential.  Overrides
-the global ``beta`` for the magnetic channel on a per-site basis.
-
-**Example:**
-
-.. code-block:: fortran
-
-   mixmag(1) = 0.2   ! Conservative magnetic mixing for atom 1
+Read but currently not used. The magnetic mixing parameter in use is
+``magbeta`` in ``&mix``.
 
 mixmag_all
 ----------
 
 **Type:** Logical
 
-**Default:** ``.false.``
+**Default:** ``.true.``
 
-**Purpose:** Apply the same magnetic mixing parameter (``mixmag(1)``) to all
-inequivalent atoms
+Read but currently not used.
 
 mix_all
 -------
 
 **Type:** Logical
 
-**Default:** ``.false.``
+**Default:** ``.true.``
 
-**Purpose:** Mix all components of the potential (charge + magnetic + orbital)
-simultaneously in a single mixing step
+Read but currently not used.
 
 freeze
 ------
@@ -314,23 +279,16 @@ freeze
 
 **Default:** ``.false.``
 
-**Purpose:** Freeze the potential at its current value — no SCF updates are
-applied.  Useful for single-shot calculations starting from a converged potential.
+Read but currently not used.
 
 all_inequivalent
 ----------------
 
 **Type:** Logical
 
-**Default:** ``.false.``
+**Default:** ``.true.``
 
-**Purpose:** Treat every atom in the cluster as symmetry-inequivalent, even if
-the lattice has symmetry.  Forces independent potentials on all sites.
-
-**Notes:**
-
-- Substantially increases memory and CPU cost.
-- Required for impurity calculations or when breaking lattice symmetry explicitly.
+Read but currently not used.
 
 rigid_band
 ----------
@@ -339,12 +297,7 @@ rigid_band
 
 **Default:** ``.false.``
 
-**Purpose:** Apply a rigid-band shift to the potential: shift the Fermi level
-without updating the self-consistent potential.
-
-**Notes:**
-
-- Useful for electron/hole doping studies at fixed potential shape.
+Read but currently not used.
 
 nstep
 -----
@@ -360,14 +313,9 @@ init
 
 **Type:** Integer
 
-**Default:** ``0``
+**Default:** none (not set in ``self%restore_to_default``)
 
-**Purpose:** Initialisation mode for the SCF potential
-
-**Allowed values:**
-
-- ``0``: Start from scratch (free-atom superposition)
-- ``1``: Read potential from a previous run (restart)
+Read but currently not used.
 
 cold
 ----
@@ -401,11 +349,8 @@ others may be added in future versions.
 
 **Temperature effects:**
 
-If non-zero temperature (``&energy``):
-
-- SCF may converge more slowly
-- Smeared Fermi surface -> fewer oscillations
-- Can sometimes help or hinder
+``temperature`` in ``&energy`` is used only in the energy integration of the
+exchange interactions; it does not enter the SCF cycle.
 
 **Constraint fields:**
 

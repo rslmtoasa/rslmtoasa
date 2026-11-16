@@ -182,10 +182,11 @@ LDA and GGA XC potentials are **T=0 functionals**.
 For **finite temperature** calculations:
 
 - XC functional doesn't change formally
-- Fermi-Dirac distribution broadens electronic levels
-- Effective electronic temperature matters for stability
 
-Parameter: ``temperature`` in ``&energy`` namelist.
+The ``temperature`` key of the ``&energy`` namelist (Kelvin, default 0) is used
+only in the energy integration of the exchange interactions :math:`J_{ij}`
+(``source/exchange.f90``): 0 gives a step function at :math:`E_F`. It does not
+enter the SCF cycle.
 
 Magnetic Moment Predictions
 ===========================

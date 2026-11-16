@@ -143,7 +143,6 @@ Alphabetical Listing (All Parameters)
 **B**
 
 - ``beta`` - Density mixing parameter (``&mix``)
-- ``bias`` - Applied bias hook for interface potential step, B7 §6 (plumbing only, not yet wired)
 - ``blockrec`` - Block recursion flag
 - ``b_stochastic`` - Stochastic field array (ASD)
 
@@ -212,8 +211,8 @@ Alphabetical Listing (All Parameters)
 
 - ``linear_in``, ``linear_out`` - Linear-response input and output operators (in &control)
 - ``ll_cond`` - Read but not used; the conductivity cutoff is ``cond_ll`` (in &control)
-- ``lld`` - Recursion cutoff for d electrons
-- ``llsp`` - Recursion cutoff for s/p electrons
+- ``lld`` - Recursion cutoff (number of recursion levels)
+- ``llsp`` - Enters only the array size ``max(llsp, lld)``
 - ``lmax`` - Maximum orbital angular momentum
 
 **M**
@@ -223,11 +222,10 @@ Alphabetical Listing (All Parameters)
 - ``mixmag`` - Per-atom magnetic mixing parameter
 - ``mixtype`` - Density mixing type, 'linear' or 'broyden' (``&mix``)
 - ``mixmag_all`` - Apply same magnetic mixing to all atoms
-- ``mixing`` - Density mixing type
 
 **N**
 
-- ``nbulk`` - Number of bulk atoms in cluster
+- ``nbulk`` - Read but not used; the code sets it internally
 - ``nlay_a``, ``nlay_b`` - Layer counts for interface regions A/B (B7, calctype='L'; also a
   separate, differently-scoped &charge pair of the same name — see :ref:`keywords/lattice_geometry`)
 - ``nlim`` - Cluster size control
@@ -237,7 +235,6 @@ Alphabetical Listing (All Parameters)
 - ``num_quant_d`` - Principal quantum number for d channel
 - ``num_quant_p`` - Principal quantum number for p channel
 - ``num_quant_s`` - Principal quantum number for s channel
-- ``nx, ny, nz`` - Cluster dimensions in lattice coordinates
 
 **O**
 
@@ -254,7 +251,7 @@ Alphabetical Listing (All Parameters)
 
 - ``random_vec_num`` - Number of stochastic vectors for moment calculation
 - ``r2`` - Cluster cutoff radius squared
-- ``recur`` - Recursion algorithm (lanczos/chebyshev)
+- ``recur`` - Recursion algorithm (lanczos/chebyshev/block)
 - ``region_b_kind`` - Physical kind of interface region B: metal/vacuum (B7, calctype='L')
 - ``rigid_band`` - Rigid band shift
 - ``ruban`` - Ruban-Abrikosov alloy concentration parameter
@@ -272,7 +269,7 @@ Alphabetical Listing (All Parameters)
 
 - ``t_f`` - ASD final simulation time
 - ``t_i`` - ASD initial simulation time
-- ``temperature`` - Electronic temperature (Kelvin)
+- ``temperature`` - Temperature (Kelvin) of the exchange-interaction energy integration (``&energy``)
 - ``terminator`` - Recursion terminator type
 - ``theta_ss`` - Spin-spiral cone angle (degrees)
 - ``txc`` - Exchange-correlation functional type

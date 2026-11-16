@@ -22,7 +22,7 @@ alat
 
 **Typical range:** 2-6 Å (system-dependent)
 
-**Default:** 5.0
+**Default:** none (not set in ``lattice%restore_to_default``); give it in every input.
 
 **Example:**
 
@@ -43,64 +43,13 @@ nbulk
 
 **Type:** Integer
 
-**Purpose:** Number of atoms in bulk unit cell
+Read but currently not used. The namelist value is not stored: the code sets
+``nbulk`` itself, as the number of atoms of type bulk (0 for a bulk run; see
+the member documentation in ``source/lattice.f90``). The number of atoms of
+the bulk unit cell is ``nbulk_bulk`` (below).
 
-**Typical range:** 1-4
-
-**Default:** 1
-
-**Meaning:**
-
-- 1 for monatomic lattices (simple cubic, bcc, fcc)
-- 2+ for compounds or complex structures
-- Defines the base repeating unit before cluster expansion
-
-**Example:**
-
-.. code-block:: fortran
-
-   nbulk = 2  ! Two atoms per unit cell
-
-**Notes:**
-
-- For diamond (Si, Ge): nbulk = 2
-- For rock salt (NaCl): nbulk = 2
-- For perovskite (ABO3): nbulk = 5
-
-**Related code:** ``source/lattice.f90::type lattice``
-
-nx, ny, nz
-----------
-
-**Type:** Integer (each)
-
-**Purpose:** Cluster dimensions in lattice coordinates
-
-**Typical range:** 3-11 (odd numbers for center)
-
-**Default:** 5 (each)
-
-**Meaning:**
-
-- Defines number of unit cells in each Cartesian direction
-- Center atom typically at (nx+1)/2, (ny+1)/2, (nz+1)/2
-- Larger values -> larger cluster -> more expensive
-
-**Example:**
-
-.. code-block:: fortran
-
-   nx = 7
-   ny = 7
-   nz = 1   ! Quasi-2D: surface-like
-
-**Notes:**
-
-- Usually odd values to have center atom
-- Total atoms ≈ nbulk × nx × ny × nz
-- Convergence study: vary nx, ny, nz to check bulk limit
-
-**Related code:** ``source/lattice.f90``
+**Related code:** ``source/lattice.f90::type lattice``,
+``source/lattice_cluster.f90``
 
 r2
 --
@@ -111,7 +60,7 @@ r2
 
 **Typical range:** 10-30 Å²
 
-**Default:** 25.0
+**Default:** none (not set in ``lattice%restore_to_default``); give it, or ``ct``.
 
 **Meaning:**
 
@@ -127,8 +76,8 @@ r2
 
 **Notes:**
 
-- r2 = 7.566 Å² ≈ distance to first neighbors in fcc (e.g., Au)
-- r2 = 15.13 Å² ≈ distance to second neighbors
+- r2 = 7.566 Å² is the squared first-neighbour distance of fcc Pd (a = 3.89 Å)
+- r2 = 15.13 Å² is the squared second-neighbour distance of fcc Pd
 - Use "5 th neighs." as comment suggests (code note) for bulk limit
 
 **Related code:** ``source/lattice_cluster.f90``
@@ -144,22 +93,20 @@ Though not explicit in namelists, typical structures:
 
 .. code-block:: fortran
 
-   alat = 2.87   ! For bcc iron
-   nx = 7        ! Cubic cluster
-   ny = 7
-   nz = 7
+   crystal_sym = 'bcc'
+   alat = 2.86120   ! For bcc iron
 
-**Hexagonal (HCP, graphene):**
+**Hexagonal (HCP):**
 
 .. code-block:: fortran
 
-   nx = 7
-   ny = 7
-   nz = 3        ! Thinner in z for layers
+   crystal_sym = 'hcp'
+   celldm = 1.633    ! c/a ratio
 
 **Tetragonal or lower:**
 
-Use ``nx, ny, nz`` and ``alat`` to specify conventional cell dimensions.
+Use ``crystal_sym = 'file'`` and give the lattice vectors ``a`` and the basis
+``crd`` in ``lattice.nml`` (read by ``lattice%build_from_lattice``).
 
 Wigner-Seitz Sphere Parameters
 ==============================
@@ -167,11 +114,11 @@ Wigner-Seitz Sphere Parameters
 ws_r (from &par namelist)
 ==========================
 
-**Type:** Real (Ångströms)
+**Type:** Real (Bohr)
 
 **Purpose:** Wigner-Seitz sphere radius (atomic sphere size)
 
-**Typical range:** 2-3 Å
+**Typical range:** 2-3 Bohr
 
 **Default:** element/structure-dependent
 
@@ -282,7 +229,7 @@ Related Structural Parameters
 
 Several structure-related parameters are in ``&lattice`` or ``&charge``:
 
-**celldm** - Cell parameters (from PWSCF convention)
+**celldm** - c/a ratio for ``crystal_sym = 'hcp'`` (1.633, with a warning, when 0)
 
 **gx, gy, gz** - Lattice distortion parameters (for structure optimization)
 
@@ -302,21 +249,22 @@ Structure constants (strux_lib)
    * - ``strux_backend``
      - character
      - ``'legacy'``
-     - ``'legacy'`` or ``'strux_lib'``. ``strux_lib`` is required for ``lmax = 3`` (f basis) and
+     - ``'legacy'`` or ``'strux_lib'``; any other value runs the legacy path. ``strux_lib`` is required for ``lmax = 3`` (f basis) and
        for ``magnetic_representation = 'gbt_single_q'``.
    * - ``screening``
      - character
      - ``'default'``
-     - Screening of the ``strux_lib`` structure constants: ``'default'`` and ``'manual'`` use
+     - Screening of the ``strux_lib`` structure constants: ``'default'`` uses the built-in
+       table and ignores the input ``screening_alpha``; ``'manual'`` uses
        ``screening_alpha``; ``'sigma'`` uses ``screening_sigma``; ``'fitted'`` fits the
        screening constants. Other values stop the run.
    * - ``screening_alpha(l)``
      - real (lmax+1)
      - built-in table
-     - l-resolved screening constants for ``'default'``/``'manual'``.
+     - l-resolved screening constants for ``'manual'``.
    * - ``screening_sigma(l)``
      - real (lmax+1)
-     - unset
+     - 0.7
      - l-resolved hard-core radii in units of the sphere radius, for ``'sigma'``.
    * - ``strux_want_sdot``
      - logical
@@ -368,9 +316,9 @@ rarely set by hand. Where the code documents no further meaning, the table says 
    * - Key
      - Meaning
    * - ``crystal_sym``
-     - Crystal symmetry: ``'bcc'``, ``'fcc'``, ``'hcp'`` or ``'nsy'``.
+     - Crystal symmetry: ``'bcc'``, ``'b2'``, ``'fcc'``, ``'hcp'``, ``'fcc2'``, ``'fcc3'`` or ``'file'``; any other value stops the run.
    * - ``celldm``
-     - Cell parameter written with the lattice; no further meaning documented in the code.
+     - c/a ratio of the hcp cell (1.633, with a warning, when 0).
    * - ``primcell``
      - Coordinates of the atoms of the primitive cell.
    * - ``crd``
@@ -422,7 +370,7 @@ rarely set by hand. Where the code documents no further meaning, the table says 
    * - ``acr``, ``reduced_acr``
      - Cluster bookkeeping from the impurity build; no further meaning documented in the code.
    * - ``surftype``
-     - Surface orientation: ``'111'``, ``'110'`` or ``'001'``.
+     - Surface orientation as three integers read free-format, e.g. ``'1 1 1'`` or ``'0 0 1'``; four indices for ``crystal_sym = 'hcp'``.
    * - ``nlay``, ``z``
      - Number of layers and the layer coordinates of a surface cluster.
    * - ``zmin``, ``zmax``, ``zstep``
@@ -445,8 +393,8 @@ Lattice parameters defined and used in:
 See Also
 ========
 
-- :ref:`keywords/basis_parameters` - Related: lmax, ws_r
-- :ref:`keywords/control_parameters` - Related: nlim, verbose
+- :ref:`keywords/basis_parameters` - Related: lmax, ws_r (``&par``)
+- :ref:`keywords/control_parameters` - Related: lmax, calctype
 - :doc:`../user_guide/input_files` - Input file format
 - :doc:`../user_guide/examples` - Typical values for common materials
 - :doc:`../code_structure` - Cluster construction details

@@ -22,7 +22,7 @@ channels_ldos
 
 **Typical range:** 200-1000
 
-**Default:** 500
+**Default:** by ``calctype`` (``control%calctype``): 6000 for ``'B'``, ``'S'`` and ``'L'``; 3000 for ``'I'``
 
 **Example:**
 
@@ -53,7 +53,7 @@ energy_min
 
 **Typical range:** -3 to -1 Ry
 
-**Default:** -3.0
+**Default:** by ``calctype``: -5.5 for ``'B'``; -1.5 for ``'I'``, ``'S'`` and ``'L'``
 
 **Example:**
 
@@ -82,7 +82,7 @@ energy_max
 
 **Typical range:** 0 to +3 Ry
 
-**Default:** +3.0
+**Default:** by ``calctype``: +5.5 for ``'B'``; +0.5 for ``'I'``, ``'S'`` and ``'L'``
 
 **Example:**
 
@@ -111,7 +111,8 @@ fermi
 
 **Typical range:** -1 to +1 Ry
 
-**Default:** 0.0
+**Default:** by ``calctype``: -0.05 for ``'B'``; not set for ``'I'`` and ``'S'`` (the
+value of the bulk run is used) and not set for ``'L'``
 
 **Example:**
 
@@ -137,7 +138,7 @@ fix_fermi
 
 **Purpose:** Fix Fermi level to specified value
 
-**Default:** .false.
+**Default:** by ``calctype``: ``.false.`` for ``'B'`` and ``'L'``; ``.true.`` for ``'I'`` and ``'S'``
 
 **Example:**
 
@@ -234,7 +235,7 @@ edel
 ene (array)
 -----------
 
-**Type:** Real array (dimension: channels_ldos)
+**Type:** Real array (dimension: channels_ldos + 10)
 
 **Purpose:** Actual energy mesh values
 
@@ -340,15 +341,15 @@ Energy mesh parameters defined in:
 - **Mesh generation:** ``source/energy.f90::e_mesh()``
 - **Usage:** ``source/green.f90``, ``source/density_of_states.f90``
 
-vmix (&charge, calctype='L')
-----------------------------
+vmix (&charge)
+--------------
 
 **Type:** Real
 
 **Default:** 1.0
 
-**Purpose:** ``vmix`` is the linear mixing of the Madelung potential of the active region in the
-interface (``calctype = 'L'``) update; 1.0 takes the new potential.
+**Purpose:** ``vmix`` is the linear mixing of the Madelung potential in the impurity, surface and
+interface (``calctype = 'L'``) updates of the Madelung potential; 1.0 takes the new potential.
 
 Stored electrostatics state (&charge)
 -------------------------------------

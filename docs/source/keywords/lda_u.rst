@@ -153,8 +153,9 @@ Density-matrix file (&density_matrix)
 =====================================
 
 The file named by ``dm_file`` holds one ``&density_matrix`` group. It is written by
-the code; a missing or unreadable file named in ``dm_file`` stops the run when it is
-read.
+the code. A missing file named in ``dm_file`` gives a warning and ``dm_file`` is
+cleared; a file that exists but cannot be opened or read as a ``&density_matrix``
+group stops the run.
 
 .. list-table::
    :header-rows: 1

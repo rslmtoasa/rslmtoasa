@@ -12,7 +12,6 @@ The ``&control`` namelist contains the main calculation settings, including:
 - Type of calculation (relativistic treatment, collinearity, etc.)
 - SCF loop limits and tolerances
 - Recursion cutoff depths
-- Output verbosity
 - Pre/post-processing options
 
 Parameters
@@ -51,7 +50,7 @@ spin-density channels even when ``nsp=1``.
      - FR non-collinear
      - Spin-orbit + arbitrary spin direction
 
-**Default:** 1
+**Default:** none. ``nsp`` is not initialised in ``control%restore_to_default``; give it in every input.
 
 **Example:**
 
@@ -68,31 +67,23 @@ llsp
 
 **Type:** Integer
 
-**Purpose:** Recursion cutoff for s and p electrons
+**Purpose:** Enters only the allocation size of the recursion coefficient
+arrays, ``max(llsp, lld)``. The recursion depth is set by ``lld``.
 
-**Typical range:** 50-150
+**Default:** 16
 
-**Default:** 80
+**Notes:**
 
-**Meaning:**
-
-- Number of Lanczos vectors generated during recursion
-- Controls energy resolution and accuracy
-- Higher value = better accuracy but slower
+- No other part of the code reads ``llsp``; it does not change the recursion
+  depth or the energy resolution.
 
 **Example:**
 
 .. code-block:: fortran
 
-   llsp = 100  ! More accurate
+   llsp = 16
 
-**Notes:**
-
-- Too low -> missed spectral features
-- Too high -> diminishing returns (convergence slows down)
-- Convergence study recommended (see :doc:`../user_guide/examples`)
-
-**Related code:** ``source/recursion.f90::recur()``
+**Related code:** ``source/recursion_core.f90``
 
 **See also:** :ref:`keywords/lattice_geometry`
 
@@ -101,24 +92,23 @@ lld
 
 **Type:** Integer
 
-**Purpose:** Recursion cutoff for d electrons
+**Purpose:** Recursion cutoff: number of recursion levels used by the
+recursion and Chebyshev routines (``llsp`` only sets an array size)
 
 **Typical range:** 50-150
 
-**Default:** 80
+**Default:** 16
 
 **Notes:**
 
-- Often same as ``llsp``, but can be different
+- Higher values resolve more spectral detail at higher cost
 - For d-rich systems (Fe, Co, Ni), may need higher values
-- Independent of ``llsp`` allows flexibility
 
 **Example:**
 
 .. code-block:: fortran
 
    lld = 100
-   llsp = 60   ! Different for s/p and d electrons
 
 **Related code:** ``source/recursion.f90``
 
@@ -128,53 +118,35 @@ Iteration limit and convergence
 The SCF iteration limit and convergence threshold are ``nstep`` and ``conv_thr`` in the ``&self`` namelist (not in
 ``&control``); see :ref:`keywords/scf_settings`.
 
-verbose
--------
+.. note::
 
-**Type:** Logical
-
-**Purpose:** Enable verbose output during calculation
-
-**Allowed values:** ``.true.`` or ``.false.``
-
-**Default:** .false.
-
-**Example:**
-
-.. code-block:: fortran
-
-   verbose = .true.
-
-**Effect:**
-
-- Prints state of structure, control, self-consistent, charge after setup
-- Useful for debugging parameter values
-- Increases output volume (check disk space for long runs)
-
-**Related code:** ``source/calculation.f90::pre_processing_*()``
+   ``verbose`` is a key of the ``&calculation`` namelist, not of ``&control``
+   (a ``verbose`` in ``&control`` stops the run); see
+   :ref:`keywords/output_options`.
 
 random_vec_num
 --------------
 
 **Type:** Integer
 
-**Purpose:** Number of stochastic vectors for Chebyshev moment calculation
+**Purpose:** Number of random vectors of the stochastic trace in the
+conductivity (transport) moments
 
 **Typical range:** 1-100
 
-**Default:** 10
+**Default:** 1
 
 **Meaning:**
 
-When computing Chebyshev moments for DOS, use random vector estimation:
+Used only with ``cond_calctype = 'random_vec'``. The trace of the transport
+moments is estimated with random vectors:
 
 .. math::
 
    \mu_n \approx \frac{1}{N_{\text{random}}} \sum_i \langle r_i | H^n | r_i \rangle
 
 - Higher value = more accurate but slower
-- For small systems: can use 1 (deterministic)
-- For large systems: use 10-50 (statistical average)
+- The DOS moments do not use this key.
 
 **Example:**
 
@@ -182,7 +154,7 @@ When computing Chebyshev moments for DOS, use random vector estimation:
 
    random_vec_num = 20  ! Accurate
 
-**Related code:** ``source/recursion.f90::chebyshev_recur_ll()``
+**Related code:** ``source/recursion_transport.f90``, ``source/conductivity.f90``
 
 **See also:** :ref:`theory/recursion_method`
 
@@ -191,129 +163,47 @@ mext
 
 **Type:** Integer
 
-**Purpose:** Acceleration of spin rotation (for magnetic calculations)
-
-**Allowed values:** 0 (off), 1 (linear), 2 (Broyden)
-
 **Default:** 0
 
-**Meaning:**
-
-For non-collinear calculations (nsp=3 or 4), accelerate convergence of spin directions:
-
-- 0: No acceleration
-- 1: Linear extrapolation
-- 2: Broyden acceleration
-
-**Example:**
-
-.. code-block:: fortran
-
-   mext = 2  ! Broyden acceleration for spins
-
-**Notes:**
-
-- Only relevant for non-collinear magnetism
-- Can significantly speed up convergence
-- Similar to density mixing but for spin directions
-
-**Related code:** ``source/control.f90``, ``source/self.f90``
+Read but currently not used. The magnetic moments are mixed with
+``mix_magnetic_moments`` and ``magbeta`` of ``&mix``.
 
 lrot
 ----
 
 **Type:** Logical
 
-**Purpose:** Rotate spins to local coordinate system
-
 **Default:** .false.
 
-**Notes:**
-
-- Advanced feature (beta, not recommended)
-- When true, rotates basis to local spin quantization axis
-- Usually leave as false
-
-**Example:**
-
-.. code-block:: fortran
-
-   lrot = .false.  ! Recommended
+Read but currently not used.
 
 incorb
 ------
 
 **Type:** Logical
 
-**Purpose:** Include orbital moment in local spin axis determination
-
 **Default:** .false.
 
-**Notes:**
-
-- For non-collinear calculations with spin-orbit coupling
-- When true: magnetic axis = spin + orbital angular momentum
-- Usually false for spin-only considerations
+Read but currently not used.
 
 idos
 ----
 
 **Type:** Integer
 
-**Purpose:** Output type for local density of states (LDOS)
-
-**Allowed values:**
-
-.. list-table::
-   :widths: 10 20 60
-   :header-rows: 1
-
-   * - idos
-     - Output
-     - Description
-   * - 0
-     - None
-     - No LDOS output
-   * - 1
-     - Atom-averaged
-     - LDOS s,p,d for first atom type
-   * - 2
-     - Per-atom
-     - LDOS s,p,d for each atom type
-
 **Default:** 0
 
-**Example:**
-
-.. code-block:: fortran
-
-   idos = 2  ! Output LDOS per atom type
-
-**Related code:** ``source/density_of_states.f90``
+Read but currently not used. The real-space DOS route writes ``totaldos.out``
+and ``<symbol>_dos.out`` (``source/bands.f90``) independently of this key.
 
 nlim
 ----
 
 **Type:** Integer
 
-**Purpose:** Cluster size control (limiting cluster vs. bulk)
+**Default:** none (not set in ``control%restore_to_default``)
 
-**Allowed values:** >= 0
-
-**Default:** 0 (bulk)
-
-**Meaning:**
-
-- 0: All first neighbors included (bulk-like)
-- n > 0: Limit cluster to atoms within n nearest-neighbor shells
-- Used to study cluster vs. bulk behavior
-
-**Notes:**
-
-- For bulk calculations: use 0
-- For cluster studies: increase to isolate finite-size effects
-
-**Related code:** ``source/lattice.f90``
+Read but currently not used.
 
 npold
 -----
@@ -325,20 +215,11 @@ npold
 
 **Default:** ``norb`` (orbitals per spin channel of the basis: 4, 9 or 16)
 
-orb_pol
--------
+.. note::
 
-**Type:** Logical
-
-**Purpose:** Include orbital polarization corrections
-
-**Default:** .false.
-
-**Notes:**
-
-- Advanced feature for improved magnetism description
-- Adds mean-field term to enhance orbital anisotropy
-- Usually false for standard calculations
+   ``orb_pol`` is a key of the ``&hamiltonian`` namelist, not of ``&control``
+   (an ``orb_pol`` in ``&control`` stops the run); see
+   :ref:`keywords/hamiltonian_parameters`.
 
 recur
 -----
@@ -360,7 +241,7 @@ recur
 **Notes:**
 
 - ``'lanczos'``: Scalar Lanczos recursion — tridiagonalises the Hamiltonian
-  up to the cutoff ``llsp``/``lld``.  Preferred for small clusters and
+  up to the cutoff ``lld``.  Preferred for small clusters and
   impurity calculations.
 - ``'block'``: Block-Lanczos recursion, processing several starting vectors
   together (fast kernels in ``haydock_fast.f90``).  This is the default
@@ -422,7 +303,7 @@ CUDA plugin (only relevant when ``gpu_plugin = .true.``).
 - ``'fft'`` / ``'conv'``: periodic operator apply; **require a fully periodic
   lattice** (``pbc=.true.`` with ``b1``/``b2``/``b3``), otherwise the run
   warns and falls back to the CPU path.
-- An unrecognized value is non-fatal (warning + CPU fallback).
+- An unrecognized value is fatal (``control%check_all``); the same holds for ``gpu_precision``.
 
 **Related code:** ``source/rsrec_cuda_plugin.f90::decode_gpu_backend()``
 
@@ -446,7 +327,7 @@ see :ref:`keywords/output_options`).
 **Allowed values:** ``'B'`` (bulk), ``'S'`` (surface), ``'I'`` (impurity),
 ``'L'`` (layered/interface — ``buildinterface``, B7)
 
-**Default:** ``'B'``
+**Default:** none (``''``); the run stops unless one of the four values is given.
 
 **Example:**
 
@@ -480,19 +361,14 @@ do_asd
 
 **Default:** ``.false.``
 
-**Purpose:** Activate the atomistic spin dynamics (ASD) module after the SCF
-calculation.
-
-**Example:**
-
-.. code-block:: fortran
-
-   do_asd = .true.
+Read but currently not used. The ASD module is started by
+``processing = 'sd'`` in ``&calculation``; its parameters are set in the
+``&sd`` namelist (see :ref:`keywords/spin_dynamics`).
 
 **Notes:**
 
-- ASD time-integration parameters are set in the ``&sd`` namelist
-  (see :ref:`keywords/spin_dynamics`).
+- ``source/calculation.f90`` selects the ASD run from ``processing``, not
+  from ``do_asd``.
 
 **See also:** :ref:`theory/spin_dynamics`, :ref:`keywords/spin_dynamics`
 
@@ -503,12 +379,7 @@ asd_jij
 
 **Default:** ``.false.``
 
-**Purpose:** Include computed exchange parameters :math:`J_{ij}` as the
-effective field driving the ASD simulation.
-
-**Notes:**
-
-- Only meaningful when ``do_asd = .true.``.
+Read but currently not used.
 
 linear_in
 ---------
@@ -517,11 +388,13 @@ linear_in
 
 **Purpose:** Operator of the linear-response input (the perturbation)
 
-**Allowed values:** ``'charge'`` (the only value supported at present)
+**Allowed values:** the same operator names as ``linear_out`` (below).
+For ``linear_in /= 'charge'`` the conductivity output is written in raw
+units (no S/cm conversion).
 
 **Default:** ``'charge'``
 
-**Related code:** ``source/recursion_transport.f90``
+**Related code:** ``source/recursion_transport.f90``, ``source/conductivity.f90``
 
 linear_out
 ----------
@@ -531,7 +404,10 @@ linear_out
 **Purpose:** Operator of the linear-response output (the measured response)
 
 **Allowed values:** ``'charge'``, ``'spin'``, ``'orbital'``, ``'spin_accumulation'``,
-``'orbital_accumulation'``, ``'spin_torque'``, ``'orbital_torque'``
+``'orbital_accumulation'``, ``'spin_torque'``, ``'orbital_torque'``,
+``'spin_soc_torque'`` (alias ``'soc_spin_torque'``), ``'quadrupole'``, ``'oap'``,
+``'quadrupole_accumulation'``, ``'oap_accumulation'``, ``'octupole'``,
+``'octupole_current'``, ``'octupole_accumulation'``; any other value is fatal
 
 **Default:** ``'charge'``
 
@@ -656,12 +532,17 @@ cond_calctype
 
 **Type:** Character string
 
-**Purpose:** Selects the sub-type (orbital decomposition, trace method) used
-inside the conductivity calculation
+**Purpose:** Selects how the trace of the stochastic transport moments is taken
+
+**Allowed values:** ``'per_type'``, ``'random_vec'``
+
+**Default:** ``'per_type'``
 
 **Notes:**
 
-- Allows selection between full tensor, diagonal, or off-diagonal evaluation.
+- ``'per_type'``: one start vector set per atom type.
+- ``'random_vec'``: ``random_vec_num`` random vectors.
+- The code does not check the value; use one of the two.
 
 cond_ll
 -------
@@ -673,7 +554,7 @@ independent of the SCF recursion cutoffs ``llsp``/``lld``
 
 **Typical range:** 300–1000
 
-**Default:** 500
+**Default:** 200
 
 **Example:**
 
@@ -694,8 +575,7 @@ svac
 
 **Default:** ``.false.``
 
-**Purpose:** Use spherically averaged atomic spheres (spherical vacancy
-approximation) for the potential within the Wigner-Seitz spheres.
+Read but currently not used.
 
 blockrec
 --------
@@ -704,57 +584,34 @@ blockrec
 
 **Default:** ``.false.``
 
-**Purpose:** Enable block recursion, processing multiple starting vectors
-simultaneously for improved parallel efficiency.
+Read but currently not used. The recursion type is selected by ``recur``.
 
 partype
 -------
 
 **Type:** Integer
 
-**Default:** ``0``
+**Default:** ``1``
 
-**Purpose:** Selects the source of tight-binding potential parameters.
-0 uses parameters from the ``&par`` namelist (standard).
+Read but currently not used.
 
 terminator
 ----------
 
 **Type:** Integer
 
-**Default:** ``0``
+**Default:** ``5``
 
-**Purpose:** Selects the terminator function applied at the end of the recursion
-chain to close the continued-fraction Green's function
-
-**Allowed values:**
-
-- ``0``: Beer-Pettifor terminator (analytic band-edge approximation, recommended)
-- ``1``: Luchini-Nex terminator
-- ``2``: Constant terminator
-
-**Related code:** ``source/recursion.f90``
+Read but currently not used.
 
 conca / concb
 -------------
 
 **Type:** Real
 
-**Default:** 1.0 / 0.0
+**Default:** 0.0 / 0.0
 
-**Purpose:** Concentrations of species A and B for binary alloy calculations
-
-**Example:**
-
-.. code-block:: fortran
-
-   conca = 0.75
-   concb = 0.25
-
-**Notes:**
-
-- Only relevant when ``ruban > 0``.
-- Should satisfy ``conca + concb = 1``.
+Read but currently not used.
 
 ruban
 -----
@@ -763,8 +620,7 @@ ruban
 
 **Default:** ``0.0``
 
-**Purpose:** Ruban-Abrikosov concentration parameter; a positive value activates
-CPA-like alloy averaging.
+Read but currently not used.
 
 dipole_electrostatics (B6)
 --------------------------
@@ -914,10 +770,14 @@ do_cochg / do_comom
 
 **Type:** Logical
 
-**Default:** ``.false.``
+**Default:** ``.false.`` / ``.false.``
 
-**Purpose:** Enable co-charge (``do_cochg``) and co-moment (``do_comom``)
-corrections for CPA alloy disorder.
+``do_cochg``: read but currently not used.
+
+``do_comom``: read once, in the radial solver of ``source/self.f90``. When it
+is ``.true.`` and the atom is not forced non-magnetic, the field term
+``B_fsm`` of the radial equation is set to ``-mag_cfield(3)``, minus the
+z component of the constraining field of the atom.
 
 Provenance
 ==========

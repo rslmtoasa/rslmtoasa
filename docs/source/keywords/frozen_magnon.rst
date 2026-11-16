@@ -48,7 +48,7 @@ mode
 
 **Type:** Character string
 
-**Allowed values:** ``'mft'``, ``'scf'``
+**Allowed values:** ``'mft'``, ``'scf'``, ``'mft_constrained'`` (alias ``'corrected_mft'``); any other value is fatal
 
 **Default:** ``'mft'``
 
@@ -182,7 +182,8 @@ n_q_points
 **Default:** ``0``
 
 **Purpose:** Number of q-points to use from the inline ``q_ss_list`` array
-(ignored when ``q_file`` is set).
+(ignored when ``q_file`` is set). Without ``q_file`` it must be at least 2 (one reference
+point plus one sweep point); smaller values are fatal.
 
 output_file
 -----------

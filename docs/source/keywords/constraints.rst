@@ -71,7 +71,7 @@ even if present.
   constructors.
 
 **Code location:** ``source/control.f90``, member ``constraints_enable``;
-checked in ``source/self.f90:445``.
+checked in ``source/self.f90`` (``this%control%constraints_enable``).
 
 ----
 
@@ -126,8 +126,8 @@ constraints_i_cons
 - Start with ``3`` for most non-collinear calculations.
 - Use ``5`` (Ma-Dudarev) if ``3`` is slow to converge or oscillates.
 - Use ``4`` (PID) when moment directions are changing rapidly across iterations.
-- Value ``0`` (default) means no field is computed even if
-  ``constraints_enable = .true.``; this is likely a misconfiguration.
+- Value ``0`` (default) with ``constraints_enable = .true.`` is fatal:
+  ``control%check_all`` requires a value from 2 to 5 when constraints are enabled.
 
 **Code location:** ``source/include_codes/abspinlib/constrain.f90``,
 module variable ``i_cons``.
@@ -209,7 +209,7 @@ The vectors need not be unit vectors; the code normalises them internally.
   :math:`z`-component.
 
 **Code location:** ``source/control.f90``, member ``constraints_mom_ref``;
-read from namelist at lines 340–360.
+read from the namelist in ``control%build_from_file``.
 
 ----
 
@@ -341,7 +341,7 @@ Convergence Tips
 ================
 
 - If the SCF oscillates after adding constraints, reduce the overall mixing
-  parameter ``alpha`` (in ``&self``) to 0.2–0.3.
+  parameter ``beta`` (in ``&mix``) to 0.2–0.3.
 - Set ``constraints_diagnostics = .true.`` when auditing the per-site field,
   angular residual, torque, or convergence metric in
   ``constraint_diagnostics.dat``.
@@ -357,11 +357,11 @@ Provenance
 ==========
 
 - **Namelist definition:** ``source/include_codes/namelists/constraints.f90``
-- **Control type:** ``source/control.f90`` (lines 192–196, 340–360, 418–420)
+- **Control type:** ``source/control.f90``
 - **Algorithm implementation:** ``source/include_codes/abspinlib/constrain.f90``
-- **SCF integration:** ``source/self.f90`` (lines 445–449, 862–881)
-- **Exchange integration:** ``source/exchange.f90`` (lines 120–124, 1471–1492)
-- **Transport integration:** ``source/conductivity.f90`` (lines 102–106)
+- **SCF integration:** ``source/self.f90``
+- **Exchange integration:** ``source/exchange.f90``
+- **Transport integration:** ``source/conductivity.f90``
 
 See Also
 ========

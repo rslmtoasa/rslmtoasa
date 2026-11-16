@@ -150,7 +150,8 @@ Spin-spiral / non-collinear
      global spin rotation and is energy-invariant without SOC.
      ``post_processing='frozen_magnon'`` selects ``'gbt_single_q'`` itself and
      is unaffected.
-- ``v_alpha`` / ``v_beta`` (real(3)) — quantization-axis vectors.
+- ``v_alpha`` / ``v_beta`` (real(3), default ``[1, 0, 0]``) — directions of the output / input
+  velocity operators of the linear response (the bond vectors are projected on them).
 - ``pol_alpha`` / ``pol_beta`` (character, default ``'z'``) — spin, orbital or
   multipole component of the linear-response output / input operator.
 
@@ -180,7 +181,7 @@ disk in a PAOFLOW-compatible format (the same "legacy7" record layout that
 
 - ``'python'`` writes ``<base>_paoham.dat`` via ``export_rs_tb_all``.
 - ``'rs2pao'`` writes via the ``rs2pao`` path.
-- ``'none'`` disables export.
+- ``'none'`` disables export; any other value is silently ignored (no export).
 
 **Related code:** ``source/hamiltonian_paoflow_io.f90``,
 ``source/calculation.f90::pre_processing_bravais()``

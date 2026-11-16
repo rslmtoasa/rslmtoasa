@@ -36,7 +36,7 @@ verbose
 
 **Where to find:**
 
-- In ``&control`` or ``&calculation`` namelist
+- In the ``&calculation`` namelist only (an invalid key in ``&control``)
 
 **Related code:** ``source/calculation.f90::pre_processing_*()``
 
@@ -45,49 +45,12 @@ idos
 
 **Type:** Integer
 
-**Purpose:** Local density of states (LDOS) output option
-
-**Allowed values:**
-
-.. table::
-   :align: left
-
-   +-----+------------------+--------------------------------+
-   | idos| Output           | Description                    |
-   +=====+==================+================================+
-   | 0   | None             | No LDOS output (default)       |
-   +-----+------------------+--------------------------------+
-   | 1   | First atom type  | LDOS for s, p, d of first type |
-   +-----+------------------+--------------------------------+
-   | 2   | Per atom type    | LDOS for s, p, d of each type  |
-   +-----+------------------+--------------------------------+
-
 **Default:** 0
 
-**Example:**
-
-.. code-block:: fortran
-
-   idos = 2  ! Output LDOS per atom type
-
-**Output files:**
-
-With idos=1 or idos=2: creates files like ``ldos_atom1_s.dat``, ``ldos_atom1_p.dat``, etc.
-
-Format: Two columns
-
-.. code-block:: text
-
-   Energy(Ry)   LDOS(states/Ry)
-   -2.0         0.0234
-   -1.99        0.0245
-   ...
-
-**Where to find:**
-
-- In ``&control`` or ``&dos`` namelist
-
-**Related code:** ``source/density_of_states.f90``
+Read but currently not used (``&control`` key). The real-space SCF step writes
+``totaldos.out`` (two columns: energy minus Fermi energy in Ry, total DOS) and
+``<symbol>_dos.out`` per recursion atom (``source/bands.f90``) independently of
+this key.
 
 post_processing
 ---------------
@@ -128,6 +91,12 @@ post_processing
    +--------------------+---------------------------------------+
    | 'frozen_magnon'    | Frozen-magnon E(q)/omega(q) sweep (B1)|
    +--------------------+---------------------------------------+
+   | 'fermi_surface'    | Dense k-space eigenpair export for    |
+   |                    | Fermi-surface analysis                |
+   +--------------------+---------------------------------------+
+   | 'spin_response'    | Spin-response driver (see             |
+   |                    | :ref:`keywords/spin_response`)        |
+   +--------------------+---------------------------------------+
 
 **Default:** 'none'
 
@@ -145,11 +114,20 @@ post_processing
 
 **Output files generated:**
 
-- 'density_of_states': ``dos_kspace.dat`` (k-space mode) and/or DOS outputs
+- 'density_of_states': ``dos_kspace.dat`` (k-space DOS). The real-space SCF
+  step writes ``totaldos.out`` and ``<symbol>_dos.out`` (``source/bands.f90``).
 - 'band_structure': ``band_structure.dat``
-- 'exchange': ``exchange.dat``, ``exchange_expanded.dat``
-- 'conductivity': ``conductivity_tensor.dat``, ``conductivity_scalar.dat``
-- 'bsf': ``bsf.dat`` (see ``source/reciprocal_bsf.f90::calculate_bsf()``)
+- 'exchange': ``jijso.out``, ``jijfo.out``, ``dijso.out``, ``dijfo.out``,
+  ``aijso.out``, ``aijfo.out``, ``jtensso.out``, ``jtensfo.out`` and the
+  ``jijparts.out``, ``dijparts.out``, ``aijparts.out`` files; ``jij.out``,
+  ``dij.out``, ``aij.out``, ``jtens.out`` in the other exchange variants
+  (``source/exchange.f90``)
+- 'conductivity': ``cond_total.out``, ``cond_total_orb_real.out``,
+  ``cond_total_orb_im.out``, ``response_total.out``,
+  ``response_orbitals_real.out``, ``response_orbitals_imag.out``
+  (``source/conductivity.f90``)
+- 'bsf': ``bsf.dat`` and ``bsf_bands.dat`` (see
+  ``source/reciprocal_bsf.f90::calculate_bsf()``)
 - 'frozen_magnon': the file named by ``&frozen_magnon output_file``
   (default ``frozen_magnon.dat``), plus ``frozen_magnon_branches.dat``/
   ``frozen_magnon_modes.dat`` when ``branch_mode='auto'`` — see
@@ -186,7 +164,7 @@ inversion :math:`[zS-H(k)-\Sigma]^{-1}`, B2 backend D)
   behavior — bit-identical output.
 - At ``'lehmann'``/``'dyson'`` the exchange/damping/conductivity pipeline
   is unchanged; only the Green's-function producer differs. See
-  ``green_backend``/``green_eta`` (:ref:`keywords/hamiltonian_parameters`)
+  ``green_backend``/``green_eta`` (:ref:`keywords/reciprocal`)
   for the k-space engine's own settings, and
   ``docs/DECISIONS.md`` for the accepted convergence
   envelopes (Lehmann-route J_ij/damping are broadening-defined at the
@@ -245,7 +223,7 @@ e.g. a future CPA/DMFT provider)
 
 - In ``&reciprocal`` namelist (not ``&calculation`` — ``gf_route`` is set
   in ``&calculation`` and internally assigns ``reciprocal%green_backend``
-  to match; see ``source/calculation.f90`` lines ~1217, ~1281).
+  to match; see ``source/calculation.f90`` lines 815 and 899).
 - With :math:`\Sigma=0`, ``'dyson'`` reproduces ``'lehmann'`` to solver
   tolerance — a permanent consistency check (gate G-B2-1, see
   ``docs/DECISIONS.md``).
@@ -311,6 +289,8 @@ pre_processing
    +--------------------+---------------------------------------+
    | 'newclubulk'       | Insert impurity into bulk             |
    +--------------------+---------------------------------------+
+   | 'buildinterface'   | Generate interface (layered) cluster  |
+   +--------------------+---------------------------------------+
 
 **Default:** 'none'
 
@@ -362,15 +342,13 @@ Typical Output File Workflow
 .. code-block:: fortran
 
    &calculation
-      post_processing = 'dos'
+      post_processing = 'density_of_states'
       verbose = .true.
    /
 
 Creates:
 
-- ``input_out.nml`` - Parameter echo
-- ``scf_convergence.dat`` - Iteration data
-- ``dos.dat`` - Density of states
+- ``dos_kspace.dat`` - k-space density of states
 
 **Example 2: Bulk + Surface + Impurity**
 
@@ -398,23 +376,17 @@ Creates:
       post_processing = 'exchange'
       verbose = .true.
    /
-   &output
-      idos = 2
-   /
 
 Creates:
 
-- SCF convergence data
-- Exchange interactions
-- LDOS files
-- Magnetic moments
+- ``jijso.out``, ``jijfo.out``, ... - Exchange interactions
 
 Controlling Output Size
 =======================
 
 **Large output:**
 
-- Long ``channels_ldos`` -> large DOS and LDOS files
+- Long ``channels_ldos`` -> large DOS files
 - Long recursion cutoff -> slower but not larger files
 - Large cluster -> more exchange pairs
 
@@ -431,11 +403,11 @@ Typical example calculations:
 .. code-block:: bash
 
    # Compress after calculation
-   gzip dos.dat
-   gzip exchange.dat
+   gzip totaldos.out
+   gzip jijso.out
    
    # View compressed files
-   gunzip -c dos.dat.gz | head -20
+   gunzip -c totaldos.out.gz | head -20
 
 Parsing Output Files
 ====================
@@ -446,36 +418,26 @@ Parsing Output Files
 
    import numpy as np
    
-   # Read DOS
-   dos = np.loadtxt('dos.dat')
+   # Read DOS (columns: E - E_F in Ry, total DOS)
+   dos = np.loadtxt('totaldos.out')
    E = dos[:, 0]
    rho = dos[:, 1]
-   
-   # Read convergence
-   conv = np.loadtxt('scf_convergence.dat', skiprows=1)
-   iters = conv[:, 0]
-   dq = conv[:, 1]
-   
-   # Read exchange
-   ex = np.loadtxt('exchange.dat', skiprows=1)
-   pairs = ex[:, :2].astype(int)
-   J_values = ex[:, 3]
 
 Provenance
 ==========
 
 Output control parameters found in:
 
-- **verbose:** ``source/control.f90::type control``
-- **idos:** ``source/control.f90::type control``
+- **verbose:** ``source/calculation.f90::type calculation``
+- **idos:** ``source/control.f90::type control`` (not used)
 - **post_processing:** ``source/calculation.f90::type calculation``
 - **pre_processing:** ``source/calculation.f90::type calculation``
 - **Output writers:**
   
-  - ``source/density_of_states.f90`` (DOS files)
+  - ``source/bands.f90``, ``source/reciprocal_dos.f90`` (DOS files)
   - ``source/exchange.f90`` (exchange files)
   - ``source/conductivity.f90`` (conductivity files)
-  - ``source/self.f90`` (convergence file)
+  - ``source/self.f90`` (``report.out``, ``minfo.out``, ``linfo.out``)
 
 Magnetic inertia (&calculation)
 ===============================

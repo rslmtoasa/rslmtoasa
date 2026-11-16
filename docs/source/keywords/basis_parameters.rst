@@ -40,7 +40,6 @@ lmax
 
 **Meaning:**
 
-- lmax=0: single orbital (s-like) – rare, very approximate
 - lmax=1: s and p orbitals – for light elements (C, N, O)
 - lmax=2: s, p, d orbitals – **standard for transition metals**
 - lmax=3: includes f orbitals – for rare earths (experimental)
@@ -56,7 +55,7 @@ lmax
 center_band
 -----------
 
-**Type:** Real array (dimension: lmax+1, nsp)
+**Type:** Real array (dimension: lmax+1, 2; second index spin up/down)
 
 **Purpose:** Energy reference (orbital center) for each orbital
 
@@ -96,7 +95,7 @@ center_band
 width_band
 ----------
 
-**Type:** Real array (dimension: lmax+1, nsp)
+**Type:** Real array (dimension: lmax+1, 2; second index spin up/down)
 
 **Purpose:** Bandwidth parameter (√Δ) for each orbital
 
@@ -135,36 +134,41 @@ width_band
 enu
 ---
 
-**Type:** Real array (dimension: lmax+1, nsp)
+**Type:** Real array (dimension: 0:lmax, 2; second index spin up/down)
 
-**Purpose:** Energy parameter for orthogonal tight-binding (ORT) potential
+**Purpose:** Linearisation energy of the orthogonal representation
 
 **Units:** Rydberg
 
-**Related code:** ``source/potential.f90``
+**Related code:** ``source/potential.f90``, ``source/symbolic_atom.f90::predls``
 
 **Notes:**
 
-For ORT potential formulation (alternative to center_band/width_band).
-Details depend on specific potential parameterization.
+``enu`` is an input of ``predls``, which builds ``center_band`` and
+``width_band`` from ``c``, ``enu``, ``srdel`` and ``qpar`` (and the Madelung
+potential ``vmad``). It is not an alternative to ``center_band``/``width_band``.
 
 c, srdel, qpar, ppar, vl
 ------------------------
 
-**Type:** Real arrays
+**Type:** Real arrays (dimension: 0:lmax, 2)
 
-**Purpose:** Additional potential parameters for ORT formulation
+**Purpose:** Potential parameters of the orthogonal representation
 
 **Meaning:**
 
-- c: potential parameter
+- c: band centre parameter C (together with ``enu``)
 - srdel: √Δ analog
-- qpar, ppar: quadrupole/octupole parameters
-- vl: local potential
+- qpar: parameter Q; ``predls`` scales it to ``Q*wow**(1 - 2*i)`` for orbital
+  index ``i = l + 1``, with ``wow`` the sphere radius over ``ws_r``
+- ppar: enters the factor :math:`p = 1/\mathrm{ppar}^2` of the radial solver
+  (``source/alsda_radial.f90``)
+- vl: computed with the potential parameters (:math:`E_\nu + \omega_+`) and written; no calculation reads it
 
 **Notes:**
 
-Implementation varies; see specific potential database documentation.
+``center_band`` and ``width_band`` are derived from these parameters by
+``predls`` (``source/symbolic_atom.f90``).
 
 For exchange-correlation functional parameters, see :doc:`exchange_correlation`.
 
@@ -177,13 +181,13 @@ Potential parameters are usually NOT entered manually. Instead:
 
 .. code-block:: fortran
 
-   &element
-      symbol = 'Si1',
-      atomic_number = 14,
-      core = 10,
-      valence = 4,
+   &atoms
       database = '/path/to/element_database/'
+      label(1) = 'Si1'
    /
+
+The file ``Si1.nml`` of that directory holds the ``&element`` and ``&par``
+groups of the atom.
 
 2. **Or pre-computed in namelist** (for testing/development):
 
@@ -282,6 +286,6 @@ See Also
 ========
 
 - :ref:`keywords/control_parameters` - txc (XC functional)
-- :ref:`keywords/lattice_geometry` - ws_r (sphere radius)
+- :ref:`keywords/lattice_geometry` - ws_r (``&par``, sphere radius in Bohr)
 - :doc:`../theory/lmto_asa_overview` - Theoretical background
 - :doc:`../user_guide/examples` - Example potential values
