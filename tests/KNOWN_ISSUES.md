@@ -503,3 +503,15 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### `fort.*` files written by legacy routines — 2026-11-16
 - **Measured:** after a quick-tier run, `build_base/Testing` holds `fort.800` (136 directories), `fort.805` (135), `fort.99` (28), `fort.120` (8) and `fort.1122`/`fort.2122`/`fort.4122` (16, `recursion_haydock.f90` `recur_b`, one file per rank). Writers: `lattice_lifecycle.f90` (800), `lattice_cluster.f90` (805), `exchange.f90` (99), `charge.f90` (120), `recursion_haydock.f90` (1122+). All pre-AI; kept deliberately.
 - **Proposal:** remove or put behind a flag; developer decision.
+
+### `kspace_ham_order = 'second'` without `hoh` builds the first-order H(k) silently — 2026-11-16
+- **Read:** `source/reciprocal_fourier.f90` (about line 154): `second_order = this%use_second_order .and. this%hamiltonian%hoh .and. allocated(this%hamiltonian%eeo)`; with `hoh = .false.` an explicit `'second'` falls back to first order without a message.
+- **Proposal:** stop with a fatal (or warn) when `'second'` is requested without `hoh`; developer decision.
+
+### Namelist keys read but not used — 2026-11-16
+- **Read (grep, docs review):** about 25 keys are read into the type and only echoed (`nml%add`, `print`), e.g. `&control` `idos`, `mext`, `lrot`, `incorb`, `nlim`, `svac`, `blockrec`, `partype`, `terminator`, `conca`, `concb`, `ruban`, `do_cochg`, `do_asd`, `asd_jij`; `&self` `mix_all`, `mixmag`, `mixmag_all`, `magnetic_mixing`, `freeze`, `rigid_band`, `all_inequivalent`, `orbital_polarization`, `init`, `ws`, `rb`; `&mix` `var`; `&sd` `integrator`, `nt`, `t_i`, `t_f`. The docs now say "read but currently not used".
+- **Proposal:** remove the keys with their deck entries, or wire them in; developer decision.
+
+### Conductivity comments name the Jackson kernel; the code uses Lorentz (lambda = 6) — 2026-11-16
+- **Read:** `source/conductivity.f90` about lines 327-339 describe a Jackson kernel; line 391 (`jackson_kernel`) is commented out and line 392 calls `lorentz_kernel(..., 6.0d0)`.
+- **Proposal:** correct the comments (or restore Jackson if Lorentz was a debugging change); developer decision.
