@@ -13,16 +13,18 @@ Post-Processing: Spin Hall Effect in Pt
 Overview
 ========
 
-Platinum exhibits a large spin Hall effect - converting charge current to spin current via spin-orbit coupling. This example calculates the spin Hall conductivity using **fully relativistic** treatment (``nsp = 4``).
+Platinum exhibits a large spin Hall effect - converting charge current to spin current via spin-orbit coupling. This example calculates the spin Hall conductivity using a collinear calculation with spin-orbit coupling (``nsp = 2``).
 
 Files
 =====
 
-- ``input.nml`` - Conductivity with nsp=4
-- ``Pt_scf.nml`` - Pt parameters with spin-orbit coupling
+- ``input.nml`` - Conductivity with nsp=2
+- ``Pt.nml`` - Pt parameters
 
 Input File: input.nml
 =====================
+
+The SCF input in ``example/conductivity/fccPt/input.nml``:
 
 .. code-block:: fortran
 
@@ -30,64 +32,62 @@ Input File: input.nml
    pre_processing = 'bravais'
    verbose = T
    /
-   
    &lattice
-   rc = 60
-   alat = 3.923                   ! FCC Pt lattice constant
+   rc = 060
+   alat = 3.9264951876
    crystal_sym = 'fcc'
-   wav = 1.4844
+   wav = 1.5344598728
+   pbc = .true.
+   b1 = .false.
+   b2 = .false.
+   b3 = .false.
+   n1 = 20
+   n2 = 20
+   n3 = 20
    ntype = 1
-   ct(1) = 4.0
-   r2 = 16.0
+   ct(1) = 4.0d0
+   r2 = 16.0d0
    /
-   
    &atoms
    database = './'
    label(1) = 'Pt'
    /
-   
    &self
+   ws_all = .true.
    nstep = 100
    /
-   
    &hamiltonian
    v_alpha = 0, 1, 0              ! Charge current (y)
-   v_beta = 1, 0, 0               ! Electric field (x)
-   pol_alpha = 'z'                 ! Spin current (z)
+   v_beta =  1, 0, 0              ! Electric field (x)
+   pol_alpha = 'z'                ! Spin current (z)
    pol_beta = 'z'
    /
-   
    &energy
-   fermi = -0.095
+   fermi = -0.089509
    energy_min = -1.0
-   energy_max = 1.5
+   energy_max = 1.2
    channels_ldos = 2500
    /
-   
    &control
    calctype = 'B'
-   nsp = 4                        ! ← Fully relativistic (strong SOC!)
+   nsp = 2                        ! Collinear, with spin-orbit coupling
    cond_ll = 500
-   recur = 'chebyshev'
    lld = 150
+   recur = 'chebyshev'
    linear_in = 'charge'
-   linear_out = 'orbital'             ! Orbital contribution
+   linear_out = 'spin'            ! Spin current response
+   cond_calctype = 'per_type'
    /
-   
    &mix
-   beta = 0.3
    mixtype = 'broyden'
+   beta = 0.4
    /
 
-Key Difference: nsp = 4
------------------------
+Spin-Orbit Coupling: nsp = 2
+----------------------------
 
-``nsp = 4`` enables **fully relativistic** calculation:
-
-- 4-component spinors
-- Full spin-orbit coupling
-- Essential for heavy elements (Z > 70)
-- Required for spin Hall effect
+``nsp = 2`` is the collinear calculation with spin-orbit coupling. ``nsp = 4`` (non-collinear with
+spin-orbit coupling) is not used in this example.
 
 Spin Hall Effect
 ================
@@ -107,9 +107,24 @@ where the spin Hall angle is:
 Running the Calculation
 =======================
 
+The calculation has two steps. With ``post_processing = 'none'`` (the default) the file above runs
+the SCF only:
+
 .. code-block:: bash
 
    cd example/conductivity/fccPt
+   ../../../build/bin/rslmto.x
+
+The conductivity step does not repeat the SCF. The folders ``sigma_xy_z-spin`` (``linear_out = 'spin'``)
+and ``sigma_xy_z-orb`` (``linear_out = 'orbital'``) hold an ``input.nml`` that differs from the file
+above only in ``post_processing = 'conductivity'`` (in place of ``pre_processing = 'bravais'``) and, for
+the orbital case, ``linear_out``. Copy the converged ``Pt_out.nml`` (read before ``Pt.nml``) into the
+subfolder and run there:
+
+.. code-block:: bash
+
+   cp Pt_out.nml sigma_xy_z-spin/
+   cd sigma_xy_z-spin
    ../../../../build/bin/rslmto.x
 
 Expected Output
@@ -127,7 +142,7 @@ For Pt at room temperature:
    - Cu: ~0.001 (0.1%)
    - Al: ~0.0001 (0.01%)
 
-**Expected runtime:** 20-30 minutes (nsp=4 is computationally expensive).
+**Expected runtime:** 20-30 minutes.
 
 Physical Interpretation
 ========================
@@ -149,7 +164,7 @@ Pt is the most widely used spin Hall material in experimental devices.
 See Also
 ========
 
-- :doc:`bulk_mn3sn` - Another nsp=4 example
+- :doc:`bulk_mn3sn` - Non-collinear (nsp=4) example
 - :doc:`conductivity_bccfe` - Anomalous Hall effect
-- :doc:`conductivity_fcccu` - Non-relativistic conductivity
+- :doc:`conductivity_fcccu` - Conductivity of Cu
 - :doc:`../../keywords/control_parameters` - nsp parameter

@@ -52,16 +52,16 @@ Common Tasks
 
 **Run a bulk crystal calculation:**
 
-See ``example/bulk/Si/Si1.nml`` for an example (copy to ``input.nml`` or specify as argument).
+See ``example/bulk/Si/input.nml`` for an example (run in that folder, or pass the file name as argument).
 
 **Calculate magnetic properties:**
 
-Set ``nsp=1`` (scalar relativistic) or ``nsp=2`` (collinear magnetism).
-Provide exchange field or constrain moments.
+Set ``nsp=1`` (collinear, scalar relativistic), ``nsp=2`` (collinear with spin-orbit),
+``nsp=3`` or ``nsp=4`` (non-collinear). Provide exchange field or constrain moments.
 
 **Compute band structure:**
 
-Include ``post_processing='dos'`` and appropriate energy mesh.
+Use ``post_processing='band_structure'`` with the ``&reciprocal`` and ``&kpath`` namelists.
 
 **Surface calculation:**
 
@@ -76,7 +76,7 @@ Getting Help
 
 - Check keyword documentation: :ref:`keywords/index`
 - Review example input files in ``example/``
-- Enable verbose output: ``verbose = .true.``
+- Enable verbose output: ``verbose = .true.`` in ``&calculation``
 - Check log output for error messages
 
 See Also

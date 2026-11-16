@@ -67,7 +67,7 @@ Input File: input.nml
    
    &control
    calctype = 'B'
-   nsp = 2
+   nsp = 2                        ! Collinear, with spin-orbit coupling
    lld = 21
    recur = 'block'
    /
@@ -90,7 +90,7 @@ Critical Exchange Parameters
 
 1. Check cluster generation output
 2. Identify atoms at desired distances
-3. Common shells for bcc: 1NN at a√3/2, 2NN at a, 3NN at a√11/2
+3. Common shells for bcc: 1NN at a√3/2, 2NN at a, 3NN at a√2, 4NN at a√11/2
 
 No lattice.nml Needed
 =====================
@@ -105,25 +105,30 @@ Running the Calculation
 .. code-block:: bash
 
    cd example/exchange/bccFe
-   ../../../../build/bin/rslmto.x
+   ../../../build/bin/rslmto.x
 
 Expected Output
 ===============
 
 **Output files:**
 
-- ``exchange_jij.out`` - Exchange parameters in mRy and meV
-- ``exchange_full.out`` - Full exchange tensor (isotropic J, DMI, anisotropy)
+- ``jij.out`` - Exchange parameters (columns: ``iz_i``, ``iz_j``, ``dx``, ``dy``, ``dz``, ``J``, ``dist``)
+- ``dij.out`` - DMI vector (same first five columns, then three components, then ``dist``)
+- ``aij.out`` - 3x3 tensor ``aij`` (nine values per pair)
+- ``jtens.out`` - Exchange tensor
 - ``Fe_out.nml`` - Updated parameters
 
 **Expected results for bcc Fe:**
 
 .. code-block:: text
 
-   Neighbor Shell    Distance (Å)    J_ij (mRy)    J_ij (meV)
-   1NN (2634)           2.48          +20 to +24    +0.45 to +0.55
-   2NN (2635)           2.86          +2 to +5      +0.05 to +0.11
-   3NN                  3.31          -1 to +1      ~0
+   Neighbor Shell    Distance (Å)    J_ij (mRy)
+   1NN (2634)           2.48          +20 to +24
+   2NN (2635)           2.86          +2 to +5
+   3NN                  4.05          -1 to +1
+
+The unit of ``jij`` is not stated in the code or in ``jij.out``. The ranges above are quoted values,
+not measured here.
 
 **Sign convention:** Positive J_ij = ferromagnetic coupling.
 
@@ -131,8 +136,8 @@ View results:
 
 .. code-block:: bash
 
-   cat exchange_jij.out
-   grep "J(" exchange_full.out | head -5
+   cat jij.out
+   head -5 dij.out
 
 **Expected runtime:** 5-15 minutes.
 

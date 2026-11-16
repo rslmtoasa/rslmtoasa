@@ -6,7 +6,7 @@ Impurity: Fe in B2 FeCo
 
 **Location:** ``example/impurity/B2FeCo/``
 
-**System:** Single Fe impurity replacing Co in ordered B2 FeCo
+**System:** Single impurity site (type ``Fe-imp``) in ordered B2 FeCo
 
 **Physics:** Demonstrates embedded cluster impurity calculation with local magnetic perturbation.
 
@@ -24,9 +24,9 @@ Files
 =====
 
 - ``input.nml`` - Main parameters
-- ``Fe_scf.nml`` - Bulk Fe site parameters
-- ``Co_scf.nml`` - Bulk Co site parameters
-- ``Fe-imp_scf.nml`` - Fe impurity parameters (different from bulk Fe!)
+- ``Fe.nml`` - Bulk Fe site parameters
+- ``Co.nml`` - Bulk Co site parameters
+- ``Fe-imp.nml`` - Fe impurity parameters (different from bulk Fe!)
 
 Input File: input.nml
 =====================
@@ -54,7 +54,7 @@ Input File: input.nml
    database = './'
    label(1) = 'Fe'                ! Bulk Fe atoms
    label(2) = 'Co'                ! Bulk Co atoms
-   label(3) = 'Fe-imp'            ! Fe impurity (replaces Co)
+   label(3) = 'Fe-imp'            ! Fe impurity (placed at the site given by inclu)
    /
    
    &self
@@ -101,13 +101,13 @@ B2 Structure: Auto-Generated
    - Co at (0.5, 0.5, 0.5)
    
    Impurity setup:
-   - Replace Co at origin with Fe-imp
+   - The cluster site at the origin (inclu) becomes type Fe-imp
    - Surrounded by bulk Fe and Co atoms
 
 No lattice.nml needed.
 
-Atom Parameters: Fe-imp_scf.nml
-================================
+Atom Parameters: Fe-imp.nml
+============================
 
 The impurity atom has **modified** parameters vs bulk Fe:
 
@@ -148,7 +148,7 @@ Running the Calculation
 .. code-block:: bash
 
    cd example/impurity/B2FeCo
-   ../../../../build/bin/rslmto.x
+   ../../../build/bin/rslmto.x
 
 Expected Output
 ===============
@@ -159,8 +159,7 @@ Expected Output
 
 .. code-block:: bash
 
-   grep "magnetic moment" Fe-imp_out.nml
-   grep "magnetic moment" Fe_out.nml      # Compare with bulk Fe
+   grep "Spin moment of atom" report.out   # One line per recursion atom
 
 Expected: Impurity moment ~2.5-2.8 μ_B (enhanced vs bulk Fe ~2.2 μ_B).
 
@@ -168,8 +167,7 @@ Expected: Impurity moment ~2.5-2.8 μ_B (enhanced vs bulk Fe ~2.2 μ_B).
 
 .. code-block:: bash
 
-   grep "charge" Fe-imp_out.nml
-   grep "charge" Fe_out.nml
+   grep "Charge transfer at atom" report.out
 
 **Expected runtime:** 2-4 minutes.
 

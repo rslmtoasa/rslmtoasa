@@ -87,7 +87,7 @@ Input File: input.nml
 Key Parameter: nsp = 4
 ----------------------
 
-``nsp = 4`` enables fully relativistic treatment with 4-component spinors. This is **required** for non-collinear magnetism where magnetic moments point in different directions (not just ↑ or ↓).
+``nsp = 4`` enables fully relativistic treatment with 4-component spinors. Non-collinear magnetism, where magnetic moments point in different directions (not just ↑ or ↓), needs ``nsp = 3`` (scalar-relativistic) or ``nsp = 4`` (with spin-orbit coupling).
 
 Lattice File: lattice.nml
 ==========================
@@ -177,7 +177,7 @@ Expected Output
 
 .. code-block:: bash
 
-   grep "moment" Mn*_out.nml
+   grep "Spin moment projections" report.out
 
 Each Mn should show moment components in x, y, z (not just along one axis).
 
@@ -197,7 +197,7 @@ This is a prototypical topological antiferromagnet.
 See Also
 ========
 
-- :doc:`bulk_bccfe` - Collinear magnetism (nsp=2)
+- :doc:`bulk_bccfe` - Collinear magnetism
 - :doc:`conductivity_bccfe` - Anomalous Hall effect
 - :doc:`../../keywords/control_parameters` - nsp parameter
 - :doc:`../../theory/spin_dynamics` - Non-collinear magnetism theory

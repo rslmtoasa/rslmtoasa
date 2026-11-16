@@ -15,7 +15,7 @@ Overview
 
 Iron crystallizes in the BCC structure at room temperature and is ferromagnetic with a magnetic moment of approximately 2.2 Bohr magnetons per atom. This example demonstrates:
 
-- Spin-polarized calculation with ``nsp = 2``
+- Collinear spin-polarized calculation with spin-orbit coupling (``nsp = 2``)
 - Magnetic SCF convergence
 - BCC lattice generation (no separate lattice.nml needed)
 - Careful mixing for magnetic stability
@@ -40,10 +40,10 @@ Input File: input.nml
    rc = 80                       ! Larger cluster for magnetic system
    alat = 2.86120                ! BCC lattice constant (Å)
    crystal_sym = 'bcc'           ! Body-centered cubic (auto-generated)
-   wav = 1.40880                 ! Wigner-Seitz radius
+   wav = 1.40880                 ! Wigner-Seitz radius (Å)
    ntype = 1                     ! Single atom type
-   ct(1) = 3.0d0                 ! Charge transfer parameter
-   r2 = 9.00d0                   ! Screening radius
+   ct(1) = 3.0d0                 ! Neighbour cut radius (Å)
+   r2 = 9.00d0                   ! Squared neighbour cut radius (Å²), r2 = ct²
    /
    
    &atoms
@@ -64,7 +64,7 @@ Input File: input.nml
    
    &control
    calctype = 'B'
-   nsp = 2                       ! Spin-polarized (up and down channels)
+   nsp = 2                       ! Collinear, with spin-orbit coupling
    lld = 21
    recur = 'block'
    /
@@ -77,7 +77,7 @@ Input File: input.nml
 Key Parameters for Magnetic Systems
 ------------------------------------
 
-**nsp = 2:** Enables spin-polarization with separate up and down electron channels. Essential for ferromagnets.
+**nsp = 2:** Collinear calculation with spin-orbit coupling. Collinear spin polarization with separate up and down channels is also available with ``nsp = 1`` (scalar-relativistic).
 
 **beta = 0.01:** Very small mixing parameter. Magnetic systems are sensitive to mixing - too large beta causes oscillations and non-convergence.
 
@@ -90,7 +90,7 @@ Lattice: Auto-Generated BCC
 
 With ``crystal_sym = 'bcc'``, the code generates:
 
-- Simple cubic cell with 1-atom basis
+- Primitive bcc cell with 1-atom basis
 - Atom at origin: (0,0,0)
 - 8 nearest neighbors at distance a*sqrt(3)/2 = 2.48 Å
 
@@ -116,7 +116,7 @@ Expected Output
 
 .. code-block:: bash
 
-   grep "magnetic moment" Fe_out.nml
+   grep "Spin moment of atom" report.out
 
 Expected: 2.15-2.25 Bohr magnetons per Fe atom (experimental: 2.22).
 
@@ -124,7 +124,7 @@ Expected: 2.15-2.25 Bohr magnetons per Fe atom (experimental: 2.22).
 
 .. code-block:: bash
 
-   grep "fermi" input_out.nml
+   grep "Fermi energy" report.out
 
 Expected: fermi = -0.069 +- 0.005 Ry.
 

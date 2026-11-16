@@ -74,7 +74,7 @@ This is the :doc:`bulk_bccfe` input with an added ``use_kspace`` switch and a
 
    &control
    calctype = 'B'
-   nsp = 2
+   nsp = 2                       ! Collinear, with spin-orbit coupling
    lld = 21
    recur = 'block'
    /
@@ -96,7 +96,8 @@ Key Parameters
    Builds the second-order ASA Hamiltonian
    :math:`H(k) = h(k) - [hoh](k) + E_\nu + H_{LS}`, adding the Bloch-summed
    ``Hcc_2c(k)`` combined correction when ``ccor_2c = .true.``. Use ``'first'``
-   for the lower-order ``h(k) + H_LS`` form.
+   for the lower-order ``h(k) + H_LS`` form. The other accepted values are
+   ``'auto'`` (default) and ``'orthogonal'``.
 
 **nk1/nk2/nk3**
    Monkhorst-Pack mesh density. Denser meshes improve DOS/Fermi-level accuracy
@@ -111,8 +112,9 @@ Running the Calculation
 
 .. code-block:: bash
 
-   cd example/bulk/bccFe
-   # edit input.nml to add use_kspace / &reciprocal as above
+   cd example/k_space_scf/bccFe
+   # input.nml has &reciprocal (nsp = 1, 12x12x12 mesh, nstep = 2) but no use_kspace:
+   # add use_kspace = .true. to &self, otherwise this is a recursion SCF
    ../../../build/bin/rslmto.x
 
 Expected Output
@@ -121,7 +123,7 @@ Expected Output
 The converged magnetic moment and Fermi energy should agree with the recursion
 run in :doc:`bulk_bccfe` (about 2.2 μ_B/atom, ``fermi ≈ -0.069 Ry``) to within
 the k-mesh discretization error — that agreement is the point of the
-cross-check. The k-space DOS is written to ``dos_kspace.dat``.
+cross-check. The k-space DOS of the SCF branch is written to ``density_of_states.dat``.
 
 Notes
 =====

@@ -151,7 +151,10 @@ Verify Installation
 
 .. code-block:: bash
 
-   ./build/bin/rslmto.x --help
+   ls build/bin/rslmto.x
+
+The executable has no ``--help`` option: its first argument is the input file name. Run it in a
+folder with an ``input.nml`` (see :ref:`Example Calculation <getting_started_example>` below).
 
 Running a Calculation
 =====================
@@ -174,27 +177,23 @@ specify a different input filename as the first argument.
 
    ./rslmto.x my_calculation.nml
 
+.. _getting_started_example:
+
 Example Calculation
 -------------------
 
-Navigate to an example directory and copy the example file to ``input.nml``:
+Navigate to an example directory. It already contains an ``input.nml`` (the files ``Si1.nml`` and
+``Si2.nml`` are the per-atom parameter files read through ``&atoms``):
 
 .. code-block:: bash
 
    cd example/bulk/Si
-   cp Si1.nml input.nml
-   
+
 Run the calculation:
 
 .. code-block:: bash
 
    ../../../build/bin/rslmto.x
-
-Alternatively, specify the input file directly:
-
-.. code-block:: bash
-
-   ../../../build/bin/rslmto.x Si1.nml
 
 With OpenMP parallelization:
 
@@ -218,7 +217,8 @@ See :ref:`user_guide/input_files` for detailed information on input file structu
 
 Output files are written to the current directory and include:
 
-- ``*_out.nml``: Output parameters file
+- ``<label>_out.nml``: Per atom type, element and potential parameters at the end of the run (restart file)
+- ``report.out``: Total energy, Fermi energy, spin moments and charge transfer
 - Energy values and convergence information
 - Band structure and density of states (if requested)
 - Magnetic properties (if applicable)
@@ -310,7 +310,7 @@ This section documents the codebase locations used:
 - **Compilation system**: ``CMakeLists.txt`` (root), ``source/CMakeLists.txt``
 - **Entry point**: ``source/main.f90`` (program entry, MPI initialization, timer)
 - **Build options**: ``cmake/SetFortranFlags.cmake`` (compiler flags)
-- **Example inputs**: ``example/bulk/Si/Si1.nml``, ``example/bulk/bccFe/``, etc.
+- **Example inputs**: ``example/bulk/Si/input.nml``, ``example/bulk/bccFe/``, etc.
 
 Next Steps
 ==========

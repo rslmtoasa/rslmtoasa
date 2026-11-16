@@ -28,60 +28,67 @@ Files
 Input File: input.nml
 =====================
 
+The SCF input in ``example/conductivity/bccFe/input.nml``:
+
 .. code-block:: fortran
 
    &calculation
    pre_processing = 'bravais'
    verbose = T
    /
-   
    &lattice
-   rc = 80
+   rc = 080
    alat = 2.86120
    crystal_sym = 'bcc'
    wav = 1.40880
+   pbc = .true.
+   b1 = .false.
+   b2 = .false.
+   b3 = .false.
+   n1 = 20
+   n2 = 20
+   n3 = 20
    ntype = 1
-   ct(1) = 3.0
-   r2 = 9.0
+   ct(1) = 3.0d0
+   r2 = 9.0d0
    /
-   
    &atoms
    database = './'
    label(1) = 'Fe'
    /
-   
    &self
    nstep = 100
    /
-   
    &hamiltonian
-   v_alpha = 0, 1, 0              ! ← Transverse current (y)
-   v_beta = 1, 0, 0               ! ← Applied field (x)
-   pol_alpha = 'z'                 ! ← Magnetization (z)
+   v_alpha = 0, 1, 0              ! Transverse current (y)
+   v_beta = 1, 0, 0               ! Applied field (x)
+   pol_alpha = 'z'                ! Magnetization (z)
    pol_beta = 'z'
    /
-   
    &energy
-   fermi = -0.069282
+   fermi = -0.069099
    energy_min = -1.0
    energy_max = 1.2
    channels_ldos = 2500
    /
-   
    &control
    calctype = 'B'
-   nsp = 2                        ! Spin-polarized
-   cond_ll = 500
-   recur = 'chebyshev'
+   nsp = 2                        ! Collinear, with spin-orbit coupling
+   cond_ll = 300
    lld = 150
+   recur = 'chebyshev'
    linear_in = 'charge'
-   linear_out = 'spin'             ! Spin contribution
+   linear_out = 'spin'            ! Spin current response
+   cond_calctype = 'per_type'
    /
-   
    &mix
-   beta = 0.05
+   beta = 0.1
    mixtype = 'broyden'
    /
+
+The conductivity step uses the folders ``sigma_xy_z-spin`` (``linear_out = 'spin'``) and
+``sigma_xy_z-orb`` (``linear_out = 'orbital'``). Their ``input.nml`` equals the file above, except that
+``pre_processing = 'bravais'`` is replaced by ``post_processing = 'conductivity'``.
 
 Anomalous Hall Effect
 =====================
@@ -102,9 +109,21 @@ The anomalous Hall conductivity σ_xy^AHE is calculated from transverse velocity
 Running the Calculation
 =======================
 
+The calculation has two steps. With ``post_processing = 'none'`` (the default) the file above runs
+the SCF only:
+
 .. code-block:: bash
 
    cd example/conductivity/bccFe
+   ../../../build/bin/rslmto.x
+
+The conductivity step does not repeat the SCF. It reads the converged ``Fe_out.nml`` (the code reads
+``<label>_out.nml`` before ``<label>.nml``), so copy it into the subfolder and run there:
+
+.. code-block:: bash
+
+   cp Fe_out.nml sigma_xy_z-spin/
+   cd sigma_xy_z-spin
    ../../../../build/bin/rslmto.x
 
 Expected Output
@@ -123,10 +142,11 @@ Expected Output
 
 .. code-block:: bash
 
-   cat cond_spin_up.out     # Majority spin
-   cat cond_spin_down.out   # Minority spin
+   cat cond_total.out       # E-E_F (Ry), Re, Im of the selected component (raw kernel)
+   cat response_total.out   # same response in physical units, E-E_F in eV
+   cat Fe_cond.out          # per-type contribution
 
-Spin-up and spin-down channels contribute differently due to exchange splitting.
+Orbital-resolved parts are in ``cond_total_orb_real.out`` and ``cond_total_orb_im.out``.
 
 **Expected runtime:** 15-25 minutes.
 

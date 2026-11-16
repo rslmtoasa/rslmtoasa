@@ -78,7 +78,7 @@ Input File: input.nml
    
    &control
    calctype = 'B'
-   nsp = 2
+   nsp = 2                        ! Collinear, with spin-orbit coupling
    cond_ll = 500                  ! ← Chebyshev expansion order
    recur = 'chebyshev'            ! ← Use Chebyshev recursion
    lld = 150
@@ -124,9 +124,24 @@ For cubic Cu, by symmetry: σ_xx = σ_yy = σ_zz and off-diagonal terms are zero
 Running the Calculation
 =======================
 
+The calculation has two steps. With ``post_processing = 'none'`` (the default) the file above runs
+the SCF only:
+
 .. code-block:: bash
 
    cd example/conductivity/fccCu
+   ../../../build/bin/rslmto.x
+
+The conductivity step does not repeat the SCF. The folders ``sigma_xy_z-spin`` (``linear_out = 'spin'``)
+and ``sigma_xy_z-orb`` (``linear_out = 'orbital'``) hold an ``input.nml`` that differs from the file
+above only in ``post_processing = 'conductivity'`` (in place of ``pre_processing = 'bravais'``) and, for
+the orbital case, ``linear_out``. Copy the converged ``Cu_out.nml`` (read before ``Cu.nml``) into the
+subfolder and run there:
+
+.. code-block:: bash
+
+   cp Cu_out.nml sigma_xy_z-spin/
+   cd sigma_xy_z-spin
    ../../../../build/bin/rslmto.x
 
 Expected Output
@@ -134,13 +149,17 @@ Expected Output
 
 **Output files:**
 
-- ``cond_total.out`` - Total conductivity vs energy
-- ``cond_Cu.out`` - Cu contribution (if per_type)
-- ``cond_spin.out`` or ``cond_orb.out`` - Spin/orbital resolved
+- ``cond_total.out`` - Total response vs energy (raw kernel, no header)
+- ``Cu_cond.out`` - Cu contribution (if per_type)
+- ``cond_total_orb_real.out``, ``cond_total_orb_im.out``, ``Cu_cond_orb_real.out``, ``Cu_cond_orb_im.out`` - Orbital-resolved parts
+- ``response_total.out``, ``Cu_response.out``, ``response_units.txt`` - Response in physical units and the units used
 
 **Expected results:**
 
-For fcc Cu at Fermi level:
+The shipped deck (``v_alpha = 0,1,0``, ``v_beta = 1,0,0``, ``pol = 'z'``, ``linear_out = 'spin'``)
+computes the :math:`\sigma_{yx}` spin-current response, not the charge conductivity. The value
+below refers to the charge conductivity :math:`\sigma_{xx}`, which needs ``linear_out = 'charge'`` and
+``v_alpha = v_beta = 1, 0, 0``. For fcc Cu at Fermi level:
 
 .. code-block:: text
 
@@ -153,20 +172,20 @@ For fcc Cu at Fermi level:
 
 .. code-block:: bash
 
-   grep -A 5 "Fermi" cond_total.out
+   head cond_total.out
    
-   # Plot conductivity vs energy
+   # Plot the real part vs energy
    gnuplot -e "plot 'cond_total.out' u 1:2 w l; pause -1"
 
 **Output format:**
 
 .. code-block:: text
 
-   # Energy (Ry)    σ (10⁷ Ω⁻¹m⁻¹)    Re[σ]    Im[σ]
-   -0.100          2.15             2.15      0.01
-   -0.090          4.82             4.82      0.02
-   -0.089 (E_F)    6.03             6.03      0.00
-   -0.088          5.71             5.71     -0.01
+   # cond_total.out (no header; energies relative to E_F)
+   E-E_F (Ry)      Re              Im
+
+   # response_total.out
+   # E-Ef [eV], Re, Im; units: ...
 
 **Expected runtime:** 10-20 minutes.
 

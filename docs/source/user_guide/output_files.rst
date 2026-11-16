@@ -13,62 +13,57 @@ settings. This section describes the main output files and how to interpret them
 Standard Output Files
 =====================
 
-**input_out.nml**
+**<label>_out.nml**
 
-Echo of all parameters used in the calculation. Useful for:
+One file per atom type (for example ``Fe_out.nml``). It is a Fortran namelist with the
+``&element`` and ``&par`` keys of that atom type (``mom``, ``lmom``, ``ql``, ``etot``, ...) at the
+end of the run. A later run reads it instead of ``<label>.nml`` (see ``fresh_start`` in ``&control``).
 
-- Verifying that input was read correctly
-- Reproducing a calculation
-- Documenting what parameters were used
-
-Format: Same as input file (Fortran namelist)
+Format: Same as the per-label input file (Fortran namelist)
 
 Example:
 
 .. code-block:: fortran
 
-   &control
-      nsp = 1,
+   &element
+      symbol='Fe',
       ...
    /
 
-**scf_convergence.dat** (or similar)
+**report.out**
 
-SCF iteration-by-iteration convergence data. Columns typically:
+Text report written at the end of the SCF run. It contains the total energy
+(``Total energy of system:``), the band energy, the spin and orbital moments per atom
+(``Spin moment of atom``, ``Orbital moment of atom``), the occupations and charge transfer per
+atom (``Occupation at atom``, ``Charge transfer at atom``), the Fermi energy
+(``Fermi energy:``) and the final mixing difference (``Total RMS Diff:``).
 
-.. code-block:: text
+**Standard output / log**
 
-   Iteration    ΔQ (Ry)    ΔE (Ry)    Wall Time (s)    Fermi Energy (Ry)
-   -----------  -------    -------    -----------      -----------------
-   1            0.523      -0.287     2.1              -0.125
-   2            0.156       0.089     1.9              -0.124
-   3            0.042       0.024     1.8              -0.123
-   ...
-
-Use this to:
-
-- Monitor convergence rate
-- Detect oscillations or divergence
-- Estimate total time needed
-- Extract final Fermi energy
+The SCF progress is written to standard output (redirect it with ``> output.log``). After each
+SCF iteration the code prints ``Not converged! Diff=`` followed by the mixing difference; the
+last iteration prints ``Converged!`` followed by the mixing difference.
 
 Density of States Output
 ========================
 
-If ``post_processing = 'dos'`` or similar:
+Real-space (recursion) calculations write, at the end of the DOS step of the SCF run:
 
-**dos.dat** (format: energy, total DOS, atom-resolved DOS)
+- ``totaldos.out`` - two columns: energy relative to the Fermi level (Ry), total DOS
+- ``magneticdos.out`` - columns: energy, ``dos_up``, ``dos_dw``, ``dos_mx``, ``dos_my``, ``dos_mz``, ``dos_nmag``
+- ``<symbol>_dos.out`` - columns: energy, site DOS total, up, down (one file per atom type)
+- ``<symbol>_orbital_dos.out`` - energy and orbital-resolved site DOS (one file per atom type)
 
-Columns:
+Columns of ``totaldos.out``:
 
 .. code-block:: text
 
-   Energy(Ry)   Total DOS      Atom 1 DOS   Atom 2 DOS   ...
-   -----------  -----------    -------      -------
-   -2.000       0.00000        0.00000      0.00000
-   -1.995       0.00234        0.00123      0.00111
-   -1.990       0.00289        0.00145      0.00144
-   ...
+   E-E_F (Ry)   Total DOS
+
+With ``post_processing = 'density_of_states'`` the k-space DOS is written to ``dos_kspace.dat``
+(header lines starting with ``#``, then ``Energy-E_F (Ry)`` and ``Total DOS``). A k-space SCF
+(``use_kspace = .true.``) writes ``density_of_states.dat``. If projected DOS is available,
+``projected_dos.dat`` is written as well.
 
 **Usage:**
 
@@ -83,33 +78,35 @@ Columns:
    import numpy as np
    import matplotlib.pyplot as plt
    
-   data = np.loadtxt('dos.dat')
+   data = np.loadtxt('totaldos.out')
    E = data[:, 0]
    dos = data[:, 1]
    
    plt.plot(E, dos)
-   plt.xlabel('Energy (Ry)')
+   plt.xlabel('E - E_F (Ry)')
    plt.ylabel('DOS')
    plt.show()
 
 Band Structure Output
 =====================
 
-If ``post_processing = 'bands'``:
+If ``post_processing = 'band_structure'``:
 
-**bands.dat** (or similar)
+**band_structure.dat**
 
-Usually contains energy bands along high-symmetry k-paths.
-
-Format depends on implementation, but typically:
+Energy bands along a k-path. Header lines start with ``#``; each data row has the k-path distance
+followed by all eigenvalues at that k-point:
 
 .. code-block:: text
 
-   k-point     Band 1      Band 2      Band 3      ...
-   -------     ------      ------      ------
-   0.000       -1.234      -0.567       0.891
-   0.010       -1.230      -0.560       0.895
-   ...
+   # Format: k_distance, eigenvalue_1, eigenvalue_2, ...
+
+**band_structure_kpath.dat**
+
+k-path information: k-path distance, ``kx, ky, kz`` and, at high-symmetry points, the label.
+
+With ``post_processing = 'bsf'`` the Bloch spectral function files are ``bsf.dat`` and
+``bsf_bands.dat``.
 
 **Plotting:**
 
@@ -118,25 +115,19 @@ Use standard band structure visualization tools.
 Magnetic Properties
 ===================
 
-If ``nsp > 1`` (magnetic calculation):
-
-**magnetization.dat** or similar
-
-Atom-resolved magnetic moments:
+Spin and orbital moments per atom are printed in ``report.out`` (they are not written to a
+separate file):
 
 .. code-block:: text
 
-   Atom    m_x        m_y        m_z       |m|
-   ----    -----      -----      -----     -----
-   1       0.0000     0.0000     2.234     2.234
-   2       0.0000     0.0000    -2.201     2.201
-   ...
+   Spin moment of atom   1:  2.234000
+   Spin moment projections of atom   1:  0.000000  0.000000  2.234000
+   Orbital moment of atom   1:  0.045000
 
 **Interpretation:**
 
-- :math:`m_z` is the z-component of magnetization
-- :math:`|m|` is total magnetic moment
-- Negative values indicate opposite spin direction
+- ``Spin moment of atom`` is the norm of the moment; the projections are its :math:`m_x, m_y, m_z` components
+- Negative :math:`m_z` indicates opposite spin direction
 
 **For non-collinear magnetism (nsp=3,4):**
 
@@ -147,17 +138,21 @@ Exchange Interactions
 
 If ``post_processing = 'exchange'``:
 
-**exchange.dat** or similar
+**jij.out**
 
-Magnetic exchange interactions:
+Magnetic exchange interactions, one row per pair. Columns: ``iz(i)``, ``iz(j)``, the three
+components of :math:`\mathbf{r}_j - \mathbf{r}_i`, ``jij``, and the distance :math:`|\mathbf{r}_i - \mathbf{r}_j|`:
 
 .. code-block:: text
 
-   Atom1  Atom2   Distance(Å)   J (mRy)    J/2 (mRy)
-   -----  -----   -----------   -------    ---------
-   1      2       2.834         -1.234     -0.617
-   1      3       4.006         -0.123     -0.062
-   ...
+   iz_i  iz_j   dx  dy  dz   J_ij   distance
+
+The file carries no header and does not state the unit of ``jij``. ``dij.out`` holds the
+Dzyaloshinskii-Moriya vector (same first five columns, three components, distance), ``aij.out`` the
+3x3 tensor ``aij`` (nine values) and ``jtens.out`` the exchange tensor. Further files named
+``jijso.out``, ``jijfo.out``, ``dijso.out``, ``dijfo.out``, ``aijso.out``, ``aijfo.out``,
+``jtensso.out``, ``jtensfo.out`` and ``*parts.out`` are written by other routines in
+``source/exchange.f90``.
 
 **Interpretation:**
 
@@ -176,51 +171,47 @@ Transport Properties
 
 If ``post_processing = 'conductivity'``:
 
-**conductivity_tensor.dat** or similar
+**cond_total.out**
 
-Electrical conductivity tensor as function of energy:
+Raw (bare-kernel) response of one tensor component, selected by ``v_alpha``, ``v_beta`` and
+``pol_alpha``, ``pol_beta``. No header; three columns (``'(3es16.6)'``):
 
 .. code-block:: text
 
-   Energy(Ry)   σ_xx      σ_yy      σ_zz     σ_xy (etc.)
-   -----------  ------    ------    ------   ------
-   -2.0         0.00      0.00      0.00     0.00
-   -1.9         0.023     0.023     0.021    0.001
-   ...
+   E-E_F (Ry)   Re   Im
+
+The energy is in Ry and the values are not converted to physical units.
+``cond_total_orb_real.out`` and ``cond_total_orb_im.out`` hold the orbital-resolved real and
+imaginary parts, and ``<symbol>_cond.out``, ``<symbol>_cond_orb_real.out`` and
+``<symbol>_cond_orb_im.out`` the per-atom-type contributions (``cond_calctype = 'per_type'``).
+
+**response_total.out**
+
+The same response converted to physical units. Header
+``# E-Ef [eV], Re, Im; units: ...`` followed by three columns, energy in eV.
+``<symbol>_response.out`` holds the per-type contributions, ``response_orbitals_real.out`` and
+``response_orbitals_imag.out`` the orbital contributions, and ``response_units.txt`` the units,
+directions and conversion factors used.
 
 **Interpretation:**
 
-- Diagonal elements: longitudinal conductivity
-- Off-diagonal elements: Hall conductivity, anomalous Hall effect
+- Which observable is computed (charge, spin or orbital current) is set by ``linear_out`` and ``linear_in`` in ``&control``
+- Off-diagonal components (Hall response) are selected with ``v_alpha`` and ``v_beta``
 - Sum over energies (with Fermi distribution) gives transport properties at temperature
 
-Charge Density Output
-=====================
+Charge Transfer and Occupations
+===============================
 
-If charge density output is requested:
-
-**charge_density.dat** or **charge.dat**
-
-Local charge density per atom or per orbital.
-
-Format:
-
-.. code-block:: text
-
-   Atom    Orbital    Charge (e)
-   ----    -------    ----------
-   1       s          0.750
-   1       p          0.990
-   1       d          0.245
-   2       s          0.750
-   ...
+``report.out`` lists, for each atom, ``Occupation at atom``, the up and down orbital occupations
+(``Up orbital occupation at atom``, ``Down orbital occupation at atom``) and
+``Charge transfer at atom``.
 
 Convergence Diagnostics
 =======================
 
 **Typical signs of good convergence:**
 
-- :math:`\Delta Q` decreases monotonically
+- The mixing difference (``Not converged! Diff=`` in the log, ``Total RMS Diff:`` in ``report.out``) decreases
 - Fermi energy stabilizes
 - Energy change becomes very small (< :math:`10^{-6}` Ry)
 - Usually achieved in 10-100 iterations
@@ -229,13 +220,12 @@ Convergence Diagnostics
 
 - Charge density oscillates
 - Energy increases in some iterations
-- :math:`\Delta Q` plateaus at high value
+- The mixing difference plateaus at a high value
 - Forces/torques don't decrease
 
 **Action if non-convergent:**
 
-- Reduce mixing parameter ``alpha`` (from 0.5 to 0.3)
-- Increase Broyden history length
+- Reduce mixing parameter ``beta`` (``&mix``)
 - Increase recursion cutoff (``llsp``, ``lld``)
 - Use coarser energy mesh initially, then refine
 - Check Hamiltonian parameters are reasonable
@@ -251,66 +241,41 @@ Reading and Plotting Output
    import matplotlib.pyplot as plt
    
    # Read DOS
-   dos_data = np.loadtxt('dos.dat')
+   dos_data = np.loadtxt('totaldos.out')
    energy = dos_data[:, 0]
    dos = dos_data[:, 1]
    
-   # Read convergence
-   scf_data = np.loadtxt('scf_convergence.dat', skiprows=1)
-   iterations = scf_data[:, 0]
-   dq = scf_data[:, 1]
-   
    # Plot
-   fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-   
-   axes[0].plot(energy, dos)
-   axes[0].set_xlabel('Energy (Ry)')
-   axes[0].set_ylabel('DOS')
-   axes[0].set_title('Density of States')
-   
-   axes[1].semilogy(iterations, dq)
-   axes[1].set_xlabel('Iteration')
-   axes[1].set_ylabel('ΔQ (Ry)')
-   axes[1].set_title('SCF Convergence')
-   
-   plt.tight_layout()
+   plt.plot(energy, dos)
+   plt.xlabel('E - E_F (Ry)')
+   plt.ylabel('DOS')
+   plt.title('Density of States')
    plt.show()
 
 Analyzing Magnetic Structure
 ============================
 
-**Extract magnetization:**
+**Extract the spin moments from report.out:**
 
 .. code-block:: python
 
-   mag_data = np.loadtxt('magnetization.dat')
-   m_z = mag_data[:, 3]  # z-component
-   m_mag = mag_data[:, 4] # magnitude
+   import re
    
-   # Check if system is ferromagnetic or antiferromagnetic
-   if np.all(np.sign(m_z[:-1]) == np.sign(m_z[1:])):
-       print("Ferromagnetic")
-   else:
-       print("Antiferromagnetic")
+   m_mag = []
+   with open('report.out') as f:
+       for line in f:
+           m = re.match(r'Spin moment of atom\s*\d+:\s*(\S+)', line)
+           if m:
+               m_mag.append(float(m.group(1)))
    
-   # Total magnetic moment
-   m_total = np.sum(m_mag)
-   print(f"Total moment: {m_total:.3f} μB")
+   print("Spin moments per atom:", m_mag)
 
 File Size and Storage
 =====================
 
-**Typical sizes for a single calculation:**
-
-- ``input_out.nml`` - 1-10 KB
-- ``scf_convergence.dat`` - 1-100 KB (depending on iterations)
-- ``dos.dat`` - 100 KB - 1 MB (depends on energy mesh)
-- ``bands.dat`` - varies widely
-- Other files - 1-10 MB typical
-
-**For multiple energy windows or temperatures:**
-
-Output files can be significantly larger; plan disk space accordingly.
+The size of the DOS, band-structure and response files grows with ``channels_ldos``, the number of
+k-points and the number of energy points. For multiple energy windows or temperatures, output
+files can be significantly larger; plan disk space accordingly.
 
 Provenance
 ==========
@@ -318,12 +283,11 @@ Provenance
 Output is generated by:
 
 - **Main output:** ``source/calculation.f90`` (overall workflow)
-- **SCF convergence:** ``source/self.f90`` (each iteration)
-- **DOS output:** ``source/density_of_states.f90``
-- **Band structure:** ``source/bands.f90``
+- **SCF log and report.out:** ``source/self.f90``
+- **Real-space DOS:** ``source/bands.f90``
+- **k-space DOS and band structure:** ``source/reciprocal_dos.f90``, ``source/reciprocal_bands.f90``
 - **Exchange:** ``source/exchange.f90``
 - **Conductivity:** ``source/conductivity.f90``
-- **Magnetic properties:** ``source/hamiltonian.f90``, related modules
 
 See Also
 ========

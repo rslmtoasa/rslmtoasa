@@ -82,8 +82,10 @@ the symmetric kernel is a global constant *if and only if* :math:`Q = 0`; at
 ``fccCu111_AB_misaligned`` — a negative control
 ------------------------------------------------
 
-Same geometry, but the input *declares* the two regions to sit on different
-absolute energy scales:
+Same geometry, but the two regions are declared to sit on different absolute
+energy scales. The live ``&charge`` block of the shipped ``input.nml`` contains
+only comments (``fermi_a`` and ``fermi_b`` appear only in comment lines), and
+with both unset the check is silent. Add the two keys to ``&charge``:
 
 .. code-block:: fortran
 
@@ -92,8 +94,8 @@ absolute energy scales:
    fermi_b = -0.109874    ! a lie: 20 mRy below it
    /
 
-while both are in fact the same parameter set. **This run is supposed to
-warn**, every iteration:
+while both regions are in fact the same parameter set. **With these keys the
+run is supposed to warn**, every iteration:
 
 .. code-block:: text
 
@@ -422,8 +424,7 @@ The Hamiltonian is *not* the cause: the on-site block and all 19 fcc
 neighbour hoppings are bit-identical across the bulk, impurity and layered
 routes for both orientations, and ``etot`` agrees to ~1e-8 Ry. The residual
 is downstream of the Hamiltonian and specific to the (111) normal. It is
-unexplained, deliberately pinned by the committed test reference rather than
-tolerated away, and tracked in ``tests/KNOWN_ISSUES.md``.
+unexplained. There is no entry for it in ``tests/KNOWN_ISSUES.md``.
 
 The examples on this page use (111) — the orientation with the known
 residual — because that is what the surface example they mirror uses. For the
@@ -504,4 +505,3 @@ See Also
 - ``docs/DECISIONS.md`` — archived design and rationale
 - ``docs/conventions/CONTRACT_FROZEN_REGION.md`` — what a parameter set must persist
   to be usable as a frozen region
-- ``tests/KNOWN_ISSUES.md`` — the (111) residual

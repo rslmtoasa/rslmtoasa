@@ -48,7 +48,7 @@ Input File Structure
 Each example uses three types of input files:
 
 1. **input.nml** - Main calculation parameters (lattice, energy, convergence, etc.)
-2. **lattice.nml** - Crystal structure (auto-generated or user-provided)
+2. **lattice.nml** - Crystal structure (user-provided; read when ``crystal_sym = 'file'``)
 3. **atom.nml** - Tight-binding parameters for each atom type (e.g., ``Fe.nml``, ``Si1.nml``)
 
 The following sections explain each example in detail.
@@ -90,14 +90,14 @@ Check that the final iterations show:
 
 .. code-block:: bash
 
-   grep "Total energy" input_out.nml | tail -5   # Should vary by < 0.001 Ry
-   grep "Total charge" *_out.nml                  # Should match valence electrons
-   grep "Fermi" input_out.nml | tail -5           # Should be stable to 0.001 Ry
+   grep "Total energy of system" report.out      # Compare between runs
+   grep "Charge transfer at atom" report.out     # Should be small
+   grep "Fermi energy" report.out                # Compare between runs
 
 **Common Issues:**
 
 - **SCF not converging:** Reduce ``beta``, increase ``nstep``
-- **Wrong total charge:** Adjust ``ct`` parameter or increase ``rc``
+- **Wrong total charge:** Increase ``rc`` or ``ct`` (neighbour cut radius)
 - **Slow performance:** Reduce ``lld`` or ``channels_ldos``, use OpenMP
 
 See Also
