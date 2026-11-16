@@ -1041,20 +1041,6 @@ contains
                end do
             end do
          end if
-         ! if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
-         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
-         !                       ’ ql_s_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
-         !                       ’ ql_s_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 2)), __FILE__, __LINE__)
-         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
-         !                       ’ ql_p_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 1))// &
-         !                       ’ ql_p_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 2)), __FILE__, __LINE__)
-         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
-         !                       ’ ql_d_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 1))// &
-         !                       ’ ql_d_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 2)), __FILE__, __LINE__)
-         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
-         !                       ’ ql_f_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 1))// &
-         !                       ’ ql_f_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
-         ! end if
       end do
 
       ! Rebuild full on-site LDM from Green-function occupations so LDA+U/Liechtenstein
@@ -2630,14 +2616,6 @@ contains
          call g_logger%info('Magnetic torque (mRy) on atom'//fmt('i4', na)// &
                             ' is '//fmt('f16.6', tx)//' '//fmt('f16.6', ty)//' '// &
                             fmt('f16.6', tz), __FILE__, __LINE__)
-
-         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic mom0 for atom ″, na, ″=″,this%symbolic_atom(plusbulk)%potential%mom0
-         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic mom1 for atom ″, na, ″=″, this%symbolic_atom(plusbulk)%potential%mom1
-         !print ´(a,i4,a, 3f12.6)´ , ″Field prefactors for atom ″, na, ″=″, pref_0, pref_1
-         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic force for atom ″, na, ″=″, I_loc
-         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic torque for atom ″, na, ″=″, tau_loc
-         !print ´(a,i4,a, 3f12.6)´ , ″Field prefactors for atom ″, na, ″=″, pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
-         !print ´(a,i4,a, 3f12.6)´ , ″Field prefactors for atom ″, na, ″=″, pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
       end do
    end subroutine calculate_magnetic_torques
 
