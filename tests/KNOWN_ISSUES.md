@@ -34,7 +34,7 @@ are not tracked here; see `docs/DECISIONS.md`.
 
 ### Long examples time out under `ctest -j4` — 2026-10-03
 - **Observed:** `Example_orbital_modern_bccFe` (about 480 s serial), `Example_exchange_bccFe_hoh` and `Example_exchange_conductivity_fccPt_hoh` hit
-  their 600-900 s limits under `ctest -j4`; serially they finish within the limits. Not investigated.
+  their 600-900 s limits under `ctest -j4`; serially they finish within the limits. Not investigated. **2026-11-16:** the named `_hoh` tests are no longer registered (`ctest -N`); the underlying behaviour was not re-checked.
 
 ### Example-suite etot tolerance is 5.8e-4 to 0.37 Ry — 2026-10-04
 - **Verified:** `_check_value` in `tests/run_test.py` fails a value only when both `abs_tol` and `rel_tol` are exceeded, so for etot of order 1e3 Ry
@@ -81,6 +81,7 @@ are not tracked here; see `docs/DECISIONS.md`.
   retired, archive tag) and `Val17GbtHarmonicGoldstone` (`tests/validation/val_gbt_harmonic.py`, script retired, at tag `archive/fable_v4b_gbt-2026-11-05`: canonical occupation N = 8.0069 against `|N-8| <
   1e-8`, and sin^2(theta) spread 10.39% against 5%). A later cone-angle remeasurement gives a 1.49% spread, so the Val17 status is not reconciled.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
+- **2026-11-16:** `Val04LdaUPhysics` is no longer registered and `val04_lda_u.py` is not in the tree; Val12 was not re-run.
 
 ## Fixed-potential and frozen-magnon (GBT) findings
 
@@ -107,8 +108,8 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Measured again (2026-11-10, real space, two-atom Fe cell, `nsp = 3`, block recursion, q = 0, U = 0, no `hoh`, one step, hand-built deck):** with `mom = +z, -z` on the two sites `gbt_single_q` gives E_F -0.069256 Ry and |m| 2.104043 muB against `periodic_nc` -0.043287 Ry and 2.179464 muB; with U = 2 eV and `hoh` the antiferromagnet under `gbt_single_q` reproduces the ferromagnet to all printed digits. Not traced.
 
 ### `cmplx` without `kind` rounds double-precision arguments to single in four places — 2026-10-18
-- **Read, not run:** `source/bands.f90:1366` and `:1444` (`cmplx(0.0_rp, res)`, Gauss-Legendre nodes), `source/green_block.f90:214`,
-  `source/hamiltonian_paoflow_io.f90:236` (PAOFLOW hoppings). Expected size about 1e-8 relative in the real-space Green-function quadrature. Not
+- **Read, not run:** `source/bands.f90:1639` and `:1717` (`cmplx(0.0_rp, res)`, Gauss-Legendre nodes), `source/green_block.f90:214`,
+  `source/hamiltonian_paoflow_io.f90:134` and `:235` (PAOFLOW hoppings; line numbers 2026-11-16). Expected size about 1e-8 relative in the real-space Green-function quadrature. Not
   measured; fixing changes reference values.
 
 ### Real-space LKAG exchange does not follow the full-ASA reference with Hamiltonian order — 2026-10-22
@@ -191,7 +192,7 @@ are not tracked here; see `docs/DECISIONS.md`.
 ### `SpinResponseOmpIdentity` fails in the CUDA/MKL build — 2026-10-21
 - **Measured:** `tests/spin_response/omp_identity.py` on `fe_bcc` reports differing `spin_response_q*.dat` files between 1 and 4 threads in the
   `build_gpu` binary. Not diagnosed; suspects: MKL threading of the CUDA build, and a library mismatch in that setup (binary linked to MKL 2026.2,
-  `LD_LIBRARY_PATH` at 2026.1).
+  `LD_LIBRARY_PATH` at 2026.1). **2026-11-16:** the named tests are no longer registered (`ctest -N`); the underlying behaviour was not re-checked.
 
 ### Stray double comma in the `USE_SAFE_ALLOC` branch of `recursion%restore_to_default` — 2026-11-11
 - **Read:** `source/recursion_core.f90`, `g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld,, this%lattice%nrec/))` has `,,`.
@@ -272,7 +273,7 @@ are not tracked here; see `docs/DECISIONS.md`.
   dynamic tr L peak (1.6 to 1.8 times Omega_RPA) and its maximum at the window edge for 68 of 94 q (eta = 2e-3 Ry, window +-0.06 Ry) were not
   examined; the Fe-style pole weight is not defined here.
 - **Verified:** `spin_swapped` follows the sign of the total d moment, +5e-14 to +2.5e-13 muB here; a flip on another compiler would change
-  `_state.dat` and fail `SpinResponseCrBaselineRepro`.
+  `_state.dat` and fail `SpinResponseCrBaselineRepro` (no longer registered, 2026-11-16).
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
 
@@ -315,7 +316,7 @@ the archive tags.
   run aborts in `update_fixed_u_residuals` (`source/self.f90:1843`), "Index '4' of dimension 2 of array `this%mix%_data%ldm_new` above upper bound 3".
   Not checked: Release behaviour, Val04 at `nsp = 1`.
 - Both tests were disabled (`DISABLED TRUE`, 2026-10-26). Either they move to `nsp = 1` after the bound is triaged, or the guard is extended once a
-  spinor-basis oracle exists; developer decision.
+  spinor-basis oracle exists; developer decision. **2026-11-16:** the named tests are no longer registered (`ctest -N`); the underlying behaviour was not re-checked.
 
 ### Co bulk U=0 non-finite — OPEN
 - **Verified:** RS records of the fixed Co bulk deck become non-finite after about 19-40 iterations at U=0; reproduces on `8b8f7ef`. A fixed Co block
@@ -475,11 +476,6 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Read:** `source/reciprocal_lifecycle.f90` `build_from_file` lists `total_electrons` in the namelist but neither seeds the local from the object before the read nor copies it back; the constructor always recomputes it from the valence charges. A value given in a deck is ignored.
 - **Proposal:** either wire it through (changes behaviour for decks that set it) or remove the key.
 
-### A read error in `&reciprocal` or `&kpath` falls back to defaults silently — 2026-11-15
-- **Read:** `source/reciprocal_lifecycle.f90` (about lines 352-363) logs "namelist not found ... using defaults" for any non-EOF `iostat`, so a misspelt key does not stop the run. The documented example in `docs/source/theory/kspace_modes.rst` (about line 305) sets `kspace_diagnostics`, which is not a key.
-- **Not verified:** whether keys read before the bad one keep their values (compiler-dependent).
-- **Proposal:** make a non-EOF error fatal, as in `&frozen_magnon` and `&spin_response`; fix the doc example.
-
 ### `explicit_texture` moment directions are frozen after the first build — 2026-11-15
 - **Read:** `prepare_explicit_texture_moments` in `source/hamiltonian_build.f90` returns early once `texture_moments` is allocated with at least `kk` columns; the array is only deallocated in the destructor and `restore_to_default`. Later SCF updates of `potential%mom` do not reach the Hamiltonian or CCOR in this mode.
 - **Verified:** no deck in `example/` or `tests/` sets `magnetic_representation = 'explicit_texture'`.
@@ -496,3 +492,15 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Measured:** Release, MPI ON, `-DENABLE_SPGLIB=OFF`: 13 quick tests fail (`Example_k_space_scf_*`, `Example_density_of_states_bccFe*`), for example `Example_k_space_scf_bccFe`: 9 of 18 values out of tolerance. Same 13 failures and counts at `origin/main_rc` (8d68cafb).
 - **Not checked:** whether the difference is only the k-mesh reduction without spglib (references were made with spglib) or a defect.
 - **Proposal:** decide whether these tests require spglib (skip them when it is off) or need spglib-off references; the developer owns that choice.
+
+### Damping total is scaled by the last pair's factor — 2026-11-16
+- **Read:** `source/exchange_dynamics.f90`, `calculate_gilbert_damping`: `damping-energy.out` writes `factor*total_damping`, where `total_damping` sums all pairs and `factor = -0.5/(pi*spin_i)` is that of the last pair. Equal to a per-pair sum only when all pairs share `spin_i` (one type).
+- **Not checked:** which normalisation is intended for several types. Developer decision.
+
+### `fort.*` files written by legacy routines — 2026-11-16
+- **Measured:** after a quick-tier run, `build_base/Testing` holds `fort.800` (136 directories), `fort.805` (135), `fort.99` (28), `fort.120` (8) and `fort.1122`/`fort.2122`/`fort.4122` (16, `recursion_haydock.f90` `recur_b`, one file per rank). Writers: `lattice_lifecycle.f90` (800), `lattice_cluster.f90` (805), `exchange.f90` (99), `charge.f90` (120), `recursion_haydock.f90` (1122+). All pre-AI; kept deliberately.
+- **Proposal:** remove or put behind a flag; developer decision.
+
+### `&reciprocal use_shift` is read and discarded — 2026-11-16
+- **Read:** `source/reciprocal_lifecycle.f90` sets `use_shift = .false.` after the read ("Derived from k_offset") and never copies it. Ten decks, three `tests/scf/cases.json` overrides, two test scripts and three reference `meta.json` files set it.
+- **Proposal:** remove the key together with those inputs (the reference metadata is developer-owned).
