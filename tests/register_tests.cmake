@@ -202,6 +202,9 @@ if(RUN_REG_TESTS)
   rslmto_add_test(NAME TransportBackend TIER standard TIMEOUT 900 LABELS transport regression
     COMMAND ${_pytest_env} "RSLMTO_EXE=${TestBinary}" "${PY}" -m pytest -q -p no:cacheprovider
       "${TestDIR}/regression/test_transport_backend.py")
+  rslmto_add_test(NAME ImpurityConductivityRoute TIER standard TIMEOUT 600 LABELS transport impurity regression
+    COMMAND ${_pytest_env} "${PY}" "${TestDIR}/regression/test_impurity_conductivity_route.py" "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/impurity_conductivity_route")
 endif()
 
 ##############################################################################################

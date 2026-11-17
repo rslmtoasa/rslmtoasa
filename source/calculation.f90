@@ -877,9 +877,12 @@ contains
       ! error bound (see docs/validation/route_agnostic_estimators.md).
       rec_moments = (trim(this%gf_route) == 'recursion')
       call g_kpm_profile%start('P_stack_setup')
+      ! Reuse the same geometry route that prepared this calculation. In
+      ! particular, calctype='I' with newclubulk must rebuild as I_bulk here,
+      ! not fall through to the surface-impurity route.
       call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
-                                         green_obj, bands_obj)
+                                         green_obj, bands_obj, this%pre_processing)
       call g_kpm_profile%stop('P_stack_setup')
       if (rec_moments) call recursion_obj%compute_moments_stochastic()
       if (.not. rec_moments) then
