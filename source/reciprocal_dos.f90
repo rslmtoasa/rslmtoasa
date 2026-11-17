@@ -55,6 +55,12 @@ contains
       if (present(total_electrons)) this%total_electrons = total_electrons
       if (present(auto_find_fermi)) this%auto_find_fermi = auto_find_fermi
 
+      if (.not. this%lattice%b3 .and. this%nk_mesh(3) == 1 .and. &
+          (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl')) then
+         call g_logger%fatal("calculate_density_of_states: dos_method='" // trim(this%dos_method) // &
+            "' is unsupported for a 2D mesh (b3=.false., nk3=1); use dos_method='gaussian'.", __FILE__, __LINE__)
+      end if
+
       ! Set output filename
       filename = 'density_of_states.dat'
       if (present(output_file)) filename = output_file

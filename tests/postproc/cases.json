@@ -558,6 +558,98 @@
       "tier": "quick"
     },
     {
+      "name": "Example_density_of_states_2d_tetrahedron_rejected",
+      "labels": [
+        "kspace",
+        "dos",
+        "2d",
+        "guard"
+      ],
+      "case": "../../../example/bulk/Graphene",
+      "timeout": 60,
+      "expect_fatal": "is unsupported for a 2D mesh (b3=.false., nk3=1); use dos_method='gaussian'.",
+      "namelists": {
+        "calculation": {
+          "post_processing": "density_of_states"
+        },
+        "lattice": {
+          "n1": 4,
+          "n2": 4,
+          "n3": 1,
+          "rc": 20.0,
+          "r2": 4.0
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "chebyshev",
+          "lld": 12
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 1,
+          "use_symmetry_reduction": false,
+          "dos_method": "tetrahedron",
+          "n_energy_points": 20
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "quick"
+    },
+    {
+      "name": "Example_density_of_states_2d_blochl_rejected",
+      "labels": [
+        "kspace",
+        "dos",
+        "2d",
+        "guard"
+      ],
+      "case": "../../../example/bulk/Graphene",
+      "timeout": 60,
+      "expect_fatal": "is unsupported for a 2D mesh (b3=.false., nk3=1); use dos_method='gaussian'.",
+      "namelists": {
+        "calculation": {
+          "post_processing": "density_of_states"
+        },
+        "lattice": {
+          "n1": 4,
+          "n2": 4,
+          "n3": 1,
+          "rc": 20.0,
+          "r2": 4.0
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "chebyshev",
+          "lld": 12
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 1,
+          "use_symmetry_reduction": false,
+          "dos_method": "blochl",
+          "n_energy_points": 20
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "quick"
+    },
+    {
       "name": "Example_density_of_states_bccFe_ccor_2c",
       "labels": [
         "kspace",
