@@ -4,7 +4,7 @@ Every registered test carries exactly one **tier** label. Select a tier with `ct
 
 | Tier | Contents | Budget (`-j4`) | Runs |
 |---|---|---|---|
-| `quick` | unit oracles, guards, short decks; each test <= 10 s | whole tier <= 2 min | build + every push, pull request, and before each commit |
+| `quick` | unit oracles, guards, short decks; each test <= 10 s | whole tier <= 2 min | build + every push to main, every pull request, and before each commit |
 | `standard` | backend regression, SCF/post-processing examples, GBT and spin-response runs, stored-reference rows | whole tier <= 20 min | nightly (`.github/workflows/tests.yml`) |
 | `validation` | long validation studies and three-route comparisons | none | manually (`workflow_dispatch`) |
 

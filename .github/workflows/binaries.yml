@@ -4,7 +4,11 @@
 name: Build binaries on all platforms (branch beta)
 
 #on: [release]
-on: [release, push, pull_request]
+on:
+  release:
+  push:
+    branches: [main]
+  pull_request:
 
 concurrency:
   group: binaries-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

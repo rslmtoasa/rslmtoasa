@@ -3,8 +3,10 @@ name: Example tests
 # Runs directly from the checked-out branch. The test workflow builds its own
 # binary, so it does not depend on another workflow's artifacts or definition.
 on:
-  # Every push and pull request: build plus the quick tier.
+  # Pushes to main and every pull request: build plus the quick tier. Pushes to a
+  # pull-request branch are covered by pull_request; an unfiltered push would run each twice.
   push:
+    branches: [main]
   pull_request:
   schedule:
     # 03:00 UTC nightly: quick and standard tiers on Linux + macOS.
