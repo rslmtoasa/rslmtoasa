@@ -3,8 +3,10 @@ name: Example tests
 # Runs directly from the checked-out branch. The test workflow builds its own
 # binary, so it does not depend on another workflow's artifacts or definition.
 on:
-  # Every push and pull request: build plus the quick tier.
+  # Pushes to main and every pull request: build plus the quick tier. Pushes to a
+  # pull-request branch are covered by pull_request; an unfiltered push would run each twice.
   push:
+    branches: [main]
   pull_request:
   schedule:
     # 03:00 UTC nightly: quick and standard tiers on Linux + macOS.
@@ -31,8 +33,8 @@ jobs:
       matrix:
         include:
           - { icon: "🐧", os: ubuntu-latest, arch: x86_64 }
-          - { icon: "🍎", os: macos-14,      arch: arm64  }
-          # macos-13 (x86_64 Intel) has been retired by GitHub
+          - { icon: "🍎", os: macos-15,      arch: arm64  }
+          # macos-14 (retired 2026-11-02) and macos-13 (x86_64 Intel) have been retired by GitHub
           # - { icon: "🍏", os: macos-13,      arch: x86_64 }
 
     runs-on: ${{ matrix.os }}
@@ -90,8 +92,9 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        # The GBT oracle/unit checks import NumPy in addition to f90nml.
-        run: pip install f90nml numpy
+        # The GBT oracle/unit checks import NumPy in addition to f90nml, and the
+        # TransportOperatorSource test runs under pytest.
+        run: pip install f90nml numpy pytest
 
       # -----------------------------------------------------------------------
       # Configure and build the checked-out source.
@@ -425,6 +428,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-numpy
             git
 
       - name: Install Python dependencies

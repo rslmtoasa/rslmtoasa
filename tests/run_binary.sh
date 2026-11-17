@@ -64,21 +64,32 @@ if [ "$mpi_procs" -gt 1 ]; then
         exit 3
     fi
 
+    # mpirun merges the ranks' output in chunks that can split a line, which breaks the log
+    # regex assertions. Each rank therefore writes its own file; they are joined below.
+    rank_cmd=(bash -c 'exec "$0" > "testrun.rank${OMPI_COMM_WORLD_RANK:-${PMI_RANK:-${PMIX_RANK:-0}}}.log" 2>&1' "$binary")
+    rm -f testrun.rank*.log
+
     launcher_version="$("$mpi_launcher" --version 2>&1 || true)"
     launcher_name="$(basename "$mpi_launcher")"
     # Debian/Ubuntu's mpirun.openmpi identifies the runtime as OpenRTE,
     # rather than printing the literal "Open MPI" in --version output.
     if [[ "$launcher_name" == "mpirun.openmpi" || "$launcher_name" == "mpiexec.openmpi" ]] ||
        printf '%s\n' "$launcher_version" | grep -Eqi 'Open MPI|OpenRTE'; then
-        run_cmd=("$mpi_launcher" --oversubscribe -n "$mpi_procs" "$binary")
+        run_cmd=("$mpi_launcher" --oversubscribe -n "$mpi_procs" "${rank_cmd[@]}")
     else
-        run_cmd=("$mpi_launcher" -n "$mpi_procs" "$binary")
+        run_cmd=("$mpi_launcher" -n "$mpi_procs" "${rank_cmd[@]}")
     fi
 
     set +e
-    OMP_NUM_THREADS=1 "${run_cmd[@]}" > testrun.log 2>&1
+    OMP_NUM_THREADS=1 "${run_cmd[@]}" > testrun.launcher.log 2>&1
     rc=$?
     set -e
+    # testrun.log: the launcher's own messages, then rank 0, 1, ... each in one piece.
+    cat testrun.launcher.log > testrun.log
+    for ((rank = 0; rank < mpi_procs; rank++)); do
+        if [ -f "testrun.rank${rank}.log" ]; then cat "testrun.rank${rank}.log" >> testrun.log; fi
+    done
+    rm -f testrun.launcher.log testrun.rank*.log
     if [ "$rc" -ne 0 ]; then
         echo "ERROR: launcher command failed with exit code ${rc}" >&2
         echo "--- testrun.log (tail -n 120) ---" >&2

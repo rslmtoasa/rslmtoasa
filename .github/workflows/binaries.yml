@@ -4,7 +4,11 @@
 name: Build binaries on all platforms (branch beta)
 
 #on: [release]
-on: [release, push, pull_request]
+on:
+  release:
+  push:
+    branches: [main]
+  pull_request:
 
 concurrency:
   group: binaries-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -17,8 +21,8 @@ jobs:
       matrix:
         include:
           - { icon: '🐧' , os: ubuntu-latest,  shell: bash, arch: x86_64 }
-          - { icon: '🍎' , os: macos-14,       shell: bash, arch: arm64 }
-          # macos-13 (x86_64 Intel) has been retired by GitHub
+          - { icon: '🍎' , os: macos-15,       shell: bash, arch: arm64 }
+          # macos-14 (retired 2026-11-02) and macos-13 (x86_64 Intel) have been retired by GitHub
           # - { icon: '🍏' , os: macos-13,       shell: bash, arch: x86_64 }
           - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
     runs-on: ${{ matrix.os }}

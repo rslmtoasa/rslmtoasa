@@ -12,12 +12,15 @@ are not tracked here; see `docs/DECISIONS.md`.
 
 ## Reference and tolerance questions
 
-### Bitwise sub-case of `UnitLdaULocalMoments` fails with `-march=native` on FMA hardware — 2026-11-05
-- **Verified:** sub-case `spinor_frame_kernel` (`test_hubbard_spinor_moments.f90`, check "(f) n = z vs the S4 z-block loop (bitwise)") gives
-  2.2e-16 against 0 on x86_64 Linux, gfortran 13, OpenBLAS, `-DENABLE_MARCH_NATIVE=ON`. It gives 0.0 with `-DENABLE_MARCH_NATIVE=OFF` (the CI
-  configuration, `.github/workflows/tests.yml`). The failure is the same on the unmodified `fable_v4c` (`9a87c09`) as test `UnitHubbardSpinorMoments`.
-- **Suspected, not diagnosed:** fused multiply-add contraction in two production routines (`correct_d_shell_moments_spinor` and the S4 z-block
-  loop) that sum in the same order but contract differently. The check is not loosened.
+### The n = z spinor kernel and the S4 z-block loop differ by one rounding step on some builds — 2026-11-05
+- **Verified:** sub-case `spinor_frame_kernel` (`test_hubbard_spinor_moments.f90`, check "(f) n = z vs the S4 z-block loop") gave 2.2e-16 against a bitwise
+  tolerance of 0 on x86_64 Linux, gfortran 13, OpenBLAS, `-DENABLE_MARCH_NATIVE=ON`, and 0.0 with `-DENABLE_MARCH_NATIVE=OFF`. The result was the same on the
+  unmodified `fable_v4c` (`9a87c09`) as test `UnitHubbardSpinorMoments`.
+- **Verified (2026-11-17, GitHub Actions `ubuntu-latest`, GNU Fortran 15.2.0, `-DENABLE_MARCH_NATIVE=OFF`, MPI ON):** 8.9e-16 against 0; the largest deviation among the
+  other checks of the sub-case is 8.9e-15 (`(f) global covariance`) against 1e-13.
+- **Owner decision, 2026-11-17:** the tolerance of this check is 1e-14, the level of its sibling checks, and the label no longer says bitwise.
+- **Suspected, not diagnosed:** fused multiply-add contraction in `correct_d_shell_moments_spinor` and the S4 z-block loop. That does not fit the CI build, because
+  `-DENABLE_MARCH_NATIVE=OFF` generates generic x86-64 code without FMA instructions; BLAS kernels selected at run time are another candidate. Neither was tested.
 
 ### LDA+U stored-reference rows: tolerances were set on the developer platform — 2026-11-05
 - **Verified (x86_64 Linux, gfortran 13, OpenBLAS, 4 steps, single thread):** `imp_rs_soc0` (RS-host impurity, nsp=2 with SOC = 0 against nsp=1) differs by
@@ -33,6 +36,18 @@ are not tracked here; see `docs/DECISIONS.md`.
   `linux-x86_64` variant) fails with max |delta| 6.71e-10 against 1e-10, identically at `origin/main_rc` (8d68cafb) and on `cleanup/rc-final`.
 - **Not diagnosed:** whether the 1e-6 impurity difference is only the documented local-mode transient amplification (see "RS +U transient") or a platform
   effect of the BLAS used. Owner decision needed: platform tolerance, or a different row.
+
+### Two-rank example output interleaves in `testrun.log` and breaks log-regex assertions — 2026-11-17
+- **Verified (one run, GitHub Actions `macos-15` arm64, Homebrew Open MPI):** `Example_k_space_scf_diamondSi_sp_tetrahedron_mpi` (2 ranks) fails in 1.49 s with
+  `log assertion pattern did not match testrun.log: k-space energy cross-checks:.*?DOS N=...`. The binary finished (`Calculation finished`, DOS N = 8.00001464,
+  deltaN = 1.4644E-05). In `testrun.log` the rank-0 record `k-space energy cross-checks: ... total-DOS EBAND= -4.10448330` is cut by a line from the other rank
+  (`calculate_band_moments: Using canonical/fixed Fermi level`) and continues on the next line. The regex is applied by `re.search` without `DOTALL`
+  (`tests/run_test.py`), so it cannot match across the break; it does match once the other rank's line is removed.
+- **Verified:** `tests/run_binary.sh` sends stdout and stderr of all ranks to one file; `root_info` prints on rank 0 only, other `g_logger%info` calls print on every rank
+  (many lines appear twice in the log).
+- **Suspected, not diagnosed:** `mpirun` forwards rank output in chunks that do not end on line boundaries. The same case passed on `ubuntu-latest`, so the failure is
+  probably timing dependent; one observation only.
+- **Not changed.** Owner decision needed: per-rank output files with `testrun.log` taken from rank 0, or a different capture; the assertion regex is not loosened.
 
 ### Long examples time out under `ctest -j4` — 2026-10-03
 - **Observed:** `Example_orbital_modern_bccFe` (about 480 s serial), `Example_exchange_bccFe_hoh` and `Example_exchange_conductivity_fccPt_hoh` hit
