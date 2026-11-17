@@ -38,6 +38,18 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not diagnosed:** whether the 1e-6 impurity difference is only the documented local-mode transient amplification (see "RS +U transient") or a platform
   effect of the BLAS used. Owner decision needed: platform tolerance, or a different row.
 
+### Two-rank example output interleaves in `testrun.log` and breaks log-regex assertions — 2026-11-17
+- **Verified (one run, GitHub Actions `macos-15` arm64, Homebrew Open MPI):** `Example_k_space_scf_diamondSi_sp_tetrahedron_mpi` (2 ranks) fails in 1.49 s with
+  `log assertion pattern did not match testrun.log: k-space energy cross-checks:.*?DOS N=...`. The binary finished (`Calculation finished`, DOS N = 8.00001464,
+  deltaN = 1.4644E-05). In `testrun.log` the rank-0 record `k-space energy cross-checks: ... total-DOS EBAND= -4.10448330` is cut by a line from the other rank
+  (`calculate_band_moments: Using canonical/fixed Fermi level`) and continues on the next line. The regex is applied by `re.search` without `DOTALL`
+  (`tests/run_test.py`), so it cannot match across the break; it does match once the other rank's line is removed.
+- **Verified:** `tests/run_binary.sh` sends stdout and stderr of all ranks to one file; `root_info` prints on rank 0 only, other `g_logger%info` calls print on every rank
+  (many lines appear twice in the log).
+- **Suspected, not diagnosed:** `mpirun` forwards rank output in chunks that do not end on line boundaries. The same case passed on `ubuntu-latest`, so the failure is
+  probably timing dependent; one observation only.
+- **Not changed.** Owner decision needed: per-rank output files with `testrun.log` taken from rank 0, or a different capture; the assertion regex is not loosened.
+
 ### Long examples time out under `ctest -j4` — 2026-10-03
 - **Observed:** `Example_orbital_modern_bccFe` (about 480 s serial), `Example_exchange_bccFe_hoh` and `Example_exchange_conductivity_fccPt_hoh` hit
   their 600-900 s limits under `ctest -j4`; serially they finish within the limits. Not investigated. **2026-11-16:** the named `_hoh` tests are no longer registered (`ctest -N`); the underlying behaviour was not re-checked.
