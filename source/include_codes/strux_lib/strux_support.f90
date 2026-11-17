@@ -18,7 +18,7 @@ module strux_support
 contains
 
 subroutine build_common_tables(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
-    nttab, ntab_arr, iax, cy, cg, indxcg, jcg)
+    nttab, ntab_arr, iax, cy, cg, indxcg, jcg, periodic)
 !> Purpose:
 !>   Build the common geometric and angular tables shared by the public drivers.
 !> Notes:
@@ -33,8 +33,9 @@ subroutine build_common_tables(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
     integer, intent(inout), allocatable :: iax(:,:)
     double precision, intent(out) :: cy(100), cg(1200)
     integer, intent(out) :: indxcg(350), jcg(1200)
+    logical, intent(in) :: periodic(3)
 
-    call strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, nttab, ntab_arr, iax)
+    call strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, nttab, ntab_arr, iax, periodic)
     call mkiaxd(nttab, lmxb, ips, iax)
     call scg(lmxcg_max, cg, indxcg, jcg)
     call sylmnc(cy, lmxcg_max)

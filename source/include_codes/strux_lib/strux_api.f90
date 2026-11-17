@@ -23,6 +23,8 @@ module strux_lib
         integer :: method = STRUX_METHOD_LMTO47
         logical :: auto_alpha = .false.
         logical :: want_sdot = .false.
+        ! Enabled translations along the three direct-lattice vectors.
+        logical :: periodic(3) = .true.
         integer :: lmaxw = -1
         ! 0 assembles every source row; a positive value restricts the solve
         ! to one source environment while retaining the global pair table.
@@ -96,19 +98,19 @@ subroutine strux_compute(opts, nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
         call strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, hcr, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
             result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
-            source_atom=opts%source_atom)
+            source_atom=opts%source_atom, periodic=opts%periodic)
     else if (opts%screening_mode == STRUX_LMTO47_IALPHA_SIGMA) then
         if (.not. present(hcr)) call strux_fail('strux_compute: hcr is required for LMTO47 screening_mode=sigma')
         call strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, hcr, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
             result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
-            source_atom=opts%source_atom)
+            source_atom=opts%source_atom, periodic=opts%periodic)
     else if (opts%auto_alpha) then
         if (.not. present(hcr)) call strux_fail('strux_compute: hcr is required when auto_alpha=.true.')
         call strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, hcr, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
             result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
-            source_atom=opts%source_atom)
+            source_atom=opts%source_atom, periodic=opts%periodic)
     else
         if (.not. present(alpha_in)) call strux_fail('strux_compute: alpha_in is required unless automatic LMTO47 screening is selected')
         allocate(alpha_l_used(0:nl-1, nspec))
@@ -116,7 +118,7 @@ subroutine strux_compute(opts, nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
         call strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, alpha_in, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
             result%nttab, iax_full, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
-            source_atom=opts%source_atom)
+            source_atom=opts%source_atom, periodic=opts%periodic)
     end if
 
     call move_alloc(alpha_l_used, result%alpha_l)
@@ -200,7 +202,7 @@ end subroutine pair_vector
 
 subroutine strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     rmt, alpha_in, avw, rmax, lmaxw, ldot, &
-    nttab, iax, alpha_out, s_out, sdot_out, hcr, screening_mode, source_atom)
+    nttab, iax, alpha_out, s_out, sdot_out, hcr, screening_mode, source_atom, periodic)
     implicit none
     integer,  intent(in)  :: nbas, nspec, nl, lmaxw
     logical,  intent(in)  :: ldot
@@ -215,6 +217,7 @@ subroutine strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     double precision, intent(inout), allocatable :: sdot_out(:,:,:)
     double precision, intent(in), optional :: hcr(nl, nspec)
     integer, intent(in), optional :: screening_mode, source_atom
+    logical, intent(in), optional :: periodic(3)
 
     integer :: nl2, ntab_arr(nbas+1)
     double precision :: cy(100), cg(1200), kap1(1)
@@ -222,15 +225,18 @@ subroutine strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     double precision, allocatable :: adot(:,:), tral(:,:,:), trad(:,:,:)
     double precision, allocatable :: bas_loc(:,:), rwats(:), plat_loc(:,:)
     double precision, allocatable :: s_work(:,:,:,:,:), sdot_work(:,:,:,:,:)
+    logical :: periodic_(3)
 
     if (ldot .and. .not. present(hcr)) then
         call strux_fail('strux_lmto47: manual-alpha Sdot requires hcr so LMTO47 derivative screening data can be built')
     end if
 
     nl2 = nl*nl
+    periodic_ = .true.
+    if (present(periodic)) periodic_ = periodic
     call validate_common_inputs('strux_lmto47', nbas, nspec, nl, avw, rmax)
     call build_common_tables(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
-        nttab, ntab_arr, iax, cy, cg, indxcg, jcg)
+        nttab, ntab_arr, iax, cy, cg, indxcg, jcg, periodic_)
 
     call strux_lmto47_screening_impl(nbas, nspec, nl, avw, ips, lmxb, rmt, alpha_in, &
         alpha_out, adot, tral, trad, hcr, screening_mode)
@@ -267,7 +273,7 @@ end subroutine strux_lmto47
 
 subroutine strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     rmt, hcr, avw, rmax, lmaxw, ldot, &
-    nttab, iax, alpha_l_out, alpha_out, s_out, sdot_out, screening_mode, source_atom)
+    nttab, iax, alpha_l_out, alpha_out, s_out, sdot_out, screening_mode, source_atom, periodic)
     implicit none
     integer,  intent(in)  :: nbas, nspec, nl, lmaxw
     logical,  intent(in)  :: ldot
@@ -282,6 +288,7 @@ subroutine strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     double precision, intent(inout), allocatable :: s_out(:,:,:)
     double precision, intent(inout), allocatable :: sdot_out(:,:,:)
     integer, intent(in), optional :: screening_mode, source_atom
+    logical, intent(in), optional :: periodic(3)
 
     integer :: nl2, ntab_arr(nbas+1)
     double precision :: cy(100), cg(1200), kap1(1)
@@ -289,11 +296,14 @@ subroutine strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     double precision, allocatable :: adot(:,:), tral(:,:,:), trad(:,:,:)
     double precision, allocatable :: bas_loc(:,:), rwats(:), plat_loc(:,:)
     double precision, allocatable :: s_work(:,:,:,:,:), sdot_work(:,:,:,:,:)
+    logical :: periodic_(3)
 
     nl2 = nl*nl
+    periodic_ = .true.
+    if (present(periodic)) periodic_ = periodic
     call validate_common_inputs('strux_lmto47_autoalpha', nbas, nspec, nl, avw, rmax)
     call build_common_tables(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
-        nttab, ntab_arr, iax, cy, cg, indxcg, jcg)
+        nttab, ntab_arr, iax, cy, cg, indxcg, jcg, periodic_)
     call strux_lmto47_autoalpha_screening_impl(nbas, nspec, nl, avw, ips, lmxb, rmt, hcr, &
         alpha_l_out, alpha_out, adot, tral, trad, screening_mode)
 

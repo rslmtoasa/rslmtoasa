@@ -4,6 +4,7 @@ program test_structure_constants_backends
    use basis_mod, only: basis_init
    use control_mod, only: control
    use lattice_mod, only: lattice
+   use strux_lib, only: strux_compute, strux_options, strux_result, STRUX_LMTO47_IALPHA_MANUAL
    use timer_mod, only: g_timer, timer
    implicit none
 
@@ -44,6 +45,7 @@ program test_structure_constants_backends
    call run_basis_case(1, 'sp')
    call run_basis_case(2, 'spd')
    call run_custom_supercell_case()
+   call run_periodic_mask_case()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -75,6 +77,67 @@ contains
       call compare_equivalent_sites('custom legacy', legacy)
       call compare_equivalent_sites('custom strux', strux)
    end subroutine run_custom_supercell_case
+
+   subroutine run_periodic_mask_case()
+      type(strux_options) :: opts
+      type(strux_result) :: result
+      real(8) :: plat(3, 3), pos(3, 2), rmt(1), alpha(0:0, 1)
+      integer :: ips(2), lmxb(1), axis
+      character(len=8), parameter :: axis_name(3) = ['a1      ', 'a2      ', 'a3      ']
+      logical :: periodic(3)
+
+      ! A two-site unit cell with short vectors makes the image table explicit.
+      ! The independent expectation is geometric: a disabled axis has only
+      ! zero translation indices, while its enabled control has a +/- image.
+      plat = 0.0d0
+      plat(1, 1) = 1.0d0
+      plat(2, 2) = 1.0d0
+      plat(3, 3) = 1.0d0
+      pos = 0.0d0
+      pos(1, 2) = 0.5d0
+      ips = [1, 1]
+      lmxb = [0]
+      rmt = [1.0d0]
+      alpha = alpha_legacy(1)
+
+      opts%pair_cutoff = 1.01d0
+      opts%solve_cutoff = 1.01d0
+      opts%screening_mode = STRUX_LMTO47_IALPHA_MANUAL
+
+      periodic = .true.
+      opts%periodic = periodic
+      call run_strux_table(opts, plat, pos, ips, lmxb, rmt, alpha, result)
+      do axis = 1, 3
+         call require(any(result%iax(axis + 2, :) == 1) .and. any(result%iax(axis + 2, :) == -1), &
+            'periodic control contains +/- '//trim(axis_name(axis))//' image')
+      end do
+      call release_strux_result(result)
+
+      do axis = 1, 3
+         periodic = .true.
+         periodic(axis) = .false.
+         opts%periodic = periodic
+         call run_strux_table(opts, plat, pos, ips, lmxb, rmt, alpha, result)
+         call require(all(result%iax(axis + 2, :) == 0), &
+            'disabled '//trim(axis_name(axis))//' excludes translated pair blocks')
+         call release_strux_result(result)
+      end do
+   end subroutine run_periodic_mask_case
+
+   subroutine run_strux_table(opts, plat, pos, ips, lmxb, rmt, alpha, result)
+      type(strux_options), intent(in) :: opts
+      real(8), intent(in) :: plat(3, 3), pos(3, 2), rmt(1), alpha(0:0, 1)
+      integer, intent(in) :: ips(2), lmxb(1)
+      type(strux_result), intent(out) :: result
+
+      call strux_compute(opts, 2, 1, 1, 1.0d0, plat, pos, ips, lmxb, 1.0d0, rmt, result, alpha_in=alpha)
+   end subroutine run_strux_table
+
+   subroutine release_strux_result(result)
+      type(strux_result), intent(inout) :: result
+
+      deallocate(result%iax, result%alpha_l, result%alpha, result%s, result%sdot)
+   end subroutine release_strux_result
 
    subroutine run_backend(lmax, basis_name, backend_name, state)
       integer, intent(in) :: lmax

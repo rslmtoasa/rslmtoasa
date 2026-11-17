@@ -79,7 +79,7 @@ module strux_pair_table
 contains
 
 subroutine strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
-    nttab, ntab, iax)
+    nttab, ntab, iax, periodic)
 !> Purpose:
 !>   Enumerate all pair blocks within the real-space cutoff.
 !> Notes:
@@ -93,6 +93,7 @@ subroutine strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
     integer,  intent(out) :: nttab
     integer,  intent(out) :: ntab(nbas+1)
     integer,  intent(inout), allocatable :: iax(:,:)
+    logical, intent(in), optional :: periodic(3)
 
     integer,  parameter :: niax = 10
     integer,  parameter :: nmax_init = 50000
@@ -103,6 +104,10 @@ subroutine strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
     integer, allocatable :: iax_tmp(:,:)
     integer, allocatable :: npair_site(:)
     integer :: nalloc
+    logical :: periodic_(3)
+
+    periodic_ = .true.
+    if (present(periodic)) periodic_ = periodic
 
     do i = 1, 3
         do j = 1, 3
@@ -115,6 +120,15 @@ subroutine strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
     n2hi = ceiling(rmax / sqrt(avec(1,2)**2 + avec(2,2)**2 + avec(3,2)**2) + 1)
     n3hi = ceiling(rmax / sqrt(avec(1,3)**2 + avec(2,3)**2 + avec(3,3)**2) + 1)
     n1lo = -n1hi;  n2lo = -n2hi;  n3lo = -n3hi
+    if (.not. periodic_(1)) then
+        n1lo = 0; n1hi = 0
+    end if
+    if (.not. periodic_(2)) then
+        n2lo = 0; n2hi = 0
+    end if
+    if (.not. periodic_(3)) then
+        n3lo = 0; n3hi = 0
+    end if
 
     nalloc = nmax_init
     allocate(iax_tmp(niax, nalloc))

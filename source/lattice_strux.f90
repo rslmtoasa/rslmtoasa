@@ -390,6 +390,11 @@ contains
       ! Surface builds (calctype 'S') also leave a finite cluster in this%cr
       ! although crystal_sym names the bulk lattice.
       finite_cluster = .not. this%pbc .and. (trim(lower(this%crystal_sym)) == 'file' .or. this%control%calctype == 'S')
+      if (this%pbc) then
+         opts%periodic = [this%b1, this%b2, this%b3]
+      else
+         opts%periodic = .not. finite_cluster
+      end if
 
       if (finite_cluster) then
          ! A non-periodic lattice has already been expanded into the finite
