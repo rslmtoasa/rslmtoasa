@@ -1,8 +1,9 @@
 # Build artifacts
 /build/
-/build_*/
+/build*/
 /CMakeFiles/
 /CMakeCache.txt
+/source/CMakeCache.txt
 /cmake_install.cmake
 /CPackConfig.cmake
 /CPackSourceConfig.cmake
@@ -19,8 +20,19 @@ rslmto.x
 *.mod
 
 # Test generated files and logs
+**/fort.*
 **/data.nml
 **/testrun.log
+**/clust
+**/mad.mat
+**/sbar
+**/view.sbar
+**/str.out
+**/map
+
+# Per-iteration SCF output; examples may retain curated copies.
+/tests/**/Fe_scf.nml
+
 
 # CTest / Testing folders
 /Testing/
@@ -55,6 +67,15 @@ pip-wheel-metadata/
 # Jupyter
 .ipynb_checkpoints
 
+# Sphinx documentation build output
+/docs/_build/
+
 # Logs
 *.log
 *.out
+
+# Generated calculation/benchmark results
+/results/
+
+# Small tracked native LR oracle; the test reads this historical two-row file.
+!tests/lr_baseline/cases/static_lkag/jij.out

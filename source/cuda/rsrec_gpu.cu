@@ -1,0 +1,3352 @@
+/* ===========================================================================
+ * rsrec_gpu.cu -- CUDA implementation of rsrec.h (v3)
+ *
+ * Strategy (general GPUs; HPC parts A100/H100 run FP64 at 1/2 FP32,
+ * GeForce/RTX-A at 1/64 -- both are served):
+ *
+ *   matvec     -> ONE fused templated kernel for BOTH precisions:
+ *                 template<CT, NB, TC>, NB in {2, 8, 18, 32}
+ *                 (s/sp/spd/spdf x 2 spinors), dynamic fallback otherwise.
+ *                 Padded shared memory (LDS = NB+1 for even NB: conflict-
+ *                 free column-strided reads), fully unrolled inner product,
+ *                 register tiling TC = 2 columns/thread for NB >= 16,
+ *                 column slabs keep dynamic shared <= 40 KB at any nrhs.
+ *                 Chebyshev recurrence and (y - b x)/a shift fused into the
+ *                 epilogue: zero extra field passes.
+ *                 The per-shell cublasZgemmBatched pointer-array matvec is
+ *                 REMOVED: 10-30% tiny-GEMM efficiency + per-shell output
+ *                 re-read made it dominated on every architecture.
+ *   layout     -> ALL drivers use site-major psi: (ld = nb*kk) x nrhs
+ *                 column-major. Every block reduction sum_k A_k^H B_k is
+ *                 ONE tall-skinny GEMM (Zgemm / Cgemm3m) and every right-
+ *                 multiply psi*M is ONE (ld x nb x nb) GEMM with pointer
+ *                 swap (no copy-back, no batched scratch, no gemv, no
+ *                 atomics in hot paths).
+ *   batching   -> rsrec_chebyshev_moments_batch runs several starting
+ *                 states as extra RHS columns of the same recurrence:
+ *                 H-block loads amortize over nstates (cheapest remaining
+ *                 speedup; directly serves the J_ij exchange driver).
+ *   precision  -> fp32 Chebyshev engine by default (KPM-safe: RMP 78, 275;
+ *                 KITE/GPUQT practice), fp64 via rsrec_set_precision(1).
+ *                 Lanczos drivers always fp64; the nb x nb eig-sqrt stays
+ *                 on host LAPACK zheev, bit-comparable with crecal_b.
+ *   L2         -> per-type bulk blocks pinned in the L2 persistence window
+ *                 (CUDA >= 11) so psi streaming cannot evict them.
+ *   structured -> cuFFT stencil + correction backend retained (fp64,
+ *                 nrhs == nb), adapted to the site-major layout.
+ *
+ * Build:  nvcc -O3 -arch=native -Xcompiler -fPIC -shared rsrec_gpu.cu \
+ *              -o librsrec_gpu.so -lcublas -lcufft -llapack
+ * =========================================================================== */
+#include "rsrec.h"
+
+#include <cublas_v2.h>
+#include <cufft.h>
+#include <cuComplex.h>
+#include <cuda_runtime.h>
+
+#include <complex>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <algorithm>
+#include <chrono>
+#include <string>
+#include <vector>
+
+typedef cuDoubleComplex zc;
+typedef cuComplex fc;
+typedef std::complex<double> cplx;
+
+extern "C" void zheev_(const char *, const char *, const int *, cplx *,
+                       const int *, double *, cplx *, const int *, double *,
+                       int *);
+
+static std::string g_err;
+extern "C" const char *rsrec_last_error(void) { return g_err.c_str(); }
+#define FAIL(msg) do { g_err = (msg); return 1; } while (0)
+#define CUCHK(x) do { cudaError_t e = (x); if (e != cudaSuccess) { \
+    g_err = std::string("CUDA: ") + cudaGetErrorString(e); return 1; } } while (0)
+#define CBCHK(x) do { if ((x) != CUBLAS_STATUS_SUCCESS) \
+    { g_err = "cuBLAS error"; return 1; } } while (0)
+
+/* --------------------------------------------------------------------------
+ * Context
+ * ------------------------------------------------------------------------ */
+struct rsrec_ctx {
+    int kk, nb, nnmax, ntype, nmax, device;
+
+    zc *d_ee = nullptr, *d_hall = nullptr, *d_va = nullptr, *d_vb = nullptr;
+    int *d_nn = nullptr, *d_iz = nullptr;
+    bool have_h = false, have_v = false;
+    int ham_ver = 0;
+
+    /* Orthogonalisation (hoh) operands for the two-sweep apply. Uploaded only
+     * when set_hamiltonian receives eeo/hallo/enim. d_ee_bare/d_hall_bare are
+     * the BARE h (no lsham fold), d_eeo/d_hallo the eeo/hallo factor, and
+     * d_hons the on-site (enim + lsham) per type (block-diagonal). The combine
+     *   y = ( h*x - eeo*(h*x) + hons*x - b*x ) / a
+     * mirrors ham_hoh_vec_matmul. Stored UNSCALED (raw); the 1/a and -b*I
+     * scaling is applied in the combine kernel. f_* are fp32 mirrors used by
+     * the default fp32 Chebyshev path (raw down-conversion, no scaling).     */
+    zc *d_ee_bare = nullptr, *d_hall_bare = nullptr;
+    zc *d_eeo = nullptr, *d_hallo = nullptr, *d_hons = nullptr;
+    fc *f_ee_bare = nullptr, *f_hall_bare = nullptr;
+    fc *f_eeo = nullptr, *f_hallo = nullptr, *f_hons = nullptr;
+    int f_hoh_ver = -1;
+    bool have_hoh = false;
+
+    /* ccor_2c operand for the hoh apply (CC*x, added to the on-site term):
+     * CC' = eecc/hallcc with the on-site (enim + lsham) of the site's type
+     * added into shell 1, so one step_apply gives o = CC'*x. Raw, like the
+     * other hoh operands. Present only when set_hamiltonian received eecc.   */
+    zc *d_cc_ee = nullptr, *d_cc_hall = nullptr;
+    fc *f_cc_ee = nullptr, *f_cc_hall = nullptr;
+    bool have_cc = false;
+
+    /* Velocity orthogonalisation operators for the hoh two-sweep velocity apply
+     * (out = v*psi - vo*(h_bare*psi); vo on-site shell-1 is zeroed on upload to
+     * match velo_hoh_vec_matmul). fp32 mirrors of v_a/v_b/vo_a/vo_b for the
+     * default fp32 path. */
+    zc *d_voa = nullptr, *d_vob = nullptr;
+    bool have_vo = false;
+    fc *f_va = nullptr, *f_vb = nullptr, *f_voa = nullptr, *f_vob = nullptr;
+    int f_vel_ver = -1;
+    int vel_ver = 0;
+
+    int cheb_prec = 0;                       /* 0 = fp32 (default), 1 = fp64 */
+    fc *f_ee = nullptr, *f_hall = nullptr;   /* (H - b)/a fp32 copies        */
+    double f_a = 0.0, f_b = 0.0;
+    int f_ver = -1;
+
+    /* Last stochastic transport request.  These are intentionally request-
+     * local rather than cumulative: the Fortran transport loop records one
+     * profile interval per reference state. */
+    double stoch_h2d_s = 0.0, stoch_cheb_s = 0.0, stoch_d2h_s = 0.0;
+    double stoch_conversion_s = 0.0;
+    double stoch_mu_pack_s = 0.0;
+    long long stoch_h2d_bytes = 0, stoch_d2h_bytes = 0;
+    long long stoch_mu_pack_bytes = 0;
+
+    /* Narrow transport residency contract. Each entry owns only the packed
+     * diagonal U(K,nb), never a raw pointer exposed to Fortran. Hamiltonian,
+     * velocity, precision, shape, or an explicit clear invalidates entries. */
+    struct resident_u {
+        void *u = nullptr;
+        size_t bytes = 0;
+        int trace_index = 0;
+        int moments = 0;
+        int precision = 0;
+    };
+    std::vector<resident_u> resident_moments;
+
+    /* Capacity-owned stochastic transport workspace.  The moment driver is
+     * called once per trace/projector, so these buffers deliberately live at
+     * context lifetime rather than request lifetime.  Capacity only grows;
+     * changing lld or precision reuses the existing allocation when possible. */
+    struct stochastic_workspace {
+        void *left = nullptr, *dmu = nullptr, *R = nullptr;
+        void *w0 = nullptr, *w1 = nullptr, *w2 = nullptr;
+        void *ht = nullptr, *he = nullptr, *ho = nullptr, *vtmp = nullptr;
+        void *stage = nullptr;
+        size_t field_bytes = 0;
+        size_t left_bytes = 0;
+        size_t mu_bytes = 0;
+        size_t stage_bytes = 0;
+        std::vector<zc> host_moments64;
+        std::vector<fc> host_moments32;
+    } stoch_workspace;
+
+    /* site-major scratch fields, each ld*nb cplx (single-state size)        */
+    zc *d_s0 = nullptr, *d_s1 = nullptr, *d_s2 = nullptr, *d_s3 = nullptr;
+    zc *d_blk = nullptr;
+    double *d_col = nullptr;
+    cublasHandle_t blas = nullptr;
+
+    /* structured (cuFFT stencil + correction) path                          */
+    bool use_struct = false;
+    int t_ref = 0, nshell_ref = 0;
+    int N[3] = {0, 0, 0}, Np[3] = {0, 0, 0};
+    size_t Npc = 0;
+    std::vector<int> roff;
+    int *d_gcell = nullptr;
+    zc *d_gin = nullptr, *d_gw = nullptr;
+    zc *d_Hq = nullptr, *d_VAq = nullptr, *d_VBq = nullptr;
+    zc *d_negW = nullptr;
+    cufftHandle fft_plan = 0;
+    bool have_plan = false;
+    std::vector<int> cg_off;
+    int *d_c_atom = nullptr, *d_c_nbr = nullptr;
+    const zc **d_cA_H = nullptr, **d_cA_VA = nullptr, **d_cA_VB = nullptr;
+    const zc **d_cB = nullptr;
+    zc **d_cC = nullptr;
+    size_t c_nnz = 0;
+};
+
+static inline double host_seconds() {
+    using clock = std::chrono::steady_clock;
+    return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+}
+
+static inline size_t fieldsz(const rsrec_ctx *c) {
+    return (size_t)c->nb * c->nb * c->kk;
+}
+
+static int grow_stochastic_buffer(void **ptr, size_t *capacity, size_t bytes,
+                                  const char *name) {
+    if (*ptr && *capacity >= bytes) return 0;
+    void *replacement = nullptr;
+    const cudaError_t status = cudaMalloc(&replacement, bytes);
+    if (status != cudaSuccess) {
+        g_err = std::string("stochastic workspace ") + name + ": " +
+                cudaGetErrorString(status);
+        return 1;
+    }
+    if (*ptr) cudaFree(*ptr);
+    *ptr = replacement;
+    *capacity = bytes;
+    return 0;
+}
+
+static std::vector<zc> &stochastic_host_moments(
+    rsrec_ctx::stochastic_workspace *ws, zc *) {
+    return ws->host_moments64;
+}
+
+static std::vector<fc> &stochastic_host_moments(
+    rsrec_ctx::stochastic_workspace *ws, fc *) {
+    return ws->host_moments32;
+}
+
+static void release_stochastic_workspace(rsrec_ctx::stochastic_workspace *ws) {
+    if (!ws) return;
+    for (void *p : {ws->left, ws->dmu, ws->R, ws->w0, ws->w1, ws->w2,
+                    ws->ht, ws->he, ws->ho, ws->vtmp, ws->stage})
+        if (p) cudaFree(p);
+    *ws = rsrec_ctx::stochastic_workspace();
+}
+
+static void clear_resident_moments(rsrec_ctx *c) {
+    if (!c) return;
+    for (auto &entry : c->resident_moments)
+        if (entry.u) cudaFree(entry.u);
+    c->resident_moments.clear();
+}
+
+template <class CT>
+static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh,
+                                       int nstates) {
+    auto *ws = &c->stoch_workspace;
+    if (nstates < 1) FAIL("stochastic workspace: nstates must be positive");
+    const size_t nfield = fieldsz(c) * (size_t)nstates;
+    const size_t field_bytes = nfield * sizeof(CT);
+    const size_t left_bytes = (size_t)lld * field_bytes;
+    const size_t mu_bytes = (size_t)c->nb * c->nb * (size_t)lld * lld * nstates * sizeof(CT);
+    const size_t stage_bytes = nfield * sizeof(zc);
+
+    /* Capacity-aware preflight. Existing allocations are reused, while a
+     * larger request is rejected before a sequence of cudaMalloc calls can
+     * leave the context partially grown. The 90% guard leaves room for the
+     * resident diagonal moments and CUDA runtime workspaces. */
+    size_t freeb = 0, totalb = 0;
+    CUCHK(cudaMemGetInfo(&freeb, &totalb));
+    const size_t required = (do_hoh ? 8 : 4) * field_bytes + left_bytes +
+                            mu_bytes + stage_bytes;
+    const bool field_growth = ws->field_bytes < field_bytes;
+    const bool needs_growth = !ws->w0 || !ws->w1 || !ws->w2 || !ws->R ||
+                              field_growth || !ws->left || ws->left_bytes < left_bytes ||
+                              !ws->dmu || ws->mu_bytes < mu_bytes ||
+                              !ws->stage || ws->stage_bytes < stage_bytes;
+    if (needs_growth && required > freeb * 9 / 10)
+        FAIL("stochastic workspace does not fit; reduce gpu_stochastic_block or cond_ll");
+
+    /* field_bytes is shared as the capacity token for the same-sized
+     * recurrence/operator buffers.  If the request grows, invalidate the
+     * whole set before allocating the replacement set; growing only w0 would
+     * falsely make the old w1/w2/R allocations look large enough. */
+    if (field_growth) {
+        for (void **p : {&ws->w0, &ws->w1, &ws->w2, &ws->R,
+                         &ws->ht, &ws->he, &ws->ho, &ws->vtmp})
+            if (*p) { cudaFree(*p); *p = nullptr; }
+        ws->field_bytes = 0;
+    }
+
+    if (grow_stochastic_buffer(&ws->w0, &ws->field_bytes, field_bytes, "w0") ||
+        grow_stochastic_buffer(&ws->w1, &ws->field_bytes, field_bytes, "w1") ||
+        grow_stochastic_buffer(&ws->w2, &ws->field_bytes, field_bytes, "w2") ||
+        grow_stochastic_buffer(&ws->R, &ws->field_bytes, field_bytes, "R") ||
+        grow_stochastic_buffer(&ws->left, &ws->left_bytes, left_bytes, "left") ||
+        grow_stochastic_buffer(&ws->dmu, &ws->mu_bytes, mu_bytes, "mu_nm") ||
+        grow_stochastic_buffer(&ws->stage, &ws->stage_bytes, stage_bytes, "host_stage"))
+        return 1;
+
+    if (do_hoh &&
+        (grow_stochastic_buffer(&ws->ht, &ws->field_bytes, field_bytes, "ht") ||
+         grow_stochastic_buffer(&ws->he, &ws->field_bytes, field_bytes, "he") ||
+         grow_stochastic_buffer(&ws->ho, &ws->field_bytes, field_bytes, "ho") ||
+         grow_stochastic_buffer(&ws->vtmp, &ws->field_bytes, field_bytes, "vtmp")))
+        return 1;
+
+    stochastic_host_moments(ws, static_cast<CT *>(nullptr)).resize(
+        mu_bytes / sizeof(CT));
+    return 0;
+}
+
+static int ensure_structured_stochastic_workspace(rsrec_ctx *c, int lld) {
+    auto *ws = &c->stoch_workspace;
+    const size_t field_bytes = fieldsz(c) * sizeof(zc);
+    const size_t left_bytes = (size_t)lld * field_bytes;
+    const size_t mu_bytes = (size_t)c->nb * c->nb * (size_t)lld * lld * sizeof(zc);
+    if (grow_stochastic_buffer(&ws->R, &ws->field_bytes, field_bytes, "structured R") ||
+        grow_stochastic_buffer(&ws->left, &ws->left_bytes, left_bytes, "structured left") ||
+        grow_stochastic_buffer(&ws->dmu, &ws->mu_bytes, mu_bytes, "structured mu_nm"))
+        return 1;
+    return 0;
+}
+
+template <class CT>
+static int retain_transport_diagonal(rsrec_ctx *c, CT *dmu, int moments,
+                                      int trace_index) {
+    if (trace_index < 1) FAIL("resident stochastic moments: trace index must be positive");
+    const size_t K = (size_t)moments * moments;
+    const size_t bytes = K * (size_t)c->nb * sizeof(CT);
+
+    if ((int)c->resident_moments.size() < trace_index)
+        c->resident_moments.resize(trace_index);
+    auto &entry = c->resident_moments[(size_t)trace_index - 1];
+    if (entry.u) cudaFree(entry.u);
+    entry = rsrec_ctx::resident_u();
+    CUCHK(cudaMalloc(&entry.u, bytes));
+    entry.bytes = bytes;
+    entry.trace_index = trace_index;
+    entry.moments = moments;
+    entry.precision = (sizeof(CT) == sizeof(fc)) ? 0 : 1;
+
+    const int tpb = 256;
+    const size_t total = K * (size_t)c->nb;
+    const double start = host_seconds();
+    k_pack_transport_diagonal<<<(int)((total + tpb - 1) / tpb), tpb>>>(
+        dmu, moments, c->nb, static_cast<CT *>(entry.u));
+    CUCHK(cudaGetLastError());
+    CUCHK(cudaDeviceSynchronize());
+    c->stoch_mu_pack_s += host_seconds() - start;
+    c->stoch_mu_pack_bytes += (long long)bytes;
+    return 0;
+}
+
+extern "C" void rsrec_destroy(rsrec_ctx *c) {
+    if (!c) return;
+    clear_resident_moments(c);
+    release_stochastic_workspace(&c->stoch_workspace);
+    for (void *p : {(void *)c->d_ee, (void *)c->d_hall, (void *)c->d_va,
+                    (void *)c->d_vb, (void *)c->d_s0, (void *)c->d_s1,
+                    (void *)c->d_s2, (void *)c->d_s3, (void *)c->d_blk,
+                    (void *)c->d_nn, (void *)c->d_iz, (void *)c->f_ee,
+                    (void *)c->f_hall, (void *)c->d_gcell, (void *)c->d_gin,
+                    (void *)c->d_gw, (void *)c->d_Hq, (void *)c->d_VAq,
+                    (void *)c->d_VBq, (void *)c->d_negW, (void *)c->d_c_atom,
+                    (void *)c->d_c_nbr, (void *)c->d_cA_H,
+                    (void *)c->d_cA_VA, (void *)c->d_cA_VB, (void *)c->d_cB,
+                    (void *)c->d_cC, (void *)c->d_col,
+                    (void *)c->d_ee_bare, (void *)c->d_hall_bare,
+                    (void *)c->d_eeo, (void *)c->d_hallo, (void *)c->d_hons,
+                    (void *)c->f_ee_bare, (void *)c->f_hall_bare,
+                    (void *)c->f_eeo, (void *)c->f_hallo, (void *)c->f_hons,
+                    (void *)c->d_cc_ee, (void *)c->d_cc_hall,
+                    (void *)c->f_cc_ee, (void *)c->f_cc_hall,
+                    (void *)c->d_voa, (void *)c->d_vob,
+                    (void *)c->f_va, (void *)c->f_vb,
+                    (void *)c->f_voa, (void *)c->f_vob})
+        if (p) cudaFree(p);
+    if (c->have_plan) cufftDestroy(c->fft_plan);
+    if (c->blas) cublasDestroy(c->blas);
+    delete c;
+}
+
+extern "C" rsrec_ctx *rsrec_create(int kk, int nb, int nnmax, int ntype,
+                                   int nmax, int device) {
+    if (kk <= 0 || nb <= 0 || nb > 32 || nnmax <= 0 || ntype <= 0 ||
+        nmax < 0 || nmax > kk) {
+        g_err = "rsrec_create: bad dimensions (need 0 < nb <= 32)";
+        return nullptr;
+    }
+    rsrec_ctx *c = new rsrec_ctx();
+    c->kk = kk; c->nb = nb; c->nnmax = nnmax; c->ntype = ntype;
+    c->nmax = nmax; c->device = device;
+    if (cudaSetDevice(device) != cudaSuccess ||
+        cublasCreate(&c->blas) != CUBLAS_STATUS_SUCCESS) {
+        g_err = "rsrec_create: CUDA/cuBLAS init failed";
+        delete c; return nullptr;
+    }
+    size_t nf = fieldsz(c) * sizeof(zc);
+    if (cudaMalloc(&c->d_s0, nf) || cudaMalloc(&c->d_s1, nf) ||
+        cudaMalloc(&c->d_s2, nf) || cudaMalloc(&c->d_s3, nf) ||
+        cudaMalloc(&c->d_blk, 8 * (size_t)nb * nb * sizeof(zc)) ||
+        cudaMalloc(&c->d_col, 2 * (size_t)nb * sizeof(double))) {
+        g_err = "rsrec_create: out of device memory for scratch fields";
+        rsrec_destroy(c); return nullptr;
+    }
+    return c;
+}
+
+/* L2 persistence: pin per-type operator blocks (small, reused by every atom
+ * every step). No-op below CUDA 11 / unsupported hardware.                  */
+static void l2_pin(const void *ptr, size_t bytes) {
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 11000
+    int dev = 0; cudaGetDevice(&dev);
+    cudaDeviceProp prop; cudaGetDeviceProperties(&prop, dev);
+    if (prop.persistingL2CacheMaxSize <= 0) return;
+    size_t win = bytes < (size_t)prop.persistingL2CacheMaxSize
+                     ? bytes : (size_t)prop.persistingL2CacheMaxSize;
+    cudaDeviceSetLimit(cudaLimitPersistingL2CacheSize, win);
+    cudaStreamAttrValue attr;
+    attr.accessPolicyWindow.base_ptr = const_cast<void *>(ptr);
+    attr.accessPolicyWindow.num_bytes = win;
+    attr.accessPolicyWindow.hitRatio = 1.0f;
+    attr.accessPolicyWindow.hitProp = cudaAccessPropertyPersisting;
+    attr.accessPolicyWindow.missProp = cudaAccessPropertyStreaming;
+    cudaStreamSetAttribute(cudaStreamDefault,
+                           cudaStreamAttributeAccessPolicyWindow, &attr);
+#else
+    (void)ptr; (void)bytes;
+#endif
+}
+
+/* --------------------------------------------------------------------------
+ * Upload (lsham folded into shell-1 once, like the CPU reference)
+ * ------------------------------------------------------------------------ */
+extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
+                                     const void *hall_, const void *lsham_,
+                                     const int *nn, const int *iz,
+                                     const void *eeo_, const void *hallo_,
+                                     const void *enim_, const void *eecc_,
+                                     const void *hallcc_) {
+    const cplx *ee = (const cplx *)ee_;
+    const cplx *hall = (const cplx *)hall_;
+    const cplx *ls = (const cplx *)lsham_;
+    const cplx *eeo = (const cplx *)eeo_;
+    const cplx *hallo = (const cplx *)hallo_;
+    const cplx *enim = (const cplx *)enim_;
+    const cplx *eecc = (const cplx *)eecc_;
+    const cplx *hallcc = (const cplx *)hallcc_;
+    if (!ee || !nn || !iz) FAIL("set_hamiltonian: null input");
+    clear_resident_moments(c);
+    if (c->nmax > 0 && !hall) FAIL("set_hamiltonian: nmax>0 but hall is null");
+    const int nb = c->nb, nnmax = c->nnmax;
+    const size_t bb = (size_t)nb * nb;
+    const bool hoh = (eeo != nullptr);
+    if (hoh && c->nmax > 0 && !hallo)
+        FAIL("set_hamiltonian: hoh with nmax>0 but hallo is null");
+
+    std::vector<cplx> hee(ee, ee + bb * nnmax * c->ntype);
+    std::vector<cplx> hha;
+    if (c->nmax > 0) hha.assign(hall, hall + bb * nnmax * c->nmax);
+    if (ls) {
+        for (int t = 0; t < c->ntype; ++t)
+            for (size_t i = 0; i < bb; ++i)
+                hee[i + bb * (size_t)nnmax * t] += ls[i + bb * t];
+        for (int k = 0; k < c->nmax; ++k) {
+            int t = iz[k] - 1;
+            for (size_t i = 0; i < bb; ++i)
+                hha[i + bb * (size_t)nnmax * k] += ls[i + bb * t];
+        }
+    }
+    if (!c->d_ee) CUCHK(cudaMalloc(&c->d_ee, hee.size() * sizeof(zc)));
+    CUCHK(cudaMemcpy(c->d_ee, hee.data(), hee.size() * sizeof(zc),
+                     cudaMemcpyHostToDevice));
+    if (c->nmax > 0) {
+        if (!c->d_hall) CUCHK(cudaMalloc(&c->d_hall, hha.size() * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_hall, hha.data(), hha.size() * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+    }
+    if (!c->d_nn)
+        CUCHK(cudaMalloc(&c->d_nn, (size_t)c->kk * nnmax * sizeof(int)));
+    CUCHK(cudaMemcpy(c->d_nn, nn, (size_t)c->kk * nnmax * sizeof(int),
+                     cudaMemcpyHostToDevice));
+    if (!c->d_iz) CUCHK(cudaMalloc(&c->d_iz, c->kk * sizeof(int)));
+    CUCHK(cudaMemcpy(c->d_iz, iz, c->kk * sizeof(int),
+                     cudaMemcpyHostToDevice));
+    l2_pin(c->d_ee, bb * nnmax * c->ntype * sizeof(zc));
+
+    /* --- two-sweep hoh operands (uploaded raw; combine applies 1/a) ------ */
+    c->have_hoh = false;
+    c->have_cc = false;
+    if (hoh) {
+        /* bare h: ee/hall WITHOUT the lsham fold (the eeo sweep must see the
+         * bare h*x; lsham + enim are carried on-site by d_hons).            */
+        if (!c->d_ee_bare) CUCHK(cudaMalloc(&c->d_ee_bare, bb * nnmax * c->ntype * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_ee_bare, ee, bb * nnmax * c->ntype * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+        if (!c->d_eeo) CUCHK(cudaMalloc(&c->d_eeo, bb * nnmax * c->ntype * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_eeo, eeo, bb * nnmax * c->ntype * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+        if (c->nmax > 0) {
+            if (!c->d_hall_bare) CUCHK(cudaMalloc(&c->d_hall_bare, bb * nnmax * c->nmax * sizeof(zc)));
+            CUCHK(cudaMemcpy(c->d_hall_bare, hall, bb * nnmax * c->nmax * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+            if (!c->d_hallo) CUCHK(cudaMalloc(&c->d_hallo, bb * nnmax * c->nmax * sizeof(zc)));
+            CUCHK(cudaMemcpy(c->d_hallo, hallo, bb * nnmax * c->nmax * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+        }
+        /* on-site (enim + lsham) per type, block-diagonal (bb per type). */
+        std::vector<cplx> hons(bb * c->ntype, cplx(0.0, 0.0));
+        for (int t = 0; t < c->ntype; ++t)
+            for (size_t i = 0; i < bb; ++i) {
+                cplx v(0.0, 0.0);
+                if (enim) v += enim[i + bb * t];
+                if (ls) v += ls[i + bb * t];
+                hons[i + bb * t] = v;
+            }
+        if (!c->d_hons) CUCHK(cudaMalloc(&c->d_hons, bb * c->ntype * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_hons, hons.data(), bb * c->ntype * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+        /* ccor_2c: CC' = CC + on-site (enim + lsham) in shell 1 (see d_cc_ee) */
+        if (eecc && (c->nmax == 0 || hallcc)) {
+            std::vector<cplx> cee(eecc, eecc + bb * nnmax * c->ntype);
+            for (int t = 0; t < c->ntype; ++t)
+                for (size_t i = 0; i < bb; ++i)
+                    cee[i + bb * (size_t)nnmax * t] += hons[i + bb * t];
+            if (!c->d_cc_ee) CUCHK(cudaMalloc(&c->d_cc_ee, cee.size() * sizeof(zc)));
+            CUCHK(cudaMemcpy(c->d_cc_ee, cee.data(), cee.size() * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+            if (c->nmax > 0) {
+                std::vector<cplx> cha(hallcc, hallcc + bb * nnmax * c->nmax);
+                for (int k = 0; k < c->nmax; ++k) {
+                    int t = iz[k] - 1;
+                    for (size_t i = 0; i < bb; ++i)
+                        cha[i + bb * (size_t)nnmax * k] += hons[i + bb * t];
+                }
+                if (!c->d_cc_hall) CUCHK(cudaMalloc(&c->d_cc_hall, cha.size() * sizeof(zc)));
+                CUCHK(cudaMemcpy(c->d_cc_hall, cha.data(), cha.size() * sizeof(zc),
+                                 cudaMemcpyHostToDevice));
+            }
+            c->have_cc = true;
+        }
+        c->have_hoh = true;
+    }
+    c->have_h = true;
+    c->ham_ver++;
+    return 0;
+}
+
+extern "C" int rsrec_set_velocity(rsrec_ctx *c, const void *va,
+                                  const void *vb, const void *voa,
+                                  const void *vob) {
+    if (!va || !vb) FAIL("set_velocity: null input");
+    clear_resident_moments(c);
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t ne = bb * c->nnmax * c->ntype;
+    const size_t n = ne * sizeof(zc);
+    if (!c->d_va) CUCHK(cudaMalloc(&c->d_va, n));
+    if (!c->d_vb) CUCHK(cudaMalloc(&c->d_vb, n));
+    CUCHK(cudaMemcpy(c->d_va, va, n, cudaMemcpyHostToDevice));
+    CUCHK(cudaMemcpy(c->d_vb, vb, n, cudaMemcpyHostToDevice));
+    c->have_v = true;
+
+    /* hoh velocity ortho: upload vo_a/vo_b with the on-site shell-1 block
+     * zeroed (velo_hoh_vec_matmul applies vo only off-site).               */
+    c->have_vo = false;
+    if (voa && vob) {
+        std::vector<cplx> ha((const cplx *)voa, (const cplx *)voa + ne);
+        std::vector<cplx> hb((const cplx *)vob, (const cplx *)vob + ne);
+        for (int t = 0; t < c->ntype; ++t)
+            for (size_t i = 0; i < bb; ++i) {
+                ha[i + bb * (size_t)c->nnmax * t] = cplx(0.0, 0.0);
+                hb[i + bb * (size_t)c->nnmax * t] = cplx(0.0, 0.0);
+            }
+        if (!c->d_voa) CUCHK(cudaMalloc(&c->d_voa, n));
+        if (!c->d_vob) CUCHK(cudaMalloc(&c->d_vob, n));
+        CUCHK(cudaMemcpy(c->d_voa, ha.data(), n, cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(c->d_vob, hb.data(), n, cudaMemcpyHostToDevice));
+        c->have_vo = true;
+    }
+    c->vel_ver++;
+    return 0;
+}
+
+extern "C" int rsrec_set_precision(rsrec_ctx *c, int prec) {
+    if (prec < 0 || prec > 1) FAIL("set_precision: 0 = fp32, 1 = fp64");
+    if (c->cheb_prec != prec) {
+        clear_resident_moments(c);
+        /* The stochastic workspace is type-punned by the selected CT.  Do
+         * not reuse a smaller-precision allocation after a precision switch. */
+        release_stochastic_workspace(&c->stoch_workspace);
+    }
+    c->cheb_prec = prec;
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Device complex helpers (overloaded for zc / fc)
+ * ------------------------------------------------------------------------ */
+__device__ __forceinline__ zc cfma(zc a, zc b, zc s) {
+    s.x = fma(a.x, b.x, fma(-a.y, b.y, s.x));
+    s.y = fma(a.x, b.y, fma(a.y, b.x, s.y));
+    return s;
+}
+__device__ __forceinline__ fc cfma(fc a, fc b, fc s) {
+    s.x = fmaf(a.x, b.x, fmaf(-a.y, b.y, s.x));
+    s.y = fmaf(a.x, b.y, fmaf(a.y, b.x, s.y));
+    return s;
+}
+template <class CT> __device__ __forceinline__ CT czero_v();
+template <> __device__ __forceinline__ zc czero_v<zc>() {
+    return make_cuDoubleComplex(0.0, 0.0);
+}
+template <> __device__ __forceinline__ fc czero_v<fc>() {
+    return make_cuFloatComplex(0.0f, 0.0f);
+}
+
+/* --------------------------------------------------------------------------
+ * Fused block-ELL step kernel, templated:
+ *   y(:,c) = alpha * ((Op x1)(:,c) - bsc*x1(:,c)) * inva + beta * x0(:,c)
+ * over columns [col0, col0+ncols). Site-major: element (l, col, atom k)
+ * lives at l + NB*k + ld*col. One thread block per atom, threads
+ * (NB, ncols/TC), each thread owns TC adjacent columns; shared staging
+ * padded with LDS = NB+1 (even NB) for conflict-free column reads; inner
+ * product fully unrolled into FMA registers.
+ * ------------------------------------------------------------------------ */
+template <class CT, int NB, int TC, class RT>
+__global__ void k_step_t(int kk, int nnmax, int nmax,
+                         const int *__restrict__ nn,
+                         const int *__restrict__ iz,
+                         const CT *__restrict__ btype,
+                         const CT *__restrict__ bimp, int use_imp,
+                         const CT *__restrict__ x1,
+                         const CT *__restrict__ x0, CT *__restrict__ y,
+                         RT alpha, RT beta, RT inva, RT bsc,
+                         size_t ld, int col0, int ncols) {
+    constexpr int LDS = (NB % 2 == 0) ? NB + 1 : NB;
+    extern __shared__ unsigned char smem_raw[];
+    CT *sH = (CT *)smem_raw;
+    CT *sX = sH + (size_t)LDS * NB;
+    const int k = blockIdx.x;
+    if (k >= kk) return;
+    const int l = threadIdx.x, ct = threadIdx.y;
+    const int tid = l + NB * ct, nthr = NB * blockDim.y;
+    const size_t bb = (size_t)NB * NB;
+    const bool imp = use_imp && (k < nmax);
+    const CT *base = imp ? bimp + bb * (size_t)nnmax * k
+                         : btype + bb * (size_t)nnmax * (iz[k] - 1);
+    CT acc[TC];
+#pragma unroll
+    for (int j = 0; j < TC; ++j) acc[j] = czero_v<CT>();
+
+    const int nr = nn[k];
+    for (int s = 0; s < nr; ++s) {
+        const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
+        if (nbr < 0) continue;
+        for (int i = tid; i < NB * NB; i += nthr)
+            sH[(i % NB) + LDS * (i / NB)] = base[bb * s + i];
+        for (int i = tid; i < NB * ncols; i += nthr) {
+            int r = i % NB, cc = i / NB;
+            sX[r + LDS * cc] =
+                x1[(size_t)r + (size_t)NB * nbr + ld * (col0 + cc)];
+        }
+        __syncthreads();
+#pragma unroll
+        for (int m = 0; m < NB; ++m) {
+            const CT h = sH[l + LDS * m];
+#pragma unroll
+            for (int j = 0; j < TC; ++j)
+                acc[j] = cfma(h, sX[m + LDS * (ct * TC + j)], acc[j]);
+        }
+        __syncthreads();
+    }
+#pragma unroll
+    for (int j = 0; j < TC; ++j) {
+        const int cc = ct * TC + j;
+        if (cc >= ncols) continue;
+        const size_t idx = (size_t)l + (size_t)NB * k + ld * (col0 + cc);
+        CT v = acc[j];
+        if (bsc != (RT)0) {
+            CT xs = x1[idx];
+            v.x -= bsc * xs.x;
+            v.y -= bsc * xs.y;
+        }
+        v.x *= inva; v.y *= inva;
+        if (beta != (RT)0) {
+            CT p = x0[idx];
+            v.x = alpha * v.x + beta * p.x;
+            v.y = alpha * v.y + beta * p.y;
+        } else {
+            v.x *= alpha; v.y *= alpha;
+        }
+        y[idx] = v;
+    }
+}
+
+/* Dynamic-NB fallback (TC = 1).                                            */
+template <class CT, class RT>
+__global__ void k_step_dyn(int kk, int nb, int nnmax, int nmax,
+                           const int *__restrict__ nn,
+                           const int *__restrict__ iz,
+                           const CT *__restrict__ btype,
+                           const CT *__restrict__ bimp, int use_imp,
+                           const CT *__restrict__ x1,
+                           const CT *__restrict__ x0, CT *__restrict__ y,
+                           RT alpha, RT beta, RT inva, RT bsc,
+                           size_t ld, int col0, int ncols) {
+    extern __shared__ unsigned char smem_raw[];
+    CT *sH = (CT *)smem_raw;
+    const int LDS = nb + 1;
+    CT *sX = sH + (size_t)LDS * nb;
+    const int k = blockIdx.x;
+    if (k >= kk) return;
+    const int l = threadIdx.x, ct = threadIdx.y;
+    const int tid = l + nb * ct, nthr = nb * blockDim.y;
+    const size_t bb = (size_t)nb * nb;
+    const bool imp = use_imp && (k < nmax);
+    const CT *base = imp ? bimp + bb * (size_t)nnmax * k
+                         : btype + bb * (size_t)nnmax * (iz[k] - 1);
+    CT acc = czero_v<CT>();
+    const int nr = nn[k];
+    for (int s = 0; s < nr; ++s) {
+        const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
+        if (nbr < 0) continue;
+        for (int i = tid; i < nb * nb; i += nthr)
+            sH[(i % nb) + LDS * (i / nb)] = base[bb * s + i];
+        for (int i = tid; i < nb * ncols; i += nthr) {
+            int r = i % nb, cc = i / nb;
+            sX[r + LDS * cc] =
+                x1[(size_t)r + (size_t)nb * nbr + ld * (col0 + cc)];
+        }
+        __syncthreads();
+        for (int m = 0; m < nb; ++m)
+            acc = cfma(sH[l + LDS * m], sX[m + LDS * ct], acc);
+        __syncthreads();
+    }
+    if (ct < ncols) {
+        const size_t idx = (size_t)l + (size_t)nb * k + ld * (col0 + ct);
+        CT v = acc;
+        if (bsc != (RT)0) {
+            CT xs = x1[idx];
+            v.x -= bsc * xs.x;
+            v.y -= bsc * xs.y;
+        }
+        v.x *= inva; v.y *= inva;
+        if (beta != (RT)0) {
+            CT p = x0[idx];
+            v.x = alpha * v.x + beta * p.x;
+            v.y = alpha * v.y + beta * p.y;
+        } else {
+            v.x *= alpha; v.y *= alpha;
+        }
+        y[idx] = v;
+    }
+}
+
+/* Host dispatcher: template instantiation by NB, column slabs sized so the
+ * dynamic shared stays <= 40 KB and blockDim <= 1024.                       */
+template <class CT, class RT>
+static int step_apply(rsrec_ctx *c, const CT *btype, const CT *bimp,
+                      int use_imp, const CT *x1, const CT *x0, CT *y,
+                      int nrhs, RT alpha, RT beta, RT inva, RT bsc) {
+    const int nb = c->nb;
+    const int LDS = (nb % 2 == 0) ? nb + 1 : nb;
+    const size_t ld = (size_t)nb * c->kk;
+    int cs_max = (40 * 1024 / (int)sizeof(CT) - LDS * nb) / LDS;
+    cs_max = std::min(cs_max, 1024 / nb);
+    cs_max = std::max(1, cs_max - (cs_max % 2));     /* keep even for TC=2  */
+    for (int c0 = 0; c0 < nrhs; c0 += cs_max) {
+        int nc = std::min(cs_max, nrhs - c0);
+        size_t shmem = (size_t)LDS * (nb + nc) * sizeof(CT);
+        bool done = false;
+#define RSREC_LAUNCH(NBv, TCv)                                               \
+        if (!done && nb == NBv && nc % TCv == 0) {                           \
+            dim3 thr(NBv, nc / TCv);                                         \
+            k_step_t<CT, NBv, TCv, RT><<<c->kk, thr, shmem>>>(               \
+                c->kk, c->nnmax, c->nmax, c->d_nn, c->d_iz, btype, bimp,     \
+                use_imp, x1, x0, y, alpha, beta, inva, bsc, ld, c0, nc);     \
+            done = true;                                                     \
+        }
+        RSREC_LAUNCH(32, 2)
+        RSREC_LAUNCH(18, 2)
+        RSREC_LAUNCH(8, 1)
+        RSREC_LAUNCH(2, 1)
+#undef RSREC_LAUNCH
+        if (!done) {
+            dim3 thr(nb, nc);
+            k_step_dyn<CT, RT><<<c->kk, thr, shmem>>>(
+                c->kk, nb, c->nnmax, c->nmax, c->d_nn, c->d_iz, btype, bimp,
+                use_imp, x1, x0, y, alpha, beta, inva, bsc, ld, c0, nc);
+        }
+        CUCHK(cudaGetLastError());
+    }
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Small generic kernels (site-major)
+ * ------------------------------------------------------------------------ */
+template <class CT, class RT>
+__global__ void k_axpby(size_t n, RT alpha, const CT *__restrict__ x,
+                        RT beta, CT *__restrict__ y) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) {
+        y[i].x = alpha * x[i].x + beta * y[i].x;
+        y[i].y = alpha * x[i].y + beta * y[i].y;
+    }
+}
+
+/* pack: atom-major fp64 (nb, ncols, kk) -> site-major CT (ld x ncols)      */
+template <class CT>
+/* pack: atom-major fp64 input -> site-major CT (ld x nb*nstates).
+ * Input is the Fortran array (nb, nb_cols, kk, nstates), i.e. per state a
+ * (nb, nb_cols, kk) block with states OUTERMOST (slowest). Flat input index
+ *   i = l + nb*(col + nb_cols*(k + kk*s)).
+ * Output column for (state s, block-col col) is s*nb_cols + col, so the
+ * site-major destination is l + nb*k + ld*(s*nb_cols + col).               */
+__global__ void k_pack(size_t n, int nb, int nb_cols, int kk, size_t ld,
+                       const zc *__restrict__ in, CT *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    int l = (int)(i % nb);
+    int col = (int)((i / nb) % nb_cols);
+    size_t k = (i / ((size_t)nb * nb_cols)) % (size_t)kk;
+    size_t s = i / ((size_t)nb * nb_cols * kk);
+    CT v; v.x = (decltype(v.x))in[i].x; v.y = (decltype(v.y))in[i].y;
+    out[(size_t)l + (size_t)nb * k + ld * ((long)s * nb_cols + col)] = v;
+}
+
+/* unpack: site-major zc -> atom-major zc (for rsrec_op_apply only)         */
+__global__ void k_unpack64(size_t n, int nb, int ncols, size_t ld,
+                           const zc *__restrict__ in, zc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    int l = (int)(i % nb);
+    int col = (int)((i / nb) % ncols);
+    size_t k = i / ((size_t)nb * ncols);
+    out[i] = in[(size_t)l + (size_t)nb * k + ld * col];
+}
+
+/* Scalar-Lanczos per-column helpers (site-major: column stride ld).
+ * The per-column dot products diag(A^H B) come from a single gram gemm
+ * (gram64) followed by this diagonal pick -- no atomics in the hot path.
+ * G is the nb x nb gram matrix (column-major, leading dim nb); its (j,j)
+ * real part is the column-j dot.                                            */
+__global__ void k_diag_real(int nb, const zc *__restrict__ G,
+                            double *__restrict__ out) {
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j < nb) out[j] = G[(size_t)j + (size_t)nb * j].x;
+}
+
+__global__ void k_col_axpy(size_t ld, int ncols,
+                           const double *__restrict__ alpha,
+                           const zc *__restrict__ x, zc *__restrict__ y) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < ld * (size_t)ncols) {
+        int col = (int)(i / ld);
+        y[i].x += alpha[col] * x[i].x;
+        y[i].y += alpha[col] * x[i].y;
+    }
+}
+
+__global__ void k_col_shift(size_t ld, int ncols,
+                            const double *__restrict__ s2,
+                            zc *__restrict__ psi, zc *__restrict__ pmn) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < ld * (size_t)ncols) {
+        int col = (int)(i / ld);
+        double sf = sqrt(s2[col]), si = (sf > 0.0) ? 1.0 / sf : 0.0;
+        zc newpsi = make_cuDoubleComplex(pmn[i].x * si, pmn[i].y * si);
+        pmn[i] = make_cuDoubleComplex(-psi[i].x * sf, -psi[i].y * sf);
+        psi[i] = newpsi;
+    }
+}
+
+/* cuBLAS scalar constants and thin precision-overloaded wrappers           */
+static const zc Z_ONE = {1.0, 0.0};
+static const zc Z_ZERO = {0.0, 0.0};
+static const zc Z_MONE = {-1.0, 0.0};
+static const fc C_ONE = {1.0f, 0.0f};
+static const fc C_ZERO = {0.0f, 0.0f};
+
+template <class CT>
+__global__ void k_pack_transport_diagonal(const CT *__restrict__ dmu,
+                                          int moments, int nb,
+                                          CT *__restrict__ U) {
+    const size_t K = (size_t)moments * moments;
+    const size_t total = K * (size_t)nb;
+    const size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= total) return;
+    const int l = (int)(i / K);
+    const size_t q = i - (size_t)l * K;
+    /* dmu is laid out as Fortran mu(:,:,n,m): q=n+(m-1)*M. */
+    U[i] = dmu[q * (size_t)nb * nb + (size_t)l * (nb + 1)];
+}
+
+static cublasStatus_t blas_gemm(cublasHandle_t h, cublasOperation_t ta,
+                                cublasOperation_t tb, int m, int n, int k,
+                                const zc *al, const zc *A, int lda,
+                                const zc *B, int ldb, const zc *be, zc *C,
+                                int ldc) {
+    return cublasZgemm(h, ta, tb, m, n, k, al, A, lda, B, ldb, be, C, ldc);
+}
+static cublasStatus_t blas_gemm(cublasHandle_t h, cublasOperation_t ta,
+                                cublasOperation_t tb, int m, int n, int k,
+                                const fc *al, const fc *A, int lda,
+                                const fc *B, int ldb, const fc *be, fc *C,
+                                int ldc) {
+    return cublasCgemm3m(h, ta, tb, m, n, k, al, A, lda, B, ldb, be, C, ldc);
+}
+static cublasStatus_t blas_gemm_sb(cublasHandle_t h, cublasOperation_t ta,
+                                   cublasOperation_t tb, int m, int n, int k,
+                                   const zc *al, const zc *A, int lda,
+                                   long long sA, const zc *B, int ldb,
+                                   long long sB, const zc *be, zc *C, int ldc,
+                                   long long sC, int batch) {
+    return cublasZgemmStridedBatched(h, ta, tb, m, n, k, al, A, lda, sA, B,
+                                     ldb, sB, be, C, ldc, sC, batch);
+}
+static cublasStatus_t blas_gemm_sb(cublasHandle_t h, cublasOperation_t ta,
+                                   cublasOperation_t tb, int m, int n, int k,
+                                   const fc *al, const fc *A, int lda,
+                                   long long sA, const fc *B, int ldb,
+                                   long long sB, const fc *be, fc *C, int ldc,
+                                   long long sC, int batch) {
+    return cublasCgemm3mStridedBatched(h, ta, tb, m, n, k, al, A, lda, sA, B,
+                                       ldb, sB, be, C, ldc, sC, batch);
+}
+
+/* B = U sqrt(ev) U^H, Bi = U ev^{-1/2} U^H on the host (zheev), like
+ * crecal_b. dS/dB/dBi are device pointers.                                  */
+static int host_eig_sqrt(rsrec_ctx *c, const zc *dS, zc *dB, zc *dBi) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb;
+    std::vector<cplx> S(bb), Bm(bb), Bi(bb);
+    CUCHK(cudaMemcpy(S.data(), dS, bb * sizeof(zc), cudaMemcpyDeviceToHost));
+    std::vector<cplx> U = S;
+    std::vector<double> ev(nb), rwork(3 * nb - 2);
+    int lwork = nb * nb, info = 0;
+    std::vector<cplx> work(lwork);
+    zheev_("V", "U", &nb, U.data(), &nb, ev.data(), work.data(), &lwork,
+           rwork.data(), &info);
+    if (info != 0) FAIL("block_lanczos: zheev failed");
+    for (int j = 0; j < nb; ++j)
+        for (int i = 0; i < nb; ++i) {
+            cplx sb(0, 0), sbi(0, 0);
+            for (int l = 0; l < nb; ++l) {
+                double lam = sqrt(ev[l] > 0.0 ? ev[l] : 0.0);
+                cplx uu = U[i + (size_t)nb * l] *
+                          std::conj(U[j + (size_t)nb * l]);
+                sb += uu * lam;
+                if (lam > 0.0) sbi += uu / lam;
+            }
+            Bm[i + (size_t)nb * j] = sb;
+            Bi[i + (size_t)nb * j] = sbi;
+        }
+    CUCHK(cudaMemcpy(dB, Bm.data(), bb * sizeof(zc), cudaMemcpyHostToDevice));
+    CUCHK(cudaMemcpy(dBi, Bi.data(), bb * sizeof(zc),
+                     cudaMemcpyHostToDevice));
+    return 0;
+}
+
+/* Build a complex value of the engine precision CT (zc or fc) from doubles. */
+template <class CT>
+static inline CT ct_make(double re, double im) {
+    CT v;
+    v.x = (decltype(v.x))re;
+    v.y = (decltype(v.y))im;
+    return v;
+}
+
+/* Precision-templated Hermitian matrix square root B = S^{1/2} and B^{-1/2}.
+ * Identical to host_eig_sqrt but reads/writes the engine precision CT and always
+ * promotes to fp64 (cplx) on the host for zheev + the eigen reconstruction, so
+ * the numerically sensitive block B-matrix is computed in double even in the
+ * fp32 (mixed) block path -- mirroring bsqrt_dp in haydock_fast.f90.            */
+template <class CT>
+static int host_eig_sqrt_t(rsrec_ctx *c, const CT *dS, CT *dB, CT *dBi) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb;
+    std::vector<CT> Sh(bb), Bh(bb), Bih(bb);
+    CUCHK(cudaMemcpy(Sh.data(), dS, bb * sizeof(CT), cudaMemcpyDeviceToHost));
+    std::vector<cplx> U(bb);
+    for (size_t i = 0; i < bb; ++i) U[i] = cplx(Sh[i].x, Sh[i].y);
+    std::vector<double> ev(nb), rwork(3 * nb - 2);
+    int lwork = nb * nb, info = 0;
+    std::vector<cplx> work(lwork);
+    zheev_("V", "U", &nb, U.data(), &nb, ev.data(), work.data(), &lwork,
+           rwork.data(), &info);
+    if (info != 0) FAIL("block_lanczos: zheev failed");
+    for (int j = 0; j < nb; ++j)
+        for (int i = 0; i < nb; ++i) {
+            cplx sb(0, 0), sbi(0, 0);
+            for (int l = 0; l < nb; ++l) {
+                double lam = sqrt(ev[l] > 0.0 ? ev[l] : 0.0);
+                cplx uu = U[i + (size_t)nb * l] *
+                          std::conj(U[j + (size_t)nb * l]);
+                sb += uu * lam;
+                if (lam > 0.0) sbi += uu / lam;
+            }
+            Bh[i + (size_t)nb * j] = ct_make<CT>(sb.real(), sb.imag());
+            Bih[i + (size_t)nb * j] = ct_make<CT>(sbi.real(), sbi.imag());
+        }
+    CUCHK(cudaMemcpy(dB, Bh.data(), bb * sizeof(CT), cudaMemcpyHostToDevice));
+    CUCHK(cudaMemcpy(dBi, Bih.data(), bb * sizeof(CT), cudaMemcpyHostToDevice));
+    return 0;
+}
+
+/* ==========================================================================
+ * Structured (cuFFT stencil + correction) path -- fp64, nrhs == nb,
+ * site-major layout (atom block = nb rows at offset nb*k, column stride ld).
+ * Channel grids stay channel-major: channel ch occupies a contiguous padded
+ * volume of Npc cells.
+ * ======================================================================== */
+__global__ void k_scatter(size_t nfield, int nb, int kk, size_t ld,
+                          size_t Npc, const int *__restrict__ gcell,
+                          const zc *__restrict__ x, zc *__restrict__ g) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= nfield) return;
+    int l = (int)(i % nb);
+    int k = (int)((i / nb) % kk);
+    int col = (int)(i / ((size_t)nb * kk));
+    g[(size_t)(l + nb * col) * Npc + gcell[k]] =
+        x[(size_t)l + (size_t)nb * k + ld * col];
+}
+
+__global__ void k_gather(size_t nfield, int nb, int kk, size_t ld,
+                         size_t Npc, const int *__restrict__ gcell,
+                         const zc *__restrict__ g, zc *__restrict__ y) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= nfield) return;
+    int l = (int)(i % nb);
+    int k = (int)((i / nb) % kk);
+    int col = (int)(i / ((size_t)nb * kk));
+    y[(size_t)l + (size_t)nb * k + ld * col] =
+        g[(size_t)(l + nb * col) * Npc + gcell[k]];
+}
+
+__global__ void k_stencil_scatter(int nshell, int nbsq, size_t Npc,
+                                  int Npx, int Npy, int Npz,
+                                  const int *__restrict__ roff,
+                                  const zc *__restrict__ W, double scale,
+                                  zc *__restrict__ g) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= nshell * nbsq) return;
+    int s = idx / nbsq, ch = idx % nbsq;
+    int rx = ((-roff[3 * s]) % Npx + Npx) % Npx;
+    int ry = ((-roff[3 * s + 1]) % Npy + Npy) % Npy;
+    int rz = ((-roff[3 * s + 2]) % Npz + Npz) % Npz;
+    size_t cell = ((size_t)rx * Npy + ry) * Npz + rz;
+    zc w = W[(size_t)s * nbsq + ch];
+    g[(size_t)ch * Npc + cell] = make_cuDoubleComplex(w.x * scale,
+                                                      w.y * scale);
+}
+
+__global__ void k_pointwise_blockmul(size_t Npc, int nb,
+                                     const zc *__restrict__ Hq,
+                                     zc *__restrict__ g) {
+    extern __shared__ unsigned char smem_raw[];
+    zc *sH = (zc *)smem_raw, *sx = sH + nb * nb;
+    for (size_t cell = blockIdx.x; cell < Npc; cell += gridDim.x) {
+        const int l = threadIdx.x, c2 = threadIdx.y;
+        const int ch = l + nb * c2;
+        sH[ch] = Hq[(size_t)ch * Npc + cell];
+        sx[ch] = g[(size_t)ch * Npc + cell];
+        __syncthreads();
+        zc acc = make_cuDoubleComplex(0.0, 0.0);
+        for (int m = 0; m < nb; ++m)
+            acc = cfma(sH[l + nb * m], sx[m + nb * c2], acc);
+        __syncthreads();
+        g[(size_t)ch * Npc + cell] = acc;
+    }
+}
+
+/* Correction x/y block pointers over the site-major layout (block stride
+ * nb columns; ldb = ldc = ld).                                             */
+__global__ void k_make_ptrs(size_t nnz, int nb,
+                            const int *__restrict__ atom,
+                            const int *__restrict__ nbr,
+                            const zc *__restrict__ x, zc *__restrict__ y,
+                            const zc **__restrict__ Bp,
+                            zc **__restrict__ Cp) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < nnz) {
+        Bp[i] = x + (size_t)nb * nbr[i];
+        Cp[i] = y + (size_t)nb * atom[i];
+    }
+}
+
+extern "C" int rsrec_set_grid(rsrec_ctx *c, const int *coords,
+                              int use_structured) {
+    if (!c->have_h) FAIL("set_grid: call set_hamiltonian first");
+    if (!use_structured) { c->use_struct = false; return 0; }
+    const int kk = c->kk, nb = c->nb;
+    const size_t bb = (size_t)nb * nb;
+
+    /* ---- host copies of nn/iz (kept on device only so far) -------------- */
+    std::vector<int> nn((size_t)kk * c->nnmax), iz(kk);
+    CUCHK(cudaMemcpy(nn.data(), c->d_nn, nn.size() * sizeof(int),
+                     cudaMemcpyDeviceToHost));
+    CUCHK(cudaMemcpy(iz.data(), c->d_iz, kk * sizeof(int),
+                     cudaMemcpyDeviceToHost));
+    auto NNF = [&](int k, int s) { return nn[(size_t)k + (size_t)kk * s]; };
+
+    /* ---- bounding box, cell map ----------------------------------------- */
+    int lo[3];
+    for (int d = 0; d < 3; ++d) {
+        int mn = coords[d], mx = coords[d];
+        for (int k = 1; k < kk; ++k) {
+            mn = std::min(mn, coords[3 * k + d]);
+            mx = std::max(mx, coords[3 * k + d]);
+        }
+        lo[d] = mn; c->N[d] = mx - mn + 1;
+    }
+    const int Nx = c->N[0], Ny = c->N[1], Nz = c->N[2];
+    std::vector<int> cellmap((size_t)Nx * Ny * Nz, -1);
+    std::vector<int> gc(kk);
+    for (int k = 0; k < kk; ++k) {
+        int cx = coords[3 * k] - lo[0], cy = coords[3 * k + 1] - lo[1];
+        int cz = coords[3 * k + 2] - lo[2];
+        size_t cell = (cx * (size_t)Ny + cy) * Nz + cz;
+        if (cellmap[cell] >= 0)
+            FAIL("set_grid: two atoms share one lattice cell (multi-atom "
+                 "bases need a basis-resolved grid; not supported yet)");
+        cellmap[cell] = k;
+        gc[k] = (int)cell;
+    }
+
+    /* ---- reference type / template / stencil offsets -------------------- */
+    if (kk == c->nmax)
+        FAIL("set_grid: hall covers all atoms; no bulk stencil to exploit "
+             "-- stay on the ELL backend");
+    std::vector<int> cnt(c->ntype, 0);
+    for (int k = c->nmax; k < kk; ++k) cnt[iz[k] - 1]++;
+    c->t_ref = (int)(std::max_element(cnt.begin(), cnt.end()) - cnt.begin());
+    int k0 = -1, best = -1;
+    for (int k = c->nmax; k < kk; ++k)
+        if (iz[k] - 1 == c->t_ref && NNF(k, 0) > best) {
+            best = NNF(k, 0); k0 = k;
+        }
+    if (k0 < 0) FAIL("set_grid: no bulk atom of the reference type");
+    c->nshell_ref = best;
+    c->roff.assign(3 * c->nshell_ref, 0);
+    for (int s = 1; s < c->nshell_ref; ++s) {
+        int nbr = NNF(k0, s) - 1;
+        if (nbr < 0) FAIL("set_grid: template atom has a hole in its "
+                          "neighbour list; pick a cluster interior template");
+        for (int d = 0; d < 3; ++d)
+            c->roff[3 * s + d] = coords[3 * nbr + d] - coords[3 * k0 + d];
+    }
+
+    /* ---- flag rows the stencil cannot represent -------------------------- */
+    auto shells_match = [&](int k) -> bool {
+        const int nr = NNF(k, 0);
+        if (nr > c->nshell_ref) return false;
+        int cell = gc[k];
+        int cz = cell % Nz, cy = (cell / Nz) % Ny, cx = cell / (Nz * Ny);
+        for (int s = 1; s < c->nshell_ref; ++s) {
+            int tx = cx + c->roff[3 * s], ty = cy + c->roff[3 * s + 1];
+            int tz = cz + c->roff[3 * s + 2];
+            bool inbox = (tx >= 0 && tx < Nx && ty >= 0 && ty < Ny &&
+                          tz >= 0 && tz < Nz);
+            int occ = inbox ? cellmap[(tx * (size_t)Ny + ty) * Nz + tz] : -1;
+            int nbr = (s < nr) ? NNF(k, s) - 1 : -1;
+            if (occ != nbr) return false;
+        }
+        return true;
+    };
+    std::vector<char> flagH(kk);
+    size_t nflagH = 0;
+    for (int k = 0; k < kk; ++k) {
+        bool irr = !shells_match(k) || (iz[k] - 1 != c->t_ref);
+        flagH[k] = irr || (k < c->nmax);
+        nflagH += flagH[k];
+    }
+
+    /* ---- correction entries, grouped by per-atom slot (race-free) --------
+     * One shared (atom, nbr) list built from the H flag set (a superset of
+     * the velocity flag set: flagH = flagV or k < nmax). For the velocity
+     * operators, rows flagged only because of hall are stencil-regular, so
+     * their (+v_type, -v_ref) entries cancel exactly -- a few wasted GEMMs,
+     * no error. Entries store (shell s | negW slot) + atom, from which the
+     * per-operator A-pointers are derived.                                  */
+    std::vector<int> ca, cn, cs;          /* atom, nbr, shell (>=0) or
+                                             -(negW slot)-1                  */
+    {
+        std::vector<std::vector<int>> pa, pn, ps;
+        for (int k = 0; k < kk; ++k) {
+            if (!flagH[k]) continue;
+            std::vector<int> ea, en, es;
+            const int nr = NNF(k, 0);
+            for (int s = 0; s < nr; ++s) {
+                int nb_at = (s == 0) ? k : NNF(k, s) - 1;
+                if (nb_at < 0) continue;
+                ea.push_back(k); en.push_back(nb_at); es.push_back(s);
+            }
+            int cell = gc[k];
+            int cz = cell % Nz, cy = (cell / Nz) % Ny, cx = cell / (Nz * Ny);
+            for (int s = 0; s < c->nshell_ref; ++s) {
+                int tx = cx + c->roff[3 * s], ty = cy + c->roff[3 * s + 1];
+                int tz = cz + c->roff[3 * s + 2];
+                if (tx < 0 || tx >= Nx || ty < 0 || ty >= Ny ||
+                    tz < 0 || tz >= Nz) continue;
+                int occ = cellmap[(tx * (size_t)Ny + ty) * Nz + tz];
+                if (occ < 0) continue;
+                ea.push_back(k); en.push_back(occ); es.push_back(-s - 1);
+            }
+            pa.push_back(std::move(ea)); pn.push_back(std::move(en));
+            ps.push_back(std::move(es));
+        }
+        c->cg_off.assign(1, 0);
+        size_t maxlen = 0;
+        for (auto &v : pa) maxlen = std::max(maxlen, v.size());
+        for (size_t g = 0; g < maxlen; ++g) {
+            for (size_t i = 0; i < pa.size(); ++i)
+                if (g < pa[i].size()) {
+                    ca.push_back(pa[i][g]); cn.push_back(pn[i][g]);
+                    cs.push_back(ps[i][g]);
+                }
+            c->cg_off.push_back((int)ca.size());
+        }
+    }
+    c->c_nnz = ca.size();
+
+    /* materialize -W_ref for all three ops in one buffer                    */
+    if (c->d_negW) cudaFree(c->d_negW);
+    CUCHK(cudaMalloc(&c->d_negW, 3 * bb * c->nshell_ref * sizeof(zc)));
+    {
+        std::vector<cplx> wref(bb * c->nshell_ref);
+        std::vector<cplx> neg(3 * bb * c->nshell_ref, cplx(0, 0));
+        const zc *bases[3] = {c->d_ee, c->d_va, c->d_vb};
+        for (int op = 0; op < 3; ++op) {
+            if (!bases[op]) continue;
+            CUCHK(cudaMemcpy(wref.data(),
+                             bases[op] + bb * (size_t)c->nnmax * c->t_ref,
+                             bb * c->nshell_ref * sizeof(zc),
+                             cudaMemcpyDeviceToHost));
+            for (size_t i = 0; i < wref.size(); ++i)
+                neg[(size_t)op * bb * c->nshell_ref + i] = -wref[i];
+        }
+        CUCHK(cudaMemcpy(c->d_negW, neg.data(), neg.size() * sizeof(cplx),
+                         cudaMemcpyHostToDevice));
+    }
+
+    /* per-operator A-pointer arrays over the shared entry list              */
+    if (c->c_nnz > 0) {
+        auto upload_A = [&](int op, const zc *type_base, const zc *imp_base,
+                            const zc ***dst) -> int {
+            std::vector<const zc *> A(c->c_nnz);
+            for (size_t i = 0; i < c->c_nnz; ++i) {
+                int k = ca[i], s = cs[i];
+                if (s < 0)                                   /* -W_ref      */
+                    A[i] = c->d_negW + (size_t)op * bb * c->nshell_ref +
+                           bb * (size_t)(-s - 1);
+                else if (op == 0 && k < c->nmax)             /* hall row    */
+                    A[i] = imp_base +
+                           bb * ((size_t)s + (size_t)c->nnmax * k);
+                else                                         /* per type    */
+                    A[i] = type_base +
+                           bb * ((size_t)s + (size_t)c->nnmax * (iz[k] - 1));
+            }
+            if (*dst) cudaFree((void *)*dst);
+            CUCHK(cudaMalloc(dst, c->c_nnz * sizeof(zc *)));
+            CUCHK(cudaMemcpy((void *)*dst, A.data(),
+                             c->c_nnz * sizeof(zc *),
+                             cudaMemcpyHostToDevice));
+            return 0;
+        };
+        if (upload_A(0, c->d_ee, c->d_hall, &c->d_cA_H)) return 1;
+        if (c->have_v) {
+            if (upload_A(1, c->d_va, nullptr, &c->d_cA_VA)) return 1;
+            if (upload_A(2, c->d_vb, nullptr, &c->d_cA_VB)) return 1;
+        }
+        if (c->d_c_atom) cudaFree(c->d_c_atom);
+        if (c->d_c_nbr) cudaFree(c->d_c_nbr);
+        CUCHK(cudaMalloc(&c->d_c_atom, c->c_nnz * sizeof(int)));
+        CUCHK(cudaMalloc(&c->d_c_nbr, c->c_nnz * sizeof(int)));
+        CUCHK(cudaMemcpy(c->d_c_atom, ca.data(), c->c_nnz * sizeof(int),
+                         cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(c->d_c_nbr, cn.data(), c->c_nnz * sizeof(int),
+                         cudaMemcpyHostToDevice));
+        if (c->d_cB) cudaFree((void *)c->d_cB);
+        if (c->d_cC) cudaFree((void *)c->d_cC);
+        CUCHK(cudaMalloc(&c->d_cB, c->c_nnz * sizeof(zc *)));
+        CUCHK(cudaMalloc(&c->d_cC, c->c_nnz * sizeof(zc *)));
+    }
+
+    /* ---- padded box, grids, H(q) tables, cuFFT plan ---------------------- */
+    int rmax[3] = {0, 0, 0};
+    for (int s = 0; s < c->nshell_ref; ++s)
+        for (int d = 0; d < 3; ++d)
+            rmax[d] = std::max(rmax[d], std::abs(c->roff[3 * s + d]));
+    for (int d = 0; d < 3; ++d) c->Np[d] = c->N[d] + 2 * rmax[d];
+    c->Npc = (size_t)c->Np[0] * c->Np[1] * c->Np[2];
+
+    std::vector<int> gpad(kk);
+    for (int k = 0; k < kk; ++k) {
+        int cell = gc[k];
+        int cz = cell % Nz, cy = (cell / Nz) % Ny, cx = cell / (Nz * Ny);
+        gpad[k] = (int)((cx * (size_t)c->Np[1] + cy) * c->Np[2] + cz);
+    }
+    if (c->d_gcell) cudaFree(c->d_gcell);
+    CUCHK(cudaMalloc(&c->d_gcell, kk * sizeof(int)));
+    CUCHK(cudaMemcpy(c->d_gcell, gpad.data(), kk * sizeof(int),
+                     cudaMemcpyHostToDevice));
+
+    size_t gridbytes = c->Npc * bb * sizeof(zc);
+    for (zc **p : {&c->d_gin, &c->d_gw, &c->d_Hq})
+        { if (*p) cudaFree(*p); CUCHK(cudaMalloc(p, gridbytes)); }
+    if (c->have_v)
+        for (zc **p : {&c->d_VAq, &c->d_VBq})
+            { if (*p) cudaFree(*p); CUCHK(cudaMalloc(p, gridbytes)); }
+
+    if (c->have_plan) cufftDestroy(c->fft_plan);
+    if (cufftPlanMany(&c->fft_plan, 3, c->Np, nullptr, 1, (int)c->Npc,
+                      nullptr, 1, (int)c->Npc, CUFFT_Z2Z, nb * nb)
+        != CUFFT_SUCCESS)
+        FAIL("set_grid: cufftPlanMany failed");
+    c->have_plan = true;
+
+    /* build H(q) per operator: scatter W(-R)/Npc then forward FFT           */
+    int *d_roff;
+    CUCHK(cudaMalloc(&d_roff, c->roff.size() * sizeof(int)));
+    CUCHK(cudaMemcpy(d_roff, c->roff.data(), c->roff.size() * sizeof(int),
+                     cudaMemcpyHostToDevice));
+    const zc *opbase[3] = {c->d_ee, c->d_va, c->d_vb};
+    zc *optab[3] = {c->d_Hq, c->d_VAq, c->d_VBq};
+    for (int op = 0; op < 3; ++op) {
+        if (!opbase[op] || !optab[op]) continue;
+        CUCHK(cudaMemset(c->d_gw, 0, gridbytes));
+        int nthread = c->nshell_ref * (int)bb;
+        k_stencil_scatter<<<(nthread + 255) / 256, 256>>>(
+            c->nshell_ref, (int)bb, c->Npc, c->Np[0], c->Np[1], c->Np[2],
+            d_roff, opbase[op] + bb * (size_t)c->nnmax * c->t_ref,
+            1.0 / (double)c->Npc, c->d_gw);
+        CUCHK(cudaGetLastError());
+        if (cufftExecZ2Z(c->fft_plan, (cufftDoubleComplex *)c->d_gw,
+                         (cufftDoubleComplex *)optab[op], CUFFT_FORWARD)
+            != CUFFT_SUCCESS)
+            FAIL("set_grid: cufftExecZ2Z failed building H(q)");
+    }
+    cudaFree(d_roff);
+    CUCHK(cudaMemset(c->d_gin, 0, gridbytes));   /* pristine zero background */
+
+    fprintf(stderr,
+            "rsrec_set_grid: box %dx%dx%d (padded %dx%dx%d), ref type %d, "
+            "%d shells, corrected rows: %zu/%d, device tables %.0f MB\n",
+            Nx, Ny, Nz, c->Np[0], c->Np[1], c->Np[2], c->t_ref + 1,
+            c->nshell_ref, nflagH, kk,
+            (double)gridbytes * (2 + (c->have_v ? 3 : 1)) / 1e6);
+    c->use_struct = true;
+    return 0;
+}
+
+/* Structured y = Op x (UNSCALED, site-major, nrhs == nb). Callers apply the
+ * shift/recurrence via k_combine.                                          */
+static int struct_apply(rsrec_ctx *c, int which, const zc *x, zc *y) {
+    const int nb = c->nb;
+    const size_t nf = fieldsz(c), bb = (size_t)nb * nb;
+    const size_t ld = (size_t)nb * c->kk;
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    const zc *Hq = (which == 1) ? c->d_VAq : (which == 2) ? c->d_VBq
+                                                          : c->d_Hq;
+    if (!Hq) FAIL("struct_apply: operator table missing (call set_velocity "
+                  "before set_grid)");
+    k_scatter<<<nbl, tpb>>>(nf, nb, c->kk, ld, c->Npc, c->d_gcell, x,
+                            c->d_gin);
+    CUCHK(cudaGetLastError());
+    if (cufftExecZ2Z(c->fft_plan, (cufftDoubleComplex *)c->d_gin,
+                     (cufftDoubleComplex *)c->d_gw, CUFFT_FORWARD)
+        != CUFFT_SUCCESS) FAIL("struct_apply: forward FFT failed");
+    {
+        dim3 thr(nb, nb);
+        int nblocks = (int)std::min<size_t>(c->Npc, 65535);
+        k_pointwise_blockmul<<<nblocks, thr, 2 * bb * sizeof(zc)>>>(
+            c->Npc, nb, Hq, c->d_gw);
+        CUCHK(cudaGetLastError());
+    }
+    if (cufftExecZ2Z(c->fft_plan, (cufftDoubleComplex *)c->d_gw,
+                     (cufftDoubleComplex *)c->d_gw, CUFFT_INVERSE)
+        != CUFFT_SUCCESS) FAIL("struct_apply: inverse FFT failed");
+    k_gather<<<nbl, tpb>>>(nf, nb, c->kk, ld, c->Npc, c->d_gcell, c->d_gw, y);
+    CUCHK(cudaGetLastError());
+
+    if (c->c_nnz > 0) {
+        const zc **Ap = (which == 1) ? c->d_cA_VA :
+                        (which == 2) ? c->d_cA_VB : c->d_cA_H;
+        k_make_ptrs<<<(int)((c->c_nnz + tpb - 1) / tpb), tpb>>>(
+            c->c_nnz, nb, c->d_c_atom, c->d_c_nbr, x, y, c->d_cB, c->d_cC);
+        CUCHK(cudaGetLastError());
+        for (size_t g = 0; g + 1 < c->cg_off.size(); ++g) {
+            int off = c->cg_off[g], cnt2 = c->cg_off[g + 1] - off;
+            if (cnt2 <= 0) continue;
+            CBCHK(cublasZgemmBatched(c->blas, CUBLAS_OP_N, CUBLAS_OP_N,
+                                     nb, nb, nb, &Z_ONE,
+                                     Ap + off, nb, c->d_cB + off, (int)ld,
+                                     &Z_ONE, c->d_cC + off, (int)ld, cnt2));
+        }
+    }
+    return 0;
+}
+
+/* y = alpha*((t - bsc*x1)*inva) + beta*x0, applied after struct_apply.      */
+__global__ void k_combine(size_t n, const zc *__restrict__ t,
+                          const zc *__restrict__ x1,
+                          const zc *__restrict__ x0, zc *__restrict__ y,
+                          double alpha, double beta, double inva,
+                          double bsc) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    double vx = (t[i].x - bsc * x1[i].x) * inva;
+    double vy = (t[i].y - bsc * x1[i].y) * inva;
+    if (beta != 0.0)
+        y[i] = make_cuDoubleComplex(alpha * vx + beta * x0[i].x,
+                                    alpha * vy + beta * x0[i].y);
+    else
+        y[i] = make_cuDoubleComplex(alpha * vx, alpha * vy);
+}
+
+/* On-site block-diagonal multiply o = hons[type(k)] * x1, site-major.
+ * One block per atom; hons is (bb per type), x1/o are (ld * ncols).         */
+template <class CT>
+__global__ void k_onsite_blockmul(int kk, int nb, size_t ld, int ncols,
+                                  const int *__restrict__ iz,
+                                  const CT *__restrict__ hons,
+                                  const CT *__restrict__ x1,
+                                  CT *__restrict__ o) {
+    const int k = blockIdx.x;
+    if (k >= kk) return;
+    const int l = threadIdx.x, cc = threadIdx.y;
+    if (l >= nb || cc >= ncols) return;
+    const size_t bb = (size_t)nb * nb;
+    const CT *H = hons + bb * (size_t)(iz[k] - 1);
+    CT acc = czero_v<CT>();
+    for (int m = 0; m < nb; ++m) {
+        CT h = H[l + nb * m];
+        CT xv = x1[(size_t)m + (size_t)nb * k + ld * cc];
+        acc.x += h.x * xv.x - h.y * xv.y;
+        acc.y += h.x * xv.y + h.y * xv.x;
+    }
+    o[(size_t)l + (size_t)nb * k + ld * cc] = acc;
+}
+
+/* hoh combine: y = alpha*((t - e + o - bsc*x1)*inva) + beta*x0, elementwise.
+ * t = h*x1, e = eeo*(h*x1), o = hons*x1 (all unscaled).                      */
+template <class CT, class RT>
+__global__ void k_combine_hoh(size_t n, const CT *__restrict__ t,
+                              const CT *__restrict__ e,
+                              const CT *__restrict__ o,
+                              const CT *__restrict__ x1,
+                              const CT *__restrict__ x0, CT *__restrict__ y,
+                              RT alpha, RT beta, RT inva, RT bsc) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    RT vx = (t[i].x - e[i].x + o[i].x - bsc * x1[i].x) * inva;
+    RT vy = (t[i].y - e[i].y + o[i].y - bsc * x1[i].y) * inva;
+    CT r;
+    if (beta != (RT)0) {
+        r.x = alpha * vx + beta * x0[i].x;
+        r.y = alpha * vy + beta * x0[i].y;
+    } else {
+        r.x = alpha * vx;
+        r.y = alpha * vy;
+    }
+    y[i] = r;
+}
+
+/* ccor_2c operand of the hoh apply at the engine precision CT. */
+template <class CT> static const CT *cc_ee(const rsrec_ctx *c);
+template <> inline const fc *cc_ee<fc>(const rsrec_ctx *c) { return c->f_cc_ee; }
+template <> inline const zc *cc_ee<zc>(const rsrec_ctx *c) { return c->d_cc_ee; }
+template <class CT> static const CT *cc_hall(const rsrec_ctx *c);
+template <> inline const fc *cc_hall<fc>(const rsrec_ctx *c) { return c->f_cc_hall; }
+template <> inline const zc *cc_hall<zc>(const rsrec_ctx *c) { return c->d_cc_hall; }
+
+/* Two-sweep hoh step (block-ELL), mirrors ham_hoh_vec_matmul:
+ *   sweep A: t = h * x1            (bare ee/hall, unscaled)
+ *   sweep B: e = eeo * t           (eeo/hallo, unscaled)
+ *   on-site: o = (enim+lsham)*x1, or o = (CC + enim + lsham)*x1 with ccor_2c
+ *   combine: y = alpha*((t - e + o - bsc*x1)*inva) + beta*x0
+ * Operator pointers (bare/eeo/hons) and scratch (t/e/o) are caller-provided
+ * in the engine's precision CT, so the whole apply runs at that precision.  */
+template <class CT, class RT>
+static int step_apply_hoh(rsrec_ctx *c, const CT *bare, const CT *bare_imp,
+                          const CT *eeo, const CT *eeo_imp, const CT *hons,
+                          CT *t, CT *e, CT *o, const CT *x1, const CT *x0,
+                          CT *y, int nrhs, RT alpha, RT beta, RT inva,
+                          RT bsc) {
+    const size_t ld = (size_t)c->nb * c->kk;
+    const size_t n = ld * (size_t)nrhs;
+    /* sweep A: t = h*x1 (alpha=1,beta=0,inva=1,bsc=0 -> bare apply) */
+    if (step_apply<CT, RT>(c, bare, bare_imp, c->nmax > 0, x1, nullptr, t, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+    /* sweep B: e = eeo*t */
+    if (step_apply<CT, RT>(c, eeo, eeo_imp, c->nmax > 0, t, nullptr, e, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+    if (c->have_cc) {
+        /* ccor_2c: o = CC'*x1 over all shells, CC' includes the on-site term */
+        if (step_apply<CT, RT>(c, cc_ee<CT>(c), cc_hall<CT>(c), c->nmax > 0, x1,
+                               nullptr, o, nrhs, (RT)1, (RT)0, (RT)1, (RT)0))
+            return 1;
+    } else {
+        /* on-site: o = hons*x1 (loop column slabs so blockDim.y stays <= 1024) */
+        int cs = std::max(1, 1024 / c->nb);
+        for (int c0 = 0; c0 < nrhs; c0 += cs) {
+            int nc = std::min(cs, nrhs - c0);
+            dim3 t2(c->nb, nc);
+            k_onsite_blockmul<CT><<<c->kk, t2>>>(c->kk, c->nb, ld, nc, c->d_iz,
+                                                 hons, x1 + ld * (size_t)c0,
+                                                 o + ld * (size_t)c0);
+            CUCHK(cudaGetLastError());
+        }
+    }
+    /* combine */
+    {
+        const int tpb = 256;
+        k_combine_hoh<CT, RT><<<(int)((n + tpb - 1) / tpb), tpb>>>(
+            n, t, e, o, x1, x0, y, alpha, beta, inva, bsc);
+        CUCHK(cudaGetLastError());
+    }
+    return 0;
+}
+
+/* Velocity apply with hoh orthogonalisation, mirroring velo_hoh_vec_matmul:
+ *   out = v*x - vo*(h_bare*x)
+ * vo carries the on-site block already zeroed at upload (velo_hoh applies vo
+ * off-site only). Velocity operators are UNSCALED (inva=1, bsc=0), like the
+ * non-hoh velocity apply. Reuses step_apply entirely (no new kernel); `tmp`
+ * is caller-provided (nfield) scratch. */
+template <class CT, class RT>
+static int step_velo_hoh(rsrec_ctx *c, const CT *v_op, const CT *vo_op,
+                         const CT *bare, const CT *bare_imp, CT *tmp,
+                         const CT *x1, CT *y, int nrhs) {
+    /* out = v*x1 */
+    if (step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, y, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+    /* tmp = h_bare*x1 */
+    if (step_apply<CT, RT>(c, bare, bare_imp, c->nmax > 0, x1, nullptr, tmp, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+    /* out = -vo*tmp + out  (x0 = y, beta = 1, alpha = -1) */
+    if (step_apply<CT, RT>(c, vo_op, nullptr, 0, tmp, y, y, nrhs,
+                           (RT)-1, (RT)1, (RT)1, (RT)0)) return 1;
+    return 0;
+}
+
+/* fp64 generalized step (site-major): y = alpha*(Op x1 - bsc x1)*inva +
+ * beta*x0. Routes through the structured backend when active (needs tmp).   */
+static int step64(rsrec_ctx *c, int which, const zc *x1, const zc *x0,
+                  zc *y, zc *tmp, int nrhs, double alpha, double beta,
+                  double inva, double bsc) {
+    if (c->use_struct) {
+        if (nrhs != c->nb)
+            FAIL("structured backend supports nrhs == nb only");
+        if (struct_apply(c, which, x1, tmp)) return 1;
+        size_t n = (size_t)c->nb * c->kk * nrhs;
+        const int tpb = 256;
+        k_combine<<<(int)((n + tpb - 1) / tpb), tpb>>>(n, tmp, x1, x0, y,
+                                                       alpha, beta, inva,
+                                                       bsc);
+        CUCHK(cudaGetLastError());
+        return 0;
+    }
+    const zc *bt = (which == 1) ? c->d_va : (which == 2) ? c->d_vb : c->d_ee;
+    return step_apply<zc, double>(c, bt, c->d_hall, which == 0 ? 1 : 0,
+                                  x1, x0, y, nrhs, alpha, beta, inva, bsc);
+}
+
+/* C = A^H B over site-major fields: ONE tall-skinny gemm (na x nbc x ld).   */
+static int gram64(rsrec_ctx *c, const zc *A, int na, const zc *B, int nbc,
+                  zc *C) {
+    const int ld = c->nb * c->kk;
+    CBCHK(blas_gemm(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, na, nbc, ld, &Z_ONE,
+                    A, ld, B, ld, &Z_ZERO, C, na));
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: matvec (host arrays atom-major in/out; pack/unpack at the edges)
+ * ------------------------------------------------------------------------ */
+extern "C" int rsrec_op_apply(rsrec_ctx *c, int which, const void *x_,
+                              void *y_, int nrhs, double a, double b) {
+    if (!c->have_h) FAIL("op_apply: Hamiltonian not set");
+    if (which != 0 && !c->have_v) FAIL("op_apply: velocity operators not set");
+    if (nrhs != c->nb) FAIL("op_apply: this build expects nrhs == nb");
+    const size_t nf = fieldsz(c), ld = (size_t)c->nb * c->kk;
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(c->d_s3, x_, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<zc><<<nbl, tpb>>>(nf, c->nb, nrhs, c->kk, ld, c->d_s3, c->d_s0);
+    CUCHK(cudaGetLastError());
+    if (step64(c, which, c->d_s0, nullptr, c->d_s1, c->d_s2, nrhs,
+               1.0, 0.0, 1.0 / a, b)) return 1;
+    k_unpack64<<<nbl, tpb>>>(nf, c->nb, nrhs, ld, c->d_s1, c->d_s3);
+    CUCHK(cudaGetLastError());
+    CUCHK(cudaMemcpy(y_, c->d_s3, nf * sizeof(zc), cudaMemcpyDeviceToHost));
+    return 0;
+}
+
+/* ==========================================================================
+ * Chebyshev block moments: templated engine over CT in {fc, zc}, multi-state
+ * RHS batching (nrhs = nb * nstates). States are column groups
+ * [s*nb, (s+1)*nb); per-state moments via gemm strided-batched over states.
+ * ======================================================================== */
+__global__ void k_ham_to_f32(size_t n, int nb, int nnmax, double inva,
+                             double b, const zc *__restrict__ in,
+                             fc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    size_t bb = (size_t)nb * nb;
+    int l = (int)(i % nb), m = (int)((i / nb) % nb);
+    int s = (int)((i / bb) % nnmax);
+    double re = in[i].x, im = in[i].y;
+    if (l == m && s == 0) re -= b;
+    out[i] = make_cuFloatComplex((float)(re * inva), (float)(im * inva));
+}
+
+static int ensure_f32_ham(rsrec_ctx *c, double a, double b) {
+    if (c->f_ee && c->f_ver == c->ham_ver && c->f_a == a && c->f_b == b)
+        return 0;
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t nee = bb * c->nnmax * c->ntype;
+    const size_t nha = bb * c->nnmax * (size_t)c->nmax;
+    if (!c->f_ee) CUCHK(cudaMalloc(&c->f_ee, nee * sizeof(fc)));
+    if (c->nmax > 0 && !c->f_hall)
+        CUCHK(cudaMalloc(&c->f_hall, nha * sizeof(fc)));
+    const int tpb = 256;
+    k_ham_to_f32<<<(int)((nee + tpb - 1) / tpb), tpb>>>(
+        nee, c->nb, c->nnmax, 1.0 / a, b, c->d_ee, c->f_ee);
+    CUCHK(cudaGetLastError());
+    if (c->nmax > 0) {
+        k_ham_to_f32<<<(int)((nha + tpb - 1) / tpb), tpb>>>(
+            nha, c->nb, c->nnmax, 1.0 / a, b, c->d_hall, c->f_hall);
+        CUCHK(cudaGetLastError());
+    }
+    l2_pin(c->f_ee, nee * sizeof(fc));
+    c->f_a = a; c->f_b = b; c->f_ver = c->ham_ver;
+    return 0;
+}
+
+/* Plain fp64 -> fp32 down-conversion (no scaling): out[i] = (fc)in[i]. */
+__global__ void k_zc_to_fc(size_t n, const zc *__restrict__ in,
+                           fc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    out[i] = make_cuFloatComplex((float)in[i].x, (float)in[i].y);
+}
+
+/* fp32 mirrors of the (unscaled) hoh operands. The 1/a, -b*I scaling is
+ * applied in k_combine_hoh, so these are pure precision down-conversions and
+ * depend only on ham_ver (not on a/b). */
+static int ensure_f32_hoh(rsrec_ctx *c) {
+    if (!c->have_hoh) return 0;
+    if (c->f_ee_bare && c->f_hoh_ver == c->ham_ver) return 0;
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t nee = bb * c->nnmax * c->ntype;
+    const size_t nha = bb * c->nnmax * (size_t)c->nmax;
+    const size_t nons = bb * c->ntype;
+    if (!c->f_ee_bare) CUCHK(cudaMalloc(&c->f_ee_bare, nee * sizeof(fc)));
+    if (!c->f_eeo) CUCHK(cudaMalloc(&c->f_eeo, nee * sizeof(fc)));
+    if (!c->f_hons) CUCHK(cudaMalloc(&c->f_hons, nons * sizeof(fc)));
+    if (c->nmax > 0) {
+        if (!c->f_hall_bare) CUCHK(cudaMalloc(&c->f_hall_bare, nha * sizeof(fc)));
+        if (!c->f_hallo) CUCHK(cudaMalloc(&c->f_hallo, nha * sizeof(fc)));
+    }
+    const int tpb = 256;
+#define RSREC_DOWNCONV(N, SRC, DST)                                          \
+    k_zc_to_fc<<<(int)(((N) + tpb - 1) / tpb), tpb>>>((N), (SRC), (DST));    \
+    CUCHK(cudaGetLastError());
+    RSREC_DOWNCONV(nee, c->d_ee_bare, c->f_ee_bare)
+    RSREC_DOWNCONV(nee, c->d_eeo, c->f_eeo)
+    RSREC_DOWNCONV(nons, c->d_hons, c->f_hons)
+    if (c->nmax > 0) {
+        RSREC_DOWNCONV(nha, c->d_hall_bare, c->f_hall_bare)
+        RSREC_DOWNCONV(nha, c->d_hallo, c->f_hallo)
+    }
+    if (c->have_cc) {
+        if (!c->f_cc_ee) CUCHK(cudaMalloc(&c->f_cc_ee, nee * sizeof(fc)));
+        RSREC_DOWNCONV(nee, c->d_cc_ee, c->f_cc_ee)
+        if (c->nmax > 0) {
+            if (!c->f_cc_hall) CUCHK(cudaMalloc(&c->f_cc_hall, nha * sizeof(fc)));
+            RSREC_DOWNCONV(nha, c->d_cc_hall, c->f_cc_hall)
+        }
+    }
+#undef RSREC_DOWNCONV
+    c->f_hoh_ver = c->ham_ver;
+    return 0;
+}
+
+/* fp32 mirrors of the (unscaled) velocity operators v_a/v_b and, when hoh is
+ * active, vo_a/vo_b (on-site already zeroed at upload). Pure down-conversion,
+ * gated on vel_ver. */
+static int ensure_f32_velocity(rsrec_ctx *c) {
+    if (!c->have_v) return 0;
+    if (c->f_va && c->f_vel_ver == c->vel_ver) return 0;
+    const size_t ne = (size_t)c->nb * c->nb * c->nnmax * c->ntype;
+    if (!c->f_va) CUCHK(cudaMalloc(&c->f_va, ne * sizeof(fc)));
+    if (!c->f_vb) CUCHK(cudaMalloc(&c->f_vb, ne * sizeof(fc)));
+    const int tpb = 256;
+    const int nbl = (int)((ne + tpb - 1) / tpb);
+    k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_va, c->f_va);
+    CUCHK(cudaGetLastError());
+    k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_vb, c->f_vb);
+    CUCHK(cudaGetLastError());
+    if (c->have_vo) {
+        if (!c->f_voa) CUCHK(cudaMalloc(&c->f_voa, ne * sizeof(fc)));
+        if (!c->f_vob) CUCHK(cudaMalloc(&c->f_vob, ne * sizeof(fc)));
+        k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_voa, c->f_voa);
+        CUCHK(cudaGetLastError());
+        k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_vob, c->f_vob);
+        CUCHK(cudaGetLastError());
+    }
+    c->f_vel_ver = c->vel_ver;
+    return 0;
+}
+
+/* Templated multi-state engine (block-ELL path only). Moment buffer layout:
+ * dmu has 2*lld+2 slots, each slot a (bb x ns) block (state-major); the host
+ * combine writes mu as (bb, nmom, ns) state-major.                          */
+template <class CT, class RT>
+static int cheb_engine(rsrec_ctx *c, const void *psi0_h, int ns, int lld,
+                       double a, double b, void *mu_h,
+                       const CT *bt, const CT *bh, RT inva, RT bsc,
+                       const CT *h_bare = nullptr, const CT *h_bare_imp = nullptr,
+                       const CT *h_eeo = nullptr, const CT *h_eeo_imp = nullptr,
+                       const CT *h_hons = nullptr) {
+    const int nb = c->nb, kk = c->kk;
+    const size_t bb = (size_t)nb * nb;
+    const size_t ld = (size_t)nb * kk;
+    const int nrhs = nb * ns;
+    const size_t nfield = ld * (size_t)nrhs;
+    const size_t nmom = 2 * (size_t)lld + 2;
+    const bool do_hoh = c->have_hoh;
+
+    size_t freeb, totalb;
+    cudaMemGetInfo(&freeb, &totalb);
+    /* p0/p1/p2 (+ 3 hoh scratch when active) + stage(zc) + dmu */
+    if ((do_hoh ? 6 : 3) * nfield * sizeof(CT) + nfield * sizeof(zc) +
+        nmom * bb * ns * sizeof(CT) > freeb * 9 / 10)
+        FAIL("chebyshev_moments: state batch does not fit; reduce nstates");
+
+    CT *p0, *p1, *p2, *dmu;
+    CT *t_hoh = nullptr, *e_hoh = nullptr, *o_hoh = nullptr;
+    zc *stage;
+    CUCHK(cudaMalloc(&p0, nfield * sizeof(CT)));
+    CUCHK(cudaMalloc(&p1, nfield * sizeof(CT)));
+    CUCHK(cudaMalloc(&p2, nfield * sizeof(CT)));
+    CUCHK(cudaMalloc(&stage, nfield * sizeof(zc)));
+    CUCHK(cudaMalloc(&dmu, nmom * bb * ns * sizeof(CT)));
+    if (do_hoh) {
+        CUCHK(cudaMalloc(&t_hoh, nfield * sizeof(CT)));
+        CUCHK(cudaMalloc(&e_hoh, nfield * sizeof(CT)));
+        CUCHK(cudaMalloc(&o_hoh, nfield * sizeof(CT)));
+    }
+
+    const int tpb = 256;
+    const int nbl = (int)((nfield + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(stage, psi0_h, nfield * sizeof(zc),
+                     cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nfield, nb, nb, kk, ld, stage, p0);
+    CUCHK(cudaGetLastError());
+
+    const CT one = {(RT)1, (RT)0};
+    const CT zero = {(RT)0, (RT)0};
+    const long long scol = (long long)ld * nb;   /* per-state column stride  */
+    const long long smu = (long long)bb;
+    auto moments = [&](const CT *A, const CT *B, size_t slot) -> int {
+        CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb,
+                           (int)ld, &one, A, (int)ld, scol, B, (int)ld,
+                           scol, &zero, dmu + slot * bb * ns, nb, smu, ns));
+        return 0;
+    };
+    /* Matvec dispatch: the two-sweep hoh apply when active, otherwise the
+     * single-operator step. Both run at the engine precision CT/RT.         */
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
+                                          h_eeo_imp, h_hons, t_hoh, e_hoh,
+                                          o_hoh, x1, x0, yv, nrhs, al, be,
+                                          inva, bsc);
+        return step_apply<CT, RT>(c, bt, bh, 1, x1, x0, yv, nrhs, al, be,
+                                  inva, bsc);
+    };
+
+    if (moments(p0, p0, 0)) return 1;
+    if (matvec(p0, nullptr, p1, (RT)1, (RT)0)) return 1;
+    if (moments(p0, p1, 1)) return 1;
+    for (int ll = 1; ll <= lld; ++ll) {
+        if (matvec(p1, p0, p2, (RT)2, (RT)-1)) return 1;
+        if (moments(p1, p1, (size_t)(2 * ll))) return 1;
+        if (moments(p2, p1, (size_t)(2 * ll + 1))) return 1;
+        CT *t = p0; p0 = p1; p1 = p2; p2 = t;
+    }
+
+    std::vector<CT> h(nmom * bb * ns);
+    CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
+                     cudaMemcpyDeviceToHost));
+    cudaFree(p0); cudaFree(p1); cudaFree(p2); cudaFree(stage); cudaFree(dmu);
+    if (t_hoh) cudaFree(t_hoh);
+    if (e_hoh) cudaFree(e_hoh);
+    if (o_hoh) cudaFree(o_hoh);
+    cplx *mu = (cplx *)mu_h;                       /* (bb, nmom, ns)         */
+    for (int s = 0; s < ns; ++s) {
+        cplx *mus = mu + (size_t)s * bb * nmom;
+        const CT *h1 = h.data() + 0 * bb * ns + (size_t)s * bb;
+        const CT *h2 = h.data() + 1 * bb * ns + (size_t)s * bb;
+        for (size_t i = 0; i < bb; ++i) {
+            mus[i] = cplx(h1[i].x, h1[i].y);
+            mus[bb + i] = cplx(h2[i].x, h2[i].y);
+        }
+        for (int ll = 1; ll <= lld; ++ll) {
+            const CT *d1 = h.data() + (size_t)(2 * ll) * bb * ns +
+                           (size_t)s * bb;
+            const CT *d2 = h.data() + (size_t)(2 * ll + 1) * bb * ns +
+                           (size_t)s * bb;
+            for (size_t i = 0; i < bb; ++i) {
+                mus[(size_t)(2 * ll) * bb + i] =
+                    2.0 * cplx(d1[i].x, d1[i].y) - mus[i];
+                mus[(size_t)(2 * ll + 1) * bb + i] =
+                    2.0 * cplx(d2[i].x, d2[i].y) - mus[bb + i];
+            }
+        }
+    }
+    return 0;
+}
+
+/* Single-state structured-backend Chebyshev moments (nrhs == nb): explicit
+ * recurrence using step64 (FFT stencil + correction) and gram64 reductions.
+ * psi0 is one (nb, nb, kk) state; mu one (bb, 2*lld+2) slot block.          */
+static int cheb_struct_one(rsrec_ctx *c, const void *psi0, int lld, double a,
+                           double b, void *mu) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    const size_t nmom = 2 * (size_t)lld + 2;
+    zc *p0 = c->d_s0, *p1 = c->d_s1, *p2 = c->d_s2, *tmp = c->d_s3;
+    zc *stage, *dmu;
+    CUCHK(cudaMalloc(&stage, nf * sizeof(zc)));
+    CUCHK(cudaMalloc(&dmu, nmom * bb * sizeof(zc)));
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(stage, psi0, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, p0);
+    CUCHK(cudaGetLastError());
+    if (gram64(c, p0, nb, p0, nb, dmu)) { cudaFree(stage); cudaFree(dmu);
+        return 1; }
+    if (step64(c, 0, p0, nullptr, p1, tmp, nb, 1.0, 0.0, 1.0 / a, b)) {
+        cudaFree(stage); cudaFree(dmu); return 1; }
+    if (gram64(c, p0, nb, p1, nb, dmu + bb)) { cudaFree(stage); cudaFree(dmu);
+        return 1; }
+    for (int ll = 1; ll <= lld; ++ll) {
+        if (step64(c, 0, p1, p0, p2, tmp, nb, 2.0, -1.0, 1.0 / a, b)) {
+            cudaFree(stage); cudaFree(dmu); return 1; }
+        if (gram64(c, p1, nb, p1, nb, dmu + (size_t)(2 * ll) * bb)) {
+            cudaFree(stage); cudaFree(dmu); return 1; }
+        if (gram64(c, p2, nb, p1, nb, dmu + (size_t)(2 * ll + 1) * bb)) {
+            cudaFree(stage); cudaFree(dmu); return 1; }
+        zc *t = p0; p0 = p1; p1 = p2; p2 = t;
+    }
+    std::vector<cplx> h(nmom * bb);
+    CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(zc),
+                     cudaMemcpyDeviceToHost));
+    cudaFree(stage); cudaFree(dmu);
+    cplx *mu_ = (cplx *)mu;
+    for (size_t i = 0; i < 2 * bb; ++i) mu_[i] = h[i];
+    for (int ll = 1; ll <= lld; ++ll)
+        for (size_t i = 0; i < bb; ++i) {
+            mu_[(size_t)(2 * ll) * bb + i] =
+                2.0 * h[(size_t)(2 * ll) * bb + i] - h[i];
+            mu_[(size_t)(2 * ll + 1) * bb + i] =
+                2.0 * h[(size_t)(2 * ll + 1) * bb + i] - h[bb + i];
+        }
+    return 0;
+}
+
+extern "C" int rsrec_chebyshev_moments_batch(rsrec_ctx *c, const void *psi0,
+                                             int nstates, int lld, double a,
+                                             double b, void *mu) {
+    if (!c->have_h) FAIL("chebyshev_moments: Hamiltonian not set");
+    if (nstates < 1) FAIL("chebyshev_moments: nstates < 1");
+    /* hoh: two-sweep block-ELL path. The structured/FFT backend assumes an
+     * ee-only Hamiltonian, so hoh always uses the block-ELL engine. The
+     * operators are stored unscaled; the engine's combine applies (1/a, -b),
+     * hence inva = 1/a and bsc = b are passed (NOT 1, 0 as in the prescaled
+     * non-hoh fp32 path). fp32 by default for speed; fp64 if requested.     */
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c)) return 1;
+            return cheb_engine<fc, float>(
+                c, psi0, nstates, lld, a, b, mu, c->f_ee_bare, c->f_hall_bare,
+                (float)(1.0 / a), (float)b, c->f_ee_bare, c->f_hall_bare,
+                c->f_eeo, c->f_hallo, c->f_hons);
+        }
+        return cheb_engine<zc, double>(
+            c, psi0, nstates, lld, a, b, mu, c->d_ee_bare, c->d_hall_bare,
+            1.0 / a, b, c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo,
+            c->d_hons);
+    }
+    if (c->cheb_prec == 0 && !c->use_struct) {
+        if (ensure_f32_ham(c, a, b)) return 1;
+        return cheb_engine<fc, float>(c, psi0, nstates, lld, a, b, mu,
+                                      c->f_ee, c->f_hall, 1.0f, 0.0f);
+    }
+    if (!c->use_struct)
+        return cheb_engine<zc, double>(c, psi0, nstates, lld, a, b, mu,
+                                       c->d_ee, c->d_hall, 1.0 / a, b);
+    /* structured backend (fp64): one FFT-stencil sweep per state. The
+     * stencil apply is fixed at nrhs == nb, so states are looped rather than
+     * stacked as RHS columns; the moments are identical state-by-state.     */
+    const size_t nf = fieldsz(c);
+    const size_t per_mu = (size_t)c->nb * c->nb * (2 * (size_t)lld + 2);
+    const cplx *psi = (const cplx *)psi0;
+    cplx *mu_ = (cplx *)mu;
+    for (int s = 0; s < nstates; ++s)
+        if (cheb_struct_one(c, psi + (size_t)s * nf, lld, a, b,
+                            mu_ + (size_t)s * per_mu)) return 1;
+    return 0;
+}
+
+extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0,
+                                       int lld, double a, double b,
+                                       void *mu) {
+    return rsrec_chebyshev_moments_batch(c, psi0, 1, lld, a, b, mu);
+}
+
+/* Precision-templated block-Lanczos (Haydock) engine WITH hoh orthogonalisation.
+ * Mirrors the fp64 block recurrence below and crecal_b/hop_b_hoh: the matvec is
+ * the genuine two-sweep hoh apply (raw H, no Chebyshev a,b scaling) and the
+ * per-step B-matrix square root is always computed in fp64 on the host
+ * (host_eig_sqrt_t), so the fp32 (mixed) path keeps the numerically sensitive
+ * block normalisation in double -- exactly like block_lanczos_sp + bsqrt_dp in
+ * haydock_fast.f90. Working buffers/gram/gemms run at the engine precision CT/RT
+ * (fc/float for the mixed path, zc/double for the full-fp64 path). The hoh
+ * operators are passed unscaled (combine uses inva=1, bsc=0).                  */
+template <class CT, class RT>
+static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
+                            void *a_b_, void *b2_b_, const CT *bare,
+                            const CT *bare_imp, const CT *eeo,
+                            const CT *eeo_imp, const CT *hons) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    cplx *a_b = (cplx *)a_b_, *b2_b = (cplx *)b2_b_;
+
+    CT *psi, *pmn, *hpsi, *gt, *t_h, *e_h, *o_h, *dAn, *dSum, *dB, *dBi;
+    CUCHK(cudaMalloc(&psi, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&pmn, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&hpsi, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&gt, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&t_h, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&e_h, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&o_h, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&dAn, bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&dSum, bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&dB, bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&dBi, bb * sizeof(CT)));
+
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    {   /* host psi0 (zc, atom-major) -> device CT (site-major + down-convert) */
+        zc *stage;
+        CUCHK(cudaMalloc(&stage, nf * sizeof(zc)));
+        CUCHK(cudaMemcpy(stage, psi0_, nf * sizeof(zc), cudaMemcpyHostToDevice));
+        k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, psi);
+        CUCHK(cudaGetLastError());
+        cudaFree(stage);
+    }
+    CUCHK(cudaMemset(pmn, 0, nf * sizeof(CT)));
+
+    const CT c_one = ct_make<CT>(1, 0), c_zero = ct_make<CT>(0, 0),
+             c_mone = ct_make<CT>(-1, 0);
+    auto gram = [&](const CT *A, const CT *B, CT *C) -> int {
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                        &c_one, A, (int)ld, B, (int)ld, &c_zero, C, nb));
+        return 0;
+    };
+
+    std::vector<cplx> sum_b(bb, cplx(0, 0));
+    for (int i = 0; i < nb; ++i) sum_b[i + (size_t)nb * i] = 1.0;
+    std::memset(a_b, 0, bb * lld * sizeof(cplx));
+    std::memset(b2_b, 0, bb * lld * sizeof(cplx));
+    std::vector<CT> hbb(bb);
+
+    for (int ll = 0; ll < lld - 1; ++ll) {
+        /* hpsi = H psi (raw two-sweep hoh apply: t = h*psi; e = eeo*t;
+         * o = (enim+lsham)*psi; hpsi = t - e + o)                            */
+        if (step_apply_hoh<CT, RT>(c, bare, bare_imp, eeo, eeo_imp, hons, t_h,
+                                   e_h, o_h, psi, nullptr, hpsi, nb, (RT)1,
+                                   (RT)0, (RT)1, (RT)0))
+            return 1;
+        if (gram(psi, hpsi, dAn)) return 1;                       /* A_n     */
+        CUCHK(cudaMemcpy(hbb.data(), dAn, bb * sizeof(CT),
+                         cudaMemcpyDeviceToHost));
+        for (size_t i = 0; i < bb; ++i)
+            a_b[(size_t)ll * bb + i] = cplx(hbb[i].x, hbb[i].y);
+        k_axpby<CT, RT><<<nbl, tpb>>>(nf, (RT)1, hpsi, (RT)-1, pmn);
+        CUCHK(cudaGetLastError());                        /* pmn = hpsi - pmn */
+        std::memcpy(b2_b + (size_t)ll * bb, sum_b.data(), bb * sizeof(cplx));
+
+        /* pmn -= psi * A_n */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &c_mone, psi, (int)ld, dAn, nb, &c_one, pmn, (int)ld));
+        if (gram(pmn, pmn, dSum)) return 1;                       /* B^2     */
+        CUCHK(cudaMemcpy(hbb.data(), dSum, bb * sizeof(CT),
+                         cudaMemcpyDeviceToHost));
+        for (size_t i = 0; i < bb; ++i) sum_b[i] = cplx(hbb[i].x, hbb[i].y);
+        if (host_eig_sqrt_t<CT>(c, dSum, dB, dBi)) return 1;  /* fp64 B-sqrt */
+
+        /* psi_{n+1} = pmn * Bi (-> gt); pmn = psi * B; swap                  */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &c_one, pmn, (int)ld, dBi, nb, &c_zero, gt, (int)ld));
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &c_one, psi, (int)ld, dB, nb, &c_zero, pmn, (int)ld));
+        CT *t = psi; psi = gt; gt = t;
+    }
+    std::memcpy(b2_b + (size_t)(lld - 1) * bb, sum_b.data(), bb * sizeof(cplx));
+
+    cudaFree(psi); cudaFree(pmn); cudaFree(hpsi); cudaFree(gt);
+    cudaFree(t_h); cudaFree(e_h); cudaFree(o_h);
+    cudaFree(dAn); cudaFree(dSum); cudaFree(dB); cudaFree(dBi);
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: block Lanczos (site-major: each reduction/right-multiply is one big
+ * gemm; host zheev per step like crecal_b). Non-hoh path runs fp64 via step64
+ * (and the structured backend when active). With hoh it dispatches to the
+ * precision-templated two-sweep engine above: prec==0 -> fp32 mixed (fp64
+ * B-sqrt), prec==1 -> full fp64.
+ * ------------------------------------------------------------------------ */
+extern "C" int rsrec_block_lanczos(rsrec_ctx *c, const void *psi0_, int lld,
+                                   void *a_b_, void *b2_b_, int prec) {
+    if (!c->have_h) FAIL("block_lanczos: Hamiltonian not set");
+    if (c->have_hoh) {
+        if (prec == 0) {
+            if (ensure_f32_hoh(c)) return 1;
+            return block_hoh_engine<fc, float>(
+                c, psi0_, lld, a_b_, b2_b_, c->f_ee_bare, c->f_hall_bare,
+                c->f_eeo, c->f_hallo, c->f_hons);
+        }
+        return block_hoh_engine<zc, double>(
+            c, psi0_, lld, a_b_, b2_b_, c->d_ee_bare, c->d_hall_bare,
+            c->d_eeo, c->d_hallo, c->d_hons);
+    }
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    cplx *a_b = (cplx *)a_b_, *b2_b = (cplx *)b2_b_;
+
+    zc *psi = c->d_s0, *pmn = c->d_s1, *hpsi = c->d_s2, *tmp = c->d_s3;
+    zc *gt;
+    CUCHK(cudaMalloc(&gt, nf * sizeof(zc)));
+    zc *dAn = c->d_blk, *dSum = c->d_blk + bb;
+    zc *dB = c->d_blk + 2 * bb, *dBi = c->d_blk + 3 * bb;
+
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(gt, psi0_, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, gt, psi);
+    CUCHK(cudaGetLastError());
+    CUCHK(cudaMemset(pmn, 0, nf * sizeof(zc)));
+
+    std::vector<cplx> sum_b(bb, cplx(0, 0));
+    for (int i = 0; i < nb; ++i) sum_b[i + (size_t)nb * i] = 1.0;
+    std::memset(a_b, 0, bb * lld * sizeof(cplx));
+    std::memset(b2_b, 0, bb * lld * sizeof(cplx));
+
+    for (int ll = 0; ll < lld - 1; ++ll) {
+        if (step64(c, 0, psi, nullptr, hpsi, tmp, nb, 1.0, 0.0, 1.0, 0.0))
+            return 1;
+        if (gram64(c, psi, nb, hpsi, nb, dAn)) return 1;          /* A_n    */
+        CUCHK(cudaMemcpy(a_b + (size_t)ll * bb, dAn, bb * sizeof(zc),
+                         cudaMemcpyDeviceToHost));
+        k_axpby<zc, double><<<nbl, tpb>>>(nf, 1.0, hpsi, -1.0, pmn);
+        CUCHK(cudaGetLastError());                       /* pmn = hpsi - pmn */
+        std::memcpy(b2_b + (size_t)ll * bb, sum_b.data(), bb * sizeof(cplx));
+
+        /* pmn -= psi * A_n: ONE (ld x nb x nb) gemm, beta = 1               */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &Z_MONE, psi, (int)ld, dAn, nb, &Z_ONE, pmn,
+                        (int)ld));
+        if (gram64(c, pmn, nb, pmn, nb, dSum)) return 1;          /* B^2    */
+        CUCHK(cudaMemcpy(sum_b.data(), dSum, bb * sizeof(zc),
+                         cudaMemcpyDeviceToHost));
+        if (host_eig_sqrt(c, dSum, dB, dBi)) return 1;
+
+        /* psi_{n+1} = pmn * Bi (gemm into gt); pmn = psi_n * B; swap        */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &Z_ONE, pmn, (int)ld, dBi, nb, &Z_ZERO, gt,
+                        (int)ld));
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &Z_ONE, psi, (int)ld, dB, nb, &Z_ZERO, pmn,
+                        (int)ld));
+        zc *t = psi; psi = gt; gt = t;        /* psi <- new; gt <- old psi   */
+    }
+    std::memcpy(b2_b + (size_t)(lld - 1) * bb, sum_b.data(),
+                bb * sizeof(cplx));
+    /* free whichever rotated buffer is the extra allocation (not s0..s3)    */
+    zc *extra = (psi != c->d_s0 && psi != c->d_s1 && psi != c->d_s2 &&
+                 psi != c->d_s3) ? psi : gt;
+    cudaFree(extra);
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: scalar Lanczos (fp64, site-major, all nb chains batched as columns)
+ * ------------------------------------------------------------------------ */
+extern "C" int rsrec_scalar_lanczos(rsrec_ctx *c, int site_j, int lld,
+                                    double *a_out, double *b2_out) {
+    if (!c->have_h) FAIL("scalar_lanczos: Hamiltonian not set");
+    if (site_j < 1 || site_j > c->kk) FAIL("scalar_lanczos: bad site");
+    const int nb = c->nb;
+    const size_t nf = fieldsz(c), ld = (size_t)nb * c->kk;
+
+    zc *psi = c->d_s0, *pmn = c->d_s1, *hpsi = c->d_s2, *tmp = c->d_s3;
+    CUCHK(cudaMemset(psi, 0, nf * sizeof(zc)));
+    CUCHK(cudaMemset(pmn, 0, nf * sizeof(zc)));
+    {   /* psi(row l, col l, atom site_j) = 1 (site-major)                   */
+        std::vector<cplx> col(nb, cplx(0, 0));
+        for (int l = 0; l < nb; ++l) {
+            col.assign(nb, cplx(0, 0));
+            col[l] = 1.0;
+            CUCHK(cudaMemcpy(psi + (size_t)nb * (site_j - 1) + ld * l,
+                             col.data(), nb * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+        }
+    }
+    double *dA = c->d_col, *dS = c->d_col + nb;
+    zc *dG = c->d_blk;                       /* nb x nb gram scratch          */
+    std::vector<double> acol(nb), s2(nb), summ(nb, 1.0);
+    std::memset(a_out, 0, sizeof(double) * lld * nb);
+    std::memset(b2_out, 0, sizeof(double) * lld * nb);
+
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    const int ndg = (nb + 255) / 256;
+
+    for (int ll = 0; ll < lld - 1; ++ll) {
+        if (step64(c, 0, psi, nullptr, hpsi, tmp, nb, 1.0, 0.0, 1.0, 0.0))
+            return 1;
+        /* a_col = Re diag(psi^H H psi): one gram gemm + diagonal pick        */
+        if (gram64(c, psi, nb, hpsi, nb, dG)) return 1;
+        k_diag_real<<<ndg, tpb>>>(nb, dG, dA);
+        CUCHK(cudaGetLastError());
+        k_axpby<zc, double><<<nbl, tpb>>>(nf, 1.0, hpsi, 1.0, pmn);
+        CUCHK(cudaMemcpy(acol.data(), dA, nb * sizeof(double),
+                         cudaMemcpyDeviceToHost));
+        for (int col = 0; col < nb; ++col) {
+            a_out[ll + (size_t)lld * col] = acol[col];
+            b2_out[ll + (size_t)lld * col] = summ[col];
+            acol[col] = -acol[col];
+        }
+        CUCHK(cudaMemcpy(dA, acol.data(), nb * sizeof(double),
+                         cudaMemcpyHostToDevice));
+        k_col_axpy<<<nbl, tpb>>>(ld, nb, dA, psi, pmn);  /* pmn -= a psi    */
+        /* B^2 = Re diag(pmn^H pmn): one gram gemm + diagonal pick           */
+        if (gram64(c, pmn, nb, pmn, nb, dG)) return 1;
+        k_diag_real<<<ndg, tpb>>>(nb, dG, dS);
+        CUCHK(cudaGetLastError());
+        CUCHK(cudaMemcpy(s2.data(), dS, nb * sizeof(double),
+                         cudaMemcpyDeviceToHost));
+        k_col_shift<<<nbl, tpb>>>(ld, nb, dS, psi, pmn);
+        CUCHK(cudaGetLastError());
+        summ = s2;
+    }
+    for (int col = 0; col < nb; ++col)
+        b2_out[(lld - 1) + (size_t)lld * col] = summ[col];
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Stochastic conductivity moments, block-ELL path, templated precision.
+ *   mu_{nm} = left_m^H (V_a T_{n-1}(H~) V_b |psiref>),   left_m = T_{m-1}(H~)|psiref>
+ * Reuses step_apply / step_apply_hoh (H~) and step_velo_hoh / step_apply (V).
+ * Operator pointers and scaling follow the same conventions as cheb_engine:
+ *  - non-hoh: Hop = folded H, (inva,bsc) = (1/a,b) fp64 or (1,0) fp32-prescaled;
+ *    velocity raw (va/vb), no vo.
+ *  - hoh: H via two-sweep (h_bare/eeo/hons, inva=1/a, bsc=b), velocity via
+ *    step_velo_hoh (va/vb + voa/vob + h_bare); operators raw.
+ * ------------------------------------------------------------------------ */
+template <class CT, class RT>
+static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
+                        int lld,
+                        RT inva, RT bsc, void *mu_,
+                        const CT *Hop, const CT *Himp,
+                        const CT *va, const CT *vb,
+                        const CT *h_bare, const CT *h_bare_imp,
+                        const CT *h_eeo, const CT *h_eeo_imp, const CT *h_hons,
+                        const CT *voa, const CT *vob, bool retain_device,
+                        bool download_host, int trace_index) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    const int nrhs = nb * nstates;
+    const size_t nfield = nf * (size_t)nstates;
+    const bool do_hoh = c->have_hoh;
+
+    if (ensure_stochastic_workspace<CT>(c, lld, do_hoh, nstates)) return 1;
+    auto *ws = &c->stoch_workspace;
+    CT *left = static_cast<CT *>(ws->left);
+    CT *dmu = static_cast<CT *>(ws->dmu);
+    CT *R = static_cast<CT *>(ws->R);
+    CT *w0 = static_cast<CT *>(ws->w0);
+    CT *w1 = static_cast<CT *>(ws->w1);
+    CT *w2 = static_cast<CT *>(ws->w2);
+    CT *ht = static_cast<CT *>(ws->ht);
+    CT *he = static_cast<CT *>(ws->he);
+    CT *ho = static_cast<CT *>(ws->ho);
+    CT *vtmp = static_cast<CT *>(ws->vtmp);
+    zc *stage = static_cast<zc *>(ws->stage);
+    CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * nstates * sizeof(CT)));
+
+    /* H~ apply (Chebyshev recurrence operator), hoh-aware. */
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
+                                          h_eeo_imp, h_hons, ht, he, ho,
+                                          x1, x0, yv, nrhs, al, be, inva, bsc);
+        return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nrhs,
+                                  al, be, inva, bsc);
+    };
+    /* velocity apply (raw, hoh-aware). */
+    auto velo = [&](const CT *v_op, const CT *vo_op, const CT *x1, CT *yv) -> int {
+        if (do_hoh)
+            return step_velo_hoh<CT, RT>(c, v_op, vo_op, h_bare, h_bare_imp,
+                                         vtmp, x1, yv, nrhs);
+        return step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, yv, nrhs,
+                                  (RT)1, (RT)0, (RT)1, (RT)0);
+    };
+
+    const CT one = {(RT)1, (RT)0};
+    const CT zero = {(RT)0, (RT)0};
+    const int tpb = 256;
+    const double h2d_start = host_seconds();
+    CUCHK(cudaMemcpy(stage, psiref_h, nfield * sizeof(zc), cudaMemcpyHostToDevice));
+    c->stoch_h2d_s += host_seconds() - h2d_start;
+    c->stoch_h2d_bytes += (long long)(nfield * sizeof(zc));
+    const double cheb_start = host_seconds();
+    const int nbl_batch = (int)((nfield + tpb - 1) / tpb);
+    k_pack<CT><<<nbl_batch, tpb>>>(nfield, nb, nb, c->kk, ld, stage, w1);
+    CUCHK(cudaGetLastError());
+
+    /* left states L_m = T_{m-1}(H~)|psiref>, stored device-resident. */
+    CUCHK(cudaMemcpy(left, w1, nfield * sizeof(CT), cudaMemcpyDeviceToDevice));
+    for (int m = 2; m <= lld; ++m) {
+        if (m == 2) {
+            CT *t = w0; w0 = w1; w1 = t;
+            if (matvec(w0, nullptr, w1, (RT)1, (RT)0)) return 1;
+        } else {
+            if (matvec(w1, w0, w2, (RT)2, (RT)-1)) return 1;
+            CT *t = w0; w0 = w1; w1 = w2; w2 = t;
+        }
+        CUCHK(cudaMemcpy(left + (size_t)(m - 1) * nfield, w1, nfield * sizeof(CT),
+                         cudaMemcpyDeviceToDevice));
+    }
+
+    /* right recursion v_n = T_{n-1}(H~) V_b|psiref>; left slot 0 = psiref. */
+    if (velo(vb, vob, left, w0)) return 1;        /* w0 = V_b psiref */
+    CT *v0 = w0, *v1 = w1, *v2 = w2;
+    for (int n = 1; n <= lld; ++n) {
+        if (n == 1) {
+            CUCHK(cudaMemcpy(v1, v0, nfield * sizeof(CT), cudaMemcpyDeviceToDevice));
+        } else if (n == 2) {
+            CUCHK(cudaMemcpy(v0, v1, nfield * sizeof(CT), cudaMemcpyDeviceToDevice));
+            if (matvec(v0, nullptr, v1, (RT)1, (RT)0)) return 1;
+        } else {
+            if (matvec(v1, v0, v2, (RT)2, (RT)-1)) return 1;
+            CT *t = v0; v0 = v1; v1 = v2; v2 = t;
+        }
+        if (velo(va, voa, v1, R)) return 1;        /* R = V_a v_n */
+        /* left is m-major, with each m block containing all B states;
+         * R is state-major.  Keep the existing efficient m-batched GEMM
+         * and issue one strided-batched call per state so both operands and
+         * the Fortran (n,m,state) output layout have constant strides. */
+        const size_t per_state_mu = bb * (size_t)lld * lld;
+        for (int s = 0; s < nstates; ++s)
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                               &one, left + (size_t)s * nf, (int)ld,
+                               (long long)nfield,
+                               R + (size_t)s * nf, (int)ld, 0,
+                               &zero, dmu + (size_t)s * per_state_mu +
+                                      bb * (size_t)(n - 1), nb,
+                               (long long)bb * lld, lld));
+    }
+
+    /* The device recurrence/contractions are the numerical moment stage.
+     * Keep the final synchronous copy separate so the transport profile can
+     * distinguish arithmetic from host/device traffic. */
+    CUCHK(cudaDeviceSynchronize());
+    if (retain_device) {
+        const size_t per_state_mu = bb * (size_t)lld * lld;
+        for (int s = 0; s < nstates; ++s)
+            if (retain_transport_diagonal(c, dmu + (size_t)s * per_state_mu,
+                                          lld, trace_index + s)) return 1;
+    }
+    const double d2h_start = host_seconds();
+    c->stoch_cheb_s += d2h_start - cheb_start;
+    if (!download_host) return 0;
+    /* copy moments back, widening to cplx (fp64) for the Fortran side. */
+    std::vector<CT> &h = stochastic_host_moments(ws, static_cast<CT *>(nullptr));
+    h.resize(bb * (size_t)lld * lld * nstates);
+    CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
+                     cudaMemcpyDeviceToHost));
+    c->stoch_d2h_s += host_seconds() - d2h_start;
+    c->stoch_d2h_bytes += (long long)(h.size() * sizeof(CT));
+    const double conversion_start = host_seconds();
+    cplx *mu = (cplx *)mu_;
+    for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
+    c->stoch_conversion_s += host_seconds() - conversion_start;
+
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: stochastic conductivity moments. Dispatch fp32/fp64 x hoh over the
+ * block-ELL engine; the structured/FFT backend keeps the original fp64
+ * step64-based path (ee-only, non-hoh).
+ * ------------------------------------------------------------------------ */
+static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
+                                   int lld, double a, double b, void *mu_,
+                                   bool retain_device, bool download_host,
+                                   int trace_index) {
+    if (!c->have_h) FAIL("stochastic_moments: Hamiltonian not set");
+    if (!c->have_v) FAIL("stochastic_moments: velocity operators not set");
+    if (c->have_hoh && !c->have_vo)
+        FAIL("stochastic_moments: hoh active but velocity ortho (vo) not set");
+    if (download_host && !mu_)
+        FAIL("stochastic_moments: host moment output is required when download_host is enabled");
+
+    c->stoch_h2d_s = 0.0;
+    c->stoch_cheb_s = 0.0;
+    c->stoch_d2h_s = 0.0;
+    c->stoch_conversion_s = 0.0;
+    c->stoch_mu_pack_s = 0.0;
+    c->stoch_h2d_bytes = 0;
+    c->stoch_d2h_bytes = 0;
+    c->stoch_mu_pack_bytes = 0;
+
+    if (!c->use_struct) {
+        if (c->have_hoh) {
+            if (c->cheb_prec == 0) {
+                if (ensure_f32_hoh(c)) return 1;
+                if (ensure_f32_velocity(c)) return 1;
+                return stoch_engine_batch<fc, float>(
+                    c, psiref_, 1, lld, (float)(1.0 / a), (float)b, mu_,
+                    c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
+                    c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
+                    c->f_hons, c->f_voa, c->f_vob, retain_device,
+                    download_host, trace_index);
+            }
+            return stoch_engine_batch<zc, double>(
+                c, psiref_, 1, lld, 1.0 / a, b, mu_,
+                c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
+                c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
+                c->d_voa, c->d_vob, retain_device, download_host, trace_index);
+        }
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_ham(c, a, b)) return 1;
+            if (ensure_f32_velocity(c)) return 1;
+            return stoch_engine_batch<fc, float>(
+                c, psiref_, 1, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+                c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+                nullptr, nullptr, retain_device, download_host, trace_index);
+        }
+        return stoch_engine_batch<zc, double>(
+            c, psiref_, 1, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+            c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, retain_device, download_host, trace_index);
+    }
+
+    /* --- structured/FFT backend: original fp64 step64 path (non-hoh) ----- */
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+
+    if (ensure_structured_stochastic_workspace(c, lld)) return 1;
+    auto *ws = &c->stoch_workspace;
+    zc *left = static_cast<zc *>(ws->left);
+    zc *dmu = static_cast<zc *>(ws->dmu);
+    zc *R = static_cast<zc *>(ws->R);
+    CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * sizeof(zc)));
+
+    zc *w0 = c->d_s0, *w1 = c->d_s1, *w2 = c->d_s2, *tmp = c->d_s3;
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    const double h2d_start = host_seconds();
+    CUCHK(cudaMemcpy(R, psiref_, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    c->stoch_h2d_s = host_seconds() - h2d_start;
+    c->stoch_h2d_bytes = (long long)(nf * sizeof(zc));
+    const double cheb_start = host_seconds();
+    k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, R, w1);
+    CUCHK(cudaGetLastError());
+
+    CUCHK(cudaMemcpy(left, w1, nf * sizeof(zc), cudaMemcpyDeviceToDevice));
+    for (int m = 2; m <= lld; ++m) {
+        if (m == 2) {
+            zc *t = w0; w0 = w1; w1 = t;
+            if (step64(c, 0, w0, nullptr, w1, tmp, nb, 1.0, 0.0, 1.0 / a, b))
+                return 1;
+        } else {
+            if (step64(c, 0, w1, w0, w2, tmp, nb, 2.0, -1.0, 1.0 / a, b))
+                return 1;
+            zc *t = w0; w0 = w1; w1 = w2; w2 = t;
+        }
+        CUCHK(cudaMemcpy(left + (size_t)(m - 1) * nf, w1, nf * sizeof(zc),
+                         cudaMemcpyDeviceToDevice));
+    }
+
+    if (step64(c, 2, left, nullptr, w0, tmp, nb, 1.0, 0.0, 1.0, 0.0))
+        return 1;
+    zc *v0 = w0, *v1 = w1, *v2 = w2;
+    for (int n = 1; n <= lld; ++n) {
+        if (n == 1) {
+            CUCHK(cudaMemcpy(v1, v0, nf * sizeof(zc), cudaMemcpyDeviceToDevice));
+        } else if (n == 2) {
+            CUCHK(cudaMemcpy(v0, v1, nf * sizeof(zc), cudaMemcpyDeviceToDevice));
+            if (step64(c, 0, v0, nullptr, v1, tmp, nb, 1.0, 0.0, 1.0 / a, b))
+                return 1;
+        } else {
+            if (step64(c, 0, v1, v0, v2, tmp, nb, 2.0, -1.0, 1.0 / a, b))
+                return 1;
+            zc *t = v0; v0 = v1; v1 = v2; v2 = t;
+        }
+        if (step64(c, 1, v1, nullptr, R, tmp, nb, 1.0, 0.0, 1.0, 0.0))
+            return 1;
+        CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                           &Z_ONE, left, (int)ld, (long long)nf,
+                           R, (int)ld, 0,
+                           &Z_ZERO, dmu + bb * (size_t)(n - 1), nb,
+                           (long long)bb * lld, lld));
+    }
+    CUCHK(cudaDeviceSynchronize());
+    if (retain_device && retain_transport_diagonal(c, dmu, lld, trace_index))
+        return 1;
+    const double d2h_start = host_seconds();
+    c->stoch_cheb_s = d2h_start - cheb_start;
+    if (!download_host) return 0;
+    CUCHK(cudaMemcpy(mu_, dmu, bb * (size_t)lld * lld * sizeof(zc),
+                     cudaMemcpyDeviceToHost));
+    c->stoch_d2h_s = host_seconds() - d2h_start;
+    c->stoch_d2h_bytes = (long long)(bb * (size_t)lld * lld * sizeof(zc));
+    return 0;
+}
+
+/* Batched random-vector transport request. The block-ELL backend accepts the
+ * independent states as one RHS block; the structured FFT backend remains a
+ * scalar-B=1 route because its stencil plan is intentionally restricted to
+ * nb current columns. */
+static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
+                                         int nstates, int lld, double a,
+                                         double b, void *mu_,
+                                         bool retain_device, bool download_host,
+                                         int trace_index) {
+    if (!c->have_h) FAIL("stochastic_moments_batch: Hamiltonian not set");
+    if (!c->have_v) FAIL("stochastic_moments_batch: velocity operators not set");
+    if (nstates < 1) FAIL("stochastic_moments_batch: nstates must be positive");
+    if (retain_device && trace_index < 1)
+        FAIL("stochastic_moments_batch: trace index must be positive");
+    if (download_host && !mu_)
+        FAIL("stochastic_moments_batch: host moment output is required when download_host is enabled");
+    if (c->use_struct && nstates != 1)
+        FAIL("stochastic_moments_batch: structured backend supports only B=1");
+    if (c->have_hoh && !c->have_vo)
+        FAIL("stochastic_moments_batch: hoh active but velocity ortho (vo) not set");
+    if (c->use_struct)
+        return stochastic_moments_impl(c, psiref_, lld, a, b, mu_, retain_device,
+                                       download_host, trace_index);
+
+    c->stoch_h2d_s = 0.0;
+    c->stoch_cheb_s = 0.0;
+    c->stoch_d2h_s = 0.0;
+    c->stoch_conversion_s = 0.0;
+    c->stoch_mu_pack_s = 0.0;
+    c->stoch_h2d_bytes = 0;
+    c->stoch_d2h_bytes = 0;
+    c->stoch_mu_pack_bytes = 0;
+
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c) || ensure_f32_velocity(c)) return 1;
+            return stoch_engine_batch<fc, float>(
+                c, psiref_, nstates, lld, (float)(1.0 / a), (float)b, mu_,
+                c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
+                c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
+                c->f_hons, c->f_voa, c->f_vob, retain_device,
+                download_host, trace_index);
+        }
+        return stoch_engine_batch<zc, double>(
+            c, psiref_, nstates, lld, 1.0 / a, b, mu_,
+            c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
+            c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
+            c->d_voa, c->d_vob, retain_device, download_host, trace_index);
+    }
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_ham(c, a, b) || ensure_f32_velocity(c)) return 1;
+        return stoch_engine_batch<fc, float>(
+            c, psiref_, nstates, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+            c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, retain_device, download_host, trace_index);
+    }
+    return stoch_engine_batch<zc, double>(
+        c, psiref_, nstates, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+        c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, retain_device, download_host, trace_index);
+}
+
+extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref,
+                                        int lld, double a, double b,
+                                        void *mu_nm) {
+    return stochastic_moments_impl(c, psiref, lld, a, b, mu_nm,
+                                   false, true, 0);
+}
+
+extern "C" int rsrec_stochastic_moments_resident(
+    rsrec_ctx *c, const void *psiref, int lld, double a, double b,
+    int trace_index, int download_host, void *mu_nm) {
+    return stochastic_moments_impl(c, psiref, lld, a, b, mu_nm,
+                                   true, download_host != 0, trace_index);
+}
+
+extern "C" int rsrec_stochastic_moments_resident_batch(
+    rsrec_ctx *c, const void *psiref, int nstates, int lld, double a,
+    double b, int trace_index, int download_host, void *mu_nm) {
+    return stochastic_moments_batch_impl(c, psiref, nstates, lld, a, b, mu_nm,
+                                         true, download_host != 0, trace_index);
+}
+
+extern "C" int rsrec_clear_resident_moments(rsrec_ctx *c) {
+    if (!c) FAIL("clear_resident_moments: null context");
+    clear_resident_moments(c);
+    return 0;
+}
+
+extern "C" int rsrec_resident_count(rsrec_ctx *c, int *count) {
+    if (!c || !count) FAIL("resident_count: null argument");
+    *count = 0;
+    for (const auto &entry : c->resident_moments)
+        if (entry.u) ++*count;
+    return 0;
+}
+
+extern "C" int rsrec_resident_bytes(rsrec_ctx *c, long long *bytes) {
+    if (!c || !bytes) FAIL("resident_bytes: null argument");
+    *bytes = 0;
+    for (const auto &entry : c->resident_moments)
+        if (entry.u) *bytes += static_cast<long long>(entry.bytes);
+    return 0;
+}
+
+extern "C" int rsrec_stochastic_profile(rsrec_ctx *c, double *h2d_seconds,
+                                         double *cheb_seconds,
+                                         double *d2h_seconds,
+                                         double *conversion_seconds,
+                                         double *mu_pack_seconds,
+                                         long long *h2d_bytes,
+                                         long long *d2h_bytes,
+                                         long long *mu_pack_bytes) {
+    if (!c || !h2d_seconds || !cheb_seconds || !d2h_seconds ||
+        !conversion_seconds || !mu_pack_seconds || !h2d_bytes ||
+        !d2h_bytes || !mu_pack_bytes) {
+        g_err = "stochastic_profile: null argument";
+        return 1;
+    }
+    *h2d_seconds = c->stoch_h2d_s;
+    *cheb_seconds = c->stoch_cheb_s;
+    *d2h_seconds = c->stoch_d2h_s;
+    *conversion_seconds = c->stoch_conversion_s;
+    *mu_pack_seconds = c->stoch_mu_pack_s;
+    *h2d_bytes = c->stoch_h2d_bytes;
+    *d2h_bytes = c->stoch_d2h_bytes;
+    *mu_pack_bytes = c->stoch_mu_pack_bytes;
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * GPU tiled Gamma*mu reconstruction.
+ * The host prepares only the one-dimensional basis for the current energy
+ * tile. Gamma itself is filled on device and is never materialized at full
+ * (NE,M,M) size. The retained U matrices use the validated q=n+(m-1)M
+ * flattening and are consumed directly by cuBLAS GEMM.
+ * ------------------------------------------------------------------------ */
+template <class CT>
+static CT host_complex(double re, double im);
+template <>
+zc host_complex<zc>(double re, double im) {
+    return make_cuDoubleComplex(re, im);
+}
+template <>
+fc host_complex<fc>(double re, double im) {
+    return make_cuFloatComplex((float)re, (float)im);
+}
+
+template <class CT, class RT>
+__global__ void k_fill_transport_gamma(int n_energy, int moments,
+                                       const RT *__restrict__ denom,
+                                       const CT *__restrict__ cn,
+                                       const CT *__restrict__ cm,
+                                       const RT *__restrict__ weights,
+                                       const RT *__restrict__ cheb,
+                                       CT *__restrict__ gamma) {
+    const size_t K = (size_t)moments * moments;
+    const size_t total = (size_t)n_energy * K;
+    const size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= total) return;
+    const int e = (int)(i / K);
+    const size_t q = i - (size_t)e * K;
+    const int n = (int)(q % (size_t)moments);
+    const int m = (int)(q / (size_t)moments);
+    CT value = czero_v<CT>();
+    CT tm = czero_v<CT>();
+    CT tn = czero_v<CT>();
+    tm.x = cheb[(size_t)e + (size_t)n_energy * m];
+    tn.x = cheb[(size_t)e + (size_t)n_energy * n];
+    value = cfma(cn[(size_t)e + (size_t)n_energy * n],
+                 tm, value);
+    value = cfma(cm[(size_t)e + (size_t)m * n_energy],
+                 tn, value);
+    const RT scale = weights[n] * weights[m] / denom[e];
+    value.x *= scale;
+    value.y *= scale;
+    /* cuBLAS consumes Gamma as column-major (energy rows, q columns). */
+    gamma[(size_t)e + (size_t)n_energy * q] = value;
+}
+
+template <class CT, class RT>
+static int reconstruct_transport_impl(rsrec_ctx *c, const double *energy,
+                                      int n_energy, int moments, double a,
+                                      double b, double factor, int ntrace,
+                                      int energy_block, void *c_out,
+                                      double *gamma_seconds,
+                                      double *gamma_basis_seconds,
+                                      double *gamma_fill_seconds,
+                                      double *gemm_seconds,
+                                      double *result_d2h_seconds,
+                                      long long *gamma_h2d_bytes,
+                                      long long *gamma_block_bytes,
+                                      long long *result_d2h_bytes,
+                                      int *actual_energy_block) {
+    if (!c->have_h || !energy || !c_out) FAIL("reconstruct_conductivity: null input");
+    if (n_energy < 1 || moments < 1 || ntrace < 1)
+        FAIL("reconstruct_conductivity: invalid dimensions");
+    if (c->resident_moments.empty() ||
+        moments != c->resident_moments.front().moments)
+        FAIL("reconstruct_conductivity: resident moment order mismatch");
+    if ((int)c->resident_moments.size() < ntrace)
+        FAIL("reconstruct_conductivity: requested trace is not resident");
+    for (int t = 0; t < ntrace; ++t) {
+        const auto &entry = c->resident_moments[(size_t)t];
+        if (!entry.u || entry.moments != moments ||
+            entry.precision != c->cheb_prec)
+            FAIL("reconstruct_conductivity: invalid resident moment token");
+    }
+
+    int requested = energy_block;
+    if (requested <= 0) {
+        const char *env = std::getenv("RSLMTO_KPM_GPU_BE");
+        requested = env ? std::atoi(env) : 64;
+    }
+    if (requested < 1) requested = 64;
+    requested = std::min(requested, n_energy);
+
+    size_t freeb = 0, totalb = 0;
+    CUCHK(cudaMemGetInfo(&freeb, &totalb));
+    const size_t K = (size_t)moments * moments;
+    const size_t bytes_per_energy = K * sizeof(CT) +
+                                    2 * (size_t)moments * sizeof(CT) +
+                                    3 * sizeof(RT);
+    const size_t fixed = K * (size_t)c->nb * sizeof(CT) * (size_t)ntrace +
+                         K * (size_t)c->nb * sizeof(CT) +
+                         (size_t)c->nb * (size_t)requested * sizeof(CT);
+    if (freeb <= fixed + 1 || bytes_per_energy == 0)
+        FAIL("reconstruct_conductivity: insufficient device memory");
+    const size_t safe = (freeb - fixed) * 8 / 10;
+    const int fit = (int)std::max<size_t>(1, safe / bytes_per_energy);
+    const int block = std::min(requested, std::min(n_energy, fit));
+    if (block < 1) FAIL("reconstruct_conductivity: Gamma tile does not fit");
+    *actual_energy_block = block;
+
+    CT *d_cn = nullptr, *d_cm = nullptr;
+    RT *d_cheb = nullptr, *d_denom = nullptr, *d_weights = nullptr;
+    CT *d_gamma = nullptr, *d_c = nullptr;
+    const size_t basis_bytes = (size_t)block * moments * sizeof(CT);
+    const size_t real_bytes = (size_t)block * sizeof(RT);
+    const size_t gamma_bytes = (size_t)block * K * sizeof(CT);
+    const size_t c_bytes = (size_t)block * c->nb * sizeof(CT);
+    if (cudaMalloc(&d_cn, basis_bytes) || cudaMalloc(&d_cm, basis_bytes) ||
+        cudaMalloc(&d_cheb, (size_t)block * moments * sizeof(RT)) ||
+        cudaMalloc(&d_denom, real_bytes) ||
+        cudaMalloc(&d_weights, (size_t)moments * sizeof(RT)) ||
+        cudaMalloc(&d_gamma, gamma_bytes) || cudaMalloc(&d_c, c_bytes))
+        FAIL("reconstruct_conductivity: Gamma workspace allocation failed");
+
+    std::vector<CT> h_cn((size_t)block * moments), h_cm((size_t)block * moments);
+    std::vector<RT> h_cheb((size_t)block * moments);
+    std::vector<RT> h_denom(block), h_weights(moments);
+    const double lorentz_den = std::sinh(6.0);
+    for (int n = 0; n < moments; ++n) {
+        const double theta = 6.0 * (1.0 - (double)n / moments);
+        h_weights[n] = (RT)(std::sinh(theta) / lorentz_den);
+        if (n == 0) h_weights[n] *= (RT)0.5;
+    }
+
+    *gamma_seconds = 0.0;
+    *gamma_basis_seconds = 0.0;
+    *gamma_fill_seconds = 0.0;
+    *gemm_seconds = 0.0;
+    *result_d2h_seconds = 0.0;
+    *gamma_h2d_bytes = 0;
+    *gamma_block_bytes = (long long)gamma_bytes;
+    *result_d2h_bytes = 0;
+
+    const int tpb = 256;
+    std::vector<CT> h_c(c_bytes / sizeof(CT));
+    for (int e0 = 0; e0 < n_energy; e0 += block) {
+        const int be = std::min(block, n_energy - e0);
+        const double basis_start = host_seconds();
+        for (int ie = 0; ie < be; ++ie) {
+            const double w = (energy[e0 + ie] - b) / a;
+            const double sx = std::sqrt(1.0 - w * w);
+            const double ax = std::acos(w);
+            h_denom[ie] = (RT)((1.0 - w * w) * (1.0 - w * w));
+            double tn0 = 1.0, tn1 = w;
+            for (int n = 0; n < moments; ++n) {
+                const double order = (double)n;
+                const std::complex<double> cn =
+                    std::complex<double>(w, -order * sx) *
+                    std::exp(std::complex<double>(0.0, order * ax));
+                const std::complex<double> cm =
+                    std::complex<double>(w, order * sx) *
+                    std::exp(std::complex<double>(0.0, -order * ax));
+                h_cn[ie + (size_t)be * n] = host_complex<CT>(cn.real(), cn.imag());
+                h_cm[ie + (size_t)be * n] = host_complex<CT>(cm.real(), cm.imag());
+                const double tv = n == 0 ? tn0 : (n == 1 ? tn1 : 0.0);
+                if (n >= 2) {
+                    /* Build T_n without changing the production recurrence. */
+                    double ta = tn0, tb = tn1, tc = 0.0;
+                    for (int j = 2; j <= n; ++j) {
+                        tc = 2.0 * w * tb - ta;
+                        ta = tb; tb = tc;
+                    }
+                    h_cheb[ie + (size_t)be * n] = (RT)tc;
+                } else {
+                    h_cheb[ie + (size_t)be * n] = (RT)tv;
+                }
+            }
+        }
+        const double basis_elapsed = host_seconds() - basis_start;
+        *gamma_basis_seconds += basis_elapsed;
+        *gamma_seconds += basis_elapsed;
+
+        const double h2d_start = host_seconds();
+        CUCHK(cudaMemcpy(d_cn, h_cn.data(), (size_t)be * moments * sizeof(CT),
+                         cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_cm, h_cm.data(), (size_t)be * moments * sizeof(CT),
+                         cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_cheb, h_cheb.data(), (size_t)be * moments * sizeof(RT),
+                         cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_denom, h_denom.data(), (size_t)be * sizeof(RT),
+                         cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_weights, h_weights.data(), (size_t)moments * sizeof(RT),
+                         cudaMemcpyHostToDevice));
+        *gamma_h2d_bytes += (long long)((2 * (size_t)be * moments * sizeof(CT)) +
+                                        ((size_t)be * moments + (size_t)be + (size_t)moments) * sizeof(RT));
+        *gamma_seconds += host_seconds() - h2d_start;
+
+        const double fill_start = host_seconds();
+        k_fill_transport_gamma<CT, RT><<<(int)(((size_t)be * K + tpb - 1) / tpb), tpb>>>(
+            be, moments, d_denom, d_cn, d_cm, d_weights, d_cheb, d_gamma);
+        CUCHK(cudaGetLastError());
+        CUCHK(cudaDeviceSynchronize());
+        const double fill_elapsed = host_seconds() - fill_start;
+        *gamma_fill_seconds += fill_elapsed;
+        *gamma_seconds += fill_elapsed;
+
+        for (int t = 0; t < ntrace; ++t) {
+            const CT alpha = host_complex<CT>(factor, 0.0);
+            const CT zero = host_complex<CT>(0.0, 0.0);
+            const double gemm_start = host_seconds();
+            CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, be, c->nb,
+                            (int)K, &alpha, d_gamma, be,
+                            static_cast<const CT *>(c->resident_moments[t].u),
+                            (int)K, &zero, d_c, be));
+            CUCHK(cudaDeviceSynchronize());
+            *gemm_seconds += host_seconds() - gemm_start;
+
+            const double d2h_start = host_seconds();
+            const size_t c_block_bytes = (size_t)be * c->nb * sizeof(CT);
+            CUCHK(cudaMemcpy(h_c.data(), d_c, c_block_bytes,
+                             cudaMemcpyDeviceToHost));
+            *result_d2h_seconds += host_seconds() - d2h_start;
+            *result_d2h_bytes += (long long)c_block_bytes;
+            CT *out = static_cast<CT *>(c_out);
+            for (int col = 0; col < c->nb; ++col)
+                for (int ie = 0; ie < be; ++ie)
+                    out[(size_t)(e0 + ie) + (size_t)n_energy *
+                        (col + (size_t)c->nb * t)] = h_c[ie + (size_t)be * col];
+        }
+    }
+    cudaFree(d_cn); cudaFree(d_cm); cudaFree(d_cheb); cudaFree(d_denom);
+    cudaFree(d_weights); cudaFree(d_gamma); cudaFree(d_c);
+    return 0;
+}
+
+extern "C" int rsrec_reconstruct_conductivity(
+    rsrec_ctx *c, const double *energy, int n_energy, int moments, double a,
+    double b, double factor, int ntrace, int energy_block, void *c_out,
+    double *gamma_seconds, double *gamma_basis_seconds,
+    double *gamma_fill_seconds, double *gemm_seconds,
+    double *result_d2h_seconds, long long *gamma_h2d_bytes,
+    long long *gamma_block_bytes, long long *result_d2h_bytes,
+    int *actual_energy_block) {
+    if (!c || !gamma_seconds || !gamma_basis_seconds || !gamma_fill_seconds ||
+        !gemm_seconds || !result_d2h_seconds || !gamma_h2d_bytes ||
+        !gamma_block_bytes || !result_d2h_bytes || !actual_energy_block)
+        FAIL("reconstruct_conductivity: null output");
+    if (c->cheb_prec == 0)
+        return reconstruct_transport_impl<fc, float>(
+            c, energy, n_energy, moments, a, b, factor, ntrace, energy_block,
+            c_out, gamma_seconds, gamma_basis_seconds, gamma_fill_seconds,
+            gemm_seconds, result_d2h_seconds, gamma_h2d_bytes,
+            gamma_block_bytes, result_d2h_bytes, actual_energy_block);
+    return reconstruct_transport_impl<zc, double>(
+        c, energy, n_energy, moments, a, b, factor, ntrace, energy_block,
+        c_out, gamma_seconds, gamma_basis_seconds, gamma_fill_seconds,
+        gemm_seconds, result_d2h_seconds, gamma_h2d_bytes,
+        gamma_block_bytes, result_d2h_bytes, actual_energy_block);
+}
+
+/* --------------------------------------------------------------------------
+ * API: orbital moments (single Chebyshev expansion with a fixed left state):
+ *   mu_n = sum_k left(k)^H T_{n-1}(H~)|psiref>(k),   n = 1..lld
+ * This is the stochastic engine specialised to one fixed left state and no
+ * velocity operators; it reuses the same H~ apply (hoh-aware) and a single
+ * gram gemm per moment. left and psiref are host (nb,nb,kk) atom-major; mu is
+ * (nb,nb,lld). fp32/fp64 selected by cheb_prec.
+ * ------------------------------------------------------------------------ */
+template <class CT, class RT>
+static int orbital_engine(rsrec_ctx *c, const void *left_h, const void *psiref_h,
+                          int lld, RT inva, RT bsc, void *mu_,
+                          const CT *Hop, const CT *Himp,
+                          const CT *h_bare, const CT *h_bare_imp,
+                          const CT *h_eeo, const CT *h_eeo_imp,
+                          const CT *h_hons) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    const bool do_hoh = c->have_hoh;
+
+    CT *L, *dmu, *w0, *w1, *w2;
+    zc *stage;
+    CT *ht = nullptr, *he = nullptr, *ho = nullptr;
+    CUCHK(cudaMalloc(&L, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&dmu, bb * (size_t)lld * sizeof(CT)));
+    CUCHK(cudaMalloc(&w0, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w1, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w2, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&stage, nf * sizeof(zc)));   /* fp64 host staging */
+    if (do_hoh) {
+        CUCHK(cudaMalloc(&ht, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&he, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&ho, nf * sizeof(CT)));
+    }
+
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
+                                          h_eeo_imp, h_hons, ht, he, ho,
+                                          x1, x0, yv, nb, al, be, inva, bsc);
+        return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nb,
+                                  al, be, inva, bsc);
+    };
+
+    const CT one = {(RT)1, (RT)0};
+    const CT zero = {(RT)0, (RT)0};
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+
+    /* pack fixed left state and psiref (site-major). */
+    CUCHK(cudaMemcpy(stage, left_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, L);
+    CUCHK(cudaGetLastError());
+    CUCHK(cudaMemcpy(stage, psiref_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, w1);
+    CUCHK(cudaGetLastError());
+
+    for (int n = 1; n <= lld; ++n) {
+        if (n == 1) {
+            /* v1 already = psiref in w1 */
+        } else if (n == 2) {
+            CT *t = w0; w0 = w1; w1 = t;
+            if (matvec(w0, nullptr, w1, (RT)1, (RT)0)) return 1;
+        } else {
+            if (matvec(w1, w0, w2, (RT)2, (RT)-1)) return 1;
+            CT *t = w0; w0 = w1; w1 = w2; w2 = t;
+        }
+        /* mu_n = L^H w1 (nb x nb) */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                        &one, L, (int)ld, w1, (int)ld, &zero,
+                        dmu + bb * (size_t)(n - 1), nb));
+    }
+
+    std::vector<CT> h(bb * (size_t)lld);
+    CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
+                     cudaMemcpyDeviceToHost));
+    cplx *mu = (cplx *)mu_;
+    for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
+
+    cudaFree(L); cudaFree(dmu); cudaFree(w0); cudaFree(w1); cudaFree(w2);
+    cudaFree(stage);
+    if (ht) { cudaFree(ht); cudaFree(he); cudaFree(ho); }
+    return 0;
+}
+
+extern "C" int rsrec_orbital_moments(rsrec_ctx *c, const void *left,
+                                     const void *psiref, int lld, double a,
+                                     double b, void *mu_) {
+    if (!c->have_h) FAIL("orbital_moments: Hamiltonian not set");
+    if (c->use_struct)
+        FAIL("orbital_moments: structured backend not supported");
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c)) return 1;
+            return orbital_engine<fc, float>(
+                c, left, psiref, lld, (float)(1.0 / a), (float)b, mu_,
+                c->f_ee_bare, c->f_hall_bare, c->f_ee_bare, c->f_hall_bare,
+                c->f_eeo, c->f_hallo, c->f_hons);
+        }
+        return orbital_engine<zc, double>(
+            c, left, psiref, lld, 1.0 / a, b, mu_, c->d_ee_bare,
+            c->d_hall_bare, c->d_ee_bare, c->d_hall_bare, c->d_eeo,
+            c->d_hallo, c->d_hons);
+    }
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_ham(c, a, b)) return 1;
+        return orbital_engine<fc, float>(
+            c, left, psiref, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    }
+    return orbital_engine<zc, double>(
+        c, left, psiref, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+        nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
+/* --------------------------------------------------------------------------
+ * Chebyshev Green-function / DOS reconstruction (GPU port of
+ * chebyshev_green in bands.f90; identical math and Jackson convention).
+ *
+ *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) F(i,ie),
+ *   F(i,ie) = g(i) c_i (-i) e^{-i(i-1)acos(x_ie)} / sqrt(a^2-(E_ie-b)^2)
+ *
+ * g(i) is the Jackson kernel g_J(i) built inline when the caller passes no
+ * kernel vector, otherwise the host-built vector (Lorentz, none, ...).
+ *
+ * F is built by one kernel; the contraction over moments is ONE
+ * cublas[Z|C]gemmStridedBatched over the local atoms (strideB = 0 -- all
+ * atoms share F). Precision follows rsrec_set_precision: fp32 (default,
+ * cgemm3m, consistent with the fp32 moment engine) or fp64
+ * (bit-comparable with the Fortran loop). Atom chunking keeps device
+ * memory bounded for large nv/lld.
+ * ------------------------------------------------------------------------ */
+template <bool HAS_K>
+__global__ void k_build_F64(int N, int nv, const double *__restrict__ ene,
+                            double a, double b, const double *__restrict__ kern,
+                            zc *__restrict__ F) {
+    size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= (size_t)N * nv) return;
+    const double PI = 3.14159265358979323846;
+    int i = (int)(idx % N), ie = (int)(idx / N);
+    double x = (ene[ie] - b) / a;
+    double th = acos(x);
+    double pref = rsqrt(a * a - (ene[ie] - b) * (ene[ie] - b));
+    double thl = PI * i / (N + 1.0);
+    double cot = cos(PI / (N + 1.0)) / sin(PI / (N + 1.0));
+    double gj;
+    if (HAS_K) gj = kern[i];                   /* host-built kernel vector  */
+    else gj = ((N - i + 1) * cos(thl) + sin(thl) * cot) / (N + 1.0);
+    double cc = (i == 0) ? 1.0 : 2.0;
+    double ang = i * th;                       /* (-i) e^{-i ang}           */
+    F[idx] = make_cuDoubleComplex(-gj * cc * pref * sin(ang),
+                                  -gj * cc * pref * cos(ang));
+}
+
+__global__ void k_z2c(size_t n, const zc *__restrict__ in,
+                      fc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = make_cuFloatComplex((float)in[i].x, (float)in[i].y);
+}
+
+__global__ void k_c2z(size_t n, const fc *__restrict__ in,
+                      zc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = make_cuDoubleComplex(in[i].x, in[i].y);
+}
+
+/* Shared contraction g0(:,:,col,n) = sum_i mu(:,:,i,n) F(i,col), with F
+ * (device, fp64, n_mom x ncols) broadcast over all atoms (strideB = 0). One
+ * strided-batched gemm per atom-chunk; fp32 (cgemm3m) or fp64 per cheb_prec.
+ * Caller owns d_F64. Used by both the DOS path (real-energy F) and the
+ * exchange Gij(E_f) path (complex-energy/eta F).                            */
+static int cheb_gemm_engine(rsrec_ctx *c, const cplx *mu, int n_mom,
+                            int natoms, const zc *d_F64, int ncols, cplx *g0) {
+    const int bb = c->nb * c->nb;
+    const bool f32 = (c->cheb_prec == 0);
+    const int tpb = 256;
+    size_t nF = (size_t)n_mom * ncols;
+    fc *d_F32 = nullptr;
+    if (f32) {
+        CUCHK(cudaMalloc(&d_F32, nF * sizeof(fc)));
+        k_z2c<<<(int)((nF + tpb - 1) / tpb), tpb>>>(nF, d_F64, d_F32);
+        CUCHK(cudaGetLastError());
+    }
+
+    /* atom chunking against free device memory                             */
+    size_t per_atom = (size_t)bb * n_mom * sizeof(zc)        /* mu          */
+                    + (size_t)bb * ncols * sizeof(zc)        /* g0          */
+                    + (f32 ? ((size_t)bb * n_mom + (size_t)bb * ncols)
+                                 * sizeof(fc) : 0);
+    size_t freeb, totalb;
+    cudaMemGetInfo(&freeb, &totalb);
+    int chunk = (int)std::min<size_t>((size_t)natoms,
+                                      std::max<size_t>(1, (freeb * 7 / 10)
+                                                          / per_atom));
+    zc *d_mu, *d_g0; fc *d_muf = nullptr, *d_g0f = nullptr;
+    CUCHK(cudaMalloc(&d_mu, (size_t)bb * n_mom * chunk * sizeof(zc)));
+    CUCHK(cudaMalloc(&d_g0, (size_t)bb * ncols * chunk * sizeof(zc)));
+    if (f32) {
+        CUCHK(cudaMalloc(&d_muf, (size_t)bb * n_mom * chunk * sizeof(fc)));
+        CUCHK(cudaMalloc(&d_g0f, (size_t)bb * ncols * chunk * sizeof(fc)));
+    }
+    for (int n0 = 0; n0 < natoms; n0 += chunk) {
+        int nc = std::min(chunk, natoms - n0);
+        size_t nmu = (size_t)bb * n_mom * nc, ng = (size_t)bb * ncols * nc;
+        CUCHK(cudaMemcpy(d_mu, mu + (size_t)bb * n_mom * n0,
+                         nmu * sizeof(zc), cudaMemcpyHostToDevice));
+        if (f32) {
+            k_z2c<<<(int)((nmu + tpb - 1) / tpb), tpb>>>(nmu, d_mu, d_muf);
+            CUCHK(cudaGetLastError());
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, ncols,
+                               n_mom, &C_ONE, d_muf, bb,
+                               (long long)bb * n_mom, d_F32, n_mom, 0,
+                               &C_ZERO, d_g0f, bb, (long long)bb * ncols, nc));
+            k_c2z<<<(int)((ng + tpb - 1) / tpb), tpb>>>(ng, d_g0f, d_g0);
+            CUCHK(cudaGetLastError());
+        } else {
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, ncols,
+                               n_mom, &Z_ONE, d_mu, bb,
+                               (long long)bb * n_mom, d_F64, n_mom, 0,
+                               &Z_ZERO, d_g0, bb, (long long)bb * ncols, nc));
+        }
+        CUCHK(cudaMemcpy(g0 + (size_t)bb * ncols * n0, d_g0, ng * sizeof(zc),
+                         cudaMemcpyDeviceToHost));
+    }
+    for (void *p : {(void *)d_F32, (void *)d_mu, (void *)d_g0,
+                    (void *)d_muf, (void *)d_g0f})
+        if (p) cudaFree(p);
+    return 0;
+}
+
+extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
+                                   int natoms, const double *ene, int nv,
+                                   double a, double b, const double *kernel,
+                                   void *g0_) {
+    if (n_mom < 1 || natoms < 1 || nv < 1) FAIL("chebyshev_dos: bad sizes");
+    const cplx *mu = (const cplx *)mu_;
+    cplx *g0 = (cplx *)g0_;
+    const int tpb = 256;
+
+    /* F over the real energy grid (fp64; cheb_gemm_engine down-converts).   */
+    double *d_ene; zc *d_F64;
+    CUCHK(cudaMalloc(&d_ene, nv * sizeof(double)));
+    CUCHK(cudaMemcpy(d_ene, ene, nv * sizeof(double), cudaMemcpyHostToDevice));
+    size_t nF = (size_t)n_mom * nv;
+    CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
+    double *d_kern = nullptr;       /* kernel g(0:n_mom-1); NULL = Jackson    */
+    if (kernel) {
+        CUCHK(cudaMalloc(&d_kern, n_mom * sizeof(double)));
+        CUCHK(cudaMemcpy(d_kern, kernel, n_mom * sizeof(double),
+                         cudaMemcpyHostToDevice));
+        k_build_F64<true><<<(int)((nF + tpb - 1) / tpb), tpb>>>(
+            n_mom, nv, d_ene, a, b, d_kern, d_F64);
+    } else {
+        k_build_F64<false><<<(int)((nF + tpb - 1) / tpb), tpb>>>(
+            n_mom, nv, d_ene, a, b, nullptr, d_F64);
+    }
+    CUCHK(cudaGetLastError());
+
+    int rc = cheb_gemm_engine(c, mu, n_mom, natoms, d_F64, nv, g0);
+    cudaFree(d_ene);
+    cudaFree(d_F64);
+    if (d_kern) cudaFree(d_kern);
+    return rc;
+}
+
+/* Exchange Gij at the Fermi energy: g0(:,:,k,n) = sum_i mu(:,:,i,n) F(i,k),
+ * where the caller supplies F (n_mom x n_eta, complex) already built at the
+ * complex energies E_f + eta_k (Fortran complex acos/sqrt in the wrapper, so
+ * no device complex transcendentals). g0 out: (nb,nb,n_eta,natoms). This is
+ * the Chebyshev analogue of rsrec_block_gf_eta.                             */
+extern "C" int rsrec_chebyshev_gf_eta(rsrec_ctx *c, const void *mu_, int n_mom,
+                                      int natoms, const void *F_, int n_eta,
+                                      void *g0_) {
+    if (n_mom < 1 || natoms < 1 || n_eta < 1) FAIL("cheb_gf_eta: bad sizes");
+    const cplx *mu = (const cplx *)mu_;
+    cplx *g0 = (cplx *)g0_;
+
+    /* upload the host-built complex F (cplx == zc layout, 16 bytes).        */
+    zc *d_F64;
+    size_t nF = (size_t)n_mom * n_eta;
+    CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
+    CUCHK(cudaMemcpy(d_F64, F_, nF * sizeof(zc), cudaMemcpyHostToDevice));
+
+    int rc = cheb_gemm_engine(c, mu, n_mom, natoms, d_F64, n_eta, g0);
+    cudaFree(d_F64);
+    return rc;
+}
+
+/* ==========================================================================
+ * Block (Haydock) Green-function / DOS reconstruction -- GPU port of bgreen()
+ * in green.f90. For each local atom the matrix continued fraction
+ *   G_0(E) = [ (E+eta)I - a_1 - b_1^H G_1(E) b_1 ]^-1,  G_l from a_l,b_l, ...
+ * is evaluated, terminated by a square-root (semicircle) tail built from the
+ * terminator coefficients a_inf,b_inf. Parallelised over the nv energies
+ * (one batched nb x nb complex solve per recursion level); the level loop is
+ * sequential. Output g0(:,:,ie) = G_0 (complex), exactly as bgreen accumulates
+ * it (Dfac=1, Cshi=0, b_1 = I). DOS = -aimag(g0)/pi is taken downstream.
+ * ======================================================================== */
+
+/* Batched LU factor / inverse wrappers (zc + fc).                           */
+static cublasStatus_t blas_getrf_batched(cublasHandle_t h, int n, zc **A,
+                                         int lda, int *piv, int *info, int b) {
+    return cublasZgetrfBatched(h, n, A, lda, piv, info, b);
+}
+static cublasStatus_t blas_getrf_batched(cublasHandle_t h, int n, fc **A,
+                                         int lda, int *piv, int *info, int b) {
+    return cublasCgetrfBatched(h, n, A, lda, piv, info, b);
+}
+static cublasStatus_t blas_getri_batched(cublasHandle_t h, int n, const zc **A,
+                                         int lda, const int *piv, zc **C,
+                                         int ldc, int *info, int b) {
+    return cublasZgetriBatched(h, n, A, lda, piv, C, ldc, info, b);
+}
+static cublasStatus_t blas_getri_batched(cublasHandle_t h, int n, const fc **A,
+                                         int lda, const int *piv, fc **C,
+                                         int ldc, int *info, int b) {
+    return cublasCgetriBatched(h, n, A, lda, piv, C, ldc, info, b);
+}
+
+/* Terminator: Q(i,i) = 0.5*[(E_e+eta_e) - a_inf_i - zoff_i], off-diagonals 0.
+ * zoff_i = sqrt((E-etop)(E-ebot)) with etop/ebot = a_inf_i +/- 2*b_inf_i*f_i;
+ * the radicand is real, so zoff is real (radicand>=0) or pure imaginary.
+ * E and eta vary per sub-batch element e (energies for DOS, etas for the
+ * exchange Gij(E_f)).                                                       */
+template <class CT, class RT>
+__global__ void k_block_term(int m, int nb, const double *ev, const RT *etar,
+                             const RT *etai, const RT *ainf, const RT *binf,
+                             int sym, RT a_diag, RT b_diag, CT *Q) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= m * nb) return;
+    int i = idx % nb, e = idx / nb;
+    RT E = (RT)ev[e], eta_re = etar[e], eta_im = etai[e];
+    RT ai = sym ? a_diag : ainf[i];
+    RT bi = sym ? b_diag : binf[i];
+    RT f = (!sym && (i == 0 || (nb >= 10 && i == 9))) ? (RT)1.025 : (RT)1;
+    RT etop = ai + 2 * bi * f, ebot = ai - 2 * bi * f;
+    RT ea = E - etop, eb = E - ebot, det = ea * eb;
+    RT zr = det >= (RT)0 ? sqrt(det) : (RT)0;
+    RT zi = det < (RT)0 ? sqrt(-det) : (RT)0;
+    CT q;
+    q.x = (decltype(q.x))((RT)0.5 * (E + eta_re - ai - zr));
+    q.y = (decltype(q.y))((RT)0.5 * (eta_im - zi));
+    Q[(size_t)e * nb * nb + (size_t)i * nb + i] = q;   /* diagonal (i,i) */
+}
+
+/* Qin(i,j,e) = [(i==j)?(E_e+eta_e):0] - a_b(i,j) - Q(i,j,e)  (a_b broadcast). */
+template <class CT, class RT>
+__global__ void k_block_build(int m, int nb, const double *ev, const RT *etar,
+                              const RT *etai, const CT *ab, const CT *Q,
+                              CT *Qin) {
+    size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    size_t bb = (size_t)nb * nb;
+    if (idx >= (size_t)m * bb) return;
+    int ij = (int)(idx % bb);
+    size_t e = idx / bb;
+    int i = ij % nb, j = ij / nb;
+    CT a = ab[ij];
+    CT q = Q[e * bb + ij];
+    RT dr = (i == j) ? ((RT)ev[e] + etar[e]) : (RT)0;
+    RT di = (i == j) ? etai[e] : (RT)0;
+    CT v;
+    v.x = (decltype(v.x))(dr - a.x - q.x);
+    v.y = (decltype(v.y))(di - a.y - q.y);
+    Qin[e * bb + ij] = v;
+}
+
+/* Copy CT continued-fraction result -> zc output g0 (per sub-batch block).   */
+template <class CT>
+__global__ void k_block_store(size_t n, const CT *Q, zc *g0) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    g0[i].x = (double)Q[i].x;
+    g0[i].y = (double)Q[i].y;
+}
+
+/* Shared block (Haydock) Green-function engine. The continued fraction is
+ * evaluated for a batch of m (E_e, eta_e) points per atom; the level loop is
+ * sequential. DOS passes the energy grid + a constant eta; the exchange Gij
+ * passes a constant E_f + the list of contour etas. g0 layout is always
+ * (nb,nb,m,natoms).                                                          */
+template <class CT, class RT>
+static int block_gf_engine(rsrec_ctx *c, const cplx *a_b, const cplx *b2_b,
+                           const double *a_inf, const double *b_inf,
+                           const double *ev, const double *etr,
+                           const double *eti, int m, int natoms, int lld,
+                           int sym, cplx *g0) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb;
+    const CT c_one = ct_make<CT>(1, 0), c_zero = ct_make<CT>(0, 0);
+    const int tpb = 256;
+
+    double *d_ev;
+    RT *d_etr, *d_eti;
+    CUCHK(cudaMalloc(&d_ev, m * sizeof(double)));
+    CUCHK(cudaMalloc(&d_etr, m * sizeof(RT)));
+    CUCHK(cudaMalloc(&d_eti, m * sizeof(RT)));
+    CUCHK(cudaMemcpy(d_ev, ev, m * sizeof(double), cudaMemcpyHostToDevice));
+    {
+        std::vector<RT> hr(m), hi(m);
+        for (int e = 0; e < m; ++e) { hr[e] = (RT)etr[e]; hi[e] = (RT)eti[e]; }
+        CUCHK(cudaMemcpy(d_etr, hr.data(), m * sizeof(RT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_eti, hi.data(), m * sizeof(RT), cudaMemcpyHostToDevice));
+    }
+
+    /* per-element batched work buffers (CT) and the broadcast operands        */
+    CT *Q, *Qin, *G, *W, *d_ab, *d_b2;
+    RT *d_ainf, *d_binf;
+    CUCHK(cudaMalloc(&Q, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&Qin, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&G, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&W, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&d_ab, (size_t)lld * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&d_b2, (size_t)lld * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&d_ainf, nb * sizeof(RT)));
+    CUCHK(cudaMalloc(&d_binf, nb * sizeof(RT)));
+    zc *d_g0;
+    CUCHK(cudaMalloc(&d_g0, (size_t)m * bb * sizeof(zc)));
+    int *d_piv, *d_info;
+    CUCHK(cudaMalloc(&d_piv, (size_t)m * nb * sizeof(int)));
+    CUCHK(cudaMalloc(&d_info, m * sizeof(int)));
+
+    /* device pointer arrays for the batched LU/inverse (fixed stride bb)      */
+    CT **d_Qinp, **d_Gp;
+    CUCHK(cudaMalloc(&d_Qinp, m * sizeof(CT *)));
+    CUCHK(cudaMalloc(&d_Gp, m * sizeof(CT *)));
+    {
+        std::vector<CT *> hQ(m), hG(m);
+        for (int e = 0; e < m; ++e) { hQ[e] = Qin + (size_t)e * bb; hG[e] = G + (size_t)e * bb; }
+        CUCHK(cudaMemcpy(d_Qinp, hQ.data(), m * sizeof(CT *), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_Gp, hG.data(), m * sizeof(CT *), cudaMemcpyHostToDevice));
+    }
+
+    /* host staging to down-convert a_b/b2_b (cplx) -> CT and a_inf/b_inf      */
+    std::vector<CT> hab((size_t)lld * bb), hb2((size_t)lld * bb);
+    std::vector<RT> hai(nb), hbi(nb);
+
+    for (int n = 0; n < natoms; ++n) {
+        const cplx *ab_n = a_b + (size_t)n * lld * bb;
+        const cplx *b2_n = b2_b + (size_t)n * lld * bb;
+        for (size_t k = 0; k < (size_t)lld * bb; ++k) {
+            hab[k] = ct_make<CT>(ab_n[k].real(), ab_n[k].imag());
+            hb2[k] = ct_make<CT>(b2_n[k].real(), b2_n[k].imag());
+        }
+        CUCHK(cudaMemcpy(d_ab, hab.data(), (size_t)lld * bb * sizeof(CT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_b2, hb2.data(), (size_t)lld * bb * sizeof(CT), cudaMemcpyHostToDevice));
+        for (int i = 0; i < nb; ++i) {
+            hai[i] = (RT)a_inf[(size_t)n * nb + i];
+            hbi[i] = (RT)b_inf[(size_t)n * nb + i];
+        }
+        CUCHK(cudaMemcpy(d_ainf, hai.data(), nb * sizeof(RT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_binf, hbi.data(), nb * sizeof(RT), cudaMemcpyHostToDevice));
+        RT a_diag = (nb >= 10) ? (RT)(0.5 * (a_inf[(size_t)n * nb + 0] + a_inf[(size_t)n * nb + 9]))
+                               : (RT)a_inf[(size_t)n * nb + 0];
+        RT b_diag = (nb >= 10) ? (RT)(0.5 * (b_inf[(size_t)n * nb + 0] + b_inf[(size_t)n * nb + 9]))
+                               : (RT)b_inf[(size_t)n * nb + 0];
+
+        /* terminator (off-diagonals zeroed first) */
+        CUCHK(cudaMemset(Q, 0, (size_t)m * bb * sizeof(CT)));
+        k_block_term<CT, RT><<<(m * nb + tpb - 1) / tpb, tpb>>>(
+            m, nb, d_ev, d_etr, d_eti, d_ainf, d_binf, sym, a_diag, b_diag, Q);
+        CUCHK(cudaGetLastError());
+
+        /* continued fraction: level lc = lld-1 .. 1 (Fortran ln) */
+        for (int lc = lld - 1; lc >= 1; --lc) {
+            const CT *ab_l = d_ab + (size_t)(lc - 1) * bb;
+            const CT *b2_l = d_b2 + (size_t)(lc - 1) * bb;
+            size_t nfield = (size_t)m * bb;
+            k_block_build<CT, RT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(
+                m, nb, d_ev, d_etr, d_eti, ab_l, Q, Qin);
+            CUCHK(cudaGetLastError());
+            /* G = Qin^-1 (batched LU + inverse) */
+            CBCHK(blas_getrf_batched(c->blas, nb, d_Qinp, nb, d_piv, d_info, m));
+            CBCHK(blas_getri_batched(c->blas, nb, (const CT **)d_Qinp, nb,
+                                     d_piv, d_Gp, nb, d_info, m));
+            /* W = G * b2_l   (b2 broadcast: strideB = 0) */
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, nb, nb, nb,
+                               &c_one, G, nb, (long long)bb, b2_l, nb, 0,
+                               &c_zero, W, nb, (long long)bb, m));
+            /* Q = b2_l^H * W   (b2 broadcast: strideA = 0) */
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, nb,
+                               &c_one, b2_l, nb, 0, W, nb, (long long)bb,
+                               &c_zero, Q, nb, (long long)bb, m));
+        }
+
+        /* g0(:,:,:,n) = Q */
+        size_t nfield = (size_t)m * bb;
+        k_block_store<CT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(nfield, Q, d_g0);
+        CUCHK(cudaGetLastError());
+        CUCHK(cudaMemcpy(g0 + (size_t)n * m * bb, d_g0,
+                         nfield * sizeof(zc), cudaMemcpyDeviceToHost));
+    }
+
+    for (void *p : {(void *)d_ev, (void *)d_etr, (void *)d_eti, (void *)Q,
+                    (void *)Qin, (void *)G, (void *)W, (void *)d_ab,
+                    (void *)d_b2, (void *)d_ainf, (void *)d_binf, (void *)d_g0,
+                    (void *)d_piv, (void *)d_info, (void *)d_Qinp, (void *)d_Gp})
+        if (p) cudaFree(p);
+    return 0;
+}
+
+/* DOS: g0(:,:,ie,n) over the nv energies (constant eta). a_b/b2_b:
+ * (nb,nb,lld,natoms); a_inf/b_inf: (nb,natoms) diagonals; g0:(nb,nb,nv,natoms).
+ * Precision from c->cheb_prec (0=fp32, 1=fp64).                              */
+extern "C" int rsrec_block_dos(rsrec_ctx *c, const void *a_b, const void *b2_b,
+                               const double *a_inf, const double *b_inf,
+                               const double *ene, int nv, double eta_re,
+                               double eta_im, int natoms, int lld, int sym,
+                               void *g0) {
+    if (nv < 1 || natoms < 1 || lld < 1) FAIL("block_dos: bad sizes");
+    const cplx *ab = (const cplx *)a_b, *b2 = (const cplx *)b2_b;
+    cplx *g0c = (cplx *)g0;
+    std::vector<double> etr(nv, eta_re), eti(nv, eta_im);   /* constant eta   */
+    if (c->cheb_prec == 0)
+        return block_gf_engine<fc, float>(c, ab, b2, a_inf, b_inf, ene,
+                                          etr.data(), eti.data(), nv, natoms,
+                                          lld, sym, g0c);
+    return block_gf_engine<zc, double>(c, ab, b2, a_inf, b_inf, ene,
+                                       etr.data(), eti.data(), nv, natoms, lld,
+                                       sym, g0c);
+}
+
+/* Exchange Gij: g0(:,:,k,n) at the single Fermi energy ef for the n_eta
+ * contour points eta_re[k]+i*eta_im[k] (constant E). Same a_b/b2_b/a_inf/b_inf
+ * layout as block_dos; g0 out: (nb,nb,n_eta,natoms).                         */
+extern "C" int rsrec_block_gf_eta(rsrec_ctx *c, const void *a_b,
+                                  const void *b2_b, const double *a_inf,
+                                  const double *b_inf, double ef,
+                                  const double *eta_re, const double *eta_im,
+                                  int n_eta, int natoms, int lld, int sym,
+                                  void *g0) {
+    if (n_eta < 1 || natoms < 1 || lld < 1) FAIL("block_gf_eta: bad sizes");
+    const cplx *ab = (const cplx *)a_b, *b2 = (const cplx *)b2_b;
+    cplx *g0c = (cplx *)g0;
+    std::vector<double> ev(n_eta, ef);                     /* constant energy */
+    if (c->cheb_prec == 0)
+        return block_gf_engine<fc, float>(c, ab, b2, a_inf, b_inf, ev.data(),
+                                          eta_re, eta_im, n_eta, natoms, lld,
+                                          sym, g0c);
+    return block_gf_engine<zc, double>(c, ab, b2, a_inf, b_inf, ev.data(),
+                                       eta_re, eta_im, n_eta, natoms, lld, sym,
+                                       g0c);
+}

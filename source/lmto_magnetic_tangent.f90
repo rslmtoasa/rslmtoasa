@@ -1,0 +1,60 @@
+!------------------------------------------------------------------------------
+! Ordinary noncollinear LMTO bond-value algebra.
+! This module is deliberately independent of hamiltonian_mod so the
+! ground-state Hamiltonian assembly has a small, side-effect-free seam.
+!------------------------------------------------------------------------------
+module lmto_magnetic_tangent_mod
+   use precision_mod, only: rp
+   use math_mod, only: i_unit
+   implicit none
+   private
+
+   public :: lmto_bond_value
+
+contains
+
+   ! The hhmag convention is (:,:,1:3) = (Hx,Hy,Hz), (:,:,4) = H0.
+   pure subroutine lmto_bond_value(hhh, wx0_i, wx1_i, wx0_j, wx1_j, c0_i, c1_i, &
+                                   mom_i, mom_j, onsite, hhmag)
+      complex(rp), intent(in) :: hhh(:, :), wx0_i(:), wx1_i(:), wx0_j(:), wx1_j(:)
+      complex(rp), intent(in) :: c0_i(:), c1_i(:)
+      real(rp), intent(in) :: mom_i(3), mom_j(3)
+      logical, intent(in) :: onsite
+      complex(rp), intent(out) :: hhmag(:, :, :)
+      integer :: ilm, jlm, idir
+      complex(rp) :: dot, cross(3), momc_i(3), momc_j(3)
+
+      hhmag = cmplx(0.0_rp, 0.0_rp, rp)
+      dot = cmplx(dot_product(mom_i, mom_j), 0.0_rp, rp)
+      momc_i = cmplx(mom_i, 0.0_rp, rp)
+      momc_j = cmplx(mom_j, 0.0_rp, rp)
+      cross = cmplx(cross3(mom_i, mom_j), 0.0_rp, rp)
+
+      do jlm = 1, size(hhh, 2)
+         do ilm = 1, size(hhh, 1)
+            hhmag(ilm, jlm, 4) = wx0_i(ilm)*hhh(ilm, jlm)*wx0_j(jlm) + &
+                                   wx1_i(ilm)*hhh(ilm, jlm)*wx1_j(jlm)*dot
+            do idir = 1, 3
+               hhmag(ilm, jlm, idir) = &
+                  (wx1_i(ilm)*hhh(ilm, jlm)*wx0_j(jlm))*momc_i(idir) + &
+                  (wx0_i(ilm)*hhh(ilm, jlm)*wx1_j(jlm))*momc_j(idir) + &
+                  i_unit*wx1_i(ilm)*hhh(ilm, jlm)*wx1_j(jlm)*cross(idir)
+            end do
+         end do
+      end do
+      if (.not. onsite) return
+      do ilm = 1, size(hhh, 1)
+         hhmag(ilm, ilm, 4) = hhmag(ilm, ilm, 4) + c0_i(ilm)
+         do idir = 1, 3
+            hhmag(ilm, ilm, idir) = hhmag(ilm, ilm, idir) + c1_i(ilm)*momc_i(idir)
+         end do
+      end do
+   end subroutine lmto_bond_value
+
+   pure function cross3(a, b) result(c)
+      real(rp), intent(in) :: a(3), b(3)
+      real(rp) :: c(3)
+      c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), a(1)*b(2) - a(2)*b(1)]
+   end function cross3
+
+end module lmto_magnetic_tangent_mod

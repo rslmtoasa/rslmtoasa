@@ -10,15 +10,16 @@ import f90nml
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-H = (ROOT / 'source/hamiltonian.f90').read_text()
-R = (ROOT / 'source/recursion.f90').read_text()
+H = (ROOT / 'source/hamiltonian_build.f90').read_text()
+R = (ROOT / 'source/recursion_transport.f90').read_text()
 M = (ROOT / 'source/math.f90').read_text()
 PAIRS = [('x', 'y'), ('y', 'z'), ('z', 'x'), ('x', 'z'), ('y', 'x'), ('z', 'y')]
 PURE = ['O' + a + b + b for a, b in PAIRS] + ['Oxyz']
 
 
 def subroutine(source, name):
-    return source.split('   subroutine ' + name + '(', 1)[1].split('   end subroutine ' + name, 1)[0]
+    start = re.search(r'^   (?:module )?subroutine ' + name + r'\(', source, re.M)
+    return source[start.end():].split('   end subroutine ' + name, 1)[0]
 
 
 def evaluate(expr, env):
@@ -29,8 +30,8 @@ def matrices():
     """Read actual L constants and actual hcpx transform assignments."""
     cart = []
     for axis in 'xyz':
-        block = M.split('parameter :: L_' + axis, 1)[1]
-        values = block.split('reshape((/', 1)[1].split('/),', 1)[0]
+        block = M.split('L_' + axis + ' = reshape((/', 1)[1]
+        values = block.split('/),', 1)[0]
         values = values.replace('&', '').replace('_rp', '').replace('sqrt_three', str(np.sqrt(3)))
         cart.append(-1j * np.array([float(v) for v in values.split(',')]).reshape((9, 9), order='F'))
     v = np.zeros((9, 9), complex)
@@ -112,8 +113,8 @@ class OctupoleTests(unittest.TestCase):
         self.assertEqual(moments.count('call this%kubo_ham_vec_matmul('), 4)
         self.assertEqual(moments.count('call this%apply_kubo_operator('), 2)
         self.assertIn('Unknown linear-response operator type', dispatch)
-        for name in ['hamiltonian', 'control']:
-            source = (ROOT / ('source/'+name+'.f90')).read_text()
+        for name, filename in [('hamiltonian', 'hamiltonian_build'), ('control', 'control')]:
+            source = (ROOT / ('source/'+filename+'.f90')).read_text()
             self.assertIn("g_logger%fatal('Invalid &"+name+' namelist', source)
 
     def test_example_inputs(self):

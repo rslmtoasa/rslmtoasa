@@ -10,7 +10,7 @@
 ! abiding by the rules of distribution of free software. You can use,
 ! modify and/ or redistribute the software under the terms of the CeCILL
 ! license as circulated by CEA, CNRS and inRIA at the following URL
-! "http://www.cecill.info".
+! ″http://www.cecill.info″.
 !
 ! As a counterpart to the access to the source code and rights to copy,
 ! modify and redistribute granted by the license, users are provided only
@@ -42,6 +42,7 @@ module math_mod
 !  use lapack95, only: getrf, getri
 #endif
    use precision_mod, only: ip, rp, longint
+   use basis_mod, only: norb, nb, spin_off, lmax_basis
    implicit none
 
    !> type for sorting routine
@@ -52,6 +53,9 @@ module math_mod
 
    ! To do: precise the quantity (charge, energy, etc)
    real(rp), parameter :: epsilon = 1.0E-10_rp
+
+   !> Boltzmann constant (Ry/K) used by simpson_f
+   real(rp), parameter :: kB_simpson_f = 0.633362019d-5
 
    ! Irrational
    !> \f$ \sqrt{2} \f$
@@ -96,9 +100,9 @@ module math_mod
    real(rp), parameter :: gama = 1.76e11_rp
    !> Elementary charge (Coulombs)
    real(rp), parameter :: e_const    = 1.602176634e-19_rp
-   !> Planck's constant (J·s)
+   !> Planck’s constant (J·s)
    real(rp), parameter :: h_const    = 6.62607015e-34_rp
-   !> Reduced Planck's constant h-bar (J·s)
+   !> Reduced Planck’s constant h-bar (J·s)
    real(rp), parameter :: hbar_const = 1.054571817e-34_rp
    ! Angstrom to centimeter factor
    !> 1 Å = 1.0e-8 cm
@@ -129,164 +133,604 @@ module math_mod
    !> Pauli matrix \f$ \sigma_z \f$
    complex(rp), dimension(2, 2), parameter :: sigma_z &
                                               = reshape((/1.0_rp, 0.0_rp, 0.0_rp, -1.0_rp/), (/2, 2/))
-   !> Angular momentum operators
-   complex(rp), dimension(9, 9), parameter :: L_x &
-                                              = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*(-i_unit)
-   complex(rp), dimension(9, 9), parameter :: L_y &
-                                              = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, sqrt_three, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*(-i_unit)
-   complex(rp), dimension(9, 9), parameter :: L_z &
-                                              = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*(-i_unit)
+   !> Angular momentum operators (spd basis; norb x norb).
+   !> Allocated and filled by init_math_operators().
+   complex(rp), allocatable, public, protected :: L_x(:, :)
+   complex(rp), allocatable, public, protected :: L_y(:, :)
+   complex(rp), allocatable, public, protected :: L_z(:, :)
 
-   complex(rp), dimension(18, 18), parameter :: S_z &
-   = reshape((/1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp/), &
-               (/18, 18/)) / 2 
+   !> Spin operators S_k = (1/2) * I_norb ⊗ σ_k  (nb x nb).
+   !> Allocated and filled by init_math_operators().
+   complex(rp), allocatable, public, protected :: S_x(:, :)
+   complex(rp), allocatable, public, protected :: S_y(:, :)
+   complex(rp), allocatable, public, protected :: S_z(:, :)
 
-   complex(rp), dimension(18, 18), parameter :: S_x &
-   = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, &
-               1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-               (/18, 18/)) / 2
+   public :: init_math_operators
+   public :: hubbard_projector_element, hubbard_spectral_density_element
+   public :: project_spectral_density_2x2
+   public :: hubbard_density_diagnostics, spinor_dm_summary, spinor_orbital_moment
+   public :: correct_d_shell_moments, correct_d_shell_moments_spinor
+   public :: extract_hubbard_d_shell_potential, extract_hubbard_d_spinor_potential
+   public :: fixed_impurity_atom_carries_uj
 
-   complex(rp), dimension(18, 18), parameter :: S_y &
-   = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, &
-               1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-               (/18, 18/)) * (-i_unit / 2)
-
-       
 contains
-   !> Create vector of all zeros
-   function zeros1(n) result(v)
-      integer, intent(in) :: n
-      real(rp), dimension(n) :: v
 
-      v = 0.0_rp
-   end function zeros1
+   !> Standard fixed-Liechtenstein occupation projector element P_ab=psi_a psi_b*.
+   pure function hubbard_projector_element(psi_a, psi_b) result(p_ab)
+      complex(rp), intent(in) :: psi_a, psi_b
+      complex(rp) :: p_ab
+      p_ab = psi_a*conjg(psi_b)
+   end function hubbard_projector_element
 
-   !> Create matrix of all zeros
-   function zeros2(n1, n2) result(m)
-      integer, intent(in) :: n1, n2
-      real(rp), dimension(n1, n2) :: m
+   !> Hermitian spectral matrix from a retarded Green matrix element pair.
+   pure function hubbard_spectral_density_element(g_ab, g_ba) result(a_ab)
+      complex(rp), intent(in) :: g_ab, g_ba
+      complex(rp) :: a_ab
+      a_ab = i_unit*(g_ab-conjg(g_ba))/(2.0_rp*pi)
+   end function hubbard_spectral_density_element
 
-      m = 0.0_rp
-   end function zeros2
+   !> Project a Hermitian 2x2 spectral-density block onto the positive
+   !> semidefinite cone.  For a retarded Green function this block is a
+   !> physical spin density and must obey a_uu >= 0, a_dd >= 0, and
+   !> |a_ud|^2 <= a_uu*a_dd.  Small violations arise from finite Chebyshev
+   !> expansions and reduced-precision reconstruction.  Keeping the diagonal
+   !> entries non-negative and reducing only an overlarge coherence is the
+   !> least invasive projection needed for charge and spin moments.
+   pure subroutine project_spectral_density_2x2(a_uu, a_ud, a_dd, corrected)
+      real(rp), intent(inout) :: a_uu, a_dd
+      complex(rp), intent(inout) :: a_ud
+      logical, intent(out) :: corrected
+      real(rp) :: coherence, coherence_limit
 
-   !> Create vector of all ones
-   function ones1(n) result(v)
-      integer, intent(in) :: n
-      real(rp), dimension(n) :: v
+      corrected = .false.
+      if (a_uu < 0.0_rp) then
+         a_uu = 0.0_rp
+         corrected = .true.
+      end if
+      if (a_dd < 0.0_rp) then
+         a_dd = 0.0_rp
+         corrected = .true.
+      end if
 
-      v = 1.0_rp
-   end function ones1
+      coherence = abs(a_ud)
+      coherence_limit = sqrt(a_uu)*sqrt(a_dd)
+      if (coherence > coherence_limit) then
+         if (coherence_limit == 0.0_rp) then
+            a_ud = cmplx(0.0_rp, 0.0_rp, rp)
+         else
+            a_ud = a_ud*(coherence_limit/coherence)
+         end if
+         corrected = .true.
+      end if
+   end subroutine project_spectral_density_2x2
 
-   !> Create matrix of all ones
-   function ones2(n1, n2) result(m)
-      integer, intent(in) :: n1, n2
-      real(rp), dimension(n1, n2) :: m
+   !> Report trace, anti-Hermitian residual, and eigenvalue bounds for an LDM.
+   !> Eigenvalues are evaluated on the Hermitian part solely for diagnostics;
+   !> the input matrix is never modified or projected.
+   subroutine hubbard_density_diagnostics(matrix, trace_value, min_eigenvalue, max_eigenvalue, &
+                                          max_antihermitian, info)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: trace_value, min_eigenvalue, max_eigenvalue, max_antihermitian
+      integer, intent(out) :: info
+      complex(rp), allocatable :: work(:), hermitian_part(:, :)
+      real(rp), allocatable :: rwork(:), eigenvalues(:)
+      complex(rp) :: work_query(1)
+      integer :: n, lwork, i
 
-      m = 1.0_rp
-   end function ones2
-
-   !> Create diagonal matrix
-   function diag1(v) result(m)
-      real(rp), dimension(:), intent(in) :: v
-      real(rp), dimension(size(v), size(v)) :: m
-      integer :: i, n
-
-      m = 0.0_rp
-      n = size(v)
-
+      n = size(matrix, 1)
+      trace_value = 0.0_rp
+      min_eigenvalue = 0.0_rp
+      max_eigenvalue = 0.0_rp
+      max_antihermitian = 0.0_rp
+      info = 0
+      if (n == 0 .or. size(matrix, 2) /= n) then
+         info = -1
+         return
+      end if
       do i = 1, n
-         m(i, i) = v(i)
+         trace_value = trace_value + real(matrix(i, i), rp)
       end do
-   end function diag1
+      max_antihermitian = maxval(abs(matrix - transpose(conjg(matrix))))
+      allocate(hermitian_part(n, n), eigenvalues(n), rwork(max(1, 3*n - 2)))
+      hermitian_part = 0.5_rp*(matrix + transpose(conjg(matrix)))
+      call zheev('N', 'U', n, hermitian_part, n, eigenvalues, work_query, -1, rwork, info)
+      if (info /= 0) return
+      lwork = max(1, int(real(work_query(1), rp)))
+      allocate(work(lwork))
+      call zheev('N', 'U', n, hermitian_part, n, eigenvalues, work, lwork, rwork, info)
+      if (info /= 0) return
+      min_eigenvalue = minval(eigenvalues)
+      max_eigenvalue = maxval(eigenvalues)
+   end subroutine hubbard_density_diagnostics
 
-   !> Get diagonal element of matrix
-   function diag2(m) result(v)
-      real(rp), dimension(:, :), intent(in) :: m
-      real(rp), dimension(min(size(m, 1), size(m, 2))) :: v
-      integer :: i, n
+   !> One-line summary of a spinor d-shell density P(10,10) (index (sigma-1)*5+(m+3)): Hermiticity,
+   !> traces against the radial d charges ql_up and ql_dn, eigenvalue bounds, max|P_up,dn|.
+   !> n_up and n_dn are Tr(Pi_+-(axis) P), the d charges along the site's radial spin axis;
+   !> `detailed` appends the axis and both of them.
+   subroutine spinor_dm_summary(p, ql_up, ql_dn, axis, detailed, line)
+      complex(rp), intent(in) :: p(10, 10)
+      real(rp), intent(in) :: ql_up, ql_dn, axis(3)
+      logical, intent(in) :: detailed
+      character(len=*), intent(out) :: line
+      real(rp) :: trace_value, min_eig, max_eig, antiherm, tr_up, tr_dn
+      complex(rp) :: pi_up(10, 10), pi_dn(10, 10)
+      integer :: info, k, l
 
-      n = min(size(m, 1), size(m, 2))
-
-      do i = 1, n
-         v(i) = m(i, i)
+      call hubbard_density_diagnostics(p, trace_value, min_eig, max_eig, antiherm, info)
+      call spin_axis_projector(axis, 1, pi_up)
+      call spin_axis_projector(axis, 2, pi_dn)
+      tr_up = 0.0_rp
+      tr_dn = 0.0_rp
+      do k = 1, 10
+         do l = 1, 10
+            tr_up = tr_up + real(pi_up(k, l)*p(l, k), rp)
+            tr_dn = tr_dn + real(pi_dn(k, l)*p(l, k), rp)
+         end do
       end do
-   end function diag2
+      write (line, '(a,es10.3,a,f12.8,a,es10.3,a,es10.3,a,f10.6,a,f10.6,a,es10.3,a,es10.3)') &
+         'antiherm=', antiherm, ' trace=', trace_value, ' trace_minus_ql=', trace_value - ql_up - ql_dn, &
+         ' tr_up_minus_ql=', tr_up - ql_up, ' eig_min=', min_eig, ' eig_max=', max_eig, &
+         ' max_up_dn=', maxval(abs(p(1:5, 6:10))), ' info=', real(info, rp)
+      if (detailed) write (line, '(a,a,3f12.8,a,f12.8,a,f12.8,a,f12.8)') trim(line), ' axis=', axis, &
+         ' n_up=', tr_up, ' n_dn=', tr_dn, ' m_L=', spinor_orbital_moment(p, axis)
+   end subroutine spinor_dm_summary
+
+   !> d-shell orbital moment along the unit vector n from the spinor P (index (sigma-1)*5+(m+3), P(a,b) =
+   !> sum f psi(a) conj(psi(b))): m_L = Tr(P (L.n x 1_spin)), with L the d block of the same spherical-basis
+   !> angular momentum matrices that build_lsham uses.
+   function spinor_orbital_moment(p, axis) result(ml)
+      complex(rp), intent(in) :: p(10, 10)
+      real(rp), intent(in) :: axis(3)
+      real(rp) :: ml
+      complex(rp) :: ln(norb, norb)
+      integer :: s, i, j
+
+      ln = axis(1)*L_x + axis(2)*L_y + axis(3)*L_z
+      call hcpx(ln, 'cart2sph')
+      ml = 0.0_rp
+      do s = 1, 2
+         do i = 1, 5
+            do j = 1, 5
+               ml = ml + real(ln(4 + i, 4 + j)*p((s - 1)*5 + j, (s - 1)*5 + i), rp)
+            end do
+         end do
+      end do
+   end function spinor_orbital_moment
+
+   !> Correct the d-shell radial first and second moments for the local
+   !> Hubbard operator present in the Hamiltonian.  Matrices use the
+   !> conventional P_ab = <c^+_b c_a> convention and are expressed in Ry.
+   !> A nonphysical density is rejected; no projection or q2 clamping occurs.
+   subroutine correct_d_shell_moments(p, m1, vin, q0, c, q2, cprime, q2prime, t, status)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      complex(rp), intent(in) :: p(5, 5), m1(5, 5), vin(5, 5)
+      real(rp), intent(in) :: q0, c, q2
+      real(rp), intent(out) :: cprime, q2prime, t
+      integer, intent(out) :: status
+      real(rp) :: p_trace, p_min, p_max, p_antiherm
+      real(rp) :: m1_antiherm, vin_antiherm
+      complex(rp) :: covariance(5, 5), product(5, 5)
+      integer :: info, i
+
+      cprime = c
+      q2prime = q2
+      t = 0.0_rp
+      status = 0
+      if (.not. all(ieee_is_finite(real(p, rp))) .or. .not. all(ieee_is_finite(aimag(p))) .or. &
+          .not. all(ieee_is_finite(real(m1, rp))) .or. .not. all(ieee_is_finite(aimag(m1))) .or. &
+          .not. all(ieee_is_finite(real(vin, rp))) .or. .not. all(ieee_is_finite(aimag(vin))) .or. &
+          .not. ieee_is_finite(q0) .or. .not. ieee_is_finite(c) .or. .not. ieee_is_finite(q2)) then
+         status = 5
+         return
+      end if
+      call hubbard_density_diagnostics(p, p_trace, p_min, p_max, p_antiherm, info)
+      if (info /= 0 .or. p_antiherm > 1.0e-6_rp .or. p_min < -1.0e-3_rp .or. &
+          p_max > 1.0_rp + 1.0e-3_rp) then
+         status = 1
+         return
+      end if
+      m1_antiherm = maxval(abs(m1 - transpose(conjg(m1))))
+      vin_antiherm = maxval(abs(vin - transpose(conjg(vin))))
+      if (m1_antiherm > 1.0e-6_rp .or. vin_antiherm > 1.0e-6_rp) then
+         status = 2
+         return
+      end if
+      if (q0 <= 0.0_rp) then
+         status = 3
+         return
+      end if
+
+      t = 0.0_rp
+      do i = 1, 5
+         t = t + real(sum(vin(i, :)*p(:, i)), rp)
+      end do
+      cprime = c - t/q0
+      covariance = m1 - c*p
+      product = matmul(vin, vin)
+      q2prime = q2
+      do i = 1, 5
+         q2prime = q2prime - 2.0_rp*real(sum(vin(i, :)*covariance(:, i)), rp) &
+            + real(sum(product(i, :)*p(:, i)), rp)
+      end do
+      q2prime = q2prime - t*t/q0
+      if (.not. ieee_is_finite(cprime) .or. .not. ieee_is_finite(q2prime) .or. .not. ieee_is_finite(t)) then
+         status = 5
+         return
+      end if
+      if (q2prime < 0.0_rp) status = 4
+   end subroutine correct_d_shell_moments
+
+   !> Extract the on-site, spin-diagonal d-shell block from the operator that
+   !> is actually stored in the Hamiltonian.  In the spherical onsite basis,
+   !> the d channels are m=-2..2 at indices 5:9 (see PHASE1.md and
+   !> PROJECTOR_CONTRACT.md). `spin_off` is the per-spin basis stride.
+   subroutine extract_hubbard_d_shell_potential(hubbard_u_pot, site_type, spin, spin_off, v_d, status)
+      complex(rp), intent(in) :: hubbard_u_pot(:, :, :)
+      integer, intent(in) :: site_type, spin, spin_off
+      complex(rp), intent(out) :: v_d(5, 5)
+      integer, intent(out) :: status
+      integer :: i, j, orbital_i, orbital_j
+
+      v_d = cmplx(0.0_rp, 0.0_rp, rp)
+      status = 0
+      if (site_type < 1 .or. site_type > size(hubbard_u_pot, 3) .or. &
+          (spin /= 1 .and. spin /= 2) .or. spin_off < 9) then
+         status = 1
+         return
+      end if
+      do i = 1, 5
+         orbital_i = 4 + i + spin_off*(spin - 1)
+         do j = 1, 5
+            orbital_j = 4 + j + spin_off*(spin - 1)
+            if (orbital_i > size(hubbard_u_pot, 1) .or. orbital_j > size(hubbard_u_pot, 2)) then
+               status = 2
+               v_d = cmplx(0.0_rp, 0.0_rp, rp)
+               return
+            end if
+            v_d(i, j) = hubbard_u_pot(orbital_i, orbital_j, site_type)
+         end do
+      end do
+   end subroutine extract_hubbard_d_shell_potential
+
+   !> Full 10x10 on-site d-shell block (index (sigma-1)*5+(m+3)) of the operator stored in the
+   !> Hamiltonian, including the spin-off-diagonal blocks.
+   subroutine extract_hubbard_d_spinor_potential(hubbard_u_pot, site_type, spin_off, v_d, status)
+      complex(rp), intent(in) :: hubbard_u_pot(:, :, :)
+      integer, intent(in) :: site_type, spin_off
+      complex(rp), intent(out) :: v_d(10, 10)
+      integer, intent(out) :: status
+      integer :: i, j, si, sj
+
+      v_d = cmplx(0.0_rp, 0.0_rp, rp)
+      status = 0
+      if (site_type < 1 .or. site_type > size(hubbard_u_pot, 3) .or. spin_off < 9 .or. &
+          4 + 5 + spin_off > size(hubbard_u_pot, 1) .or. 4 + 5 + spin_off > size(hubbard_u_pot, 2)) then
+         status = 1
+         return
+      end if
+      do si = 1, 2
+         do sj = 1, 2
+            do i = 1, 5
+               do j = 1, 5
+                  v_d((si - 1)*5 + i, (sj - 1)*5 + j) = &
+                     hubbard_u_pot(4 + i + spin_off*(si - 1), 4 + j + spin_off*(sj - 1), site_type)
+               end do
+            end do
+         end do
+      end do
+   end subroutine extract_hubbard_d_spinor_potential
+
+   !> Spinor generalisation of correct_d_shell_moments: the d-shell radial moments of each spin
+   !> channel s along the site's radial spin axis n, with the Hubbard operator removed, from the spinor
+   !> P, the energy-weighted M1 and V_in (10x10 in the global spin frame, index (sigma-1)*5+(m+3)).
+   !> Pi_s = (1 +- n.sigma)/2 x 1_orb (s=1: +, along n) and q0_s = Tr(Pi_s P) is passed in:
+   !>   t_s   = Re Tr(Pi_s V P),            c'_s  = c_s - t_s/q0_s,
+   !>   q2'_s = q2_s - 2 Re Tr(Pi_s V M1c_s) + Tr(V Pi_s V P) - t_s^2/q0_s,   M1c_s = M1 - c_s P.
+   !> Only V is subtracted. Rejections and status codes are those of correct_d_shell_moments.
+   subroutine correct_d_shell_moments_spinor(p, m1, vin, axis, q0, c, q2, cprime, q2prime, t, status)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      complex(rp), intent(in) :: p(10, 10), m1(10, 10), vin(10, 10)
+      real(rp), intent(in) :: axis(3)
+      real(rp), intent(in) :: q0(2), c(2), q2(2)
+      real(rp), intent(out) :: cprime(2), q2prime(2), t(2)
+      integer, intent(out) :: status
+      real(rp) :: p_trace, p_min, p_max, p_antiherm
+      complex(rp) :: vp(10, 10), vpv(10, 10), vm1c(10, 10), pi_s(10, 10)
+      integer :: info, s, k, l
+
+      cprime = c
+      q2prime = q2
+      t = 0.0_rp
+      status = 0
+      if (.not. all(ieee_is_finite(real(p, rp))) .or. .not. all(ieee_is_finite(aimag(p))) .or. &
+          .not. all(ieee_is_finite(real(m1, rp))) .or. .not. all(ieee_is_finite(aimag(m1))) .or. &
+          .not. all(ieee_is_finite(real(vin, rp))) .or. .not. all(ieee_is_finite(aimag(vin))) .or. &
+          .not. all(ieee_is_finite(q0)) .or. .not. all(ieee_is_finite(c)) .or. .not. all(ieee_is_finite(q2))) then
+         status = 5
+         return
+      end if
+      call hubbard_density_diagnostics(p, p_trace, p_min, p_max, p_antiherm, info)
+      if (info /= 0 .or. p_antiherm > 1.0e-6_rp .or. p_min < -1.0e-3_rp .or. p_max > 1.0_rp + 1.0e-3_rp) then
+         status = 1
+         return
+      end if
+      if (maxval(abs(m1 - transpose(conjg(m1)))) > 1.0e-6_rp .or. &
+          maxval(abs(vin - transpose(conjg(vin)))) > 1.0e-6_rp) then
+         status = 2
+         return
+      end if
+      if (any(q0 <= 0.0_rp)) then
+         status = 3
+         return
+      end if
+      vp = matmul(vin, p)
+      vpv = matmul(vp, vin)
+      do s = 1, 2
+         call spin_axis_projector(axis, s, pi_s)
+         vm1c = matmul(vin, m1 - c(s)*p)
+         t(s) = 0.0_rp
+         q2prime(s) = q2(s)
+         do k = 1, 10
+            do l = 1, 10
+               t(s) = t(s) + real(pi_s(k, l)*vp(l, k), rp)
+               q2prime(s) = q2prime(s) - 2.0_rp*real(pi_s(k, l)*vm1c(l, k), rp) + real(pi_s(k, l)*vpv(l, k), rp)
+            end do
+         end do
+         cprime(s) = c(s) - t(s)/q0(s)
+         q2prime(s) = q2prime(s) - t(s)*t(s)/q0(s)
+      end do
+      if (.not. all(ieee_is_finite(cprime)) .or. .not. all(ieee_is_finite(q2prime)) .or. &
+          .not. all(ieee_is_finite(t))) then
+         status = 5
+         return
+      end if
+      if (any(q2prime < 0.0_rp)) status = 4
+   end subroutine correct_d_shell_moments_spinor
+
+   !> Spin projector Pi_s = (1 +- n.sigma)/2 x 1_orb on the 10-component d spinor (index (sigma-1)*5+(m+3)),
+   !> s=1 (+, along the unit vector n) or 2 (-). sigma in the global frame: (1,2) element n_x - i n_y.
+   pure subroutine spin_axis_projector(axis, s, pi_s)
+      real(rp), intent(in) :: axis(3)
+      integer, intent(in) :: s
+      complex(rp), intent(out) :: pi_s(10, 10)
+      real(rp) :: sgn
+      integer :: i
+
+      sgn = merge(1.0_rp, -1.0_rp, s == 1)
+      pi_s = (0.0_rp, 0.0_rp)
+      do i = 1, 5
+         pi_s(i, i) = cmplx(0.5_rp*(1.0_rp + sgn*axis(3)), 0.0_rp, rp)
+         pi_s(i + 5, i + 5) = cmplx(0.5_rp*(1.0_rp - sgn*axis(3)), 0.0_rp, rp)
+         pi_s(i, i + 5) = 0.5_rp*sgn*cmplx(axis(1), -axis(2), rp)
+         pi_s(i + 5, i) = 0.5_rp*sgn*cmplx(axis(1), axis(2), rp)
+      end do
+   end subroutine spin_axis_projector
+
+   pure logical function fixed_impurity_atom_carries_uj(u_row, j_row)
+      real(rp), intent(in) :: u_row(:), j_row(:)
+      fixed_impurity_atom_carries_uj = any(abs(u_row) > 1.0e-10_rp) .or. any(abs(j_row) > 1.0e-10_rp)
+   end function fixed_impurity_atom_carries_uj
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief Allocate and fill the spin and orbital angular momentum operators.
+   !>
+   !> Must be called after basis_init().  Fills:
+   !>   L_x, L_y, L_z  (norb x norb)  – orbital angular momentum (real-harmonics
+   !>                                     spd basis; other lmax values are not yet
+   !>                                     implemented and trigger an error stop)
+   !>   S_x, S_y, S_z  (nb   x nb)    – S = (1/2) I_norb ⊗ σ  (computed for any norb)
+   !---------------------------------------------------------------------------
+   subroutine init_math_operators()
+
+      integer :: i
+      real(rp), dimension(3, 3) :: Lx_block, Ly_block, Lz_block
+
+      ! ---- Orbital angular momentum operators --------------------------------
+      if (allocated(L_x)) deallocate(L_x, L_y, L_z)
+      allocate(L_x(norb, norb), L_y(norb, norb), L_z(norb, norb))
+
+      select case (lmax_basis)
+      case (1)
+         ! sp basis: s + p_x, p_y, p_z  (lmax=1, norb=4)
+         L_x = czero
+         L_y = czero
+         L_z = czero
+
+         ! Orbital block indices for p orbitals: 2..4 (1 = s)
+         ! Real representation (p_x, p_y, p_z) — generators for l=1
+         ! L_i (in cartesian real basis) given by (-i) * J_i where
+         ! (J_x)_{jk} = [ [0,0,0],[0,0,-1],[0,1,0] ] etc.
+         Lx_block = reshape((/0.0_rp, 0.0_rp, 0.0_rp, &
+                              0.0_rp, 0.0_rp, -1.0_rp, &
+                              0.0_rp, 1.0_rp, 0.0_rp/), (/3,3/))
+         Ly_block = reshape((/0.0_rp, 0.0_rp, 1.0_rp, &
+                              0.0_rp, 0.0_rp, 0.0_rp, &
+                              -1.0_rp, 0.0_rp, 0.0_rp/), (/3,3/))
+         Lz_block = reshape((/0.0_rp, -1.0_rp, 0.0_rp, &
+                              1.0_rp, 0.0_rp, 0.0_rp, &
+                              0.0_rp, 0.0_rp, 0.0_rp/), (/3,3/))
+
+         L_x(2:4, 2:4) = Lx_block * (-i_unit)
+         L_y(2:4, 2:4) = Ly_block * (-i_unit)
+         L_z(2:4, 2:4) = Lz_block * (-i_unit)
+
+         ! s orbital (index 1) has zero orbital angular momentum
+         L_x(1, :) = czero; L_x(:, 1) = czero
+         L_y(1, :) = czero; L_y(:, 1) = czero
+         L_z(1, :) = czero; L_z(:, 1) = czero
+
+      case (2)
+         ! spd basis: hardcoded real-harmonics matrix elements (lmax=2, norb=9)
+         L_x = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three, 0.0_rp, 0.0_rp, 0.0_rp/), &
+                       (/norb, norb/))*(-i_unit)
+         L_y = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, sqrt_three, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three, 0.0_rp, 0.0_rp/), &
+                       (/norb, norb/))*(-i_unit)
+         L_z = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
+                       (/norb, norb/))*(-i_unit)
+      case (3)
+         ! spdf basis: real-harmonics matrix elements (lmax=3, norb=16)
+         ! Cubic harmonics: s(1), p_x/y/z(2-4), d_xy/yz/zx/x²-y²/3z²-r²(5-9), f-orbitals(10-16)
+         ! f-orbital indices: 10=fz3, 11=fxz2, 12=fyz2, 13=fz(x²-y²), 14=fxyz, 15=fx3, 16=fy3
+
+         ! Initialize with zeros
+         L_x = czero
+         L_y = czero
+         L_z = czero
+
+         ! Copy spd blocks from lmax=2
+         ! L_x block for sp and d
+         L_x(2:4, 2:4) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, -1.0_rp, &
+                                   0.0_rp, 1.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
+         L_x(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, 0.0_rp, &
+                                   0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
+
+         ! L_y block for sp and d
+         L_y(2:4, 2:4) = reshape((/0.0_rp, 0.0_rp, 1.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, &
+                                   -1.0_rp, 0.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
+         L_y(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
+
+         ! L_z block for sp and d
+         L_z(2:4, 2:4) = reshape((/0.0_rp, -1.0_rp, 0.0_rp, &
+                                   1.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
+         L_z(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
+
+         ! f-orbital diagonal elements (eigenvalues of L_z)
+         ! f-orbitals have m = -3, -2, -1, 0, 1, 2, 3
+         ! Eigenvalues of L_z: ℏm (in units where ℏ=1)
+         ! L_z(10,10) = m=-3: eigenvalue -3
+         ! L_z(11,11) = m=-2: eigenvalue -2
+         ! L_z(12,12) = m=-1: eigenvalue -1
+         ! L_z(13,13) = m=0: eigenvalue 0
+         ! L_z(14,14) = m=1: eigenvalue 1
+         ! L_z(15,15) = m=2: eigenvalue 2
+         ! L_z(16,16) = m=3: eigenvalue 3
+
+         ! f-orbital L_z matrix (diagonal in correct basis)
+         L_z(10, 10) = cmplx(-3.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(11, 11) = cmplx(-2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(12, 12) = cmplx(-1.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(14, 14) = cmplx( 1.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(15, 15) = cmplx( 2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(16, 16) = cmplx( 3.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! f-orbital L_+ = L_x + i*L_y and L_- = L_x - i*L_y off-diagonal elements
+         ! Using L_±|l,m⟩ = ℏ√(l(l+1) - m(m±1))|l,m±1⟩
+         ! For l=3: √(12 - m(m+1)) for L_+ and √(12 - m(m-1)) for L_-
+
+         ! L_x and L_y off-diagonal elements between f-orbitals (using raising/lowering)
+         ! These are computed from standard angular momentum algebra
+         ! L_x(i,j) = (L_+(i,j) + L_-(i,j))/2
+         ! L_y(i,j) = (L_+(i,j) - L_-(i,j))/(2i)
+
+         ! f-f raising/lowering matrix elements (representative values)
+         ! |3,-3⟩ → |3,-2⟩: √(12-(-3)(-2)) = √6
+         L_x(10, 11) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(11, 10) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,-2⟩ → |3,-1⟩: √(12-(-2)(-1)) = √10
+         L_x(11, 12) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(12, 11) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,-1⟩ → |3,0⟩: √(12-(-1)(0)) = √12
+         L_x(12, 13) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(13, 12) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,0⟩ → |3,1⟩: √(12-0(1)) = √12
+         L_x(13, 14) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(14, 13) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,1⟩ → |3,2⟩: √(12-1(2)) = √10
+         L_x(14, 15) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(15, 14) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,2⟩ → |3,3⟩: √(12-2(3)) = √6
+         L_x(15, 16) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(16, 15) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! L_y: same structure but with imaginary unit
+         L_y(10, 11) = cmplx(0.0_rp, sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(11, 10) = cmplx(0.0_rp, -sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(11, 12) = cmplx(0.0_rp, sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(12, 11) = cmplx(0.0_rp, -sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(12, 13) = cmplx(0.0_rp, sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(13, 12) = cmplx(0.0_rp, -sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(13, 14) = cmplx(0.0_rp, sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(14, 13) = cmplx(0.0_rp, -sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(14, 15) = cmplx(0.0_rp, sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(15, 14) = cmplx(0.0_rp, -sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(15, 16) = cmplx(0.0_rp, sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(16, 15) = cmplx(0.0_rp, -sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+      case default
+         write (*, '(a,i0)') 'init_math_operators: L_x/L_y/L_z not implemented for lmax=', lmax_basis
+         error stop 'init_math_operators: only lmax=1-3 (sp/spd/spdf) are implemented for L operators'
+      end select
+
+      ! ---- Spin operators: S_k = (1/2) * I_norb ⊗ σ_k -----------------------
+      if (allocated(S_x)) deallocate(S_x, S_y, S_z)
+      allocate(S_x(nb, nb), S_y(nb, nb), S_z(nb, nb))
+      S_x = czero
+      S_y = czero
+      S_z = czero
+
+      do i = 1, norb
+         ! S_z: +1/2 on spin-up diagonal, -1/2 on spin-down diagonal
+         S_z(i, i)                  = cmplx( 0.5_rp, 0.0_rp, kind=rp)
+         S_z(i + spin_off, i + spin_off) = cmplx(-0.5_rp, 0.0_rp, kind=rp)
+         ! S_x: off-diagonal (I_norb ⊗ σ_x) / 2
+         S_x(i, i + spin_off)       = cmplx(0.5_rp, 0.0_rp, kind=rp)
+         S_x(i + spin_off, i)       = cmplx(0.5_rp, 0.0_rp, kind=rp)
+         ! S_y: off-diagonal (I_norb ⊗ σ_y) / 2
+         ! σ_y = [[0,-i],[i,0]]  →  S_y(up,dn) = -i/2,  S_y(dn,up) = +i/2, so [S_x, S_y] = +i S_z
+         S_y(i, i + spin_off)       = cmplx(0.0_rp, -0.5_rp, kind=rp)
+         S_y(i + spin_off, i)       = cmplx(0.0_rp,  0.5_rp, kind=rp)
+      end do
+
+   end subroutine init_math_operators
 
    !> Factorial function by Ivan Miranda (17.09.2023)
    !> This function takes factorial(n<0) = 0, as necessary for
@@ -393,22 +837,6 @@ contains
       g = part1*part2*part3
 
    end function gaunt
-
-   !> Kronecker delta by Ivan Miranda
-   function kron(i, j) result(delta)
-      !
-      implicit none
-      !
-      integer, intent(in) :: i, j
-      real(rp) :: delta
-      !
-      if (i .eq. j) then
-         delta = 1.0_rp
-      else
-         delta = 0.0_rp
-      end if
-
-   end function kron
 
    !> Computes the Gaunt coefficients, but for real spherical harmonics
    !> Uses Eqs. of Homeier, Journal of Molecular Structure (Theochem) 368 (1996) 31-37
@@ -614,84 +1042,6 @@ contains
 
    end function real_spharm
 
-   !> Anticommutator of two operators A and B
-   !> Accepts only real values in.
-   !> Implemented by Ivan Miranda on 24.09.2023
-   function anticommutator(A, B) result(res)
-      !
-      implicit none
-      !
-      real(rp), intent(in) :: A(:, :), B(:, :)
-      real(rp) :: res(size(A, 1), size(A, 2))
-      !
-      res = matmul(A, B) + matmul(B, A)
-
-   end function anticommutator
-
-   !> Analog anticommutator of two operators A and B
-   !> but now accepts complex values in.
-   !> Implemented by Ivan Miranda on 24.09.2023
-   function canticommutator(A, B) result(res)
-      !
-      implicit none
-      !
-      complex(rp), intent(in) :: A(:, :), B(:, :)
-      complex(rp) :: res(size(A, 1), size(A, 2))
-      !
-      res = matmul(A, B) + matmul(B, A)
-
-   end function canticommutator
-
-   !> Complex identity matrix
-   function ceye(n) result(m)
-      integer, intent(in) :: n
-      complex(rp), dimension(n, n) :: m
-      integer :: i
-
-      m = czero
-
-      do i = 1, n
-         m(i, i) = cone
-      end do
-
-   end function ceye
-
-   !> Identity matrix
-   function eye(n) result(m)
-      integer, intent(in) :: n
-      real(rp), dimension(n, n) :: m
-      integer :: i
-
-      m = 0.0_rp
-
-      do i = 1, n
-         m(i, i) = 1.0_rp
-      end do
-   end function eye
-
-   !> Test if rank 4 matrix is Hermitian
-   function is_hermitian_r4(m) result(l)
-      complex(rp), dimension(:, :, :, :), intent(in) :: m
-      logical :: l
-      integer :: ia, io1, io2, is1, is2
-      integer, dimension(2, 2), parameter :: iss2is = reshape((/1, 4, 3, 2/), (/2, 2/))
-
-      l = .true.
-      do ia = 1, size(m, 1)
-         do io1 = 1, size(m, 2)
-            do io2 = 1, size(m, 3)
-               do is1 = 1, 2
-                  do is2 = 1, 2
-                     l = l .and. abs(m(ia, io1, io2, iss2is(is1, is2)) &
-                                     - conjg(m(ia, io2, io1, iss2is(is2, is1)))) < epsilon
-                     if (.not. l) return
-                  end do !end is1
-               end do !end is2
-            end do !end io1
-         end do !end io2
-      end do !end ia
-   end function is_hermitian_r4
-
    !> Vector cross product
    function cross_product(v1, v2) result(v3)
       real(rp), dimension(:), intent(in) :: v1, v2
@@ -769,8 +1119,16 @@ contains
    function angle(v1, v2) result(d)
       real(rp), dimension(3), intent(in) :: v1, v2
       real(rp) :: d
+      real(rp) :: c, nprod
 
-      d = acos(dot_product(v1, v2)/(norm2(v1)*norm2(v2)))
+      nprod = norm2(v1)*norm2(v2)
+      if (nprod <= TINY(1.0_rp)) then
+         d = 0.0_rp
+      else
+         c = dot_product(v1, v2)/nprod
+         c = MAX(-1.0_rp, MIN(1.0_rp, c))
+         d = acos(c)
+      end if
 
    end function angle
 
@@ -836,7 +1194,7 @@ contains
       real(rp) :: det
 
       det = determinant(m1)
-      if (det >= epsilon) then
+      if (abs(det) >= epsilon) then
 
          m2(1, 1) = (m1(2, 2)*m1(3, 3) - m1(2, 3)*m1(3, 2))/det; 
          m2(1, 2) = -(m1(1, 2)*m1(3, 3) - m1(1, 3)*m1(3, 2))/det; 
@@ -853,41 +1211,6 @@ contains
       end if
 
    end function inverse_3x3
-
-   !> Unique values c in an integer array a, index ia is such that c = a(ia) and
-   !> index ic is such that a = c(ic)
-   subroutine unique_int(a, c, ia, ic)
-      integer, dimension(:), intent(in)  :: a
-      integer, dimension(:), allocatable, intent(out) :: c, ia
-      integer, dimension(size(a)), intent(out) :: ic
-      integer :: sa, sc, ia1, ia2, ic1
-      integer, dimension(size(a)) :: index_a
-      logical, dimension(size(a)) :: mask
-
-      sa = size(a)
-      index_a = (/(ia1, ia1=1, sa)/)
-      mask = .false.
-      do ia1 = 1, sa - 1
-         if (.not. mask(ia1)) then
-            do ia2 = ia1 + 1, sa
-               mask(ia2) = a(ia1) == a(ia2)
-               if (mask(ia2)) index_a(ia2) = index_a(ia1)
-            end do
-         end if
-      end do
-      sc = sa - count(mask)
-      allocate (c(sc), ia(sc))
-      c = pack(a,.not. mask)
-      ia = pack(index_a,.not. mask)
-      do ia1 = 1, sa
-         do ic1 = 1, sc
-            if (index_a(ia1) == ia(ic1)) then
-               ic(ia1) = ic1
-               exit
-            end if
-         end do
-      end do
-   end subroutine unique_int
 
    ! Unique values c in a real array a down to precision epsilon, index ia is
    ! such that c = a(ia) andindex ic is such that a = c(ic)
@@ -926,31 +1249,9 @@ contains
             end if
          end if
       end if
-      ! write(6, *) "v_cart=", v_cart(:)
-      ! write(6, *) "v_sph=", v_sph(:)
+      ! write(6, *) ″v_cart=″, v_cart(:)
+      ! write(6, *) ″v_sph=″, v_sph(:)
    end function cart2sph
-
-   !> Returns a cartesian vector \f$ v_{\mathrm{cart}} = (v_x, v_y, v_z) \f$ from a
-   !> spherical vector \f$ v_{\mathrm{sph}} = (v_r, v_{\theta}, v_{\phi}) \f$
-   function sph2cart(v_sph) result(v_cart)
-      real(rp), dimension(3), intent(in) :: v_sph
-      real(rp), dimension(3) :: v_cart
-
-      v_cart(1) = v_sph(1)*sin(v_sph(2))*cos(v_sph(3))
-      v_cart(2) = v_sph(1)*sin(v_sph(2))*sin(v_sph(3))
-      v_cart(3) = v_sph(1)*cos(v_sph(2))
-   end function sph2cart
-
-   subroutine nm2rho(n, m_cart, rho)
-      real(rp), intent(in) :: n
-      real(rp), dimension(3), intent(in) :: m_cart
-      complex(rp), dimension(2, 2), intent(out) :: rho
-
-      rho(1, 1) = (n + m_cart(3))/2
-      rho(2, 2) = (n - m_cart(3))/2
-      rho(1, 2) = (m_cart(1) - i_unit*m_cart(2))/2
-      rho(2, 1) = (m_cart(1) + i_unit*m_cart(2))/2
-   end subroutine nm2rho
 
    subroutine rho2nm(rho, n, m_cart)
       complex(rp), dimension(2, 2), intent(in) :: rho
@@ -973,30 +1274,20 @@ contains
       m_cart(3) = real(rho(1, 1) - rho(2, 2))
    end subroutine rho2nm
 
-   !> Compute Fermi(E, beta) occupation function
-   function fermi_function(E, beta) result(f)
-      real(rp), intent(in) :: E, beta
-      real(rp) :: f
-      real(rp), parameter :: maxarg = 100._rp
-      real(rp) :: x
-
-      x = beta*E
-
-      if (x < -maxarg) then
-         f = 1.0_rp
-      elseif (x > maxarg) then
-         f = 0.0_rp
-      else
-         f = 1.0_rp/(1.0_rp + exp(x))
-      end if
-   end function fermi_function
-
    function fermifun(e, ef, kbt)
       implicit none
       real(rp), intent(in) :: e, ef, kbt
       real(rp) :: fermifun
+      real(rp) :: argument
 
-      fermifun = 1.0d0/(exp((e - ef)/kbt) + 1.0d0)
+      argument = (e - ef)/kbt
+      if (argument >= 50.0_rp) then
+         fermifun = 0.0_rp
+      else if (argument <= -50.0_rp) then
+         fermifun = 1.0_rp
+      else
+         fermifun = 1.0_rp/(exp(argument) + 1.0_rp)
+      end if
    end function fermifun
 
    function dfermifun(e, ef, kbt)
@@ -1009,114 +1300,6 @@ contains
          dfermifun = -1.0d0/kbt*exp((e - ef)/kbt)/(exp((e - ef)/kbt) + 1.0d0)**2
       end if
    end function dfermifun
-
-   !> Compute dFermi(E, beta)/dE
-   function fermi_function_derivative(E, beta) result(f)
-      real(rp), intent(in) :: E, beta
-      real(rp) :: f
-      real(rp), parameter :: maxarg = 100._rp
-      real(rp) :: x
-
-      x = beta*E
-
-      if (x < -maxarg) then
-         f = 0.0_rp
-      elseif (x > maxarg) then
-         f = 0.0_rp
-      else
-         f = -beta*exp(x)/(1.0_rp + exp(x))**2
-      end if
-   end function fermi_function_derivative
-
-   !> fill an array arr and sort it to get the indx of sorted values
-   subroutine indexx(n, arr, indx)
-      ! INPUT
-      integer, intent(in) :: n
-      real(rp), dimension(0:n), intent(in) :: arr
-      ! OUTPUT
-      integer, dimension(0:n), intent(out) :: indx
-      ! LOCAL
-      integer, parameter :: m = 7, nstack = 50
-      integer, dimension(:), allocatable :: istack
-      integer :: i, indxt, ir, itemp, j, jstack, k, l
-      real(rp) :: a
-      if (.not. allocated(istack)) allocate (istack(nstack))
-      indx = (/(j, j=0, n)/)
-      jstack = 0
-      l = 1
-      ir = n
-      do
-         if (ir - l < m) then
-            do j = l + 1, ir
-               indxt = indx(j)
-               a = arr(indxt)
-               do i = j - 1, 1, -1
-                  if (arr(indx(i)) <= a) exit
-                  indx(i + 1) = indx(i)
-               end do
-               if (i == 1 .and. arr(indx(i)) > a) i = 0
-               indx(i + 1) = indxt
-            end do
-            if (jstack == 0) return
-            ir = istack(jstack)
-            l = istack(jstack - 1)
-            jstack = jstack - 2
-         else
-            k = (l + ir)/2
-            itemp = indx(k)
-            indx(k) = indx(l + 1)
-            indx(l + 1) = itemp
-            if (arr(indx(l + 1)) > arr(indx(ir))) then
-               itemp = indx(l + 1)
-               indx(l + 1) = indx(ir)
-               indx(ir) = itemp
-            end if
-            if (arr(indx(l)) > arr(indx(ir))) then
-               itemp = indx(l)
-               indx(l) = indx(ir)
-               indx(ir) = itemp
-            end if
-            if (arr(indx(l + 1)) > arr(indx(l))) then
-               itemp = indx(l + 1)
-               indx(l + 1) = indx(l)
-               indx(l) = itemp
-            end if
-            i = l + 1
-            j = ir
-            indxt = indx(l)
-            a = arr(indxt)
-            do
-               i = i + 1
-               if (arr(indx(i)) < a) cycle
-               do
-                  j = j - 1
-                  if (arr(indx(j)) <= a) exit
-               end do
-               if (j < i) exit
-               itemp = indx(i)
-               indx(i) = indx(j)
-               indx(j) = itemp
-            end do
-            indx(l) = indx(j)
-            indx(j) = indxt
-            jstack = jstack + 2
-            if (jstack > nstack) then
-               write (*, *) "nstack too small in indexx"
-               stop
-            end if
-            if (ir - i + 1 >= j - l) then
-               istack(jstack) = ir
-               istack(jstack - 1) = i
-               ir = j - 1
-            else
-               istack(jstack) = j - 1
-               istack(jstack - 1) = l
-               l = i
-            end if
-         end if
-      end do
-      if (allocated(istack)) deallocate (istack)
-   end subroutine indexx
 
    !> fill an array arr and sort it to get the indx of sorted values
    recursive subroutine QSort(na, a, indx)
@@ -1172,406 +1355,111 @@ contains
 
    end subroutine QSort
 
-   real(rp) function theta_function(x, smearing)
-      !-----------------------------------------------------------------------
-      !
-      !     This function computes the approximate theta function for the
-      !     given order n, at the point x.
-      !
-      ! --> ´fd´: Fermi-Dirac smearing.
-      !       1.0/(1.0+exp(-x))
-      !
-      ! --> ´g´:  Gaussian smearing (n=0).
-      !
-      ! --> ´mp´: Methfessel-Paxton smearing (n=1). See PRB 40, 3616 (1989).
-      !
-      ! --> ´mv´: Marzari-Vanderbilt (cold) smearing. See PRL 82, 3296 (1999).
-      !       1/2*erf(x-1/sqrt(2)) + 1/sqrt(2*pi)*exp(-(x-1/sqrt(2))**2) + 1/2
-      !
-      real(rp), intent(in) :: x
-      character(len=*), intent(in) :: smearing
-      ! output: the value of the function
-      ! input: the argument of the function
-      ! input: the order of the function
-      !
-      !    the local variables
-      !
-      real(rp) :: a, hp, arg, hd, xp
-      ! the coefficient a_n
-      ! the hermitean function
-      ! the argument of the exponential
-      ! the hermitean function
-      ! auxiliary variable (cold smearing)
-      integer :: i, ni, ngauss
-      ! counter on the n indices
-      ! counter on 2n
-      real(rp), parameter :: maxarg = 100._rp
-      ! maximum value for the argument of the exponential
-
-      ! Fermi-Dirac smearing
-      if (smearing == 'fd') then
-         if (x < -maxarg) then
-            theta_function = 0._rp
-         elseif (x > maxarg) then
-            theta_function = 1._rp
-         else
-            theta_function = 1.0_rp/(1.0_rp + exp(-x))
-         end if
-         return
-      end if
-      ! Cold smearing
-      if (smearing == 'mv') then
-         xp = x - one_over_sqrt_two
-         arg = min(maxarg, xp**2)
-         theta_function = 0.5_rp*erf_qe(xp) + one_over_sqrt_two_pi*exp(- &
-                                                                       arg) + 0.5_rp
-         return
-      end if
-      if (smearing == 'mp') ngauss = 1
-      if (smearing == 'g') ngauss = 0
-
-      ! Methfessel-Paxton
-      theta_function = 0.5_rp*erfc_qe(-x)
-
-      if (ngauss == 0) return
-      hd = 0._rp
-      arg = min(maxarg, x**2)
-      hp = exp(-arg)
-      ni = 0
-      a = one_over_sqrt_pi
-      do i = 1, ngauss
-         hd = 2.0_rp*x*hp - 2.0_rp*dble(ni)*hd
-         ni = ni + 1
-         a = -a/(dble(i)*4.0_rp)
-         theta_function = theta_function - a*hd
-         hp = 2.0_rp*x*hd - 2.0_rp*dble(ni)*hp
-         ni = ni + 1
-      end do
-      return
-   end function theta_function
-
-   !***********************************************************************|
-   real(rp) function delta_function(x, smearing)
-      !
-      !     The derivative of wgauss: an approximation to the delta function
-      !
-      ! --> ´fd´: derivative of the Fermi-Dirac smearing.
-      !       0.5/(1.0+cosh(x))
-      !
-      ! --> ´g´:  derivative of the Gaussian smearing (n=0).
-      !
-      ! --> ´mp´: derivative of the Methfessel-Paxton smearing.
-      !
-      ! --> ´mv´: derivative of the Marzari-Vanderbilt (cold) smearing.
-      !       1/sqrt(pi)*exp(-(x-1/sqrt(2))**2)*(2-sqrt(2)*x)
-      !
-      real(rp), intent(in) :: x
-      character(len=*), intent(in) :: smearing
-      ! output: the value of the function
-      ! input: the point where to compute the function
-
-      ! input: the order of the smearing function
-      !
-      !    here the local variables
-      !
-      real(rp) :: a, arg, hp, hd
-      ! the coefficients a_n
-      ! the argument of the exponential
-      ! the hermite function
-      ! the hermite function
-
-      integer :: i, ni, ngauss
-      ! counter on n values
-      ! counter on 2n values
-
-      ! Fermi-Dirac smearing
-      if (smearing == 'fd') then
-         if (abs(x) <= 36.0_rp) then
-            delta_function = 1.0_rp/(2.0_rp + exp(-x) + exp(+x))
-            ! in order to avoid problems for large values of x in the e
-         else
-            delta_function = 0.0_rp
-         end if
-         return
-      end if
-      ! cold smearing  (Marzari-Vanderbilt)
-      if (smearing == 'mv') then
-         arg = min(200.0_rp, (x - one_over_sqrt_two)**2)
-         delta_function = one_over_sqrt_pi*exp(-arg)*(2.0_rp - sqrt_two*x)
-         return
-      end if
-      ! Methfessel-Paxton
-      if (smearing == 'mp') ngauss = 1
-      if (smearing == 'g') ngauss = 0
-
-      arg = min(200.0_rp, x**2)
-      delta_function = exp(-arg)*one_over_sqrt_pi
-      if (ngauss == 0) return
-      hd = 0.0_rp
-      hp = exp(-arg)
-      ni = 0
-      a = one_over_sqrt_pi
-      do i = 1, ngauss
-         hd = 2.0_rp*x*hp - 2.0_rp*dble(ni)*hd
-         ni = ni + 1
-         a = -a/(dble(i)*4.0_rp)
-         hp = 2.0_rp*x*hd - 2.0_rp*dble(ni)*hp
-         ni = ni + 1
-         delta_function = delta_function + a*hp
-      end do
-      return
-   end function delta_function
-
-   real(rp) function integrated_delta_function(x, smearing)
-      !-----------------------------------------------------------------------
-      !
-      !    w1gauss(x, n) = \int_{-\infty}^x   y delta(y) dy
-      !    where delta(x) is the current approximation for the delta function,
-      !    as obtained from w0gauss(x, n)
-      !
-      ! --> ´fd.: Fermi-Dirac smearing (n=-99). In this case w1gauss corresponds
-      !     to the negative of the electronic entropy.
-      !
-      ! --> ´mp´: Methfessel-Paxton smearing (n>=0).
-      !
-      ! --> ´mv´: Marzari-Vanderbilt (cold) smearing (n=-1).
-      !       1/sqrt(2*pi)*(x-1/sqrt(2))*exp(-(x-1/sqrt(2))**2)
-      !
-      real(rp), intent(in) :: x
-      character(len=*), intent(in) :: smearing
-      ! output: the value of the function
-      ! input: the point where to compute the function
-
-      ! input: the order of the smearing function
-      !
-      !    here the local variables
-      !
-
-      real(rp) :: a, hp, arg, hpm1, hd, f, onemf, xp
-      ! the coefficients a_n
-      ! the hermite function
-      ! the argument of the exponential
-      ! the hermite function
-      ! the hermite function
-      ! Fermi-Dirac occupation number
-      ! 1 - f
-      ! auxiliary variable (cold smearing)
-
-      integer :: i, ni, ngauss
-      ! counter on n values
-      ! counter on 2n values
-
-      if (smearing == 'fd') then
-         if (abs(x) <= 36.0_rp) then
-            f = 1.0_rp/(1.0_rp + exp(-x))
-            onemf = 1.0_rp - f
-            integrated_delta_function = f*log(f) + onemf*log(onemf)
-            ! in order to avoid problems for large values of x
-         else
-            ! neglect w1gauss when abs(w1gauss) < 1.0d-14
-            integrated_delta_function = 0.0_rp
-         end if
-         return
-
-      end if
-      ! Cold smearing
-      if (smearing == 'mv') then
-         xp = x - one_over_sqrt_two
-         arg = min(200._rp, xp**2)
-         integrated_delta_function = one_over_sqrt_two_pi*xp*exp(-arg)
-         return
-
-      end if
-      ! Methfessel-Paxton
-      if (smearing == 'mp') ngauss = 1
-      if (smearing == 'g') ngauss = 0
-
-      arg = min(200.0_rp, x**2)
-      integrated_delta_function = -0.5_rp*one_over_sqrt_pi*exp(-arg)
-      if (ngauss == 0) return
-      hd = 0.0_rp
-      hp = exp(-arg)
-      ni = 0
-      a = one_over_sqrt_pi
-      do i = 1, ngauss
-         hd = 2.0_rp*x*hp - 2.0_rp*dble(ni)*hd
-         ni = ni + 1
-         hpm1 = hp
-         hp = 2.0_rp*x*hd - 2.0_rp*dble(ni)*hp
-         ni = ni + 1
-         a = -a/(dble(i)*4.0_rp)
-         integrated_delta_function = integrated_delta_function - a*(0.5_rp*hp + dble(ni)*hpm1)
-      end do
-      return
-   end function integrated_delta_function
-
-   !***********************************************************************|
-   !
-   ! Copyright (C) 2002-2009 Quantum ESPRESSO group
-   ! This file is distributed under the terms of the
-   ! GNU General Public License. See the file `License´
-   ! in the root directory of the present distribution,
-   ! or http://www.gnu.org/copyleft/gpl.txt .
-   !
-   !---------------------------------------------------------------------
-   real(rp) function erf_qe(x)
-      !---------------------------------------------------------------------
-      !
-      !     Error function - computed from the rational approximations of
-      !     W. J. Cody, Math. Comp. 22 (1969), pages 631-637.
-      !
-      !     for abs(x) le 0.47 erf is calculated directly
-      !     for abs(x) gt 0.47 erf is calculated via erf(x)=1-erfc(x)
-      !
-      real(rp), intent(in) :: x
-      real(rp) :: x2, p1(4), q1(4)
-      data p1/2.426679552305318E2_rp, 2.197926161829415E1_rp, &
-         6.996383488619136_rp, -3.560984370181538E-2_rp/
-      data q1/2.150588758698612E2_rp, 9.116490540451490E1_rp, &
-         1.508279763040779E1_rp, 1.000000000000000_rp/
-      !
-      if (abs(x) > 6.0_rp) then
-         !
-         !  erf(6)=1-10^(-17) cannot be distinguished from 1
-         !
-         erf_qe = sign(1.0_rp, x)
-      else
-         if (abs(x) <= 0.47_rp) then
-            x2 = x**2
-            erf_qe = x*(p1(1) + x2*(p1(2) + x2*(p1(3) + x2*p1(4)))) &
-                     /(q1(1) + x2*(q1(2) + x2*(q1(3) + x2*q1(4))))
-         else
-            erf_qe = 1.0_rp - erfc_qe(x)
-         end if
-      end if
-      !
-      return
-   end function erf_qe
-
-   real(rp) function erfc_qe(x)
-      !---------------------------------------------------------------------
-      !
-      !     Complementary error function
-      !     erfc(x) = 1-erf(x)  - See comments in erf
-      !
-      real(rp), intent(in) :: x
-      real(rp) :: ax, x2, xm2, p2(8), q2(8), p3(5), q3(5), pim1
-      data p2/3.004592610201616E2_rp, 4.519189537118719E2_rp, &
-         3.393208167343437E2_rp, 1.529892850469404E2_rp, &
-         4.316222722205674E1_rp, 7.211758250883094_rp, &
-         5.641955174789740E-1_rp, -1.368648573827167E-7_rp/
-      data q2/3.004592609569833E2_rp, 7.909509253278980E2_rp, &
-         9.313540948506096E2_rp, 6.389802644656312E2_rp, &
-         2.775854447439876E2_rp, 7.700015293522947E1_rp, &
-         1.278272731962942E1_rp, 1.000000000000000_rp/
-      data p3/-2.996107077035422E-3_rp, -4.947309106232507E-2_rp, &
-         -2.269565935396869E-1_rp, -2.786613086096478E-1_rp, &
-         -2.231924597341847E-2_rp/
-      data q3/1.062092305284679E-2_rp, 1.913089261078298E-1_rp, &
-         1.051675107067932_rp, 1.987332018171353_rp, &
-         1.000000000000000_rp/
-
-      data pim1/0.56418958354775629_rp/
-      !        ( pim1= sqrt(1/pi) )
-      ax = abs(x)
-      if (ax > 26.0_rp) then
-         !
-         !  erfc(26.0)=10^(-296); erfc( 9.0)=10^(-37);
-         !
-         erfc_qe = 0.0_rp
-      elseif (ax > 4.0_rp) then
-         x2 = x**2
-         xm2 = (1.0_rp/ax)**2
-         erfc_qe = (1.0_rp/ax)*exp(-x2)*(pim1 + xm2*(p3(1) &
-                                                     + xm2*(p3(2) + xm2*(p3(3) + xm2*(p3(4) + xm2*p3(5) &
-                                                                                      ))))/(q3(1) + xm2*(q3(2) + xm2*(q3(3) + xm2* &
-                                                                                                                      (q3(4) + xm2*q3(5))))))
-      elseif (ax > 0.47_rp) then
-         x2 = x**2
-         erfc_qe = exp(-x2)*(p2(1) + ax*(p2(2) + ax*(p2(3) &
-                                                     + ax*(p2(4) + ax*(p2(5) + ax*(p2(6) + ax*(p2(7) &
-                                                                                               + ax*p2(8))))))))/(q2(1) + ax*(q2(2) + ax* &
-                                                                                                                              (q2(3) + ax*(q2(4) + ax*(q2(5) + ax*(q2(6) + ax* &
-                                                                                                                                                                   (q2(7) + ax*q2(8))))))))
-      else
-         erfc_qe = 1.0_rp - erf_qe(ax)
-      end if
-      !
-      ! erf(-x)=-erf(x)  =>  erfc(-x) = 2-erfc(x)
-      !
-      if (x < 0.0_rp) erfc_qe = 2.0_rp - erfc_qe
-      !
-      return
-   end function erfc_qe
-
    ! Transform the spd matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
    subroutine hcpx(ham, transformation)
+      ! Transform between cartesian and spherical-harmonic representations
       ! Input
       character(len=*), intent(in) :: transformation
-      complex(rp), dimension(9, 9), intent(inout) :: ham
+      complex(rp), dimension(:, :), intent(inout) :: ham
       ! local variables
-      integer :: i, ii, j, jj, k, l
-      complex(rp) :: const, del, dum, pim, cone
-      complex(rp), dimension(9, 9) :: hesf, hcart, v, vc, htmp
+      integer :: ii, n
+      complex(rp) :: const, cone
+      complex(rp), allocatable :: hesf(:, :), hcart(:, :), v(:, :), vc(:, :), htmp(:, :)
+
+      n = size(ham, 1)
       cone = (1.0d0, 0.0d0)
       const = CMPLX(1.0d0/sqrt(2.0d0), KIND=Kind(.0d0))
-      do ii = 1, 9
-         do jj = 1, 9
-            v(ii, jj) = (0.0d0, 0.0d0)
-            vc(ii, jj) = (0.0d0, 0.0d0)
-         end do
-      end do
-      !---base Y(lm) na ordem (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)---
-      ! s
-      v(1, 1) = cone
-      vc(1, 1) = cone
-      ! p
-      v(2, 4) = -const
-      vc(4, 2) = -const
-      v(2, 2) = const
-      vc(2, 2) = const
-      v(3, 4) = i_unit*const
-      vc(4, 3) = -i_unit*const
-      v(3, 2) = i_unit*const
-      vc(2, 3) = -i_unit*const
-      v(4, 3) = cone
-      vc(3, 4) = cone
-      ! d
-      v(5, 5) = i_unit*const
-      v(5, 9) = -i_unit*const
-      v(6, 6) = i_unit*const
-      v(6, 8) = i_unit*const
-      v(7, 6) = const
-      v(7, 8) = -const
-      v(8, 5) = const
-      v(8, 9) = const
-      v(9, 7) = cone
-      vc(5, 5) = -i_unit*const
-      vc(9, 5) = i_unit*const
-      vc(6, 6) = -i_unit*const
-      vc(8, 6) = -i_unit*const
-      vc(6, 7) = const
-      vc(8, 7) = -const
-      vc(5, 8) = const
-      vc(9, 8) = const
-      vc(7, 9) = cone
 
-      hesf = 0.0d0
-      hcart = 0.0d0
+      allocate(v(n, n), vc(n, n), hesf(n, n), hcart(n, n), htmp(n, n))
+      v = czero
+      vc = czero
+
+      if (n == 9) then
+         !---base Y(lm) order (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)---
+         ! s
+         v(1, 1) = cone
+         vc(1, 1) = cone
+         ! p
+         v(2, 4) = -const
+         vc(4, 2) = -const
+         v(2, 2) = const
+         vc(2, 2) = const
+         v(3, 4) = i_unit*const
+         vc(4, 3) = -i_unit*const
+         v(3, 2) = i_unit*const
+         vc(2, 3) = -i_unit*const
+         v(4, 3) = cone
+         vc(3, 4) = cone
+         ! d
+         v(5, 5) = i_unit*const
+         v(5, 9) = -i_unit*const
+         v(6, 6) = i_unit*const
+         v(6, 8) = i_unit*const
+         v(7, 6) = const
+         v(7, 8) = -const
+         v(8, 5) = const
+         v(8, 9) = const
+         v(9, 7) = cone
+         vc(5, 5) = -i_unit*const
+         vc(9, 5) = i_unit*const
+         vc(6, 6) = -i_unit*const
+         vc(8, 6) = -i_unit*const
+         vc(6, 7) = const
+         vc(8, 7) = -const
+         vc(5, 8) = const
+         vc(9, 8) = const
+         vc(7, 9) = cone
+      else if (n == 4) then
+         !---sp basis: Y(lm) order (00)(1-1)(10)(11)---
+         ! s
+         v(1, 1) = cone
+         vc(1, 1) = cone
+         ! p  (same block as in the n=9 case above)
+         v(2, 4) = -const
+         vc(4, 2) = -const
+         v(2, 2) = const
+         vc(2, 2) = const
+         v(3, 4) = i_unit*const
+         vc(4, 3) = -i_unit*const
+         v(3, 2) = i_unit*const
+         vc(2, 3) = -i_unit*const
+         v(4, 3) = cone
+         vc(3, 4) = cone
+      else
+         ! NOTE/TODO (spdf transform):
+         ! For basis sizes other than n=4 (sp) and n=9 (spd), hcpx currently
+         ! falls back to identity (no-op). This means n=16 (spdf) does NOT yet
+         ! have an explicit cartesian <-> spherical transform matrix here.
+         !
+         ! When implementing n=16, keep orbital ordering consistent with the
+         ! real-basis convention used in lattice%canso:
+         !   1:s, 2:x, 3:y, 4:z, 5:xy, 6:yz, 7:zx, 8:x2-y2, 9:3z2-r2,
+         !   10:fz3, 11:fxz2, 12:fyz2, 13:fz(x2-y2), 14:fxyz, 15:fx3, 16:fy3.
+         !
+         ! Until then, identity is intentional to avoid silently applying an
+         ! inconsistent transform.
+         ! For other basis sizes, default to identity transform (no-op)
+         do ii = 1, n
+            v(ii, ii) = cone
+            vc(ii, ii) = cone
+         end do
+      end if
+
+      hesf = czero
+      hcart = czero
 
       select case (transformation)
-
       case ('cart2sph')
          htmp = matmul(ham, v)
          hesf = matmul(vc, htmp)
-
          ham(:, :) = hesf(:, :)
       case ('sph2cart')
          htmp = matmul(ham, vc)
          hcart = matmul(v, htmp)
-
          ham(:, :) = hcart(:, :)
       end select
+
+      deallocate(v, vc, hesf, hcart, htmp)
    end subroutine hcpx
 
    !> Integration of a given function Y by Simpson, modified to integrate
@@ -1580,12 +1468,16 @@ contains
       ! Input
       integer, intent(in) :: NPTS, nexp
       real(rp), intent(in) :: EA, EF, H
-      real(rp), dimension(NPTS + 2), intent(in) :: Y
-      real(rp), dimension(NPTS + 2), intent(in) :: Ene
+      real(rp), dimension(:), intent(in) :: Y
+      real(rp), dimension(:), intent(in) :: Ene
       ! Output
       real(rp), intent(out) :: AINT
       ! Local variables
       integer :: I
+
+      if (NPTS < 3 .or. size(Y) < NPTS + 2 .or. size(Ene) < NPTS + 2) then
+         error stop 'simpson_m: invalid NPTS or integration array extent'
+      end if
 
       AINT = 0.d0
       do I = 2, NPTS - 1, 2
@@ -1604,23 +1496,28 @@ contains
       real(rp), intent(in) :: EF, T
       logical, intent(in) :: fermi, dfermi
       real(rp), intent(out) :: AINT
-      real(rp), dimension(NPTS + 10), intent(in) :: Y, Ene
+      ! Callers always pass arrays of length en%channels_ldos+10, while NPTS is
+      ! en%nv1 = channels_ldos+1 (even channels_ldos), so the true extent is
+      ! NPTS+9, not NPTS+10. The Fermi loops therefore run to NPTS+8 and read at
+      ! most Y(NPTS+9)/Ene(NPTS+9) -- in bounds. (The old NPTS+10 declaration and
+      ! NPTS+9 bound read one element past the allocation; that garbage read is
+      ! the source of the layout-sensitive J_ij NaN, KNOWN_ISSUES 2026-07-16.)
+      real(rp), dimension(NPTS + 9), intent(in) :: Y, Ene
       ! Local variables
       integer :: I
       real(rp) :: H
-      real(rp), parameter :: kB = 0.633362019d-5
       real(rp) :: kBT
 
       AINT = 0.d0
       H = Ene(2) - Ene(1)
-      kBT = kB*T + 1.0d-15
+      kBT = kB_simpson_f*T + 1.0d-15
       !
       if (fermi) then
-         do I = 2, NPTS + 9, 2
+         do I = 2, NPTS + 8, 2
             AINT = AINT + Y(I - 1)*fermifun(Ene(i - 1), Ef, kBT) + 4.d0*Y(I)*fermifun(Ene(i), Ef, kBT) + Y(I + 1)*fermifun(Ene(i + 1), Ef, kBT)
          end do
       else if (dfermi) then
-         do I = 2, NPTS + 9, 2
+         do I = 2, NPTS + 8, 2
             AINT = AINT + Y(I - 1)*dfermifun(Ene(i - 1), Ef, kBT) + 4.d0*Y(I)*dfermifun(Ene(i), Ef, kBT) + Y(I + 1)*dfermifun(Ene(i + 1), Ef, kBT)
          end do
       else
@@ -1834,23 +1731,6 @@ contains
    end function rtrace
 
 
-   function trace(mat) result(res)
-      !
-      implicit none
-      !
-      complex(rp), intent(in) :: mat(:, :)
-      real(rp) :: res
-      !
-      ! Local Variables
-      integer :: i
-
-      res = 0.0_rp
-      do i = 1, size(mat, 1)
-         res = res + (mat(i, i))
-      end do
-
-   end function trace
-
    !> Calculates the multiplication of a matrix
    !> by a scalar number (both complex).
    !> Implemented by Ivan Miranda on 16.10.2023
@@ -1874,26 +1754,41 @@ contains
 
    function imtrace9(mat)
       implicit none
-      complex(rp), dimension(9, 9), intent(in) :: mat
+      complex(rp), intent(in) :: mat(:, :)
       real(rp) :: imtrace9
+      integer :: i, n
 
-      imtrace9 = aimag(mat(1, 1) + mat(2, 2) + mat(3, 3) + mat(4, 4) + mat(5, 5) + mat(6, 6) + mat(7, 7) + mat(8, 8) + mat(9, 9))
+      n = min(size(mat, 1), size(mat, 2))
+      imtrace9 = 0.0_rp
+      do i = 1, n
+         imtrace9 = imtrace9 + aimag(mat(i, i))
+      end do
    end function imtrace9
 
    function rtrace9(mat)
       implicit none
-      complex(rp), dimension(9, 9), intent(in) :: mat
+      complex(rp), intent(in) :: mat(:, :)
       real(rp) :: rtrace9
+      integer :: i, n
 
-      rtrace9 = real(mat(1, 1) + mat(2, 2) + mat(3, 3) + mat(4, 4) + mat(5, 5) + mat(6, 6) + mat(7, 7) + mat(8, 8) + mat(9, 9))
+      n = min(size(mat, 1), size(mat, 2))
+      rtrace9 = 0.0_rp
+      do i = 1, n
+         rtrace9 = rtrace9 + real(mat(i, i))
+      end do
    end function rtrace9
 
    function trace9(mat)
       implicit none
-      complex(rp), dimension(9, 9), intent(in) :: mat
+      complex(rp), intent(in) :: mat(:, :)
       complex(rp) :: trace9
+      integer :: i, n
 
-      trace9 = (mat(1, 1) + mat(2, 2) + mat(3, 3) + mat(4, 4) + mat(5, 5) + mat(6, 6) + mat(7, 7) + mat(8, 8) + mat(9, 9))
+      n = min(size(mat, 1), size(mat, 2))
+      trace9 = czero
+      do i = 1, n
+         trace9 = trace9 + mat(i, i)
+      end do
    end function trace9
 
    function cartesian_to_direct(a, crd_car)
@@ -1923,97 +1818,34 @@ contains
       direct_to_cartesian = matmul(a, crd_dir)
    end function direct_to_cartesian
 
-   !
-   ! Subroutine to rotate the matrix
-   !
-   subroutine rotmag(MAT, sdim)
-      implicit none
-
-      ! Formal Arguments
-      integer, intent(in) :: sdim
-      complex(rp), dimension(18, 18, sdim), intent(inout) :: MAT
-
-      ! Local Scalars
-      integer :: i, j, k, m, ndim
-      real(rp) :: alpha, beta, gamma, pi
-
-      ! Local Arrays
-      complex(rp), dimension(18, 18) :: MATs, RMAT, tmpMAT
-
-      ! Define constants and initialize variables
-      pi = acos(-1.0_rp)
-      ndim = 18
-      RMAT = 0.0_rp
-      alpha = -pi/2.0_rp  ! Rotation angle in radians
-      beta = -pi/2.0_rp   ! Rotation angle in radians
-      gamma = 0.0_rp        ! Rotation angle in radians
-
-      ! Generate the rotation matrix
-      call ROTMAT(RMAT, alpha, beta, gamma)
-
-      ! Rotate each matrix
-      do k = 1, sdim
-         ! Copy MAT to MATs
-         do m = 1, 18
-            do i = 1, 18
-               MATs(i, m) = MAT(i, m, k)
-            end do
-         end do
-
-         ! Apply the rotation: h * Ux
-         call zgemm("N", "C", ndim, ndim, ndim, cone, MATs, ndim, RMAT, ndim, czero, tmpMAT, ndim)
-
-         ! Apply the rotation: Ux´ * (h * Ux)
-         call zgemm("N", "N", ndim, ndim, ndim, cone, RMAT, ndim, tmpMAT, ndim, czero, MATs, ndim)
-
-         ! Copy MATs back to MAT
-         do m = 1, 18
-            do i = 1, 18
-               MAT(i, m, k) = MATs(i, m)
-            end do
-         end do
-      end do
-
-      return
-   end subroutine rotmag
-
 !
-   subroutine rotmag_loc(MATout, MATin, sdim, MOM) !
+   subroutine rotmag_loc(MATout, MATin, sdim, MOM)
       !
       !.. Implicit Declarations ..
       implicit none
       !
       !.. Parameters ..
-      complex(selected_real_kind(15)), parameter :: cone = (1.0d+0, 0.0d+0)
-      complex(selected_real_kind(15)), parameter :: czero = (0.0d+0, 0.0d+0)
+      complex(rp), parameter :: cone_  = (1.0d+0, 0.0d+0)
+      complex(rp), parameter :: czero_ = (0.0d+0, 0.0d+0)
       !
       !.. Formal Arguments ..
       integer, intent(in) :: sdim
-      complex(selected_real_kind(15)), &
-         dimension(18, 18, sdim), intent(out) :: MATout
-      complex(selected_real_kind(15)), &
-         dimension(18, 18, sdim), intent(out) :: MATin
-      real(selected_real_kind(15)), dimension(3), intent(in) :: MOM
-      !
+      complex(rp), dimension(nb, nb, sdim), intent(out) :: MATout
+      complex(rp), dimension(nb, nb, sdim), intent(out) :: MATin
+      real(rp), dimension(3), intent(in) :: MOM
       !
       !.. Local Scalars ..
-      integer :: I, J, K, M, ndim
-      real(selected_real_kind(15)) :: ALFA, BETA, GAMA, n1, x1, y1, x2, z2, th, phi
+      integer :: J, K, M, ndim
+      real(rp) :: ALFA, BETA, GAMA
       !
       !.. Local Arrays ..
-      real(selected_real_kind(15)), dimension(3) :: v, sv
-      complex(selected_real_kind(15)), dimension(18, 18) :: MATs, RMAT, tmpMAT
-      !
-    !!.. External Calls ..
-      !external ROTMAT, zgemm
-      !
-      !.. Intrinsic Functions ..
-      !intrinsic selected_real_kind
+      real(rp), dimension(3) :: v, sv
+      complex(rp), dimension(nb, nb) :: MATs, RMAT, tmpMAT
       !
       ! ... Executable Statements ...
       !
-      ndim = 18
-      RMAT = (0.0d0, 0.0d0)
+      ndim = nb
+      RMAT = czero_
       !
       v = MOM
 
@@ -2024,39 +1856,35 @@ contains
       gama = 0.0d0
 
       call ROTMAT(RMAT, alfa, beta, gama)
-      !  call ROTMAT_org(RMAT,alfa,beta,gama)
 
       do J = 1, sdim
-         do M = 1, 18
-            do K = 1, 18
+         do M = 1, ndim
+            do K = 1, ndim
                MATs(K, M) = MATin(K, M, J)
             end do
          end do
          !  h*Ux
-         call zgemm("N", "N", ndim, ndim, ndim, cone, MATs, ndim, RMAT, ndim, czero, tmpMAT, &
+         call zgemm("N", "N", ndim, ndim, ndim, cone_, MATs, ndim, RMAT, ndim, czero_, tmpMAT, &
                     ndim)
-         !  Ux´*(h*Ux)
-         call zgemm("C", "N", ndim, ndim, ndim, cone, RMAT, ndim, tmpMAT, ndim, czero, MATs, &
+         !  Ux’*(h*Ux)
+         call zgemm("C", "N", ndim, ndim, ndim, cone_, RMAT, ndim, tmpMAT, ndim, czero_, MATs, &
                     ndim)
          !
-         do M = 1, 18
-            do K = 1, 18
+         do M = 1, ndim
+            do K = 1, ndim
                MATout(K, M, J) = MATs(K, M)
             end do
          end do
       end do
       return
       !
-      ! ... Format Declarations ...
-      !
-10000 format(3x, a8, f10.4, a8, f10.4, a8, f10.4)
    end subroutine rotmag_loc
 
    subroutine ROTMAT(MAT, A, B, G)
       implicit none
 
       ! Formal Arguments
-      complex(rp), dimension(18, 18), intent(inout) :: MAT
+      complex(rp), dimension(:, :), intent(inout) :: MAT
       real(rp), intent(in) :: A, B, G
 
       ! Local Scalars
@@ -2065,41 +1893,43 @@ contains
       complex(rp) :: ALFA, GAMA, IM
 
       ! Local Arrays
-      complex(rp), dimension(2, 2) :: SM
-      complex(rp), dimension(9, 9) :: MAT9
+      complex(rp), dimension(2, 2)       :: SM
+      complex(rp), dimension(norb, norb) :: MAT9
 
       ! Initialization
-      SM = 0.0_rp
-      MAT = 0.0_rp
-      MAT9 = 0.0_rp
-      IM = CMPLX(0.0_rp, 1.0_rp)
+      SM   = czero
+      MAT  = czero
+      MAT9 = czero
+      IM   = CMPLX(0.0_rp, 1.0_rp, kind=rp)
       ALFA = CMPLX(A, KIND=KIND(0.0_rp))
       BETA = B
       GAMA = CMPLX(G, KIND=KIND(0.0_rp))
 
-      ! Generate the submatrix SM for the rotation
-      SM(1, 1) = DSs(0.5_rp, 0.5_rp, 0.5_rp, BETA)*exp(-IM*(0.5_rp*ALFA + 0.5_rp*GAMA))
-      SM(1, 2) = DSs(0.5_rp, 0.5_rp, -0.5_rp, BETA)*exp(-IM*(0.5_rp*ALFA - 0.5_rp*GAMA))
-      SM(2, 1) = DSs(0.5_rp, -0.5_rp, 0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA + 0.5_rp*GAMA))
+      ! Generate the spin-1/2 submatrix SM for the rotation
+      SM(1, 1) = DSs(0.5_rp,  0.5_rp,  0.5_rp, BETA)*exp(-IM*( 0.5_rp*ALFA + 0.5_rp*GAMA))
+      SM(1, 2) = DSs(0.5_rp,  0.5_rp, -0.5_rp, BETA)*exp(-IM*( 0.5_rp*ALFA - 0.5_rp*GAMA))
+      SM(2, 1) = DSs(0.5_rp, -0.5_rp,  0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA + 0.5_rp*GAMA))
       SM(2, 2) = DSs(0.5_rp, -0.5_rp, -0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA - 0.5_rp*GAMA))
 
-      ! Calculate MAT9 for J=0,1,2 and corresponding M, Mprime
-      do J = 0, 2
+      ! Calculate MAT9 (orbital part) for J = 0, 1, ..., lmax_basis
+      do J = 0, lmax_basis
          S = J*J + 1 + J
          do M = -J, J
             do Mprime = -J, J
-               MAT9(S + M, S + Mprime) = DSs(J*1.0d0, M*1.0d0, Mprime*1.0d0, BETA)*exp(-IM*(M*ALFA + Mprime*GAMA))
+               MAT9(S + M, S + Mprime) = DSs(J*1.0d0, M*1.0d0, Mprime*1.0d0, BETA) &
+                                        *exp(-IM*(M*ALFA + Mprime*GAMA))
             end do
          end do
       end do
 
-      ! Populate the full matrix MAT using MAT9 and SM
-      do M = 1, 9
-         do Mprime = 1, 9
-            MAT(Mprime, M) = MAT9(Mprime, M)*SM(1, 1)
-            MAT(Mprime, M + 9) = MAT9(Mprime, M)*SM(1, 2)
-            MAT(Mprime + 9, M) = MAT9(Mprime, M)*SM(2, 1)
-            MAT(Mprime + 9, M + 9) = MAT9(Mprime, M)*SM(2, 2)
+      ! Populate the full nb×nb spinor matrix MAT using the Kronecker product
+      ! MAT = MAT9 ⊗ SM  (spin-orbit direct product)
+      do M = 1, norb
+         do Mprime = 1, norb
+            MAT(Mprime,            M           ) = MAT9(Mprime, M)*SM(1, 1)
+            MAT(Mprime,            M + spin_off) = MAT9(Mprime, M)*SM(1, 2)
+            MAT(Mprime + spin_off, M           ) = MAT9(Mprime, M)*SM(2, 1)
+            MAT(Mprime + spin_off, M + spin_off) = MAT9(Mprime, M)*SM(2, 2)
          end do
       end do
    end subroutine ROTMAT
@@ -2191,29 +2021,6 @@ contains
       !
    end subroutine car2sph
 
-   subroutine sph2car(C, S)
-      ! transforms spherical (Theta,Phi,R) to cartesian (x,y,z) coordinates
-      !
-      !
-      !.. Implicit Declarations ..
-      implicit none
-      !
-      !
-      !.. Formal Arguments ..
-      real(selected_real_kind(15)), dimension(3), intent(out) :: C
-      real(selected_real_kind(15)), dimension(3), intent(in) :: S
-      !
-      !
-      ! ... Executable Statements ...
-      !
-      !
-      C(1) = S(3)*cos(S(2))*cos(S(1))
-      C(2) = S(3)*cos(S(2))*sin(S(1))
-      C(3) = S(3)*sin(S(2))
-      return
-      !
-   end subroutine sph2car
-
    subroutine updatrotmom_single(Mvect, MOM)
       !
       !
@@ -2298,36 +2105,168 @@ contains
 10000 format(3x, a8, f10.4, a8, f10.4, a8, f10.4)
    end subroutine updatrotmom_single
 
-   !----------------------------------------------------
-   ! Set up the rotation matrix around a given axis
-   ! based on Rodrigues´ rotation formula
-   !----------------------------------------------------
-   subroutine setup_rotation_matrix(matrix, axis, theta)
-      ! Declarations
-      real(rp), intent(out) :: matrix(3, 3)
-      real(rp), intent(in) :: axis(3), theta
-      real(rp) :: ux, uy, uz, cosTheta, sinTheta
+   ! --------------------------------------------------------------------------------------
+   !> Tabulated values of hydrogenic Slater radial integrals.
+   !> Returns only diagonal terms F^k(l l, l l) for l = s,p,d.
+   ! --------------------------------------------------------------------------------------
+   function tabulated_slater_integrals(k, l1, l2, l3, l4) result(res)
+      integer, intent(in) :: k, l1, l2, l3, l4 ! l=1..4 (=s,p,d,f), k=1..4 (=0,2,4,6)
+      real(rp) :: res
+      real(rp) :: ha_to_ry
+      real(rp), dimension(4, 4, 4, 4, 4) :: slater
 
-      ! Assign values
-      ux = axis(1)
-      uy = axis(2)
-      uz = axis(3)
-      cosTheta = cos(theta)
-      sinTheta = sin(theta)
+      ! Tabulated values are treated as Hartree atomic units (Ha).
+      ! Internal Hamiltonian energy unit is Rydberg (Ry): 1 Ha = 2 Ry.
+      ha_to_ry = 2.0_rp
+      slater = 0.0_rp
 
-      ! Define the rotation matrix using Rodrigues´ formula
-      matrix(1, 1) = cosTheta + ux*ux*(1.0 - cosTheta)
-      matrix(1, 2) = ux*uy*(1.0 - cosTheta) - uz*sinTheta
-      matrix(1, 3) = ux*uz*(1.0 - cosTheta) + uy*sinTheta
+      ! 4s-electrons
+      slater(1, 1, 1, 1, 1) = 0.0372715_rp*ha_to_ry
+      ! 3p-electrons
+      slater(1, 2, 2, 2, 2) = 0.0718678_rp*ha_to_ry
+      slater(2, 2, 2, 2, 2) = 0.0359881_rp*ha_to_ry
+      ! 3d-electrons
+      slater(1, 3, 3, 3, 3) = 0.0860460_rp*ha_to_ry
+      slater(2, 3, 3, 3, 3) = 0.0454210_rp*ha_to_ry
+      slater(3, 3, 3, 3, 3) = 0.0296224_rp*ha_to_ry
 
-      matrix(2, 1) = uy*ux*(1.0 - cosTheta) + uz*sinTheta
-      matrix(2, 2) = cosTheta + uy*uy*(1.0 - cosTheta)
-      matrix(2, 3) = uy*uz*(1.0 - cosTheta) - ux*sinTheta
+      if (k < 1 .or. k > 4) then
+         res = 0.0_rp
+      else
+         res = slater(k, l1, l2, l3, l4)
+      end if
+   end function tabulated_slater_integrals
 
-      matrix(3, 1) = uz*ux*(1.0 - cosTheta) - uy*sinTheta
-      matrix(3, 2) = uz*uy*(1.0 - cosTheta) + ux*sinTheta
-      matrix(3, 3) = cosTheta + uz*uz*(1.0 - cosTheta)
-   end subroutine
+   ! --------------------------------------------------------------------------------------
+   !> Calculates a_k(m,m’,m’’,m’’’) for LDA+U(+J) matrix elements.
+   ! --------------------------------------------------------------------------------------
+   function a_k(k, l, m1, m2, m3, m4) result(res)
+      implicit none
+      integer, intent(in) :: k, l, m1, m2, m3, m4
+      integer :: q
+      real(rp) :: res
+
+      res = 0.0_rp
+      do q = -k, k
+         res = res + (4.0_rp*pi/(2.0_rp*real(k, rp) + 1.0_rp))* &
+            real(realgaunt(l, k, l, m1, q, m2), rp)*real(realgaunt(l, k, l, m3, q, m4), rp)
+      end do
+   end function a_k
+
+   function Coulomb_mat(l, m1, m3, m2, m4, f0, f2, f4, f6) result(res)
+      implicit none
+      integer, intent(in) :: l, m1, m3, m2, m4
+      real(rp), intent(in) :: f0, f2, f4, f6
+      real(rp) :: res
+
+      res = 0.0_rp
+      res = res + a_k(0, l, m1, m2, m3, m4)*f0 &
+                + a_k(2, l, m1, m2, m3, m4)*f2 &
+                + a_k(4, l, m1, m2, m3, m4)*f4 &
+                + a_k(6, l, m1, m2, m3, m4)*f6
+   end function Coulomb_mat
+
+   !> Coulomb tensor in the normalized complex spherical-harmonic basis.
+   !> The pair-pair convention is
+   !>   T(a,b,c,d) = integral Y_a^*(1)Y_b(1) r12^-1 Y_c^*(2)Y_d(2).
+   !> Equivalently this is the two-electron matrix element <a c|b d>.
+   !> Its selection rule is m_a + m_c = m_b + m_d. The conjugated second
+   !> Gaunt factor therefore uses the reversed pair (d,c).
+   !> It is deliberately separate from Coulomb_mat: that legacy routine uses
+   !> real Gaunt coefficients and remains available to unrelated callers.
+   function Coulomb_mat_spherical(l, m1, m2, m3, m4, f0, f2, f4, f6) result(res)
+      integer, intent(in) :: l, m1, m2, m3, m4
+      real(rp), intent(in) :: f0, f2, f4, f6
+      complex(rp) :: res
+      integer :: k, q
+      real(rp) :: fk, prefactor
+
+      res = (0.0_rp, 0.0_rp)
+      do k = 0, min(2*l, 6)
+         if (mod(k, 2) /= 0) cycle
+         select case (k)
+         case (0)
+            fk = f0
+         case (2)
+            fk = f2
+         case (4)
+            fk = f4
+         case (6)
+            fk = f6
+         end select
+         if (fk == 0.0_rp) cycle
+         prefactor = four_pi*fk/real(2*k + 1, rp)
+         do q = -k, k
+            res = res + prefactor*complex_gaunt(l, m1, k, q, l, m2)* &
+                  conjg(complex_gaunt(l, m4, k, q, l, m3))
+         end do
+      end do
+   end function Coulomb_mat_spherical
+
+   !> Normalized complex Gaunt coefficient integral Y_l1,m1^* Y_k,q Y_l2,m2.
+   function complex_gaunt(l1, m1, k, q, l2, m2) result(res)
+      integer, intent(in) :: l1, m1, k, q, l2, m2
+      complex(rp) :: res
+      real(rp) :: factor
+
+      res = (0.0_rp, 0.0_rp)
+      if (abs(m1) > l1 .or. abs(q) > k .or. abs(m2) > l2) return
+      factor = angular_parity(m1)*sqrt(real((2*l1 + 1)*(2*k + 1)*(2*l2 + 1), rp)/(four_pi))
+      factor = factor*wigner_3j_integer(l1, k, l2, 0, 0, 0)* &
+               wigner_3j_integer(l1, k, l2, -m1, q, m2)
+      res = cmplx(factor, 0.0_rp, kind=rp)
+   end function complex_gaunt
+
+   !> Integer-angular-momentum Wigner 3j symbol (Racah finite-sum formula).
+   function wigner_3j_integer(j1, j2, j3, m1, m2, m3) result(res)
+      integer, intent(in) :: j1, j2, j3, m1, m2, m3
+      real(rp) :: res, prefactor, summation, denominator
+      integer :: z, zmin, zmax
+
+      res = 0.0_rp
+      if (j1 < 0 .or. j2 < 0 .or. j3 < 0) return
+      if (abs(m1) > j1 .or. abs(m2) > j2 .or. abs(m3) > j3) return
+      if (m1 + m2 + m3 /= 0) return
+      if (j3 > j1 + j2 .or. j3 < abs(j1 - j2)) return
+
+      prefactor = sqrt(real(factorial_integer(j1 + j2 - j3)*factorial_integer(j1 - j2 + j3)* &
+                            factorial_integer(-j1 + j2 + j3), rp)/ &
+                       real(factorial_integer(j1 + j2 + j3 + 1), rp))
+      prefactor = prefactor*sqrt(real(factorial_integer(j1 + m1)*factorial_integer(j1 - m1)* &
+                                       factorial_integer(j2 + m2)*factorial_integer(j2 - m2)* &
+                                       factorial_integer(j3 + m3)*factorial_integer(j3 - m3), rp))
+      zmin = max(0, j2 - j3 - m1, j1 - j3 + m2)
+      zmax = min(j1 + j2 - j3, j1 - m1, j2 + m2)
+      summation = 0.0_rp
+      do z = zmin, zmax
+         denominator = real(factorial_integer(z)*factorial_integer(j1 + j2 - j3 - z)* &
+                            factorial_integer(j1 - m1 - z)*factorial_integer(j2 + m2 - z)* &
+                            factorial_integer(j3 - j2 + m1 + z)*factorial_integer(j3 - j1 - m2 + z), rp)
+         summation = summation + real((-1)**z, rp)/denominator
+      end do
+      res = angular_parity(j1 - j2 - m3)*prefactor*summation
+   end function wigner_3j_integer
+
+   function factorial_integer(n) result(res)
+      integer, intent(in) :: n
+      integer :: i
+      real(rp) :: res
+
+      res = 1.0_rp
+      do i = 2, n
+         res = res*real(i, rp)
+      end do
+   end function factorial_integer
+
+   pure function angular_parity(n) result(res)
+      integer, intent(in) :: n
+      real(rp) :: res
+
+      if (mod(abs(n), 2) == 0) then
+         res = 1.0_rp
+      else
+         res = -1.0_rp
+      end if
+   end function angular_parity
 
 end module math_mod
-

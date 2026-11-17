@@ -9,14 +9,23 @@ real(rp) :: center_band_s_up, center_band_s_dw, &
             center_band_p_up, center_band_p_dw, &
             center_band_d_up, center_band_d_dw, &
             width_band_s_up, width_band_s_dw, &
-            width_band_p_up, width_band_p_dw, &
-            width_band_d_up, width_band_d_dw, &
-            ws_r, sumec, sumev, etot, utot, ekin, rhoeps, vmad
+             width_band_p_up, width_band_p_dw, &
+             width_band_d_up, width_band_d_dw, &
+             ws_r, sumec, sumev, etot, utot, ekin, rhoeps, vmad, q10
+real(rp), dimension(2) :: vrmax
 complex(rp), dimension(9, 2) :: cx, wx, cex, obx
 real(rp), dimension(2) :: xi_p, xi_d, rac
+real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
+character(len=16) :: hubbard_radial_moments, hubbard_backend
+real(rp), dimension(:,:,:), allocatable :: ldm_flatten
+real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
+character(len=256) :: dm_file
+character(len=64) :: dm_sha256 ! written by versions that hashed the density-matrix file; read and ignored
+integer :: hubbard_nsp
+real(rp), dimension(3) :: hubbard_axis
 namelist /par/ &
    center_band, width_band, shifted_band, obar, gravity_center, &
-   sumec, sumev, etot, utot, ekin, rhoeps, vmad, &
+    sumec, sumev, etot, utot, ekin, rhoeps, vmad, vrmax, q10, &
    c, enu, ppar, qpar, srdel, vl, &
    pl, mom, lmom, ws_r, ql, lmax, &
    center_band_s_up, center_band_s_dw, &
@@ -26,4 +35,6 @@ namelist /par/ &
    width_band_p_up, width_band_p_dw, &
    width_band_d_up, width_band_d_dw, &
    cx, wx, cx0, wx0, cx1, wx1, &
-   cshi, dw_l, cex, obx, xi_p, xi_d, rac
+   cshi, dw_l, cex, obx, xi_p, xi_d, rac, &
+   hubbard_u, hubbard_j, hubbard_radial_moments, hubbard_backend, ldm_flatten, ldm_flatten_imag, dm_file, dm_sha256, hubbard_nsp, &
+   hubbard_axis

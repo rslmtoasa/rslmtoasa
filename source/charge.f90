@@ -31,9 +31,22 @@ module charge_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off
+   use region_registry_mod, only: region_registry, region_kind_vacuum, &
+                                  region_kind_lead_b
    implicit none
 
    private
+
+   !> B7.6: signature of the per-iteration hook `interfacepot` invokes after
+   !> updating the alignment shifts. Argument-free by design -- the one
+   !> implementation closes over everything it needs at installation time, and
+   !> keeping the signature empty means `charge` never grows a compile-time
+   !> dependency on what the hook actually does.
+   abstract interface
+      subroutine charge_iteration_hook()
+      end subroutine charge_iteration_hook
+   end interface
 
    !> Module´s main structure
    type, public :: charge
@@ -100,6 +113,73 @@ module charge_mod
       real(rp), dimension(:, :), allocatable :: amad
       !> Wigner Seitz radius per atom shell considered to receive charge
       real(rp), dimension(:), allocatable :: wsimp
+
+      !> B7.1: explicit per-site region registry (region id, active/frozen
+      !> mask, layer index, z, w, reference type), replacing the `init`/
+      !> `iq = init + ibas` offset arithmetic in surfpot as auditable data.
+      !> Built from the same buildsurf cluster data surfpot itself reads
+      !> (qz, wssurf, nbas, nlay); see build_region_registry.
+      type(region_registry) :: regions
+
+      !> B7.3/B7.4: per-region alignment shift V_r (B7 §1.3), a single scalar
+      !> per region applied identically to frozen and active sites of that
+      !> region. Region A is the gauge anchor (V_A == 0) and only differences
+      !> are physical: V_B - V_A is the contact potential. This is a change of
+      !> REFERENCE LEVEL, not a relaxation -- frozen sites remain frozen, at a
+      !> shifted value. B7.4 owns solving for it; until then it is zero and
+      !> interfacepot reduces to the deviation-variable form of surfpot.
+      real(rp), dimension(:), allocatable :: region_shift
+
+      !> B7.6: optional per-iteration hook, invoked at the end of
+      !> `interfacepot` once `region_shift` has been updated. Its one production
+      !> use is regenerating the vacuum region’s frozen parameters at the newly
+      !> solved vacuum level (A | vacuum), which is what makes that level
+      !> self-consistent instead of a hand-set knob.
+      !>
+      !> **Why a callback and not a direct call.** The generator needs
+      !> `self%potpar`, so `vacuum_lead_mod` depends on `self_mod`, which
+      !> depends on `charge_mod`. A direct call from here would close that
+      !> cycle; driving it from `self.f90` is impossible for the same reason
+      !> (and is fenced besides). An opaque callback set by `calculation.f90`,
+      !> which sits above all three, inverts the dependency: `charge` calls
+      !> back without knowing what it is calling.
+      !>
+      !> Null on every path except `buildinterface` with region_b_kind =
+      !> ’vacuum’, where `pre_processing_buildinterface` installs it.
+      procedure(charge_iteration_hook), pointer, nopass :: on_alignment_updated => null()
+
+      !> B7.4: .true. once the alignment solver has seeded region_shift from
+      !> the analytic guess. Subsequent iterations continue the mixed fixed
+      !> point rather than re-seeding, which would discard convergence.
+      logical :: alignment_started = .false.
+      !> B7.4: residual below which the alignment fixed point is considered
+      !> converged, and the analytic consistency check (G-B7-2) is performed.
+      real(rp) :: alignment_tol = 1.0d-6
+      !> B7.4: how far the converged fixed point may disagree with the analytic
+      !> contact potential E_F(anchor) - E_F(region) before the run warns that
+      !> the absolute-zero bookkeeping is broken (B7 §1.3, G-B7-2). Generous
+      !> by design: this is a ″something is structurally wrong″ alarm, not a
+      !> precision test.
+      real(rp) :: alignment_check_tol = 5.0d-3
+      !> B7.4: deviation charge at a frozen anchor-region site above which the
+      !> active zone is reported as too thin (B7 §1.3).
+      real(rp) :: deep_drift_tol = 1.0d-3
+      !> B7.4: which region the Fermi level is pinned to, or empty for the
+      !> default free E_F from cluster neutrality (B7 §1.3). Setting it to a
+      !> region name reduces the interface path exactly to today’s surface
+      !> behaviour, and is the correct setting when reproducing `buildsurf`
+      !> results.
+      character(len=32) :: fix_fermi_to_region = ''
+
+      !> B7.5: layered/interface (calctype=’L’) region widths, in active
+      !> layers, on the A side and the B side of the active zone.
+      integer :: nlay_a = 0
+      integer :: nlay_b = 0
+      !> B7.5: optional per-region source E_F (Ry), feeding
+      !> region_descriptor%fermi/%fermi_known for the alignment initial guess
+      !> and consistency check (B7 §1.3). Sentinel: not supplied.
+      real(rp) :: fermi_a = huge(1.0_rp)
+      real(rp) :: fermi_b = huge(1.0_rp)
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -111,6 +191,15 @@ module charge_mod
       procedure :: get_charge_transf
       procedure :: impmad
       procedure :: imppot
+      procedure :: build_region_registry
+      procedure :: build_interface_registry
+      procedure :: interfacepot
+      procedure :: align_regions
+      procedure :: deep_drift_diagnostic
+      procedure :: fermi_pinned_region
+      procedure :: compensation_sites
+      procedure :: boundary_nef
+      procedure :: overlap_diagnostic
       procedure :: print_state
       procedure :: print_state_full
       procedure :: print_state_formatted
@@ -120,6 +209,79 @@ module charge_mod
    interface charge
       procedure :: constructor
    end interface charge
+
+   interface
+
+      module subroutine set2d(this)
+         class(charge) :: this
+      end subroutine set2d
+
+      module subroutine latt2d(this)
+         class(charge), intent(inout) :: this
+      end subroutine latt2d
+
+      module subroutine madl2r(this)
+         class(charge), intent(inout) :: this
+      end subroutine madl2r
+
+      module subroutine madl2d(this)
+         class(charge), intent(inout) :: this
+      end subroutine madl2d
+
+      module subroutine build_region_registry(this)
+         class(charge), intent(inout) :: this
+      end subroutine build_region_registry
+
+      module subroutine build_interface_registry(this)
+         class(charge), intent(inout) :: this
+      end subroutine build_interface_registry
+
+      module subroutine interfacepot(this)
+         class(charge), intent(inout) :: this
+      end subroutine interfacepot
+
+      module subroutine align_regions(this, vm, nsite)
+         class(charge), intent(inout) :: this
+         integer, intent(in) :: nsite
+         real(rp), dimension(:), intent(in) :: vm
+      end subroutine align_regions
+
+      module subroutine deep_drift_diagnostic(this, tdq, nsite)
+         class(charge), intent(inout) :: this
+         integer, intent(in) :: nsite
+         real(rp), dimension(:), intent(in) :: tdq
+      end subroutine deep_drift_diagnostic
+
+      module function fermi_pinned_region(this) result(ireg)
+         class(charge), intent(inout) :: this
+         integer :: ireg
+      end function fermi_pinned_region
+
+      module subroutine compensation_sites(this, ideep_lo, ideep_hi, nef_lo, nef_hi)
+         class(charge), intent(inout) :: this
+         integer, intent(out) :: ideep_lo, ideep_hi
+         real(rp), intent(out) :: nef_lo, nef_hi
+      end subroutine compensation_sites
+
+      module function boundary_nef(this, isite) result(nef)
+         class(charge), intent(inout) :: this
+         integer, intent(in) :: isite
+         real(rp) :: nef
+      end function boundary_nef
+
+      module subroutine overlap_diagnostic(this, zsite, wsite, nsite)
+         class(charge), intent(inout) :: this
+         integer, intent(in) :: nsite
+         real(rp), dimension(:), intent(in) :: zsite, wsite
+      end subroutine overlap_diagnostic
+
+      module subroutine qsort(m, inx, nl)
+         integer, intent(in) :: nl
+         real(rp), dimension(nl), intent(inout) :: m
+         integer, dimension(nl), intent(inout) :: inx
+      end subroutine qsort
+
+   end interface
 
 contains
 
@@ -267,18 +429,155 @@ contains
       gz = this%gz
       gt = this%gt
       vmix = this%vmix
+      fix_fermi_to_region = this%fix_fermi_to_region
+      nlay_a = this%nlay_a
+      nlay_b = this%nlay_b
+      fermi_a = this%fermi_a
+      fermi_b = this%fermi_b
 
-      if (size(this%wssurf) .ne. this%lattice%nbas) then
+      if (.not. allocated(this%wssurf) .or. size(this%wssurf) .ne. this%lattice%nbas) then
 #ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('charge.wssurf', this%wssurf)
+         if (allocated(this%wssurf)) call g_safe_alloc%deallocate('charge.wssurf', this%wssurf)
          call g_safe_alloc%allocate('charge.wssurf', this%wssurf, (/this%lattice%nbas/))
 #else
-         deallocate (this%wssurf)
+         if (allocated(this%wssurf)) deallocate (this%wssurf)
          allocate (this%wssurf(this%lattice%nbas))
 #endif
       end if
 
       call move_alloc(this%wssurf, wssurf)
+      if (.not. allocated(w)) then
+         allocate(w(1))
+         w = 0.0_rp
+      end if
+      if (.not. allocated(dss)) then
+         allocate(dss(1, 1))
+         dss = 0.0_rp
+      end if
+      if (.not. allocated(dsz)) then
+         allocate(dsz(1, 1))
+         dsz = 0.0_rp
+      end if
+      if (.not. allocated(ds3z2)) then
+         allocate(ds3z2(1, 1))
+         ds3z2 = 0.0_rp
+      end if
+      if (.not. allocated(dsx2y2)) then
+         allocate(dsx2y2(1, 1))
+         dsx2y2 = 0.0_rp
+      end if
+      if (.not. allocated(dsxy)) then
+         allocate(dsxy(1, 1))
+         dsxy = 0.0_rp
+      end if
+      if (.not. allocated(dzz)) then
+         allocate(dzz(1, 1))
+         dzz = 0.0_rp
+      end if
+      if (.not. allocated(dz3z2)) then
+         allocate(dz3z2(1, 1))
+         dz3z2 = 0.0_rp
+      end if
+      if (.not. allocated(am)) then
+         allocate(am(1, 1))
+         am = 0.0_rp
+      end if
+      if (.not. allocated(bm)) then
+         allocate(bm(1, 1))
+         bm = 0.0_rp
+      end if
+      if (.not. allocated(pm)) then
+         allocate(pm(1, 1))
+         pm = 0.0_rp
+      end if
+      if (.not. allocated(bsx)) then
+         allocate(bsx(1))
+         bsx = 0.0_rp
+      end if
+      if (.not. allocated(bsy)) then
+         allocate(bsy(1))
+         bsy = 0.0_rp
+      end if
+      if (.not. allocated(bsz)) then
+         allocate(bsz(1))
+         bsz = 0.0_rp
+      end if
+      if (.not. allocated(bkx)) then
+         allocate(bkx(1))
+         bkx = 0.0_rp
+      end if
+      if (.not. allocated(bky)) then
+         allocate(bky(1))
+         bky = 0.0_rp
+      end if
+      if (.not. allocated(bkz)) then
+         allocate(bkz(1))
+         bkz = 0.0_rp
+      end if
+      if (.not. allocated(qx3)) then
+         allocate(qx3(1))
+         qx3 = 0.0_rp
+      end if
+      if (.not. allocated(qy3)) then
+         allocate(qy3(1))
+         qy3 = 0.0_rp
+      end if
+      if (.not. allocated(qz3)) then
+         allocate(qz3(1))
+         qz3 = 0.0_rp
+      end if
+      if (.not. allocated(qx)) then
+         allocate(qx(1))
+         qx = 0.0_rp
+      end if
+      if (.not. allocated(qy)) then
+         allocate(qy(1))
+         qy = 0.0_rp
+      end if
+      if (.not. allocated(qz)) then
+         allocate(qz(1))
+         qz = 0.0_rp
+      end if
+      if (.not. allocated(asx)) then
+         allocate(asx(1))
+         asx = 0.0_rp
+      end if
+      if (.not. allocated(asy)) then
+         allocate(asy(1))
+         asy = 0.0_rp
+      end if
+      if (.not. allocated(asz)) then
+         allocate(asz(1))
+         asz = 0.0_rp
+      end if
+      if (.not. allocated(akx)) then
+         allocate(akx(1))
+         akx = 0.0_rp
+      end if
+      if (.not. allocated(aky)) then
+         allocate(aky(1))
+         aky = 0.0_rp
+      end if
+      if (.not. allocated(akz)) then
+         allocate(akz(1))
+         akz = 0.0_rp
+      end if
+      if (.not. allocated(dr)) then
+         allocate(dr(1))
+         dr = 0.0_rp
+      end if
+      if (.not. allocated(dg)) then
+         allocate(dg(1))
+         dg = 0.0_rp
+      end if
+      if (.not. allocated(amad)) then
+         allocate(amad(1, 1))
+         amad = 0.0_rp
+      end if
+      if (.not. allocated(wsimp)) then
+         allocate(wsimp(1))
+         wsimp = 0.0_rp
+      end if
 
       open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -286,6 +585,9 @@ contains
       end if
 
       read (funit, nml=charge, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+         call g_logger%fatal('Invalid &charge namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+      end if
       close (funit)
 
       if (size(wssurf) .ne. this%lattice%nbas) then
@@ -298,6 +600,11 @@ contains
       this%gz = gz
       this%gt = gt
       this%vmix = vmix
+      this%fix_fermi_to_region = fix_fermi_to_region
+      this%nlay_a = nlay_a
+      this%nlay_b = nlay_b
+      this%fermi_a = fermi_a
+      this%fermi_b = fermi_b
       call move_alloc(wssurf, this%wssurf)
    end subroutine build_from_file
 
@@ -320,6 +627,16 @@ contains
 
       this%dq(:) = 0.0d0
       this%vmix = 1.0d0
+      ! B7.4: free Fermi level is the default (B7 §1.3).
+      this%fix_fermi_to_region = ''
+      this%alignment_started = .false.
+      ! B7.5: layered/interface defaults; nlay_a/nlay_b must be set by the
+      ! &charge namelist for calctype=’L’ -- there is no geometry-derived
+      ! fallback the way surfmat’s nlay is (B7 §4 B7.5).
+      this%nlay_a = 0
+      this%nlay_b = 0
+      this%fermi_a = huge(1.0_rp)
+      this%fermi_b = huge(1.0_rp)
       ! For surfmat
       this%wssurf(:) = this%lattice%wav*ang2au
 
@@ -334,6 +651,7 @@ contains
       class(charge), intent(inout) :: this
       ! Local variables
       integer :: I, IBAS, ICLAS, IM, JBAS, j, i_all, i_stat
+      integer :: nmad
       real(rp) :: DIF, VADD, VERR, VMADI
       real(rp), dimension(this%lattice%nrec) :: TDQ, RMAX
       real(rp), dimension(:, :), allocatable :: AMAD
@@ -343,15 +661,16 @@ contains
       do i = 1, this%lattice%nrec
          rmax(i) = this%symbolic_atom(this%lattice%nbulk + i)%potential%ws_r
       end do
-      !write (*, *) " NBAS=", NBAS, " NCLAS=", NCLAS
+      !write (*, *) ″ NBAS=″, NBAS, ″ NCLAS=″, NCLAS
       !print *, ´ Sum of electrons from recursion: ´, sum(DQ)
       do im = 1, this%lattice%nrec
          VMAD0(IM) = this%symbolic_atom(this%lattice%nbulk + im)%potential%vmad
       end do
-      if (this%lattice%NBAS > npot) then
+      nmad = this%lattice%ntot
+      if (nmad > npot) then
          write (*, *) "# DE ATOMOS NA CELA FERE AS DIMENSOES ATRIBUIDAS"
          write (*, *) "             JOB ABORTADO                       "
-         write (*, *) "NBAS=", this%lattice%NBAS, "DIFF NDIM=", NPOT, "IN MAD"
+         write (*, *) "NTOT=", nmad, "DIFF NDIM=", NPOT, "IN MAD"
          !IFAIL = 1
          return
       end if
@@ -359,21 +678,23 @@ contains
       tdq(:) = 0.0d0
       tdq(:) = this%dq(:)
       dif = sum(tdq(:))
-      !write (*, *) "DIF IN MAD PROGRAM = ", DIF
+      !write (*, *) ″DIF IN MAD PROGRAM = ″, DIF
 
       if (abs(dif) > 0.5) then
          if (rank == 0) call g_logger%warning('too much charge in the external atom! Careful', __FILE__, __LINE__)
       end if
 
-      allocate (AMAD(this%lattice%nbas, this%lattice%nbas), stat=i_stat)
+      ! MADMAT in bulkmat writes an ntot x ntot matrix to mad.mat.
+      ! Use the same dimension here; nbas can differ from ntot in reduced cells.
+      allocate (AMAD(nmad, nmad), stat=i_stat)
       open (15, file="mad.mat", form="unformatted", STATUS="OLD")
-      do i = 1, this%lattice%nbas
-         read (15) (AMAD(i, j), j=1, this%lattice%nbas)
+      do i = 1, nmad
+         read (15) (AMAD(i, j), j=1, nmad)
       end do
       close (15)
-      do IBAS = 1, this%lattice%NBAS
+      do IBAS = 1, nmad
          VMADI = 0.d0
-         do JBAS = 1, this%lattice%NBAS
+         do JBAS = 1, nmad
             VMADI = VMADI + 2.d0*AMAD(JBAS, IBAS)*TDQ(this%lattice%iz(JBAS))
          end do
          this%symbolic_atom(this%lattice%nbulk + this%lattice%iz(IBAS))%potential%VMAD = VMADI
@@ -469,6 +790,18 @@ contains
          totq(jj) = tdq(i)
       end do
 
+      ! Capture the previous iteration’s vmad BEFORE the loop below overwrites
+      ! it, mirroring bulkpot (which captures VMAD0 in its own separate loop).
+      ! Reading it afterwards made the mixing below a no-op -- it reduced to
+      ! x*vmix + x*(1-vmix) == x, with verr identically zero -- so impurity
+      ! runs converged unmixed. B7.4’s alignment solver leans on this hook to
+      ! damp the capacitor-like soft mode, so it must be live.
+      ! This changes neither a matrix element nor a charge-scaling convention:
+      ! at the default vmix = 1.0 the result is bit-identical.
+      do iclas = 1, this%lattice%nrec
+         vmad0(iclas) = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad
+      end do
+
       do jbas = 1, this%lattice%nrec
          ss = 0.0d0
          do n = 1, nrx
@@ -479,7 +812,6 @@ contains
       end do
 
       do iclas = 1, this%lattice%nrec
-         vmad0(iclas) = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad
          this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad = &
          & this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad*this%vmix + vmad0(iclas)*(1 - this%vmix)
          verr = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad - vmad0(iclas)
@@ -488,15 +820,48 @@ contains
       end do
    end subroutine imppot
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Self-consistent surface Madelung potential from the layer charge
+   !> distribution (Skriver-Rosengaard, Phys. Rev. B 43, 9538).
+   !>
+   !> @details
+   !> The electrostatic potential shift felt by layer i is a lattice sum over
+   !> the multipole moments of all layers j, coupled through the generalized
+   !> 2D Madelung matrices built in madl2d:
+   !>
+   !>   dV_i = (1/S) * sum_j [ M_ss(i,j) Q0(j)  +  M_sz(i,j) Q10(j) + ... ]
+   !>
+   !> where
+   !>   * MONOPOLE term  M_ss = this%dss, driven by the layer charge transfer
+   !>     Q0(j) = tdq(j) = sum over the layer’s atoms of dq (occupation-valence).
+   !>     This is the standard ASA surface electrostatics and the only term
+   !>     active in the monopole-only (default) mode.
+   !>   * DIPOLE term (B6, optional) M_sz = this%dsz, driven by the layer l=1
+   !>     (z) dipole moment Q10(j) = tq10(j), aggregated from potential%q10
+   !>     (computed in electrostatics_multipole%compute_dipole_moments). It
+   !>     corrects the work function / surface dipole of broken-symmetry
+   !>     systems and is added ADDITIVELY next to the monopole term, gated on
+   !>     control%dipole_electrostatics. In the bulk limit Q10 -> 0 so the
+   !>     dipole term vanishes and the result reduces to the monopole potential.
+   !>
+   !> The potential is referenced to the deep-bulk layer (vbulk) so that the
+   !> converged shift dV_i -> 0 in the interior. Higher (l=2) multipole
+   !> matrices (ds3z2, dsx2y2, dsxy, dzz, dz3z2) are already built by madl2d
+   !> but not consumed here.
+   !---------------------------------------------------------------------------
    subroutine surfpot(this)
       class(charge), intent(inout) :: this
       ! Local variables
       integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX, i_all, i_stat
       real(rp) :: DIF, SUM1, SUMM, SUMN, VBULK, VM1, VMAD1, VMARD, VMN, wsm, twooverwsm, wsms
       real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TDQ, VM, qst
+      real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TQ10 ! B6: per-layer l=1 dipole moments
       real(rp), dimension(:, :), allocatable :: DSS
       integer, parameter :: npot = 5000
       integer :: init, atomrec, k
+      logical :: dipole_on ! B6: dipole electrostatics enabled?
 
       !this%vmix = 0.6d0
       wsm = this%lattice%wav*ang2au
@@ -514,11 +879,15 @@ contains
       qst(:) = 0.0d0
       dif = 0.0d0
       atomrec = 0.0d0
+      tq10(:) = 0.0d0
+      dipole_on = this%lattice%control%dipole_electrostatics
       do iclas = 1, this%lattice%nlay
          tdq(iclas) = 0.0d0
          do k = 1, this%lattice%natoms_layer(iclas)
             atomrec = atomrec + 1
             tdq(iclas) = tdq(iclas) + this%dq(atomrec)
+            ! B6: per-layer aggregated l=1 dipole moment, parallel to tdq.
+            if (dipole_on) tq10(iclas) = tq10(iclas) + this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%q10
          end do
          qst(iclas) = tdq(iclas)/this%lattice%natoms_layer(iclas)
          dif = tdq(iclas) + dif
@@ -530,13 +899,18 @@ contains
       if (abs(tdq(iex)) > 0.5d0) then
          if (rank == 0) call g_logger%warning('Too much charge in the external layer!', __FILE__, __LINE__)
       end if
-      ! Calculate the potential for a given charge distribution
+      ! Calculate the Madelung potential of each layer from the layer charge
+      ! distribution: summ = sum_j [ monopole M_ss(i,j) Q0(j) + dipole M_sz(i,j) Q10(j) ].
       do ibas = 1, this%lattice%nlay
          summ = 0.0d0
          do j = 1, nrlx
             iq = init + ibas
             jq = init + j
+            ! Monopole contribution (always): dss = M_ss, tdq = layer charge Q0.
             summ = summ + this%dss(iq, jq)*tdq(j) !- twooverwsm*tdq(j) + twooverwsm*qst(j)
+            ! Dipole contribution (B6, optional): dsz = M_sz, tq10 = layer l=1
+            ! moment Q10. Additive; identically zero when disabled or in bulk.
+            if (dipole_on) summ = summ + this%dsz(iq, jq)*tq10(j)
          end do
          vm(ibas) = (summ/wsms) !+ twooverwsm*qst(t)
       end do
@@ -547,6 +921,11 @@ contains
          jq = init + j
          sum1 = sum1 + this%dss(1, jq)*tdq(j)! - twooverwsm*tdq(j) + twooverwsm*qst(j)
          sumn = sumn + this%dss(this%lattice%nbas, jq)*tdq(j) !- twooverwsm*tdq(j) + twooverwsm*qst(j)
+         ! B6: dipole contribution to the reference (surface / bulk) potentials.
+         if (dipole_on) then
+            sum1 = sum1 + this%dsz(1, jq)*tq10(j)
+            sumn = sumn + this%dsz(this%lattice%nbas, jq)*tq10(j)
+         end if
       end do
       if (rank == 0) call g_logger%info('sum1= '//real2str(sum1)//' sumn= '//real2str(sumn), __FILE__, __LINE__)
       vm1 = (sum1/wsms)
@@ -565,11 +944,25 @@ contains
             & vmard*this%vmix + this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1 - this%vmix)
          end do
       end do
+      ! Report per-class monopole charge transfer, l=1 dipole moment (B6), and
+      ! the resulting mixed Madelung shift VMAD (which now carries both the
+      ! monopole and, when enabled, the dipole contribution).
       do iclas = 1, this%lattice%nrec
-         if (rank == 0) call g_logger%info('Class '//fmt('i4', iclas)//' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))//' VMAD= '&
-                             &//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+         if (rank == 0) then
+            if (dipole_on) then
+               call g_logger%info('Class '//fmt('i4', iclas)// &
+                  ' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))// &
+                  ' Q10= '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%q10)// &
+                  ' VMAD= '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+            else
+               call g_logger%info('Class '//fmt('i4', iclas)// &
+                  ' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))// &
+                  ' VMAD= '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+            end if
+         end if
       end do
    end subroutine surfpot
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -695,7 +1088,16 @@ contains
          write (120, '(51f10.4)') (this%dss(i, j), j=1, this%lattice%nbas)
       end do
       close (120)
+
+      ! B7.1: build the explicit region registry from the same cluster data
+      ! (qz, wssurf, nbas, nlay) surfpot itself consumes, reproducing its
+      ! init=6 index map as an auditable instance. surfpot is left untouched
+      ! -- it remains the permanent regression oracle -- this is a parallel,
+      ! non-invasive artifact validated against it (see dump/build_from_buildsurf
+      ! in region_registry_mod).
+      call this%build_region_registry()
    end subroutine surfmat
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -947,7 +1349,7 @@ contains
          this%bsz(3) = dot_product(new_bsz, z)
 
          do i = 1, this%nq3
-           ! Rotate the atom's coordinates
+           ! Rotate the atom’s coordinates
            atom_rot(1) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_x)
            atom_rot(2) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_y)
            atom_rot(3) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_z)
@@ -993,6 +1395,37 @@ contains
    !> @brief
    !> Calculates the matrix elements for the electrostatic potential from
    !> information in ´clust´, ´size´ and ´self´.
+   !>
+   !> @warning DO NOT USE THIS ROUTINE AS THE TEMPLATE FOR `interfacemat`.
+   !>          USE `surfmat` INSTEAD. (B7.0 / G-B7-1 finding.)
+   !>
+   !> `impmad` and `surfmat` build their matrices in two DIFFERENT unit
+   !> conventions. Each is self-consistent with its own contraction, so
+   !> neither is wrong in place -- but they are off from each other by
+   !> exactly one factor of S, and mixing them silently produces a plausible
+   !> wrong answer:
+   !>
+   !>   impmad  (here)   : absolute units. Off-diagonal `2*dd` = 2/r, on-site
+   !>                      `2/wsimp(ii)` = 2/w, both in 1/bohr. `imppot`
+   !>                      contracts this%amad BARE -- there is no /wsms at
+   !>                      the call site -- landing directly in Rydberg.
+   !>   surfmat          : the kernel’s 1/S convention. On-site term is
+   !>                      `2*(sws*alat*ang2au/wssurf(i))` = 2*(S/w_i), which
+   !>                      is DIMENSIONLESS and equals exactly 2 for uniform w.
+   !>                      `surfpot` restores Rydberg by dividing by wsms.
+   !>
+   !> For fccCu001 (S = 2.6690 bohr, uniform w): impmad gives 2/w = 0.749346,
+   !> surfmat gives 2*(S/w) = 2.000000 -- a ratio of exactly S.
+   !>
+   !> Two further reasons to prefer `surfmat` for interface work:
+   !>   * `impmad` sets `wsimp(:) = lattice%wav`, a single system-wide average
+   !>     (″Set as if all the atoms have the same WS radius. Can be improved
+   !>     later.″), whereas `surfmat`’s `wssurf` is genuinely PER-SITE. B7
+   !>     needs per-site w across two regions.
+   !>   * `impmad` builds a real-space 3D cluster sum; the interface geometry
+   !>     needs the 2D layer kernel that `surfmat`/`madl2d` provide.
+   !>
+   !> See docs/conventions/CONVENTIONS_MADELUNG.md (C0, C1, C2).
    !---------------------------------------------------------------------------
    subroutine impmad(this)
       implicit none
@@ -1019,11 +1452,11 @@ contains
 !    END DO
 !    NRX=J
 !    if (self_obj%nbas>this%lattice%nrec) then
-!      write(*, *) "Too many shells in ´self´"
+!      write(*, *) ″Too many shells in ´self´″
 !      STOP
 !    end if
 !    if (NRX>NRLX) then
-!      write(*, *) "To many atoms in shells, increase NRLX"
+!      write(*, *) ″To many atoms in shells, increase NRLX″
 !      STOP
 !    end if
       !
@@ -1070,680 +1503,6 @@ contains
 !  10 FORMAT(2X, 3E16.6)
    end subroutine impmad
 
-! Subroutines from surfmat library
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Calculates the Madelung potential matrix for a finite number
-   !> of 2D layers of point charges and dipoles. This is used to
-   !> set up the Madelung potential in the surface program INF.
-   !>
-   !> Matrix    (l´, l)
-   !>
-   !> DSS       (s, s)
-   !> DSZ       (s, z)
-   !> DS3Z2     (s, 3z2-1)
-   !> DSX2Y2    (s, x2-y2)
-   !> DSXY      (s, xy)
-   !> DZZ       (z, z)
-   !> DZ3Z2     (z, 3zz-1)
-   !>
-   !> PM    : Plate-condenser potential matrix
-   !---------------------------------------------------------------------------
-   subroutine madl2d(this)
-
-      ! Input
-      class(charge), intent(inout) :: this
-      ! Local variables
-      integer :: I, IQ, JQ, JQP, NQM, nbas
-      real(rp) :: ALPHA, AQPPZ, BETA, BETAM, BETAP, BMDL, BMG, DGI, &
-                  DMDL, DMG, DRI, DRI2, DRI3, DRI4, DZ, ERFCA, ERFCM, &
-                  ERFCP, EXPA, EXPAA, EXPEK, EXPP, EXPZ, FACBET, &
-                  FACDIF, FACDK, FACDR, FACERF, FACG1, FACG2, &
-                  FACGAU, FACGUA, FACP, FACQ1, FACQ2, FACQ3, FACQ4, &
-                  FACQUA, FACQUR, FACZZ
-      real(rp) :: G0MDL, GAM52, GLH, GLK, GLM, GM0, PHASE, Q0MDL, &
-                  QIMDL, QM0G, QMIG, QMRG, QPPX, QPPY, QPPZ, QPX, QPY, &
-                  QPZ, QRMDL, SUM0G, SUM0R, SUM1G, SUM1R, SUM20G, &
-                  SUM20R, SUM2IG, SUM2IR, SUM2RG, SUM2RR, SUM30G, &
-                  SUM30R, SUMM, SUMQ0, SUMQI, SUMQR, TWOLAM, TWOS, X, &
-                  XI, XR
-      real(rp) :: Y, Z, ZU, exf, exh, expm
-
-      ! Process described in H. L. Skriver and N. M. Rosengaard Phys. Rev. B 43, 9538
-
-      nbas = this%lattice%nbas
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('charge.ds3z2', this%ds3z2, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.dsx2y2', this%dsx2y2, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.dsxy', this%dsxy, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.dss', this%dss, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.dsz', this%dsz, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.dzz', this%dzz, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.dz3z2', this%dz3z2, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.am', this%am, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.bm', this%bm, (/nbas, nbas/))
-      call g_safe_alloc%allocate('charge.pm', this%pm, (/nbas, nbas/))
-#else
-      allocate (this%ds3z2(nbas, nbas), this%dsx2y2(nbas, nbas), this%dsxy(nbas, nbas), this%dss(nbas, nbas), this%dsz(nbas, nbas) &
-                , this%dzz(nbas, nbas), this%dz3z2(nbas, nbas), this%am(nbas, nbas), this%bm(nbas, nbas), this%pm(nbas, nbas))
-#endif
-
-      TWOS = 2.*this%SWS
-      TWOLAM = 2.*this%ALAMDA
-      FACBET = PI/this%AR2D/TWOLAM
-      FACGAU = -2.*SQRT_PI/this%AR2D/this%ALAMDA
-      FACQUA = 2.*this%SWS*this%SWS*SQRT(5.d0)/3.
-      FACGUA = 6.*this%SWS*this%SWS*this%SWS/SQRT(15.d0)
-      FACQUR = FACQUA*SQRT(3.d0/2.d0)
-      FACERF = 2.*PI/this%AR2D
-      FACDIF = 8.*PI*this%SWS/this%AR2D
-      FACP = this%SWS*SQRT(3.d0)
-      FACDK = FACP*PI/this%AR2D
-      FACDR = FACP*2./SQRT_PI
-      FACQ1 = 4.*SQRT_PI*this%ALAMDA/this%AR2D
-      FACQ2 = 1.5*PI/this%AR2D
-      FACQ3 = 2.d0/SQRT_PI
-      FACQ4 = 0.5*PI/this%AR2D
-      FACG1 = 8.*SQRT_PI*this%ALAMDA*this%ALAMDA/this%AR2D
-      FACG2 = 2.5*PI/this%AR2D
-      FACZZ = -6.d0/SQRT(5.d0)
-
-!    write(100, ´(18f10.4)´) twos, twolam, facbet, facgau, facqua, facqur, facerf, facdif, &
-!               facp, facdk, facdr, facq1, facq2, facq3, facq4, facg1, facg2, faczz
-
-      !
-      !     Layer-diagonal terms (R=R´)
-      !
-      SUMM = 0.d0
-      SUMQ0 = -FACQ1
-      SUMQR = 0.d0
-      SUMQI = 0.d0
-      ! Summation in the reciprocal space
-      do I = 2, this%NUMVG
-         DGI = this%DG(I)
-         BETA = DGI/TWOLAM
-         ERFCA = ERFC(BETA)
-         SUMM = SUMM + 2.*ERFCA/BETA
-         SUMQ0 = SUMQ0 - FACQ1*EXP(-BETA*BETA) + 2.*FACQ2*DGI*ERFCA
-         SUMQR = SUMQR - 2.*FACQ4*(this%AKX(I)*this%AKX(I) - this%AKY(I)*this%AKY(I))*ERFCA/DGI
-         SUMQI = SUMQI - 4.*FACQ4*this%AKX(I)*this%AKY(I)*ERFCA/DGI
-      end do
-      BMDL = FACBET*SUMM
-      Q0MDL = FACQUA*SUMQ0
-      QRMDL = FACQUR*SUMQR
-      QIMDL = FACQUR*SUMQI
-      !
-      SUMM = 0.d0
-      SUMQ0 = 0.d0
-      SUMQR = 0.d0
-      SUMQI = 0.d0
-      ! Summation in the translational vector of the 2D lattice
-      do I = 2, this%NR0
-         DRI = this%DR(I)
-         DRI2 = DRI*DRI
-         DRI3 = DRI2*DRI
-         ALPHA = this%ALAMDA*DRI
-         ERFCA = ERFC(ALPHA)
-         EXPAA = EXP(-ALPHA*ALPHA)
-         GAM52 = 1.5*(ERFCA/FACQ3 + ALPHA*EXPAA) + EXPAA*ALPHA**3
-         GAM52 = GAM52/DRI3
-         SUMM = SUMM + ERFCA/DRI
-         SUMQ0 = SUMQ0 - GAM52
-         SUMQR = SUMQR + GAM52*(this%ASX(I)*this%ASX(I) - this%ASY(I)*this%ASY(I))/DRI2
-         SUMQI = SUMQI + GAM52*2.*this%ASX(I)*this%ASY(I)/DRI2
-      end do
-      BMDL = BMDL + SUMM - TWOLAM/SQRT_PI
-      Q0MDL = Q0MDL + FACQUA*FACQ3*SUMQ0
-      QRMDL = QRMDL + FACQUR*FACQ3*SUMQR
-      QIMDL = QIMDL + FACQUR*FACQ3*SUMQI
-      !
-      do IQ = 1, this%lattice%nbas
-         this%AM(IQ, IQ) = FACGAU
-         this%BM(IQ, IQ) = BMDL
-         this%DSZ(IQ, IQ) = 0.d0
-         this%DS3Z2(IQ, IQ) = Q0MDL
-         this%DSX2Y2(IQ, IQ) = QRMDL
-         this%DSXY(IQ, IQ) = QIMDL
-         this%DZ3Z2(IQ, IQ) = 0.d0
-      end do
-      !
-      !     Off-diagonal terms
-      !
-      NQM = this%lattice%nbas - 1
-      do JQ = 1, NQM
-         JQP = JQ + 1
-         QPX = this%QX(JQ)
-         QPY = this%QY(JQ)
-         QPZ = this%QZ(JQ)
-         do IQ = JQP, this%lattice%nbas
-            QPPX = this%QX(IQ) - QPX
-            QPPY = this%QY(IQ) - QPY
-            QPPZ = this%QZ(IQ) - QPZ
-            !
-            !     Contribution to potential from k-parallel equal to zero
-            !
-            DZ = this%ALAMDA*QPPZ
-            ERFCP = ERFC(DZ)
-            ERFCM = 2.-ERFCP
-            if (DZ > 12.) then
-               EXPZ = 0.d0
-            else
-               EXPZ = EXP(-DZ*DZ)
-            end if
-            this%AM(IQ, JQ) = FACGAU*EXPZ - QPPZ*FACERF*ERFCM
-            this%AM(JQ, IQ) = FACGAU*EXPZ + QPPZ*FACERF*ERFCP
-            SUM0G = 0.d0
-            SUM1G = ERFCM - ERFCP
-            SUM20G = -FACQ1*EXPZ
-            SUM2RG = 0.d0
-            SUM2IG = 0.d0
-            SUM30G = FACG1*DZ*EXPZ
-            !
-            !     Contributions from k-parallel greater than zero
-            !
-            do I = 2, this%NUMVG
-               DGI = this%DG(I)
-               PHASE = COS(this%AKX(I)*QPPX + this%AKY(I)*QPPY)
-               BETA = DGI/TWOLAM
-               AQPPZ = this%ALAMDA*QPPZ
-               BETAP = BETA + AQPPZ
-               BETAM = BETA - AQPPZ
-               ERFCP = ERFC(BETAP)
-               ERFCM = ERFC(BETAM)
-               ! alterado por Peduto para evitar alguns casos de "overflow" que podem
-               ! ocorrer quando, principalmente, o sistema se tratar de um VAX.
-               ! a variavel EXPP estoura, geralmente, quando ercp e erfcm sao nulos.
-               ! Mas
-               ! nestes casos nao eh necessario calcular EXPP. Assim evita-se que o
-               ! progra
-               ! ma seja abortado.
-               if (erfcp == 0) then
-                  expm = exp(-dgi*qppz)
-                  exf = expm*erfcm
-                  exh = -exh
-               else
-                  EXPP = EXP(DGI*QPPZ)
-                  EXPM = 1./EXPP
-                  EXF = EXPP*ERFCP + EXPM*ERFCM
-                  EXH = EXPP*ERFCP - EXPM*ERFCM
-               end if
-               EXPEK = EXP(-AQPPZ*AQPPZ)*EXP(-BETA*BETA)
-               BMG = PHASE*EXF/BETA
-               DMG = PHASE*EXH
-               QM0G = PHASE*(FACQ2*DGI*EXF - FACQ1*EXPEK)
-               QMRG = PHASE*(this%AKX(I)*this%AKX(I) - this%AKY(I)*this%AKY(I))*EXF/DGI
-               QMIG = PHASE*this%AKX(I)*this%AKY(I)*EXF/DGI
-               GM0 = PHASE*(FACG2*DGI*DGI*EXH + FACG1*DZ*EXPEK)
-               SUM0G = SUM0G + BMG
-               SUM1G = SUM1G - DMG
-               SUM20G = SUM20G + QM0G
-               SUM2RG = SUM2RG + QMRG
-               SUM2IG = SUM2IG + QMIG
-               SUM30G = SUM30G + GM0
-            end do
-            BMDL = FACBET*SUM0G
-            DMDL = FACDK*SUM1G
-            Q0MDL = FACQUA*SUM20G
-            QRMDL = FACQUR*FACQ4*SUM2RG
-            QIMDL = FACQUR*FACQ4*2.*SUM2IG
-            G0MDL = FACGUA*SUM30G
-            !
-            SUM0R = 0.d0
-            SUM1R = 0.d0
-            SUM20R = 0.d0
-            SUM2RR = 0.d0
-            SUM2IR = 0.d0
-            SUM30R = 0.d0
-            do I = 1, this%NUMVR
-               X = this%ASX(I) + QPPX
-               Y = this%ASY(I) + QPPY
-               Z = QPPZ
-               DRI2 = X*X + Y*Y + Z*Z
-               DRI = SQRT(DRI2)
-               DRI3 = DRI*DRI2
-               DRI4 = DRI*DRI3
-               ZU = -Z/DRI
-               XR = (X*X - Y*Y)/DRI2
-               XI = 2.*X*Y/DRI2
-               if (DRI < this%RMAX) then
-                  ALPHA = this%ALAMDA*DRI
-                  ERFCA = ERFC(ALPHA)
-                  SUM0R = SUM0R + ERFCA/DRI
-                  EXPA = EXP(-ALPHA*ALPHA)
-                  GLH = 0.5*SQRT_PI*ERFCA + ALPHA*EXPA
-                  GLK = 1.5*GLH + EXPA*ALPHA**3
-                  GLM = 2.5*GLK + EXPA*ALPHA**5
-                  SUM1R = SUM1R - GLH*ZU/DRI2
-                  SUM20R = SUM20R + GLK*(3.*ZU*ZU - 1.)/DRI3
-                  SUM2RR = SUM2RR + GLK*XR/DRI3
-                  SUM2IR = SUM2IR + GLK*XI/DRI3
-                  SUM30R = SUM30R + GLM*ZU*(5.*ZU*ZU - 3.)/DRI4
-               end if
-            end do
-            BMDL = BMDL + SUM0R
-            DMDL = DMDL + FACDR*SUM1R
-            Q0MDL = Q0MDL + FACQUA*FACQ3*SUM20R
-            QRMDL = QRMDL + FACQUR*FACQ3*SUM2RR
-            QIMDL = QIMDL + FACQUR*FACQ3*SUM2IR
-            G0MDL = G0MDL + FACGUA*2.*FACQ3*SUM30R
-            this%BM(IQ, JQ) = BMDL
-            this%BM(JQ, IQ) = BMDL
-            this%DSZ(IQ, JQ) = DMDL
-            this%DSZ(JQ, IQ) = -DMDL
-            this%DS3Z2(IQ, JQ) = Q0MDL
-            this%DS3Z2(JQ, IQ) = Q0MDL
-            this%DSX2Y2(IQ, JQ) = QRMDL
-            this%DSX2Y2(JQ, IQ) = QRMDL
-            this%DSXY(IQ, JQ) = QIMDL
-            this%DSXY(JQ, IQ) = QIMDL
-            this%DZZ(IQ, JQ) = FACZZ*Q0MDL
-            this%DZZ(JQ, IQ) = FACZZ*Q0MDL
-            this%DZ3Z2(IQ, JQ) = G0MDL
-            this%DZ3Z2(JQ, IQ) = -G0MDL
-            !
-         end do
-      end do
-      !
-      !     Potential in units of e**2/(2S)
-      !
-      do JQ = 1, this%lattice%nbas
-         do IQ = 1, this%lattice%nbas
-            this%AM(IQ, JQ) = TWOS*this%AM(IQ, JQ)
-            this%BM(IQ, JQ) = TWOS*this%BM(IQ, JQ)
-            this%DSS(IQ, JQ) = this%AM(IQ, JQ) + this%BM(IQ, JQ)
-            this%DSZ(IQ, JQ) = TWOS*this%DSZ(IQ, JQ)
-            this%DS3Z2(IQ, JQ) = TWOS*this%DS3Z2(IQ, JQ)
-            this%DSX2Y2(IQ, JQ) = TWOS*this%DSX2Y2(IQ, JQ)
-            this%DSXY(IQ, JQ) = TWOS*this%DSXY(IQ, JQ)
-            this%DZZ(IQ, JQ) = FACZZ*this%DS3Z2(IQ, JQ)
-            this%DZ3Z2(IQ, JQ) = TWOS*this%DZ3Z2(IQ, JQ)
-         end do
-      end do
-      !
-      !     Plate-condenser matrix
-      !
-      do JQ = 1, this%lattice%nbas
-         do IQ = 1, this%lattice%nbas
-            if (IQ > JQ) then
-               this%PM(IQ, JQ) = FACDIF*(this%QZ(JQ) - this%QZ(IQ))
-            else
-               this%PM(IQ, JQ) = 0.d0
-            end if
-         end do
-      end do
-   end subroutine madl2d
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !---------------------------------------------------------------------------
-   subroutine madl2r(this)
-      class(charge), intent(inout) :: this
-      ! Local variables
-      real(rp) :: alpha, arg, beta, dgi, dri, dz, epsz, erfca, erfcm, &
-                  erfcp, erfcz, erfr, expp, facbet, facgau, phase, r, &
-                  rx, ry, sumg, sumr, twolam, twos, x, y, z
-      real(rp), dimension(51) :: vg, vr, vz, vz0, zz
-      integer :: i, iz, nz
-
-      TWOS = 2.*this%SWS
-      TWOLAM = 2.*this%ALAMDA
-      FACBET = TWOS*PI/this%AR2D
-      FACGAU = 1./SQRT_PI/this%ALAMDA
-      NZ = 21
-      DZ = TWOS/(NZ - 1)
-      X = 0.
-      Y = 0.
-      do IZ = 1, NZ
-         Z = -this%SWS + (IZ - 1)*DZ
-         ZZ(IZ) = Z
-         !
-         !     Diagonal terms
-         !
-         EPSZ = this%ALAMDA*Z
-         ARG = -EPSZ*EPSZ
-         ERFCZ = ERFC(-EPSZ)
-         SUMG = -2.*(Z*ERFCZ + FACGAU*EXP(ARG))
-         VZ0(IZ) = FACBET*SUMG
-         do I = 2, this%NUMVG
-            DGI = this%DG(I)
-            ARG = this%AKX(I)*X + this%AKY(I)*Y
-            PHASE = COS(ARG)
-            BETA = DGI/TWOLAM
-            ERFCP = ERFC(BETA + EPSZ)
-            ERFCM = ERFC(BETA - EPSZ)
-            ! alteracao feita por Peduto para evitar alguns casos de "overflow" que
-            ! podem
-            ! ocorrer principalmente quando o sistema se tratar de um VAX
-            EXPP = EXP(DGI*Z)
-            SUMG = SUMG + PHASE*(EXPP*ERFCP + ERFCM/EXPP)/DGI
-         end do
-         VG(IZ) = FACBET*SUMG
-         R = SQRT(X*X + Y*Y + Z*Z)
-         ARG = this%ALAMDA*R
-         if (ABS(Z) < 1.d-6) then
-            ERFR = TWOLAM/SQRT_PI
-         else
-            ERFR = (1.-ERFC(ARG))/R
-         end if
-         SUMR = -ERFR
-         do I = 2, this%NR0
-            RX = this%ASX(I) - X
-            RY = this%ASY(I) - Y
-            DRI = SQRT(RX*RX + RY*RY + Z*Z)
-            ALPHA = this%ALAMDA*DRI
-            ERFCA = ERFC(ALPHA)
-            SUMR = SUMR + ERFCA/DRI
-         end do
-         VR(IZ) = TWOS*SUMR
-         VZ(IZ) = FACBET*SUMG + TWOS*SUMR
-      end do
-   end subroutine madl2r
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !---------------------------------------------------------------------------
-   subroutine latt2d(this)
-      class(charge), intent(inout) :: this
-      ! Local variables
-      integer, parameter :: mr = 50000
-      real(rp) :: a, amin, b, da, db, ddm, dkm, dq, dx, g1, ga, gx, gy, &
-                  pqx, pqy, pqz, r1, ra, sx, sy, x, y, z
-      real(rp), dimension(3) :: dd, dk
-      real(rp), dimension(mr) :: csx, csy, d
-      integer :: i, iq, jq, k, l, m, n, n1, ng, nr, nsh, nshl, numg, numgh, numr, numrh
-
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('charge.asx', this%asx, mr)
-      call g_safe_alloc%allocate('charge.asy', this%asy, mr)
-      call g_safe_alloc%allocate('charge.asz', this%asz, mr)
-      call g_safe_alloc%allocate('charge.akx', this%akx, mr)
-      call g_safe_alloc%allocate('charge.aky', this%aky, mr)
-      call g_safe_alloc%allocate('charge.akz', this%akz, mr)
-      call g_safe_alloc%allocate('charge.dr', this%dr, mr)
-      call g_safe_alloc%allocate('charge.dg', this%dg, mr)
-#else
-      allocate (this%asx(mr), this%asy(mr), this%asz(mr), this%akx(mr), this%aky(mr), this%akz(mr), this%dr(mr), this%dg(mr))
-#endif
-
-      ! Calculate the radius RA of the sphere holding all the vectors  used in the
-      ! lattice summations. R1 is the longest basis vector
-      r1 = 1.e-06
-      do IQ = 1, this%lattice%nbas
-         PQX = this%QX(IQ)
-         PQY = this%QY(IQ)
-         PQZ = this%QZ(IQ)
-         do JQ = IQ, this%lattice%nbas
-            X = PQX - this%QX(JQ)
-            Y = PQY - this%QY(JQ)
-            Z = PQZ - this%QZ(JQ)
-            DQ = SQRT(X*X + Y*Y + Z*Z)
-            if (DQ >= R1) then
-               R1 = DQ
-            end if
-         end do
-      end do
-      R1 = R1*1.001
-      RA = this%RMAX + R1
-      G1 = 0.d0
-      GA = this%GMAX + G1
-
-      do I = 1, 3
-         DD(I) = SQRT(this%BSX(I)**2 + this%BSY(I)**2 + this%BSZ(I)**2)
-         DK(I) = SQRT(this%BKX(I)**2 + this%BKY(I)**2 + this%BKZ(I)**2)
-      end do
-      DDM = MAX(DD(1), DD(2), DD(3))
-      DKM = MAX(DK(1), DK(2), DK(3))
-      DDM = 2*PI/DDM
-      DKM = 2*PI/DKM
-      NUMR = 2*(INT(RA/DKM) + 1) + 1
-      NUMG = 2*(INT(GA/DDM) + 1) + 1
-      NUMRH = NUMR/2 + 1
-      NUMGH = NUMG/2 + 1
-      ! Real space
-      NR = 0
-      this%NR0 = 0
-      do L = 1, NUMR
-         A = L - NUMRH
-         do M = 1, NUMR
-            B = M - NUMRH
-            SX = A*this%BSX(1) + B*this%BSX(2)
-            SY = A*this%BSY(1) + B*this%BSY(2)
-            DX = SQRT(SX*SX + SY*SY)
-            if (DX <= RA) then
-               if (DX <= this%RMAX) then
-                  this%NR0 = this%NR0 + 1
-               end if
-               NR = NR + 1
-               if (NR > MR) then
-                  write (6, 10005) NR, DX, RA, this%RMAX
-                  stop
-               else
-                  D(NR) = DX
-                  CSX(NR) = SX
-                  CSY(NR) = SY
-               end if
-            end if
-         end do
-      end do
-      !
-      !     Sort vectors in order of increasing length
-      !
-      DA = 1.d-06
-      NSH = 0
-      NSHL = -1
-      do K = 1, NR
-         AMIN = 1000.
-         do N = 1, NR
-            if (D(N) < AMIN) then
-               AMIN = D(N)
-               N1 = N
-            end if
-         end do
-         NSHL = NSHL + 1
-         this%ASX(K) = CSX(N1)
-         this%ASY(K) = CSY(N1)
-         this%ASZ(K) = 0.d0
-         DB = D(N1)
-         this%DR(K) = DB
-         if (DB > DA + 1.d-06) then
-            NSH = NSH + 1
-            NSHL = 0
-            DA = DB
-         end if
-         D(N1) = 1000.
-      end do
-      NSH = NSH + 1
-      NSHL = NSHL + 1
-      this%NUMVR = NR
-      !
-      !     Reciprocal space
-      !
-      NG = 0
-      do L = 1, NUMG
-         A = L - NUMGH
-         do M = 1, NUMG
-            B = M - NUMGH
-            GX = A*this%BKX(1) + B*this%BKX(2)
-            GY = A*this%BKY(1) + B*this%BKY(2)
-            DX = SQRT(GX*GX + GY*GY)
-            if (DX <= GA) then
-               NG = NG + 1
-               if (NG > MR) then
-                  write (6, 10006) NG, DX, GA, this%GMAX
-                  stop
-               else
-                  D(NG) = DX
-                  CSX(NG) = GX
-                  CSY(NG) = GY
-               end if
-            end if
-         end do
-      end do
-      !
-      !     Sort vectors in order of increasing length
-      !
-      DA = 1.e-06
-      NSH = 0
-      NSHL = -1
-      do K = 1, NG
-         AMIN = 1000.
-         do N = 1, NG
-            if (D(N) < AMIN) then
-               AMIN = D(N)
-               N1 = N
-            end if
-         end do
-         NSHL = NSHL + 1
-         this%AKX(K) = CSX(N1)
-         this%AKY(K) = CSY(N1)
-         this%AKZ(K) = 0.d0
-         DB = D(N1)
-         this%DG(K) = DB
-         if (DB > DA*1.000001) then
-            NSH = NSH + 1
-            NSHL = 0
-            DA = DB
-         end if
-         D(N1) = 1000.
-      end do
-      NSH = NSH + 1
-      NSHL = NSHL + 1
-      this%NUMVG = NG
-
-10005 format( &
-         /, " LATT2D:** NR =", i5, " exceeds MR. Decrease RMAX by", &
-         " changing ALAMDA or AMAX.", /, 11x, "Last vector: (ASX, ASY, ", "ASZ) =" &
-         , 3f10.4)
-10006 format( &
-         /, " LATT2D:** NG =", i5, " exceeds MK. Decrease GMAX by", &
-         " changing ALAMDA or BMAX.", /, 11x, "Last vector: (AKX, AKY, ", "AKZ) =" &
-         , 3f10.4)
-   end subroutine latt2d
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !---------------------------------------------------------------------------
-   subroutine set2d(this)
-      class(charge) :: this
-      ! Local variables
-      real(rp) :: bx, by, bz, dperp
-      real(rp), dimension(this%lattice%nbas*this%nq3) :: pz, uqx, uqy, uqz
-      integer, dimension(this%lattice%nbas*this%nq3) :: index
-      integer :: i, ib, inx, iq, isrf, n, nlam, nlama, nlamb, nq
-
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('charge.qx', this%qx, this%lattice%nbas)
-      call g_safe_alloc%allocate('charge.qy', this%qy, this%lattice%nbas)
-      call g_safe_alloc%allocate('charge.qz', this%qz, this%lattice%nbas)
-#else
-      allocate (this%qx(this%lattice%nbas), this%qy(this%lattice%nbas), this%qz(this%lattice%nbas))
-#endif
-
-      NLAM = this%lattice%nbas
-      NLAMB = NLAM/2
-      if (2*NLAMB == NLAM) then
-         NLAMA = NLAMB - 1
-      else
-         NLAMA = NLAMB
-      end if
-      this%AR2D = this%BSX(1)*this%BSY(2) - this%BSY(1)*this%BSX(2)
-      this%AR2D = sqrt(this%ar2d**2)
-      DPERP = this%VOL/this%AR2D
-
-      !
-      !     Establish the interface layers
-      !
-      N = 0
-      do IB = -NLAMA, NLAMB
-         BX = IB*this%BSX(3)
-         BY = IB*this%BSY(3)
-         BZ = IB*this%BSZ(3)
-         do IQ = 1, this%NQ3
-            N = N + 1
-            UQX(N) = BX + this%QX3(IQ)
-            UQY(N) = BY + this%QY3(IQ)
-            UQZ(N) = BZ + this%QZ3(IQ)
-            PZ(N) = UQZ(N)
-         end do
-      end do
-      call QSORT(PZ, INDEX, N)
-      ISRF = 0
-      do I = 1, N
-         INX = INDEX(I)
-         if (ABS(PZ(I)) < 1.d-6 .and. ISRF == 0) then
-            ISRF = I
-         end if
-      end do
-      IQ = 0
-      do I = ISRF - NLAMA, ISRF + NLAMB
-         INX = INDEX(I)
-         IQ = IQ + 1
-         this%QX(IQ) = UQX(INX)
-         this%QY(IQ) = UQY(INX)
-         this%QZ(IQ) = UQZ(INX)
-      end do
-   end subroutine set2d
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !
-   !> @param[inout] m
-   !> @param[inout] inx
-   !> @param[inout] nl
-   !---------------------------------------------------------------------------
-   subroutine qsort(m, inx, nl)
-      ! sorts the vector m in increasing order
-      implicit none
-      ! inputs and outputs
-      integer, intent(in) :: NL
-      real(rp), dimension(NL), intent(inout) :: M
-      integer, dimension(NL), intent(inout) :: INX
-      ! Local variables
-      integer :: I, IND, INIC, J, K
-      real(rp) :: FIM, Z
-
-      IND = 1
-      INIC = 2
-      FIM = NL
-      do I = 1, NL
-         INX(I) = I
-      end do
-      do while ((IND == 1) .and. (INIC <= FIM))
-         IND = 0
-         do J = INT(FIM), INIC, -1
-            if (M(J) < M(J - 1)) then
-               Z = M(J)
-               K = INX(J)
-               M(J) = M(J - 1)
-               INX(J) = INX(J - 1)
-               M(J - 1) = Z
-               INX(J - 1) = K
-            end if
-         end do
-         FIM = FIM - 1
-         do J = INIC, INT(FIM)
-            if (M(J + 1) < M(J)) then
-               Z = M(J + 1)
-               K = INX(J + 1)
-               M(J + 1) = M(J)
-               INX(J + 1) = INX(J)
-               M(J) = Z
-               INX(J) = K
-               IND = 1
-            end if
-         end do
-         INIC = INIC + 1
-      end do
-   end subroutine qsort
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1863,11 +1622,15 @@ contains
       real(rp), dimension(3, 3), intent(inout) :: rb0, rb, qb
       real(rp), dimension(1), intent(inout) :: work
       real(rp) :: tol, alat, alat0, g1, g2, g3, gt, vol, as, awald
-      ! Local variables
-      real(rp), dimension(3, 3) :: qb0
-      real(rp) :: tpiba, vol0, dstx, rdist0, qdist0, radd, qadd, alat1, a0, tol1, q0, r0
-      integer :: nkdest, nkrest, iv, k, m
-      TPIBA = 8.D0*DATAN(1.D0)/ALAT
+	      ! Local variables
+	      real(rp), dimension(3, 3) :: qb0
+	      real(rp) :: tpiba, vol0, dstx, rdist0, qdist0, radd, qadd, alat1, a0, tol1, q0, r0
+	      integer :: nkdest, nkrest, iv, k, m
+	      character(len=*), parameter :: lattc_summary_fmt = &
+	         "(/' LATTC:  AS=', F6.3, '   TOL=', 1P, E10.2, '   LMAX=', I1, " // &
+	         "'   AWALD=', 0P, F7.4, '   V0=', F8.5/' ALAT1=', F9.5, " // &
+	         "'   ESTIMATES:   NKD', I6, '   NKD', I6)"
+	      TPIBA = 8.D0*DATAN(1.D0)/ALAT
 
       qb0(1, :) = cross_product(rb0(2, :), rb0(3, :))
       qb0(2, :) = cross_product(rb0(3, :), rb0(1, :))
@@ -1914,11 +1677,8 @@ contains
       NKDEST = 4.18879*(R0 + RADD)**3/VOL0 + .5
       NKREST = 4.18879*(Q0 + QADD)**3*VOL0 + .5
       !write(*, *)radd, r0
-      WRITE (10, 340) AS, TOL, LMAX, AWALD, VOL0, ALAT1, NKDEST, NKREST
-340   FORMAT(/' LATTC:  AS=', F6.3, '   TOL=', 1P, E8.2, '   LMAX=', I1,      &
-                                                           &  '   AWALD=', 0P, F7.4, '   V0=', F8.5/' ALAT1=', F9.5,               &
-                                                                   &  '   ESTIMATES:   NKD', I6, '   NKD', I6)
-      CALL LGEN(RB0, R0 + RADD, NKD, NKDMX, DLAT, WORK)
+	      WRITE (10, lattc_summary_fmt) AS, TOL, LMAX, AWALD, VOL0, ALAT1, NKDEST, NKREST
+	      CALL LGEN(RB0, R0 + RADD, NKD, NKDMX, DLAT, WORK)
       WRITE (10, 342) R0, R0*ALAT, RADD, NKD
 342   FORMAT('  R0=', F9.4, '   RC=', F9.4, '   RADD=', F9.4, '   NKD=', I7)
       CALL LGEN(QB0, Q0 + QADD, NKR, NKRMX, RLAT, WORK)
@@ -2769,7 +2529,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=charge)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=charge)
          close (newunit)
       else
@@ -2794,36 +2554,15 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
-
-      include 'include_codes/namelists/charge.f90'
-
-      ! scalar
-
-      gx = this%gx
-      gy = this%gy
-      gz = this%gz
-      gt = this%gt
-
-      ! 1d allocatable
-
-      if (allocated(this%wssurf)) then
-         allocate (wssurf, mold=this%wssurf)
-         wssurf = this%wssurf
-      else
-         allocate (wssurf(0))
-      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
       else if (present(unit)) then
-         write (unit, nml=charge)
+         call this%print_state_formatted(unit=unit)
       else if (present(file)) then
-         open (unit=newunit, file=file)
-         write (newunit, nml=charge)
-         close (newunit)
+         call this%print_state_formatted(file=file)
       else
-         write (*, nml=charge)
+         call this%print_state_formatted()
       end if
 
    end subroutine print_state

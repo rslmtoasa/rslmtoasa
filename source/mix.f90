@@ -31,9 +31,25 @@ module mix_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: lmax_basis
+   use math_mod, only: hubbard_density_diagnostics
+   use scf_guard_mod, only: guard_q0_capacity, guard_nonfinite_scalar
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+#ifdef USE_MPI
+   ! Intel MPI does not expose MPI_ALLREDUCE through an ONLY import.
+   use mpi
+#endif
    implicit none
 
    private
+
+   ! Frozen pre-campaign convergence targets: dimensionless full-block density
+   ! norm and Ry potential norm. These are goals, not claimed integration-noise
+   ! floors; production discretization refinement must verify attainability.
+   real(rp), parameter, public :: fixed_u_density_tolerance = 1.0e-7_rp
+   real(rp), parameter, public :: fixed_u_potential_tolerance = 1.0e-7_rp
+   integer, parameter, public :: fixed_u_required_stable_updates = 3
+   public :: fixed_u_residual_metrics
 
    !> Module´s main structure
    type, public :: mix
@@ -51,8 +67,14 @@ module mix_mod
       real(rp), dimension(:, :), allocatable :: qia, qia_new, qia_old, qiaprev
       !> Variables to save magnetic moments for mixing
       real(rp), dimension(:, :), allocatable :: mag_old, mag_new, mag_mix
+      !> Variables to save LDA+U density matrices for optional linear mixing
+      !> Dimensions: (atom, l-channel, spin, flattened m,m’)
+      complex(rp), dimension(:, :, :, :), allocatable :: ldm_old, ldm_new, ldm_mix
       !> Mixing parameter
       real(rp) :: beta
+      !> Linear mixing factor for LDA+U density matrix (ldm).
+      !> 1.0 => no ldm mixing, 0.0 => keep previous ldm.
+      real(rp) :: ldm_beta
       !> Magnetic mixing parameter
       real(rp), dimension(:), allocatable :: magbeta
       !> Difference between interactions
@@ -63,6 +85,9 @@ module mix_mod
       real(rp), dimension(:), allocatable :: v_broy, u_broy, fo_broy, muo_broy
       real(rp) :: fsqo
       integer :: itr, nmix
+      ! Number of consecutive fixed-U iterations meeting the full complex P/V
+      ! residual targets. Invalid matrices reset this count.
+      integer :: fixed_u_stable_updates = 0
       !> Variable to managed induced magnetic moments
       logical, dimension(:), allocatable :: is_induced
    contains
@@ -71,6 +96,10 @@ module mix_mod
       procedure :: print_state
       procedure :: save_to
       procedure :: mixpq
+      procedure :: save_ldm_to
+      procedure :: mix_ldm_linear
+      procedure :: mix_ldm_spinor_linear
+      procedure :: advance_fixed_u_convergence
       procedure :: mix_magnetic_moments
       final :: destructor
    end type mix
@@ -80,6 +109,124 @@ module mix_mod
    end interface mix
 
 contains
+
+   !> Compute full-complex fixed-U residuals from explicit, active-shell
+   !> snapshots. Inputs are packed as (site,spin,row,column); the Frobenius
+   !> norm combines both collinear spin blocks for each physical site.
+   subroutine fixed_u_residual_metrics(p_in, p_out, v_in, v_out, rp_abs, rp_rel, rv_abs, rv_rel, &
+                                       physical, antiherm_p, antiherm_v, worst_site)
+      complex(rp), intent(in) :: p_in(:, :, :, :), p_out(:, :, :, :)
+      complex(rp), intent(in) :: v_in(:, :, :, :), v_out(:, :, :, :)
+      real(rp), intent(out) :: rp_abs, rp_rel, rv_abs, rv_rel
+      logical, intent(out) :: physical
+      real(rp), intent(out) :: antiherm_p, antiherm_v
+      integer, intent(out) :: worst_site
+      real(rp), allocatable :: rp_site(:), rp_rel_site(:), rv_site(:), rv_rel_site(:)
+      real(rp) :: tr, emin, emax, ah, pin_norm, pout_norm, vin_norm, vout_norm
+      integer :: nsite, nspin, norb, site, spin, info, local_physical
+#ifdef USE_MPI
+      integer :: mpierr
+#endif
+
+      nsite = size(p_in, 1)
+      nspin = size(p_in, 2)
+      norb = size(p_in, 3)
+      rp_abs = huge(1.0_rp); rp_rel = huge(1.0_rp)
+      rv_abs = huge(1.0_rp); rv_rel = huge(1.0_rp)
+      antiherm_p = huge(1.0_rp); antiherm_v = huge(1.0_rp)
+      physical = .false.; worst_site = 0
+      ! nspin=2: collinear spin blocks; nspin=1: one full spinor block per site (nsp=2 spinor U)
+      if (nsite < 1 .or. nspin < 1 .or. nspin > 2 .or. norb < 1) return
+      if (size(p_out,1) /= nsite .or. size(v_in,1) /= nsite .or. size(v_out,1) /= nsite .or. &
+          size(p_out,2) /= nspin .or. size(v_in,2) /= nspin .or. size(v_out,2) /= nspin .or. &
+          size(p_out,3) /= norb .or. size(p_out,4) /= norb .or. &
+          size(p_in,4) /= norb .or. size(v_in,3) /= norb .or. size(v_in,4) /= norb .or. &
+          size(v_out,3) /= norb .or. size(v_out,4) /= norb) return
+      if (.not. all(ieee_is_finite(real(p_in,rp))) .or. .not. all(ieee_is_finite(aimag(p_in))) .or. &
+          .not. all(ieee_is_finite(real(p_out,rp))) .or. .not. all(ieee_is_finite(aimag(p_out))) .or. &
+          .not. all(ieee_is_finite(real(v_in,rp))) .or. .not. all(ieee_is_finite(aimag(v_in))) .or. &
+          .not. all(ieee_is_finite(real(v_out,rp))) .or. .not. all(ieee_is_finite(aimag(v_out)))) return
+
+      allocate(rp_site(nsite), rp_rel_site(nsite), rv_site(nsite), rv_rel_site(nsite))
+      local_physical = 1
+      antiherm_p = 0.0_rp; antiherm_v = 0.0_rp
+      do site = 1, nsite
+         pin_norm = 0.0_rp; pout_norm = 0.0_rp; vin_norm = 0.0_rp; vout_norm = 0.0_rp
+         rp_site(site) = 0.0_rp; rv_site(site) = 0.0_rp
+         do spin = 1, nspin
+            pin_norm = pin_norm + sum(abs(p_in(site,spin,:,:))**2)
+            pout_norm = pout_norm + sum(abs(p_out(site,spin,:,:))**2)
+            vin_norm = vin_norm + sum(abs(v_in(site,spin,:,:))**2)
+            vout_norm = vout_norm + sum(abs(v_out(site,spin,:,:))**2)
+            rp_site(site) = rp_site(site) + sum(abs(p_out(site,spin,:,:)-p_in(site,spin,:,:))**2)
+            rv_site(site) = rv_site(site) + sum(abs(v_out(site,spin,:,:)-v_in(site,spin,:,:))**2)
+            call hubbard_density_diagnostics(p_in(site,spin,:,:), tr, emin, emax, ah, info)
+            antiherm_p = max(antiherm_p, ah)
+            ! The 1e-6 anti-Hermitian and 1e-3 occupation-bound allowances are
+            ! diagnostic tolerances inherited from the fixed-U occupation
+            ! checks; no clipping/projection is performed.
+            if (info /= 0 .or. ah > 1.0e-6_rp .or. emin < -1.0e-3_rp .or. emax > 1.0_rp + 1.0e-3_rp .or. &
+                tr < -1.0e-3_rp .or. tr > real(norb,rp) + 1.0e-3_rp) local_physical = 0
+            call hubbard_density_diagnostics(p_out(site,spin,:,:), tr, emin, emax, ah, info)
+            antiherm_p = max(antiherm_p, ah)
+            if (info /= 0 .or. ah > 1.0e-6_rp .or. emin < -1.0e-3_rp .or. emax > 1.0_rp + 1.0e-3_rp .or. &
+                tr < -1.0e-3_rp .or. tr > real(norb,rp) + 1.0e-3_rp) local_physical = 0
+            ah = maxval(abs(v_in(site,spin,:,:)-transpose(conjg(v_in(site,spin,:,:)))))
+            antiherm_v = max(antiherm_v, ah)
+            if (ah > 1.0e-6_rp) local_physical = 0
+            ah = maxval(abs(v_out(site,spin,:,:)-transpose(conjg(v_out(site,spin,:,:)))))
+            antiherm_v = max(antiherm_v, ah)
+            if (ah > 1.0e-6_rp) local_physical = 0
+         end do
+         rp_site(site) = sqrt(rp_site(site))
+         rv_site(site) = sqrt(rv_site(site))
+         rp_rel_site(site) = rp_site(site)/max(1.0_rp,sqrt(pin_norm),sqrt(pout_norm))
+         rv_rel_site(site) = rv_site(site)/max(1.0_rp,sqrt(vin_norm),sqrt(vout_norm))
+      end do
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rp_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rp_rel_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rv_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rv_rel_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, antiherm_p, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, antiherm_v, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, local_physical, 1, MPI_INTEGER, MPI_MIN, MPI_COMM_WORLD, mpierr)
+      end if
+#endif
+      rp_abs = maxval(rp_site); rp_rel = maxval(rp_rel_site)
+      rv_abs = maxval(rv_site); rv_rel = maxval(rv_rel_site)
+      worst_site = maxloc(max(rp_rel_site,rv_rel_site), dim=1)
+      physical = local_physical == 1
+   end subroutine fixed_u_residual_metrics
+
+   !> Advance a three-success stability gate. A bad physicality check or a
+   !> residual above target clears the streak; callers skip this for inactive U.
+   subroutine advance_fixed_u_convergence(this, rp_residual, rv_residual, physical, converged, &
+                                          density_tolerance, potential_tolerance)
+      class(mix), intent(inout) :: this
+      real(rp), intent(in) :: rp_residual, rv_residual
+      logical, intent(in) :: physical
+      logical, intent(out) :: converged
+      real(rp), intent(in), optional :: density_tolerance, potential_tolerance
+      real(rp) :: rp_target, rv_target
+      rp_target = fixed_u_density_tolerance
+      rv_target = fixed_u_potential_tolerance
+      if (present(density_tolerance)) rp_target = density_tolerance
+      if (present(potential_tolerance)) rv_target = potential_tolerance
+      if (.not. ieee_is_finite(rp_target) .or. .not. ieee_is_finite(rv_target) .or. &
+          rp_target <= 0.0_rp .or. rv_target <= 0.0_rp) then
+         call g_logger%fatal('Fixed-U convergence thresholds must be positive and finite.', __FILE__, __LINE__)
+      end if
+      if (.not. physical .or. .not. ieee_is_finite(rp_residual) .or. .not. ieee_is_finite(rv_residual)) then
+         this%fixed_u_stable_updates = 0
+      else if (rp_residual <= rp_target .and. rv_residual <= rv_target) then
+         this%fixed_u_stable_updates = this%fixed_u_stable_updates + 1
+      else
+         this%fixed_u_stable_updates = 0
+      end if
+      converged = this%fixed_u_stable_updates >= fixed_u_required_stable_updates
+   end subroutine advance_fixed_u_convergence
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -123,6 +270,9 @@ contains
       if (allocated(this%mag_new)) call g_safe_alloc%deallocate('mix.mag_new', this%mag_new)
       if (allocated(this%mag_old)) call g_safe_alloc%deallocate('mix.mag_old', this%mag_old)
       if (allocated(this%mag_mix)) call g_safe_alloc%deallocate('mix.mag_mix', this%mag_mix)
+      if (allocated(this%ldm_old)) call g_safe_alloc%deallocate('mix.ldm_old', this%ldm_old)
+      if (allocated(this%ldm_new)) call g_safe_alloc%deallocate('mix.ldm_new', this%ldm_new)
+      if (allocated(this%ldm_mix)) call g_safe_alloc%deallocate('mix.ldm_mix', this%ldm_mix)
       if (allocated(this%is_induced)) call g_safe_alloc%deallocate('mix.is_induced', this%is_induced)
 #else
       if (allocated(this%qia)) deallocate (this%qia)
@@ -137,6 +287,9 @@ contains
       if (allocated(this%mag_new)) deallocate (this%mag_new)
       if (allocated(this%mag_old)) deallocate (this%mag_old)
       if (allocated(this%mag_mix)) deallocate (this%mag_mix)
+      if (allocated(this%ldm_old)) deallocate (this%ldm_old)
+      if (allocated(this%ldm_new)) deallocate (this%ldm_new)
+      if (allocated(this%ldm_mix)) deallocate (this%ldm_mix)
       if (allocated(this%is_induced)) deallocate (this%is_induced)
 #endif
    end subroutine destructor
@@ -161,7 +314,11 @@ contains
       var = this%var
       mixtype = this%mixtype
       beta = this%beta
-      call move_alloc(this%magbeta, magbeta)
+      ldm_beta = this%ldm_beta
+      if (allocated(this%magbeta)) then
+         allocate(magbeta(size(this%magbeta)))
+         magbeta = this%magbeta
+      end if
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -169,62 +326,85 @@ contains
       end if
 
       read (funit, nml=mix, iostat=iostatus)
-      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus) .and. iostatus /= 5010) then
+         call g_logger%fatal('Invalid &mix namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+      else if (iostatus == 5010) then
+         call g_logger%warning('Non-fatal namelist read value mismatch in '//trim(fname)//' (iostatus=5010).', __FILE__, __LINE__)
       end if
-      close (funit)
-
-      this%var = 0
-      this%mixtype = mixtype
+      close(funit)
+      ! PATCH_MIX_NML_FIX:
+      ! Persist parsed namelist values back to object state.
+      ! Without this, this%mixtype keeps restore_to_default() value (’linear’).
+      this%var = var
+      this%mixtype = trim(mixtype)
       this%beta = beta
-      call move_alloc(magbeta, this%magbeta)
+      this%ldm_beta = min(1.0_rp, max(0.0_rp, ldm_beta))
+      if (allocated(magbeta)) then
+         call move_alloc(magbeta, this%magbeta)
+      end if
    end subroutine build_from_file
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Reset all members to default
-   !---------------------------------------------------------------------------
-   subroutine restore_to_default(this)
-      implicit none
+      !--------------------------------------------------------------------------
+      ! DESCRIPTION:
+      !> @brief
+      !> Restore defaults and allocate mixing arrays
+      subroutine restore_to_default(this)
       class(mix), intent(inout) :: this
+      integer :: qia_width
+      integer :: ldm_flat
 
+      qia_width = 6*(lmax_basis + 1)
+      ldm_flat = (2*lmax_basis + 1)*(2*lmax_basis + 1)
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.v_broy', this%v_broy, (/this%lattice%nrec*18/))
-      call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*18/))
-      call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*18/))
-      call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*18/))
+      call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.v_broy', this%v_broy, (/this%lattice%nrec*qia_width/))
+      call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*qia_width/))
+      call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*qia_width/))
+      call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*qia_width/))
       call g_safe_alloc%allocate('mix.magbeta', this%magbeta, (/this%lattice%nrec/))
       call g_safe_alloc%allocate('mix.mag_old', this%mag_old, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_new', this%mag_new, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_mix', this%mag_mix, (/this%lattice%nrec, 3/))
+      call g_safe_alloc%allocate('mix.ldm_old', this%ldm_old, (/this%lattice%nrec, lmax_basis + 1, 2, ldm_flat/))
+      call g_safe_alloc%allocate('mix.ldm_new', this%ldm_new, (/this%lattice%nrec, lmax_basis + 1, 2, ldm_flat/))
+      call g_safe_alloc%allocate('mix.ldm_mix', this%ldm_mix, (/this%lattice%nrec, lmax_basis + 1, 2, ldm_flat/))
       call g_safe_alloc%allocate('mix.is_induced', this%is_induced, (/this%lattice%nrec/))
 #else
-      allocate (this%qia(this%lattice%nrec, 18), this%qia_new(this%lattice%nrec, 18), this%qia_old(this%lattice%nrec, 18))
-      allocate (this%qiaprev(this%lattice%nrec, 18))
-      allocate (this%v_broy(this%lattice%nrec*18), this%u_broy(this%lattice%nrec*18), this%fo_broy(this%lattice%nrec*18), this%muo_broy(this%lattice%nrec*18))
+      allocate (this%qia(this%lattice%nrec, qia_width), this%qia_new(this%lattice%nrec, qia_width), this%qia_old(this%lattice%nrec, qia_width))
+      allocate (this%qiaprev(this%lattice%nrec, qia_width))
+      allocate (this%v_broy(this%lattice%nrec*qia_width), this%u_broy(this%lattice%nrec*qia_width), this%fo_broy(this%lattice%nrec*qia_width), this%muo_broy(this%lattice%nrec*qia_width))
       allocate (this%magbeta(this%lattice%nrec), this%mag_old(this%lattice%nrec, 3), this%mag_new(this%lattice%nrec, 3), this%mag_mix(this%lattice%nrec, 3))
+      allocate (this%ldm_old(this%lattice%nrec, lmax_basis + 1, 2, ldm_flat))
+      allocate (this%ldm_new(this%lattice%nrec, lmax_basis + 1, 2, ldm_flat))
+      allocate (this%ldm_mix(this%lattice%nrec, lmax_basis + 1, 2, ldm_flat))
       allocate (this%is_induced(this%lattice%nrec))
 #endif
 
+      this%qia(:, :) = 0.0_rp
+      this%qia_new(:, :) = 0.0_rp
+      this%qia_old(:, :) = 0.0_rp
+      this%qiaprev(:, :) = 0.0_rp
+      this%ldm_old(:, :, :, :) = 0.0_rp
+      this%ldm_new(:, :, :, :) = 0.0_rp
+      this%ldm_mix(:, :, :, :) = 0.0_rp
       this%v_broy(:) = 0.0d0
       this%u_broy(:) = 0.0d0
       this%fo_broy(:) = 0.0d0
       this%muo_broy(:) = 0.0d0
       this%fsqo = 1.0d0
       this%itr = 0
+      this%fixed_u_stable_updates = 0
       this%var = 0
       this%beta = 0.1d0
+      this%ldm_beta = 1.0d0
       this%magbeta(:) = 1.0d0
       this%nmix = 2
       this%mixtype = 'linear'
       this%is_induced = .false.
-   end subroutine restore_to_default
+      end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -246,91 +426,122 @@ contains
       include 'include_codes/namelists/mix.f90'
 
       var = this%var
+      beta = this%beta
+      mixtype = this%mixtype
+      ldm_beta = this%ldm_beta
+      if (allocated(this%magbeta)) then
+         if (allocated(magbeta)) deallocate(magbeta)
+         allocate(magbeta(size(this%magbeta)))
+         magbeta = this%magbeta
+      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
       else if (present(unit)) then
          write (unit, nml=mix)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=mix)
-         close (newunit)
-      else
-         write (*, nml=mix)
+         close(newunit)
       end if
-      close (newunit)
    end subroutine print_state
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
+   !--------------------------------------------------------------------------
    !> @brief
-   !> Save potential parameters and band moments.
-   !>
-   !> Save potential parameters and band moments. Save the parameters read from the &par namelist into qia variables. To be used to mix later.
-   !> @param[in] dummy variable of type mix
-   !> @return type(mix)
-   !---------------------------------------------------------------------------
-   subroutine save_to(this, whereto)
+   !> Save or restore QL/PL parameters to/from `this%qia` arrays.
+   subroutine save_to(this, whereto, iteration, guard_collinear)
+      use mpi_mod
       class(mix), intent(inout) :: this
       character(len=*), intent(in) :: whereto
-      integer :: i, it
+      integer, intent(in), optional :: iteration
+      logical, intent(in), optional :: guard_collinear
+      integer :: it, I, lcount, spin
+      integer :: iteration_value
+      logical :: guard_active
+
+      iteration_value = 0
+      guard_active = .false.
+      if (present(iteration)) iteration_value = iteration
+      if (present(guard_collinear)) guard_active = guard_collinear
 
       do it = 1, this%lattice%nrec
          if (this%symbolic_atom(this%lattice%nbulk + it)%force_nonmagnetic) &
             call this%symbolic_atom(this%lattice%nbulk + it)%potential%symmetrize_band_moments()
       end do
-      select case (whereto)
-
-      case ('old')
-         do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%qia_old(IT, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               this%qia_old(IT, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               this%qia_old(IT, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
-               !QI_OLD(IT, I+12) = ENU(I, 1)
-               this%qia_old(IT, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               this%qia_old(IT, I + 9) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               this%qia_old(IT, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
-               !QI_OLD(IT, I+15) = ENU(I, 2)
-            end do
-         end do
+      select case (trim(whereto))
       case ('new')
+         this%qia_new = 0.0_rp
          do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%qia_new(it, i) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 1)
-               this%qia_new(it, i + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1)
-               this%qia_new(it, i + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
-               !QI_OLD(IT, I+12) = ENU(I, 1)
-               this%qia_new(it, i + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2)
-               this%qia_new(it, i + 9) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
-               this%qia_new(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
-               !QI_OLD(IT, I+15) = ENU(I, 2)
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            do I = 1, lcount
+               if (guard_active) then
+                  do spin = 1, 2
+                     call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                        it, I - 1, spin, 'new q1', iteration_value, &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(2, I - 1, spin))
+                  end do
+               end if
+               this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               this%qia_new(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qia_new(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               this%qia_new(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
+            if (rank == 0) then
+                  if (any(this%qia_new(it, :) /= this%qia_new(it, :)) .or. maxval(abs(this%qia_new(it, :))) > 1.0e6_rp) then
+                     call g_logger%warning('Suspicious values in qia_new for atom '//fmt('i4', it), __FILE__, __LINE__)
+               end if
+            end if
          end do
-
-      case ('prev')
+         if (guard_active) call validate_packed_q(this, this%qia_new, iteration_value, 'new')
+      case ('old')
+         this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%qiaprev(it, i) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 1)
-               this%qiaprev(it, i + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1)
-               this%qiaprev(it, i + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
-               !QI_OLD(IT, I+12) = ENU(I, 1)
-               this%qiaprev(it, i + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2)
-               this%qiaprev(it, i + 9) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
-               this%qiaprev(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
-               !QI_OLD(IT, I+15) = ENU(I, 2)
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            do I = 1, lcount
+               this%qia_old(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               this%qia_old(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               this%qia_old(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               this%qia_old(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qia_old(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               this%qia_old(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
+            if (rank == 0) then
+               if (any(this%qia_old(it, :) /= this%qia_old(it, :)) .or. maxval(abs(this%qia_old(it, :))) > 1.0e6_rp) then
+                  call g_logger%warning('Suspicious values in qia_old for atom '//fmt('i4', it), __FILE__, __LINE__)
+               end if
+            end if
+         end do
+      case ('prev')
+         this%qiaprev = 0.0_rp
+         do it = 1, this%lattice%nrec
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            do I = 1, lcount
+               this%qiaprev(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               this%qiaprev(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               this%qiaprev(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               this%qiaprev(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qiaprev(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               this%qiaprev(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+            end do
+            if (rank == 0) then
+               if (any(this%qiaprev(it, :) /= this%qiaprev(it, :)) .or. maxval(abs(this%qiaprev(it, :))) > 1.0e6_rp) then
+                  call g_logger%warning('Suspicious values in qiaprev for atom '//fmt('i4', it), __FILE__, __LINE__)
+               end if
+            end if
          end do
 
       case ('current')
          do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 1) = this%qia(it, i)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1) = this%qia(it, i + 6)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) = this%qia(it, i + 12)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2) = this%qia(it, i + 3)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2) = this%qia(it, i + 9)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) = this%qia(it, i + 15)
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            do I = 1, lcount
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I             )
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I +     lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 2 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + 3 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)    = this%qia(it, I + 4 * lcount)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)    = this%qia(it, I + 5 * lcount)
             end do
          end do
       end select
@@ -369,8 +580,17 @@ contains
             !this%magbeta(ia) = 0.0d0
             if (rank == 0) call g_logger%info('Spin moment at atom '//fmt('i4', (ia))//' is being considered induced', __FILE__, __LINE__)
          end if
+         ! Defensive checks on magbeta
+         if (this%magbeta(ia) /= this%magbeta(ia) .or. this%magbeta(ia) < 0.0d0 .or. this%magbeta(ia) > 1.0e6_rp) then
+            if (rank == 0) call g_logger%warning('Suspicious magbeta at atom '//fmt('i4', ia)//' -> resetting to 1.0', __FILE__, __LINE__)
+            this%magbeta(ia) = 1.0d0
+         end if
+         ! Clamp to [0,1]
+         this%magbeta(ia) = min(1.0d0, max(0.0d0, this%magbeta(ia)))
+
          mag_mix(ia, :) = (1.d0 - this%magbeta(ia))*mag_old(ia, :) + this%magbeta(ia)*mag_new(ia, :)
       end do
+
    end subroutine mix_magnetic_moments
 
    !---------------------------------------------------------------------------
@@ -383,15 +603,34 @@ contains
    !> @param[in] old and new potential variables qia_old and qia_new, respectively.
    !> @return type(mix): qia, the mix potential variable.
    !---------------------------------------------------------------------------
-   subroutine mixpq(this, qia_old, qia_new)
+   subroutine mixpq(this, qia_old, qia_new, iteration, guard_collinear)
       use mpi_mod
       class(mix), intent(inout) :: this
-      real(rp), dimension(this%lattice%nrec, 18), intent(in) :: qia_old, qia_new
-      real(rp), dimension(this%lattice%nrec, 18) :: qi_to, qi_tn ! Local variables for broyden mixing
+      real(rp), dimension(:, :), intent(in) :: qia_old, qia_new
+      integer, intent(in), optional :: iteration
+      logical, intent(in), optional :: guard_collinear
+      real(rp), allocatable :: qi_to(:, :), qi_tn(:, :) ! Local variables for broyden mixing
       real(rp) :: delta_atom
-      integer :: ia, offset ! Atom index and packed spin-pair offset
+      integer :: ia, pair, lo ! Atom index and packed spin-pair index
       logical :: reset
       real(rp) :: Bnorm
+      integer :: nb_slice, lcount, occ_cols, packed_cols
+      real(rp) :: denom
+      integer :: broy_width
+      integer :: iteration_value
+      logical :: guard_active
+
+      iteration_value = 0
+      guard_active = .false.
+      if (present(iteration)) iteration_value = iteration
+      if (present(guard_collinear)) guard_active = guard_collinear
+
+      broy_width = this%lattice%nrec*size(qia_old, 2)
+
+      if (guard_active) then
+         call validate_packed_q(this, qia_old, iteration_value, 'old')
+         call validate_packed_q(this, qia_new, iteration_value, 'new')
+      end if
 
       select case (trim(this%mixtype))
       case ('linear')
@@ -399,27 +638,42 @@ contains
       case ('broyden')
          ! call g_logger%fatal(´Broyden mixing not implemented yet!´, __FILE__, __LINE__)
          reset = .false.
+         allocate(qi_to(size(qia_old, 1), size(qia_old, 2)))
+         allocate(qi_tn(size(qia_new, 1), size(qia_new, 2)))
          qi_to(:, :) = this%qia_old(:, :)
          qi_tn(:, :) = this%qia_new(:, :)
-         call broydn(this%beta, this%beta, reset, qi_to, qi_tn, Bnorm, this%lattice%nrec*18, this%itr, this%fsqo, this%u_broy, this%v_broy, this%muo_broy, this%fo_broy, this%nmix)
+         call broydn(this%beta, this%beta, reset, qi_to, qi_tn, Bnorm, broy_width, this%itr, this%fsqo, this%u_broy, this%v_broy, this%muo_broy, this%fo_broy, this%nmix)
          this%qia(:, :) = qi_to(:, :)
          bnorm = bnorm**0.5d0
+         deallocate(qi_to, qi_tn)
       end select
+      ! Safety: detect NaNs produced by mixing (e.g., in Broyden) and fallback
+      if (guard_active) then
+         call validate_packed_q(this, this%qia, iteration_value, 'mixed')
+      else if (any(this%qia /= this%qia)) then
+         call g_logger%error('NaN detected in mixed qia — reverting to linear mix', __FILE__, __LINE__)
+         this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
+      end if
+
       ! Also project mixer output, protecting against accumulated roundoff.
+      ! Packed layout: six blocks of lcount columns, spin pairs (up, down) = (1,2), (3,4), (5,6).
       do ia = 1, this%lattice%nrec
          if (.not. this%symbolic_atom(this%lattice%nbulk + ia)%force_nonmagnetic) cycle
-         do offset = 0, 12, 6
-            this%qia(ia, offset+1:offset+3) = &
-               0.5_rp*(this%qia(ia, offset+1:offset+3) + this%qia(ia, offset+4:offset+6))
-            this%qia(ia, offset+4:offset+6) = this%qia(ia, offset+1:offset+3)
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
+         do pair = 0, 2
+            lo = 2*pair*lcount
+            this%qia(ia, lo + 1:lo + lcount) = 0.5_rp*(this%qia(ia, lo + 1:lo + lcount) + this%qia(ia, lo + lcount + 1:lo + 2*lcount))
+            this%qia(ia, lo + lcount + 1:lo + 2*lcount) = this%qia(ia, lo + 1:lo + lcount)
          end do
       end do
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
+         occ_cols = 2*lcount
          this%charge%trq = 0.0d0
          this%charge%cht = 0.0d0
-         this%charge%cht = sum(this%qia_new(ia, 1:6)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
-         this%charge%dq(ia) = sum(this%qia(ia, 1:6)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
+         this%charge%cht = sum(this%qia_new(ia, 1:occ_cols)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
+         this%charge%dq(ia) = sum(this%qia(ia, 1:occ_cols)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
          this%charge%trq = this%charge%dq(ia)
          if (rank == 0) call g_logger%info('Valence at atom'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', (this%symbolic_atom(this%lattice%nbulk + ia)%element%valence)), __FILE__, __LINE__)
          if (rank == 0) call g_logger%info('Charge transfer at atom '//fmt('i4', (ia))//': '// &
@@ -430,11 +684,127 @@ contains
       end do
 
       do ia = 1, this%lattice%nrec
-         delta_atom = sqrt(sum((this%qia_old(ia, 1:12) - this%qia_new(ia, 1:12))**2))/6.0d0
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
+         packed_cols = 6*lcount
+         denom = max(1.0_rp, real(packed_cols)/2.0_rp)
+         delta_atom = sqrt(sum((this%qia_old(ia, 1:packed_cols) - this%qia_new(ia, 1:packed_cols))**2))/denom
          if (rank == 0) call g_logger%info('Moment diff for atom:'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', delta_atom), __FILE__, __LINE__)
       end do
-      this%delta = sqrt(sum((this%qia_old(:, 1:12) - this%qia_new(:, 1:12))**2))/6.0d0/this%lattice%nrec
+      nb_slice = 6*(lmax_basis + 1)
+      denom = max(1.0_rp, real(nb_slice)/2.0_rp)
+      this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
+
+   subroutine validate_packed_q(this, values, iteration, stage)
+      class(mix), intent(in) :: this
+      real(rp), intent(in) :: values(:, :)
+      integer, intent(in) :: iteration
+      character(len=*), intent(in) :: stage
+      integer :: it, lcount, l, spin, q0_col, q2_col, pl_col
+      character(len=48) :: field
+
+      do it = 1, this%lattice%nrec
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+         do spin = 1, 2
+            do l = 0, lcount - 1
+               q0_col = l + 1 + (spin - 1)*lcount
+               q2_col = l + 1 + (spin + 1)*lcount
+               pl_col = l + 1 + (spin + 3)*lcount
+               call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                  it, l, spin, iteration, values(it, q0_col))
+               field = trim(stage)//' q2'
+               call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                  it, l, spin, trim(field), iteration, values(it, q2_col))
+               field = trim(stage)//' PL'
+               call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                  it, l, spin, trim(field), iteration, values(it, pl_col))
+            end do
+         end do
+      end do
+   end subroutine validate_packed_q
+
+   subroutine save_ldm_to(this, whereto)
+      class(mix), intent(inout) :: this
+      character(len=*), intent(in) :: whereto
+      integer :: it, ispin, l, lcount, max_flat, local_flat
+
+      max_flat = size(this%ldm_old, 4)
+
+      select case (trim(whereto))
+      case ('old', 'new')
+         do it = 1, this%lattice%nrec
+            call this%symbolic_atom(this%lattice%nbulk + it)%potential%flatten_ldm()
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            if (trim(whereto) == 'old') then
+               this%ldm_old(it, :, :, :) = 0.0_rp
+            else
+               this%ldm_new(it, :, :, :) = 0.0_rp
+            end if
+            do l = 1, lcount
+               local_flat = (2*l - 1)*(2*l - 1)
+               do ispin = 1, 2
+                  if (trim(whereto) == 'old') then
+                     this%ldm_old(it, l, ispin, 1:min(local_flat, max_flat)) = cmplx( &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)), &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(l, ispin, 1:min(local_flat, max_flat)), rp)
+                  else
+                     this%ldm_new(it, l, ispin, 1:min(local_flat, max_flat)) = cmplx( &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)), &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(l, ispin, 1:min(local_flat, max_flat)), rp)
+                  end if
+               end do
+            end do
+         end do
+
+      case ('current')
+         do it = 1, this%lattice%nrec
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(:, :, :) = 0.0_rp
+            this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(:, :, :) = 0.0_rp
+            do l = 1, lcount
+               local_flat = (2*l - 1)*(2*l - 1)
+               do ispin = 1, 2
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)) = &
+                     real(this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat)), rp)
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(l, ispin, 1:min(local_flat, max_flat)) = &
+                     aimag(this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat)))
+               end do
+            end do
+            call this%symbolic_atom(this%lattice%nbulk + it)%potential%expand_ldm()
+         end do
+      end select
+   end subroutine save_ldm_to
+
+   subroutine mix_ldm_linear(this)
+      class(mix), intent(inout) :: this
+
+      this%ldm_mix(:, :, :, :) = (1.0_rp - this%ldm_beta)*this%ldm_old(:, :, :, :) + this%ldm_beta*this%ldm_new(:, :, :, :)
+   end subroutine mix_ldm_linear
+   !> Linear mixing of the spinor d-shell P with ldm_beta: P_mix = beta*P_out + (1-beta)*P_prev. The history
+   !> starts from the mixed collinear ldm with zero spin coherences. P_out (ldm_spinor) is left unchanged.
+   subroutine mix_ldm_spinor_linear(this)
+      class(mix), intent(inout) :: this
+      integer :: it, na, s, i, j
+
+      do it = 1, this%lattice%nrec
+         na = this%lattice%nbulk + it
+         if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor)) cycle
+         if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor_mix)) then
+            allocate (this%symbolic_atom(na)%potential%ldm_spinor_mix(10, 10))
+            this%symbolic_atom(na)%potential%ldm_spinor_mix = (0.0_rp, 0.0_rp)
+            do s = 1, 2
+               do i = 1, 5
+                  do j = 1, 5
+                     this%symbolic_atom(na)%potential%ldm_spinor_mix((s - 1)*5 + i, (s - 1)*5 + j) = &
+                        this%ldm_old(it, 3, s, (i - 1)*5 + j)
+                  end do
+               end do
+            end do
+         end if
+         this%symbolic_atom(na)%potential%ldm_spinor_mix = (1.0_rp - this%ldm_beta)*this%symbolic_atom(na)%potential%ldm_spinor_mix &
+                                                           + this%ldm_beta*this%symbolic_atom(na)%potential%ldm_spinor
+      end do
+   end subroutine mix_ldm_spinor_linear
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
       ! implemented by g.p.srivastava, j. phys a 17, l317(1984),
@@ -518,15 +888,15 @@ contains
          df = fo
       end if
     !!! if (myid==0) then
-    !!!    write (6, "(/ a / a / 1x, i6, 1pe12.4, 2i12 /)") &
-    !!!         " Broydn:", "    itr         fsq      length        ierr", itr, fsq, &
+    !!!    write (6, ″(/ a / a / 1x, i6, 1pe12.4, 2i12 /)″) &
+    !!!         ″ Broydn:″, ″    itr         fsq      length        ierr″, itr, fsq, &
     !!!         n, ierr
-    !!!    write (0, "(/ a / a / 1x, i6, 1pe12.4, 2i12 /)") &
-    !!!         " Broydn:", "    itr         fsq      length        ierr", itr, fsq, &
+    !!!    write (0, ″(/ a / a / 1x, i6, 1pe12.4, 2i12 /)″) &
+    !!!         ″ Broydn:″, ″    itr         fsq      length        ierr″, itr, fsq, &
     !!!         n, ierr
     !!! end if
-      !write (876, "(/ a / a / 1x, i6, 1pe12.4, 2i12 /)") &
-      !      " Broydn:", "    itr         fsq      length        ierr", itr, fsq, &
+      !write (876, ″(/ a / a / 1x, i6, 1pe12.4, 2i12 /)″) &
+      !      ″ Broydn:″, ″    itr         fsq      length        ierr″, itr, fsq, &
       !      n, ierr
       if (wjac) then
          !
@@ -618,4 +988,3 @@ contains
       !print *, ´Bmix done´, itr, fsq
    end subroutine broydn
 end module mix_mod
-

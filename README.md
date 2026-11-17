@@ -58,7 +58,7 @@ On Ubuntu or Debian, install the basic dependencies:
 
 ```bash
 sudo apt update
-sudo apt install git build-essential cmake gfortran libopenblas-dev liblapack-dev
+sudo apt install git build-essential cmake gfortran libopenblas-dev liblapack-dev libsymspg-dev
 ```
 
 Clone and build:
@@ -105,19 +105,48 @@ Use a separate build directory when changing compilers or MPI implementations.
 | `CMAKE_BUILD_TYPE` | `Release` | `Release`, `Debug`, or `Testing` |
 | `ENABLE_OPENMP` | `ON` | Enable OpenMP when detected |
 | `ENABLE_MPI` | `OFF` | Enable MPI; requires an MPI toolchain |
-| `ENABLE_MARCH_NATIVE` | `ON` | Request host CPU optimization |
+| `ENABLE_MARCH_NATIVE` | `OFF` | Request host CPU optimization |
+| `ENABLE_SPGLIB` | `ON` | Use spglib for symmetry and k-paths; requires spglib (`libsymspg-dev`) |
+| `ENABLE_LIBXC` | `OFF` | Use libXC exchange-correlation functionals (see below) |
+| `ENABLE_MKL_KERNELS` | `OFF` | Build MKL Chebyshev kernels (batched and sparse); requires oneMKL |
+| `ENABLE_CUDA_PLUGIN` | `OFF` | Build the CUDA recursion backend; requires the CUDA toolkit |
+| `ENABLE_CUDA_RECIPROCAL` | `OFF` | Build the CUDA reciprocal backend; requires the CUDA toolkit |
+| `ENABLE_FUSED_RECIPROCAL` | `ON` (`OFF` on macOS) | Fuse reciprocal H(k) assembly and eigensolution |
 | `COLOR` | `ON` | Enable colored terminal output |
 | `ENABLE_FLUSH` | `OFF` | Flush printouts |
 | `RUN_EXAMPLE_TESTS` | `OFF` | Register SCF and post-processing example tests |
 | `RUN_REG_TESTS` | `OFF` | Register the legacy recursion regression tests |
+| `RUN_UNIT_TESTS` | `OFF` | Build and register the standalone Fortran unit tests |
 
-For GNU builds targeting another CPU, set `-DENABLE_MARCH_NATIVE=OFF`. CPU flag selection is compiler-dependent; check the resolved flags when preparing portable binaries.
+The default build uses a generic CPU baseline and runs on other machines of the same architecture. To optimize for the build host, set `-DENABLE_MARCH_NATIVE=ON`; that binary may not run on other CPUs. CPU flag selection is compiler-dependent; check the resolved flags in the configure output.
 
 For installation after building:
 
 ```bash
 cmake --install build --prefix "$HOME/.local"
 ```
+
+### libXC integration
+
+RS-LMTO-ASA provides an optional [libXC](https://libxc.gitlab.io/)
+interface for spherical-ASA LDA and GGA functionals while preserving the
+historical XC implementation.  Meta-GGA, hybrid, orbital-dependent, and
+kinetic-density-dependent families are rejected explicitly because the ASA
+interface does not provide all of their required ingredients.
+
+```bash
+cmake .. -DENABLE_LIBXC=ON
+make
+
+# Predefined PBE XC bundle, or a direct native libXC ID:
+echo "txc = 108" > input.nml
+echo "txc = 1101" > input.nml  # native libXC ID 101, exchange-only PBE GGA
+```
+
+See [the XC semantics and capabilities](docs/conventions/XC_SEMANTICS_AND_CAPABILITIES.md)
+and [the production contract](docs/conventions/LIBXC_PRODUCTION_CONTRACT.md) for selector
+namespaces, bundles/compositions, spin and unit conventions, radial GGA
+evaluation, and validation evidence.
 
 ## Run your first calculation
 
@@ -292,7 +321,7 @@ ctest --test-dir build -L postproc --output-on-failure
 
 Example tests run in isolated directories under `build/Testing/` and compare selected outputs with stored references where available. Cases without numerical references run as smoke tests. Short SCF tests check implementation behavior; they do not establish production convergence.
 
-See the [SCF test guide](tests/scf/README.md) and [post-processing test guide](tests/postproc/README.md) for case definitions, tolerances, and reference generation.
+See the [test guide](tests/README.md) for tiers, case definitions, tolerances, and reference generation.
 
 ## Contributing and support
 
@@ -342,3 +371,5 @@ cmake --build build-ifx-mpi --parallel
 Alternatively, select `-DCMAKE_Fortran_COMPILER=mpiifx` in a fresh build
 folder. Do not set `I_MPI_F90` to `mpiifx` itself. Keep the oneAPI environment
 loaded when running so the MPI and MKL shared libraries can be found.
+
+Transverse spin response (magnons) is being rebuilt on `fable_v4b` as roadmap item B11. The previous linear-response implementation is preserved at tag `lr-campaign-archive-2026-10`.

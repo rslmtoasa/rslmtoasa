@@ -43,6 +43,8 @@ module energy_mod
       integer ::  channels_ldos
       !> Fermi energy (Ry).
       real(rp) :: fermi, chebfermi
+      !> Electronic temperature (K) of the exchange energy integration (0 = step function at E_F)
+      real(rp) :: temperature
       !> Lower energy limit
       real(rp) :: energy_min
       !> Upper energy limit
@@ -120,6 +122,7 @@ contains
       fermi = this%fermi
       energy_min = this%energy_min
       energy_max = this%energy_max
+      temperature = this%temperature
 
       ! Reading
       open (newunit=funit, file=this%lattice%control%fname, action='read', iostat=iostatus, status='old')
@@ -129,8 +132,7 @@ contains
 
       read (funit, nml=energy, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &energy namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -139,6 +141,7 @@ contains
       this%fermi = fermi
       this%energy_min = energy_min
       this%energy_max = energy_max
+      this%temperature = temperature
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -148,6 +151,8 @@ contains
    !---------------------------------------------------------------------------
    subroutine restore_to_default(this)
       class(energy), intent(inout) :: this
+
+      this%temperature = 0.0_rp
 
       select case (this%lattice%control%calctype)
       case ('B')
@@ -168,6 +173,14 @@ contains
          ! this%fermi = readed from bulk calculation
          this%fix_fermi = .true.
          this%channels_ldos = 6000
+      case ('L')
+         this%energy_min = -1.5
+         this%energy_max = 0.5
+         ! B7 §1.3: default is FREE E_F from cluster neutrality (unlike 'S'/'I'),
+         ! combined with the region-registry gauge anchor V_A = 0. Pinning E_F to
+         ! one region instead is charge%fix_fermi_to_region, read independently.
+         this%fix_fermi = .false.
+         this%channels_ldos = 6000
       end select
    end subroutine restore_to_default
 
@@ -178,7 +191,7 @@ contains
 
       prevfermi = this%fermi
 
-      call this%build_from_file()
+      ! call this%build_from_file()
 
       this%fermi = prevfermi
       !Make sure nv1 is odd
@@ -205,5 +218,12 @@ contains
       do i = 0, this%channels_ldos + 9
          this%ene(i + 1) = this%energy_min + this%edel*i
       end do
+
+      if (this%temperature > 0.0_rp) then
+         if (this%energy_max - this%fermi < 10.0_rp*kB_simpson_f*this%temperature) &
+            call g_logger%warning('energy_max - E_F < 10 kT: Fermi tail truncated', __FILE__, __LINE__)
+         if (this%edel > 0.5_rp*kB_simpson_f*this%temperature) &
+            call g_logger%warning('energy mesh spacing > kT/2: finite-T integration unconverged', __FILE__, __LINE__)
+      end if
    end subroutine e_mesh
 end module energy_mod

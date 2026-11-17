@@ -1,84 +1,306 @@
 !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
-!
-! MODULE: MPI
-!
-!> @author
-!> Angela Klautau
-!> Ramon Cardias
-!> Lucas P. Campagna
-!> S. Frota-Pessôa
-!> Pascoal R. Peduto
-!> Anders Bergman
-!> S. B. Legoas
-!> H. M. Petrilli
-!> Ivan P. Miranda
-!
-! DESCRIPTION:
-!> Module to handle the MPI variables for parallelization
-!------------------------------------------------------------------------------
+!> @brief MPI compatibility state and the process-local parallel context.
+!> @details `rank` and `numprocs` remain compatibility views for legacy code.
+!> `parallel_context` is their sole runtime source and is initialized by main
+!> after MPI_Init (or deterministically serial when MPI is unavailable).
 module mpi_mod
+   use logger_mod, only: g_logger
 #ifdef USE_MPI
    use mpi
 #endif
-   integer :: ierr, rank, numprocs
-   integer :: remainder_atoms, atoms_per_process, start_atom, end_atom
-   integer, dimension(:), allocatable :: l2g_map
-   integer, dimension(:), allocatable :: g2l_map
+   implicit none
+   private
+
+   integer, public :: ierr = 0
+   integer, public :: rank = 0
+   integer, public :: numprocs = 1
+   integer, public :: remainder_atoms = 0
+   integer, public :: atoms_per_process = 0
+   integer, public :: start_atom = 1
+   integer, public :: end_atom = 0
+   logical, public :: oversubscribe_warned = .false.
+   integer, dimension(:), allocatable, public :: l2g_map
+   integer, dimension(:), allocatable, public :: g2l_map
+
+   type, public :: parallel_context
+      integer :: rank = 0
+      integer :: size = 1
+      integer :: local_rank = 0
+      integer :: local_size = 1
+      logical :: mpi_enabled = .false.
+   contains
+      procedure :: is_root
+      procedure :: owns_work
+      procedure :: split_range
+      procedure :: barrier
+      procedure :: restore_to_default
+      procedure :: device_index
+      procedure, private :: initialize
+      final :: destructor
+   end type parallel_context
+
+   type(parallel_context), public :: g_parallel_context
+
+   interface parallel_context
+      procedure :: constructor
+   end interface parallel_context
+
+   public :: get_mpi_range, get_mpi_variables, get_mpi_mapping
+   public :: split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
 
 contains
 
-   subroutine get_mpi_variables(rank_in, number_of_atoms)
-      implicit none
-      integer, intent(in) :: number_of_atoms, rank_in
+   !> @brief Construct the runtime context after MPI_Init when MPI is enabled.
+   function constructor() result(obj)
+      type(parallel_context) :: obj
 
+      call obj%restore_to_default()
+      call obj%initialize()
+   end function constructor
+
+   !> @brief Initialize from MPI_COMM_WORLD and its shared-memory subcommunicator.
+   subroutine initialize(this)
+      class(parallel_context), intent(inout) :: this
 #ifdef USE_MPI
-      atoms_per_process = number_of_atoms/numprocs
-      remainder_atoms = mod(number_of_atoms, numprocs)
+      logical :: mpi_is_initialized
+      integer :: mpi_ierr, local_comm
 
-      if (rank_in < remainder_atoms) then
-         atoms_per_process = atoms_per_process + 1
-         start_atom = rank_in*atoms_per_process + 1
+      call MPI_Initialized(mpi_is_initialized, mpi_ierr)
+      if (.not. mpi_is_initialized .or. mpi_ierr /= MPI_SUCCESS) return
+
+      call MPI_Comm_rank(MPI_COMM_WORLD, this%rank, mpi_ierr)
+      if (mpi_ierr /= MPI_SUCCESS) return
+      call MPI_Comm_size(MPI_COMM_WORLD, this%size, mpi_ierr)
+      if (mpi_ierr /= MPI_SUCCESS) return
+
+      this%mpi_enabled = .true.
+      call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, this%rank, MPI_INFO_NULL, local_comm, mpi_ierr)
+      if (mpi_ierr == MPI_SUCCESS) then
+         call MPI_Comm_rank(local_comm, this%local_rank, mpi_ierr)
+         call MPI_Comm_size(local_comm, this%local_size, mpi_ierr)
+         call MPI_Comm_free(local_comm, mpi_ierr)
       else
-         start_atom = rank_in*atoms_per_process + remainder_atoms + 1
+         ! A usable world context is still preferable to aborting solely because
+         ! node-local identity is unavailable on an older MPI implementation.
+         this%local_rank = this%rank
+         this%local_size = this%size
+         call g_logger%warning('MPI_Comm_split_type(MPI_COMM_TYPE_SHARED) failed; using world-local identity.', __FILE__, __LINE__)
       end if
-      end_atom = start_atom + atoms_per_process - 1
-#else
-      remainder_atoms = 0
-      atoms_per_process = number_of_atoms
-      start_atom = 1
-      end_atom = number_of_atoms
 #endif
+      call synchronize_compatibility_globals(this)
+   end subroutine initialize
 
+   !> @brief Return whether this context owns root-only work/output.
+   pure logical function is_root(this)
+      class(parallel_context), intent(in) :: this
+      is_root = this%rank == 0
+   end function is_root
+
+   !> @brief Return whether a one-based item belongs to this context’s range.
+   pure logical function owns_work(this, item_index, n_items)
+      class(parallel_context), intent(in) :: this
+      integer, intent(in) :: item_index, n_items
+      integer :: first, last, count
+
+      call this%split_range(n_items, first, last, count)
+      owns_work = count > 0 .and. item_index >= first .and. item_index <= last
+   end function owns_work
+
+   !> @brief Split one-based work items over world ranks.
+   pure subroutine split_range(this, n_items, start_idx, end_idx, items_per_rank)
+      class(parallel_context), intent(in) :: this
+      integer, intent(in) :: n_items
+      integer, intent(out) :: start_idx, end_idx, items_per_rank
+
+      call split_range_for_worker(this%rank, this%size, n_items, start_idx, end_idx, items_per_rank)
+   end subroutine split_range
+
+   !> @brief Synchronize all world ranks when MPI is active; serial is a no-op.
+   subroutine barrier(this)
+      class(parallel_context), intent(in) :: this
+#ifdef USE_MPI
+      integer :: mpi_ierr
+      if (this%mpi_enabled) call MPI_Barrier(MPI_COMM_WORLD, mpi_ierr)
+#endif
+   end subroutine barrier
+
+   !> @brief Reset this context to the serial defaults.
+   subroutine restore_to_default(this)
+      class(parallel_context), intent(inout) :: this
+
+      this%rank = 0
+      this%size = 1
+      this%local_rank = 0
+      this%local_size = 1
+      this%mpi_enabled = .false.
+   end subroutine restore_to_default
+
+   !> @brief Finalize the context; MPI_Finalize remains program-owned.
+   subroutine destructor(this)
+      type(parallel_context), intent(inout) :: this
+      call this%restore_to_default()
+   end subroutine destructor
+
+   !> @brief Map the node-local rank to a hardware-independent device index.
+   subroutine device_index(this, available_device_count, index, valid, override)
+      class(parallel_context), intent(in) :: this
+      integer, intent(in) :: available_device_count
+      integer, intent(out) :: index
+      logical, intent(out) :: valid
+      integer, intent(in), optional :: override
+
+      call map_local_rank_to_device(this%local_rank, available_device_count, index, valid, override, this%local_size)
+   end subroutine device_index
+
+   !> @brief Deterministically split an item range for an explicit worker set.
+   !> @details Invalid workers and non-positive item counts receive the empty
+   !> range `[1,0]`; that keeps collective callers safe under oversubscription.
+   pure subroutine split_range_for_worker(worker_rank, worker_size, n_items, start_idx, end_idx, items_per_worker)
+      integer, intent(in) :: worker_rank, worker_size, n_items
+      integer, intent(out) :: start_idx, end_idx, items_per_worker
+      integer :: effective_items, remainder_items
+
+      start_idx = 1
+      end_idx = 0
+      items_per_worker = 0
+      if (worker_size <= 0 .or. worker_rank < 0 .or. worker_rank >= worker_size) return
+
+      effective_items = max(0, n_items)
+      items_per_worker = effective_items/worker_size
+      remainder_items = mod(effective_items, worker_size)
+      if (worker_rank < remainder_items) then
+         items_per_worker = items_per_worker + 1
+         start_idx = worker_rank*items_per_worker + 1
+      else
+         start_idx = worker_rank*items_per_worker + remainder_items + 1
+      end if
+      end_idx = start_idx + items_per_worker - 1
+      if (items_per_worker == 0) then
+         start_idx = 1
+         end_idx = 0
+      end if
+   end subroutine split_range_for_worker
+
+   !> @brief Select a device by local rank, optionally honoring an override.
+   !> @details The default is one-to-one `local_rank` mapping.  An explicit
+   !> override may intentionally select a shared device.  When `local_size` is
+   !> supplied, an unconfigured local-rank/device oversubscription is rejected.
+   !> This helper does not query an accelerator runtime.
+   pure subroutine map_local_rank_to_device(local_rank, available_device_count, device_index, valid, override, local_size)
+      integer, intent(in) :: local_rank, available_device_count
+      integer, intent(out) :: device_index
+      logical, intent(out) :: valid
+      integer, intent(in), optional :: override
+      integer, intent(in), optional :: local_size
+
+      device_index = -1
+      valid = .false.
+      if (local_rank < 0 .or. available_device_count <= 0) return
+      if (present(local_size)) then
+         if (local_size <= 0 .or. local_rank >= local_size) return
+      end if
+      if (present(override)) then
+         if (override < 0 .or. override >= available_device_count) return
+         device_index = override
+      else
+         if (present(local_size)) then
+            if (local_size > available_device_count) return
+            device_index = local_rank
+         else
+            ! Preserve the standalone helper’s historical round-robin behavior
+            ! for callers that do not provide a node-local size.
+            device_index = mod(local_rank, available_device_count)
+         end if
+      end if
+      valid = .true.
+   end subroutine map_local_rank_to_device
+
+   !> @brief Read the optional process-local CUDA device override.
+   !> @details `RSLMTO_CUDA_DEVICE` is interpreted in CUDA’s visible-device
+   !> namespace (the same namespace as `CUDA_VISIBLE_DEVICES`).  A configured
+   !> override is allowed to share a device intentionally; invalid text is
+   !> reported separately from an unset variable so callers can fail clearly.
+   subroutine get_cuda_device_override(device, configured, valid)
+      integer, intent(out) :: device
+      logical, intent(out) :: configured, valid
+      character(len=64) :: value
+      integer :: length, status, read_status
+
+      device = -1
+      configured = .false.
+      valid = .true.
+      value = ''
+      call get_environment_variable('RSLMTO_CUDA_DEVICE', value, length, status)
+      if (status /= 0 .or. length == 0) return
+
+      configured = .true.
+      read(value(:length), *, iostat=read_status) device
+      if (read_status /= 0 .or. device < 0) then
+         device = -1
+         valid = .false.
+      end if
+   end subroutine get_cuda_device_override
+
+   !> @brief Synchronize compatibility globals from the one runtime context.
+   subroutine synchronize_compatibility_globals(context)
+      class(parallel_context), intent(in) :: context
+      rank = context%rank
+      numprocs = context%size
+      ierr = 0
+   end subroutine synchronize_compatibility_globals
+
+   subroutine get_mpi_range(rank_in, n_items, start_idx, end_idx, items_per_process, l2g_map_out, g2l_map_out, region_tag)
+      integer, intent(in) :: rank_in, n_items
+      integer, intent(out) :: start_idx, end_idx, items_per_process
+      integer, dimension(:), allocatable, intent(out), optional :: l2g_map_out
+      integer, dimension(:), allocatable, intent(out), optional :: g2l_map_out
+      character(len=*), intent(in), optional :: region_tag
+
+      integer :: i_g, i_l
+      character(len=160) :: warn_msg
+      character(len=32) :: region_name
+
+      region_name = 'work'
+      if (present(region_tag)) region_name = trim(region_tag)
+      if ((numprocs > n_items) .and. (rank_in == 0) .and. (.not. oversubscribe_warned)) then
+         write (warn_msg, '(a,a,a,i0,a,i0,a)') 'MPI oversubscription in ', trim(region_name), &
+            '-parallel region (ranks=', numprocs, ', items=', n_items, '). Some ranks will stay idle.'
+         call g_logger%warning(trim(warn_msg), __FILE__, __LINE__)
+         oversubscribe_warned = .true.
+      end if
+
+      call split_range_for_worker(rank_in, numprocs, n_items, start_idx, end_idx, items_per_process)
+
+      if (present(l2g_map_out)) then
+         if (allocated(l2g_map_out)) deallocate(l2g_map_out)
+         allocate(l2g_map_out(items_per_process))
+         l2g_map_out = 0
+      end if
+      if (present(g2l_map_out)) then
+         if (allocated(g2l_map_out)) deallocate(g2l_map_out)
+         allocate(g2l_map_out(max(0, n_items)))
+         g2l_map_out = 0
+      end if
+
+      do i_g = start_idx, end_idx
+         i_l = i_g - start_idx + 1
+         if (present(l2g_map_out)) l2g_map_out(i_l) = i_g
+         if (present(g2l_map_out)) g2l_map_out(i_g) = i_l
+      end do
+   end subroutine get_mpi_range
+
+   subroutine get_mpi_variables(rank_in, number_of_atoms)
+      integer, intent(in) :: number_of_atoms, rank_in
+      call get_mpi_range(rank_in, number_of_atoms, start_atom, end_atom, atoms_per_process, region_tag='atom')
+      remainder_atoms = max(0, number_of_atoms - numprocs*(number_of_atoms/max(1, numprocs)))
       call get_mpi_mapping(rank_in, number_of_atoms)
-
-      return
-
    end subroutine get_mpi_variables
 
    subroutine get_mpi_mapping(rank_in, number_of_atoms)
-      implicit none
       integer, intent(in) :: number_of_atoms, rank_in
-
-      integer :: i_g, i_l
-
-      if (allocated(l2g_map)) deallocate (l2g_map)
-      if (allocated(g2l_map)) deallocate (g2l_map)
-
-      allocate (l2g_map(atoms_per_process))
-      l2g_map = 0
-      allocate (g2l_map(number_of_atoms))
-      g2l_map = 0
-
-      do i_g = start_atom, end_atom
-         i_l = i_g - start_atom + 1
-         l2g_map(i_l) = i_g
-         g2l_map(i_g) = i_l
-      end do
-
-      return
-
+      call get_mpi_range(rank_in, number_of_atoms, start_atom, end_atom, atoms_per_process, l2g_map, g2l_map, 'atom')
    end subroutine get_mpi_mapping
 
 end module mpi_mod

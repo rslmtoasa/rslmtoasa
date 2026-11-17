@@ -1,29 +1,30 @@
 name: Example tests
 
-# Triggered automatically after the build workflow completes successfully.
-# Can also be triggered manually by providing a build workflow run ID.
+# Runs directly from the checked-out branch. The test workflow builds its own
+# binary, so it does not depend on another workflow's artifacts or definition.
 on:
-  workflow_run:
-    workflows: ["Build binaries on all platforms (beta)"]
-    types: [completed]
+  # Every push and pull request: build plus the quick tier.
+  push:
+  pull_request:
+  schedule:
+    # 03:00 UTC nightly: quick and standard tiers on Linux + macOS.
+    - cron: "0 3 * * *"
+  # Manual runs choose the tier; the validation tier only runs this way.
   workflow_dispatch:
     inputs:
-      run_id:
-        description: "Run ID of the build workflow to pull binaries from"
-        required: true
-      ref:
-        description: "Git ref/SHA to test (defaults to triggering run head SHA when empty)"
-        required: false
+      tier:
+        description: "Test tier to run"
+        type: choice
+        options: [quick, standard, validation]
+        default: quick
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     name: Test on ${{ matrix.os }} ${{ matrix.icon }}
-
-    # For workflow_run: only proceed if the build succeeded.
-    # For workflow_dispatch: always run (user chose the run ID explicitly).
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     strategy:
       fail-fast: false
@@ -38,10 +39,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          # workflow_run: pin to the exact commit that triggered the build workflow.
-          # workflow_dispatch: allow overriding via input.ref; if empty, use run head SHA.
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
 
       # -----------------------------------------------------------------------
       # System dependencies — mirrors the build workflow so cmake can configure
@@ -49,22 +46,39 @@ jobs:
       - name: Install system dependencies (Linux) ${{ matrix.icon }}
         if: runner.os == 'Linux'
         run: |
+          sudo apt-get update
           sudo apt-get -y install \
             ninja-build cmake \
             gfortran \
             libopenblas-dev liblapack-dev \
+            libsymspg-dev libsymspg2 \
             openmpi-bin openmpi-common libopenmpi-dev
+          sudo ldconfig
+          symspg_lib="$(dpkg -L libsymspg2 | grep -m1 '/libsymspg\.so\.2$')"
+          test -n "$symspg_lib"
+          symspg_libdir="$(dirname "$symspg_lib")"
+          echo "LD_LIBRARY_PATH=$symspg_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
         run: |
-          for pkg in ninja cmake open-mpi; do
+          for pkg in cmake open-mpi spglib; do
             if ! brew list --versions "$pkg" >/dev/null 2>&1; then
               brew install "$pkg"
             fi
           done
+          # Use the current Homebrew GCC/Open MPI pair on CI. GCC 13 is only
+          # the local macOS workaround for the gfortran-16 issue.
           gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
+          test -x "$gfc"
           sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
+          echo "FC=$gfc" >> "$GITHUB_ENV"
+          echo "F77=$gfc" >> "$GITHUB_ENV"
+          echo "F90=$gfc" >> "$GITHUB_ENV"
+          spglib_lib="$(find -L "$(brew --prefix spglib)" -type f -name 'libsymspg*.dylib' -print -quit)"
+          test -n "$spglib_lib"
+          spglib_libdir="$(dirname "$spglib_lib")"
+          echo "DYLD_LIBRARY_PATH=$spglib_libdir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
 
       # -----------------------------------------------------------------------
@@ -76,49 +90,30 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        run: pip install f90nml
+        # The GBT oracle/unit checks import NumPy in addition to f90nml.
+        run: pip install f90nml numpy
 
       # -----------------------------------------------------------------------
-      # Download pre-built binary from the build workflow
-      # -----------------------------------------------------------------------
-      - name: Resolve build workflow run ID
-        id: run_id
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "id=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
-          else
-            echo "id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Show workflow provenance
-        run: |
-          echo "event_name=${{ github.event_name }}"
-          echo "dispatch.run_id=${{ inputs.run_id || 'n/a' }}"
-          echo "dispatch.ref=${{ inputs.ref || 'n/a' }}"
-          echo "workflow_run.id=${{ github.event.workflow_run.id || 'n/a' }}"
-          echo "workflow_run.head_sha=${{ github.event.workflow_run.head_sha || 'n/a' }}"
-          echo "selected.run_id=${{ steps.run_id.outputs.id }}"
-          echo "checked_out_sha=$(git rev-parse HEAD)"
-          echo "checked_out_branch=$(git branch --show-current || true)"
-          echo "run_test_marker=$(grep -n "\[run_test\]" tests/run_test.py | head -n 1 || true)"
-
-      - name: Download binary artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: rslmto.${{ runner.os }}.${{ matrix.arch }}
-          path: dist/
-          run-id: ${{ steps.run_id.outputs.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # -----------------------------------------------------------------------
-      # Configure CMake (registers tests; no build step needed)
+      # Configure and build the checked-out source.
       # -----------------------------------------------------------------------
       - name: Configure CMake
         run: |
-          cmake -S . -B build -G Ninja \
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            generator="Unix Makefiles"
+          else
+            generator="Ninja"
+          fi
+          cmake -S . -B build -G "$generator" \
+            -DPython3_EXECUTABLE="$(which python3)" \
             -DENABLE_MPI=ON \
+            -DENABLE_MARCH_NATIVE=OFF \
+            -DRUN_REG_TESTS=ON \
             -DRUN_EXAMPLE_TESTS=ON \
+            -DRUN_UNIT_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Build from source ${{ matrix.icon }}
+        run: cmake --build build --parallel
 
       - name: Select MPI launcher
         run: |
@@ -142,24 +137,34 @@ jobs:
             exit 1
           fi
 
-      # Place the pre-built binary where CMake expects it
-      - name: Stage pre-built binary
-        run: |
-          mkdir -p build/bin
-          cp dist/rslmto.* build/bin/rslmto.x
-          chmod +x build/bin/rslmto.x
+      - name: Build standalone unit tests ${{ matrix.icon }}
+        run: cmake --build build --target unit_tests --parallel
 
       # -----------------------------------------------------------------------
       # Run tests
       # -----------------------------------------------------------------------
-      - name: Run example tests ${{ matrix.icon }}
-        id: ctest
+      - name: Select test tier
+        id: tier
+        run: |
+          case "${{ github.event_name }}" in
+            schedule) echo "regex=^(quick|standard)$" >> "$GITHUB_OUTPUT" ;;
+            workflow_dispatch) echo "regex=^${{ github.event.inputs.tier }}$" >> "$GITHUB_OUTPUT" ;;
+            *) echo "regex=^quick$" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Run tests (tier ${{ steps.tier.outputs.regex }}) ${{ matrix.icon }}
+        id: ctest_run
+        # GitHub's runners expose fewer MPI slots than the four-rank parallel-context test exercises. This is a
+        # CI resource limit, not an oversubscription condition in the code. Linux uses Open MPI's legacy MCA
+        # setting; Homebrew Open MPI 5 uses the PRRTE mapping-policy spelling.
         env:
-          # Apply OpenMP threading only to non-MPI runs; MPI remains pinned to 1 in run_binary.sh.
+          OMPI_MCA_rmaps_base_oversubscribe: ${{ runner.os == 'Linux' && '1' || '' }}
+          PRTE_MCA_mapby: "${{ runner.os == 'macOS' && ':oversubscribe' || '' }}"
+          # OpenMP threading applies to non-MPI runs only; MPI stays pinned to 1 in run_binary.sh.
           RSLMTO_OMP_THREADS_SERIAL: "2"
         run: |
           ctest --test-dir build \
-            --label-regex example \
+            --label-regex "${{ steps.tier.outputs.regex }}" \
             --output-on-failure \
             --output-junit "${{ github.workspace }}/results.xml" \
             --parallel 1 \
@@ -169,7 +174,7 @@ jobs:
         continue-on-error: true
 
       - name: Dump per-case runner logs on failure
-        if: steps.ctest.outputs.ctest_exit != '0'
+        if: steps.ctest_run.outputs.ctest_exit != '0'
         run: |
           echo "ctest failed; printing per-case testrun.log files"
           find build/Testing -type f -name testrun.log | sort | while read -r f; do
@@ -192,59 +197,63 @@ jobs:
           python3 - << 'PYEOF'
           import os, xml.etree.ElementTree as ET
 
-          xml_path = os.path.join(os.environ["GITHUB_WORKSPACE"], "results.xml")
           summary_path = os.environ["GITHUB_STEP_SUMMARY"]
 
-          if not os.path.exists(xml_path):
+          def write_section(title, xml_name):
+              xml_path = os.path.join(os.environ["GITHUB_WORKSPACE"], xml_name)
+
+              if not os.path.exists(xml_path):
+                  with open(summary_path, "a") as f:
+                      f.write(f"## {title}\n\nNo results file found.\n")
+                  return
+
+              tree = ET.parse(xml_path)
+              root = tree.getroot()
+              suite = root.find("testsuite") or root
+
+              passed, failed, skipped = [], [], []
+              for tc in suite.findall("testcase"):
+                  name = tc.attrib.get("name", "?")
+                  time = float(tc.attrib.get("time", 0))
+                  label = f"`{name}` ({time:.1f}s)"
+                  if tc.find("failure") is not None or tc.find("error") is not None:
+                      el = tc.find("failure") if tc.find("failure") is not None else tc.find("error")
+                      msg = el.text or ""
+                      failed.append((label, msg.strip()))
+                  elif tc.find("skipped") is not None:
+                      skipped.append(label)
+                  else:
+                      passed.append(label)
+
+              total = len(passed) + len(failed) + len(skipped)
+              status = "✅ All passed" if not failed else f"❌ {len(failed)} failed"
+
+              lines = [
+                  f"## {title} — {status}",
+                  "",
+                  f"**{len(passed)}/{total} passed**"
+                  + (f", {len(failed)} failed" if failed else "")
+                  + (f", {len(skipped)} skipped" if skipped else ""),
+                  "",
+              ]
+
+              if failed:
+                  lines += ["### ❌ Failed", "", "| Test | Output |", "|------|--------|"]
+                  for label, msg in failed:
+                      # Truncate long messages for readability
+                      short = msg.replace("\n", " ").replace("|", "\\|")[:200]
+                      lines.append(f"| {label} | {short} |")
+                  lines.append("")
+
+              if passed:
+                  lines += ["### ✅ Passed", "", "| Test |", "|------|"]
+                  lines += [f"| {t} |" for t in passed]
+                  lines.append("")
+
               with open(summary_path, "a") as f:
-                  f.write("## Example tests\n\nNo results file found.\n")
-              raise SystemExit(0)
+                  f.write("\n".join(lines) + "\n")
 
-          tree = ET.parse(xml_path)
-          root = tree.getroot()
-          suite = root.find("testsuite") or root
-
-          passed, failed, skipped = [], [], []
-          for tc in suite.findall("testcase"):
-              name = tc.attrib.get("name", "?")
-              time = float(tc.attrib.get("time", 0))
-              label = f"`{name}` ({time:.1f}s)"
-              if tc.find("failure") is not None or tc.find("error") is not None:
-                  el = tc.find("failure") if tc.find("failure") is not None else tc.find("error")
-                  msg = el.text or ""
-                  failed.append((label, msg.strip()))
-              elif tc.find("skipped") is not None:
-                  skipped.append(label)
-              else:
-                  passed.append(label)
-
-          total = len(passed) + len(failed) + len(skipped)
-          status = "✅ All passed" if not failed else f"❌ {len(failed)} failed"
-
-          lines = [
-              f"## Example tests — {status}",
-              "",
-              f"**{len(passed)}/{total} passed**"
-              + (f", {len(failed)} failed" if failed else "")
-              + (f", {len(skipped)} skipped" if skipped else ""),
-              "",
-          ]
-
-          if failed:
-              lines += ["### ❌ Failed", "", "| Test | Output |", "|------|--------|"]
-              for label, msg in failed:
-                  # Truncate long messages for readability
-                  short = msg.replace("\n", " ").replace("|", "\\|")[:200]
-                  lines.append(f"| {label} | {short} |")
-              lines.append("")
-
-          if passed:
-              lines += ["### ✅ Passed", "", "| Test |", "|------|"]
-              lines += [f"| {t} |" for t in passed]
-              lines.append("")
-
-          with open(summary_path, "a") as f:
-              f.write("\n".join(lines) + "\n")
+          write_section("Tests", "results.xml")
           PYEOF
 
       # -----------------------------------------------------------------------
@@ -264,7 +273,208 @@ jobs:
       # Propagate failure after summary and upload are done
       # -----------------------------------------------------------------------
       - name: Check test outcome
-        if: steps.ctest.outputs.ctest_exit != '0'
+        if: steps.ctest_run.outputs.ctest_exit != '0'
         run: |
           echo "Tests failed — see summary above for details."
           exit 1
+
+  # ---------------------------------------------------------------------------
+  # MKL: builds from source with ENABLE_MKL_KERNELS=ON and runs the one
+  # mkl_batch regression case. No mkl_sparse case runs in CI.
+  # ---------------------------------------------------------------------------
+  mkl:
+    name: MKL kernels (Ubuntu)
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -y install ninja-build cmake gfortran
+
+      - name: Install Intel oneAPI MKL
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get -y install intel-oneapi-mkl-devel
+
+      - name: Export Intel oneAPI environment
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          echo "MKLROOT=$MKLROOT" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install f90nml
+
+      - name: Configure CMake with MKL kernels
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_MKL_KERNELS=ON \
+            -DBLA_VENDOR=Intel10_64lp \
+            -DRUN_REG_TESTS=ON \
+            -DRUN_EXAMPLE_TESTS=ON \
+            -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run MKL regression case
+        run: |
+          ctest --test-dir build \
+            -R "mkl_batch" \
+            --output-on-failure \
+            --parallel 1 \
+            -V
+
+  # ---------------------------------------------------------------------------
+  # CUDA (compile-only): builds the CUDA recursion plugin with no GPU present,
+  # then runs the CPU regression subset against that binary (plugin compiled
+  # in but unused). Catches interface drift between rsrec_cuda_plugin.f90,
+  # rsrec_cuda.h and rsrec_gpu.cu without needing GPU hardware in CI.
+  # ---------------------------------------------------------------------------
+  cuda_compile:
+    name: CUDA plugin (compile-only, Ubuntu)
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install \
+            ninja-build cmake gfortran g++ nvidia-cuda-toolkit \
+            libopenblas-dev liblapack-dev \
+            libsymspg-dev libsymspg2
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install f90nml
+
+      - name: Configure CMake with CUDA plugin
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA_PLUGIN=ON \
+            -DRUN_REG_TESTS=ON \
+            -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run CPU regression subset
+        run: |
+          ctest --test-dir build \
+            --label-regex backend \
+            --output-on-failure \
+            --parallel 1 \
+            -V
+
+  # ---------------------------------------------------------------------------
+  # Windows: binaries.yml builds Windows but never tests it. Best effort -
+  # unverified against a real Windows/MSYS2 runner as of this commit
+  # (authored and validated on Linux only), so continue-on-error: true keeps
+  # it from blocking the pipeline if MSYS2 path/toolchain quirks surface.
+  # Runs only the "quick" example subset (same one pull_request uses), not
+  # the full matrix or MPI (binaries.yml builds Windows with ENABLE_MPI=OFF
+  # to avoid MSYS2 MPI toolchain coupling issues - matched here).
+  # ---------------------------------------------------------------------------
+  windows_quick:
+    name: Windows quick subset (MSYS2 UCRT64, best effort)
+
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-gcc-fortran
+            mingw-w64-ucrt-x86_64-blas
+            mingw-w64-ucrt-x86_64-openblas
+            mingw-w64-ucrt-x86_64-lapack
+            mingw-w64-ucrt-x86_64-fftw
+            mingw-w64-ucrt-x86_64-spglib
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-pip
+            git
+
+      - name: Install Python dependencies
+        run: pip install f90nml
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_MPI=OFF \
+            -DENABLE_MARCH_NATIVE=OFF \
+            -DRUN_EXAMPLE_TESTS=ON \
+            -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+          cmake --build build --parallel
+
+      - name: Run quick example subset
+        run: |
+          ctest --test-dir build \
+            --label-regex quick \
+            --output-on-failure \
+            --parallel 1 \
+            -V
+
+  # ---------------------------------------------------------------------------
+  # libXC: opt-in functional baseline contract.  This stays separate from
+  # the normal CPU matrix so libXC is not required for developer builds.
+  # ---------------------------------------------------------------------------
+  libxc_unit:
+    name: libXC XC baseline (Ubuntu)
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build cmake gfortran libopenblas-dev liblapack-dev libxc-dev
+
+      - name: Configure libXC unit build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_MPI=OFF \
+            -DENABLE_LIBXC=ON \
+            -DRUN_UNIT_TESTS=ON
+
+      - name: Build standalone unit tests
+        run: cmake --build build --target unit_tests --parallel
+
+      - name: Run libXC baseline test
+        run: ctest --test-dir build -L libxc --output-on-failure -V

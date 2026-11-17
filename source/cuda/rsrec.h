@@ -1,0 +1,287 @@
+/* ===========================================================================
+ * rsrec.h -- GPU/CPU recursion engine for RS-LMTO-ASA (recursion_mod)
+ *
+ * Drop-in compute backends for:
+ *   recur()                    -> rsrec_scalar_lanczos   (batched over nb orbitals)
+ *   recur_b(), recur_b_ij()    -> rsrec_block_lanczos    (any psi0: single site
+ *                                                         or the 4 ij sign combos)
+ *   chebyshev_recur(),
+ *   chebyshev_recur_ij()       -> rsrec_chebyshev_moments
+ *   compute_moments_stochastic -> rsrec_stochastic_moments
+ *
+ * Hamiltonian model (mirrors hamiltonian_mod exactly):
+ *   H_{k,k}       = hall(:,:,1,k) + lsham(:,:,iz(k))      for k <= nmax
+ *                 = ee(:,:,1,iz(k)) + lsham(:,:,iz(k))    for k >  nmax
+ *   H_{k,nn(k,j)} = hall(:,:,j,k)                          for k <= nmax
+ *                 = ee(:,:,j,iz(k))                        for k >  nmax
+ * with j = 2..nn(k,1). nmax may be 0 (pure bulk) or kk (hall covers everything).
+ *
+ * All complex arrays are double complex in FORTRAN COLUMN-MAJOR order with
+ * the exact shapes used in recursion_mod; pass them directly from Fortran.
+ * Atom indices in nn(:,:) and site arguments are 1-BASED (Fortran style).
+ *
+ * The izero/idum "lightcone" bookkeeping of the CPU code is intentionally
+ * dropped: atoms outside the lightcone carry exactly zero wavefunction, so
+ * a full sweep gives bit-identical results; on the GPU the dense sweep is
+ * faster than divergent masking for typical cluster/recursion sizes.
+ *
+ * Thread safety: one context per thread/MPI rank. All routines synchronous.
+ * Returns: 0 on success, nonzero on error (message via rsrec_last_error).
+ * =========================================================================== */
+#ifndef RSREC_H
+#define RSREC_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct rsrec_ctx rsrec_ctx;
+
+/* --- lifecycle ----------------------------------------------------------- */
+/* kk: cluster size, nb: block size (18), nnmax: 2nd dim of nn(:,:),
+ * ntype: number of atom types, nmax: number of "impurity" atoms described
+ * by hall (0 => bulk only), device: CUDA device id (ignored by CPU build). */
+rsrec_ctx *rsrec_create(int kk, int nb, int nnmax, int ntype, int nmax,
+                        int device);
+void rsrec_destroy(rsrec_ctx *ctx);
+const char *rsrec_last_error(void);
+
+/* --- data upload (call once per SCF iteration / Hamiltonian change) ------ */
+/* ee   : (nb, nb, nnmax, ntype)   complex(rp)
+ * hall : (nb, nb, nnmax, nmax)    complex(rp)   (may be NULL if nmax == 0)
+ * lsham: (nb, nb, ntype)          complex(rp)   (may be NULL => zero)
+ * nn   : (kk, nnmax)              integer, nn(k,1) = #neighbour entries,
+ *                                 nn(k,j) = 1-based neighbour atom (0 = none)
+ * iz   : (kk)                     integer, 1-based atom type
+ * eeo  : (nb, nb, nnmax, ntype)   complex(rp)   orthogonalisation factor, or
+ *                                 NULL to disable hoh (single-operator path)
+ * hallo: (nb, nb, nnmax, nmax)    complex(rp)   impurity eeo (NULL if nmax==0)
+ * enim : (nb, nb, ntype)          complex(rp)   on-site E_nu (NULL => zero)
+ * eecc : (nb, nb, nnmax, ntype)   complex(rp)   ccor_2c blocks (NULL => none)
+ * hallcc: (nb, nb, nnmax, nmax)   complex(rp)   impurity eecc (NULL if nmax==0)
+ * When eeo != NULL the engine uses the two-sweep hoh apply
+ *   H = ( h - eeo*h + (enim+lsham) - b ) / a  (fp64 block-ELL only).
+ * With eeo and eecc the on-site term becomes (eecc + enim + lsham)*x, the
+ * ccor_2c term being applied to x and not folded into h.                    */
+int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
+                          const void *lsham, const int *nn, const int *iz,
+                          const void *eeo, const void *hallo,
+                          const void *enim, const void *eecc,
+                          const void *hallcc);
+
+/* Velocity (or current) operators for the stochastic conductivity moments.
+ * Same neighbour structure as ee, per-type, no lsham term:
+ * v_a, v_b: (nb, nb, nnmax, ntype) complex(rp).
+ * vo_a, vo_b: velocity orthogonalisation operators for the hoh velocity apply
+ *   (out = v*psi - vo*(h_bare*psi)); pass NULL to disable. On-site shell-1 of
+ *   vo is zeroed on upload to match velo_hoh_vec_matmul. */
+int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b,
+                       const void *vo_a, const void *vo_b);
+
+/* Orbital moments: single Chebyshev expansion with a fixed left state,
+ *   mu_n = sum_k left(k)^H T_{n-1}(H~)|psiref>(k),  n = 1..lld.
+ * left, psiref: (nb, nb, kk) complex(rp) atom-major; mu: (nb, nb, lld). */
+int rsrec_orbital_moments(rsrec_ctx *ctx, const void *left, const void *psiref,
+                          int lld, double a, double b, void *mu);
+
+/* --- structured (FFT stencil + correction) acceleration ------------------ */
+/* Map the clust onto a regular lattice grid and switch the matvec to
+ *      H = Stencil(ee[:, :, :, t_ref])  +  dH,   dH = H_true - H_stencil
+ * The stencil is evaluated as a zero-padded linear convolution (cuFFT on
+ * the GPU): vacuum cells carry psi = 0, so OPEN BOUNDARIES ARE AUTOMATIC.
+ * dH collects every deviating row -- the hall impurity region, atoms of
+ * type /= t_ref, irregular neighbour patterns -- and is applied with the
+ * block-sparse batched-GEMM machinery. Bit-compatible with the ELL backend
+ * (validated to machine precision); profitable when most rows are bulk.
+ *
+ *   coords        : (3, kk) INTEGER lattice coordinates of each atom
+ *                   (any consistent integer cell indexing; one atom per
+ *                   cell -- multi-atom bases are not supported yet)
+ *   use_structured: 1 = enable, 0 = revert to the block-ELL backend
+ *
+ * Call AFTER rsrec_set_hamiltonian (and after rsrec_set_velocity if the
+ * stochastic driver will be used). Requires nmax < kk (a bulk must exist).
+ * Re-call after each Hamiltonian upload to refresh the stencil tables.     */
+int rsrec_set_grid(rsrec_ctx *ctx, const int *coords, int use_structured);
+
+/* --- Chebyshev arithmetic precision --------------------------------------
+ * prec = 0 (DEFAULT): the block-Chebyshev driver runs in COMPLEX SINGLE
+ *          precision on a device-resident fused engine. KPM is robust in
+ *          fp32 (iterates bounded on [-1,1], Jackson damping suppresses
+ *          high-order noise; cf. Weisse et al. RMP 78, 275; KITE, GPUQT);
+ *          validated here to ~1e-6 relative on the moments. On FP64-capped
+ *          GPUs (GeForce/RTX A-series: FP64 = FP32/64) this is the only
+ *          route to large speedups.
+ * prec = 1: full double precision, bit-comparable with the CPU reference.
+ *          Recommended once per new system as a cross-check.
+ * Affects rsrec_chebyshev_moments only; the Lanczos drivers (whose
+ * orthogonalisation is precision-sensitive) always run in fp64.            */
+int rsrec_set_precision(rsrec_ctx *ctx, int prec);
+
+/* --- Chebyshev Green-function / DOS reconstruction ------------------------
+ * GPU/GEMM port of chebyshev_green (bands.f90): for each local atom n
+ *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) * gJ(i) c_i (-i) e^{-i(i-1)acos(x)}
+ *                  / sqrt(a^2 - (E_ie - b)^2),   x = (E_ie - b)/a
+ * with the damping kernel g (Jackson gJ in the exact bands.f90 convention
+ * when kernel = NULL; otherwise the caller's vector) and
+ * c_1 = 1, c_i = 2 otherwise. The transfer matrix F(i,ie) is built once;
+ * the moment contraction is one strided-batched GEMM over atoms.
+ *
+ *   mu      : (nb, nb, n_moments, natoms) complex(rp) -- the LOCAL slice
+ *             mu_n(:,:,:,g2l_map(start_atom:end_atom)); n_moments = 2*lld+2
+ *   ene     : (nv) real(rp) energy grid; keep it inside the (a,b) window
+ *             (outside points give NaN, exactly like the CPU loop)
+ *   g0      : (nb, nb, nv, natoms) complex(rp) out -- same layout as
+ *             this%g0(:,:,1:nv, local atoms); DOS = -aimag(g0)/pi
+ * a, b are the window coefficients, a = (emax-emin)/(2-0.3),
+ * b = (emax+emin)/2, as in chebyshev_green.
+ *   kernel  : host (n_moments) double, g(0:n_moments-1) (Lorentz, none, ...);
+ *             NULL selects the inline Jackson factor (default behaviour).
+ * Precision follows rsrec_set_precision (fp32 default ~1e-6, matching the
+ * moment engine; fp64 bit-comparable with the Fortran triple loop).        */
+int rsrec_chebyshev_dos(rsrec_ctx *ctx, const void *mu, int n_moments,
+                        int natoms, const double *ene, int nv,
+                        double a, double b, const double *kernel, void *g0);
+
+/* --- Chebyshev intersite Gij at the Fermi energy (exchange contour) -------
+ * Same moment contraction as rsrec_chebyshev_dos, but F is supplied by the
+ * caller (n_moments x n_eta, complex) already evaluated at the complex
+ * energies E_f + eta_k -- the Fortran wrapper builds it with complex
+ * acos/sqrt, so no device complex transcendentals are needed. This is the
+ * GPU port of the per-pair/per-eta chebyshev_green_ij_eta loop.
+ *   mu : (nb,nb,n_moments,natoms) complex(rp); natoms = 4*pairs (combos)
+ *   F  : (n_moments,n_eta) complex(rp); g0 out: (nb,nb,n_eta,natoms)        */
+int rsrec_chebyshev_gf_eta(rsrec_ctx *ctx, const void *mu, int n_moments,
+                           int natoms, const void *F, int n_eta, void *g0);
+
+/* --- Block (Haydock) Green-function / DOS reconstruction ------------------
+ * GPU port of bgreen() (green.f90): per local atom, the matrix continued
+ * fraction G_0(E) = [(E+eta)I - a_l - b_l^H G_{l+1} b_l]^-1 (l=1..lld-1),
+ * terminated by a square-root semicircle tail from a_inf/b_inf, evaluated
+ * batched over the nv energies.
+ *   a_b, b2_b : (nb,nb,lld,natoms) complex(rp) recursion coefficients
+ *   a_inf,b_inf: (nb,natoms) real(rp) terminator DIAGONALS (a_inf(i,i),...)
+ *   ene       : (nv) real(rp) energy grid; eta = eta_re + i eta_im
+ *   sym       : 1 -> orbital-independent terminator (control%sym_term)
+ *   g0        : (nb,nb,nv,natoms) complex(rp) out; DOS = -aimag(g0)/pi
+ * Precision follows rsrec_set_precision (0=fp32, 1=fp64).                   */
+int rsrec_block_dos(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
+                    const double *a_inf, const double *b_inf,
+                    const double *ene, int nv, double eta_re, double eta_im,
+                    int natoms, int lld, int sym, void *g0);
+
+/* --- Block intersite Gij at the Fermi energy (exchange contour) -----------
+ * Same continued fraction as rsrec_block_dos but evaluated at the SINGLE
+ * energy ef for n_eta contour points eta_re[k]+i*eta_im[k] (the GPU port of
+ * the per-pair/per-eta bgreen loop in calculate_intersite_gf_eta). a_b/b2_b
+ * hold the (nb,nb,lld,natoms) intersite-pair coefficients (4 combos per pair);
+ * g0 out: (nb,nb,n_eta,natoms).                                             */
+int rsrec_block_gf_eta(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
+                       const double *a_inf, const double *b_inf, double ef,
+                       const double *eta_re, const double *eta_im, int n_eta,
+                       int natoms, int lld, int sym, void *g0);
+
+/* --- core matvec (exposed mostly for testing / custom drivers) ----------- */
+/* y = (H x - b x)/a   with x, y: (nb, nrhs, kk).  a=1,b=0 gives plain H x.
+ * which: 0 = Hamiltonian, 1 = v_a, 2 = v_b (no shift/scale applied to 1,2
+ * in the drivers; available here for completeness).                         */
+int rsrec_op_apply(rsrec_ctx *ctx, int which, const void *x, void *y,
+                   int nrhs, double a, double b);
+
+/* --- drivers -------------------------------------------------------------- */
+
+/* Chebyshev block moments, mirrors cheb_0th_mom/cheb_1st_mom/
+ * chebyshev_recur_ll for a general starting block state.
+ *   psi0  : (nb, nb, kk)  starting state (identity block on one site for
+ *           chebyshev_recur; the +/-,i sign combos on sites i,j for _ij)
+ *   lld   : number of recursion steps (control%lld)
+ *   a, b  : Chebyshev scale and shift (resolve_chebyshev_window)
+ *   mu_out: (nb, nb, 2*lld+2)  block moments, identical ordering to mu_n   */
+int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
+                            double a, double b, void *mu_out);
+
+/* Block Lanczos (Haydock) recursion, mirrors crecal_b/hop_b.
+ *   psi0   : (nb, nb, kk) starting block state
+ *   lld    : recursion steps (control%lld)
+ *   a_b    : (nb, nb, lld) out, = atemp_b
+ *   b2_b   : (nb, nb, lld) out, = b2temp_b  (B^2 BEFORE zsqr, like the CPU) */
+int rsrec_block_lanczos(rsrec_ctx *ctx, const void *psi0, int lld,
+                        void *a_b, void *b2_b, int prec);
+
+/* Scalar Lanczos, mirrors recur()/crecal()/hop() but runs all nb orbital
+ * chains of one site simultaneously as independent columns.
+ *   site_j : 1-based atom index in the clust (lattice%irec(i))
+ *   lld    : recursion steps
+ *   a_out  : (lld, nb) out  -> this%a (ll, l, i, 1)
+ *   b2_out : (lld, nb) out  -> this%b2(ll, l, i, 1)
+ * NOTE: equals the nsp==1 CPU path exactly when the spin-off-diagonal
+ * blocks of H are zero (the only regime recur() is used in).               */
+int rsrec_scalar_lanczos(rsrec_ctx *ctx, int site_j, int lld,
+                         double *a_out, double *b2_out);
+
+/* Stochastic / conductivity Chebyshev moment matrix, mirrors the non-hoh
+ * path of compute_moments_stochastic for one reference state:
+ *   left  : T_{m-1}(H~) |psiref>                       m = 1..lld
+ *   right : v_a T_{n-1}(H~) v_b |psiref>               n = 1..lld
+ *   mu_nm(:,:,n,m) = sum_k  left_m(k)^H right_n(k)
+ *   psiref: (nb, nb, kk),  mu_nm: (nb, nb, lld, lld)
+ * Memory: keeps all lld left states resident (lld*kk*nb*nb*16 bytes). The
+ * left/moment/recurrence workspace is context-owned and grows monotonically,
+ * so repeated traces do not repeat the cudaMalloc/cudaFree cycle; it is
+ * released by rsrec_destroy().                                              */
+int rsrec_stochastic_moments(rsrec_ctx *ctx, const void *psiref, int lld,
+                             double a, double b, void *mu_nm);
+
+/* Optimized transport moment request. The backend retains only the diagonal
+ * packed U(K,nb) representation on device, indexed by trace_index. If
+ * download_host is non-zero the canonical full mu_nm output is also filled;
+ * otherwise the full-moment D2H is deliberately avoided. */
+int rsrec_stochastic_moments_resident(rsrec_ctx *ctx, const void *psiref,
+                                      int lld, double a, double b,
+                                      int trace_index, int download_host,
+                                      void *mu_nm);
+/* Batched random-vector transport request. psiref contains nstates consecutive
+ * Fortran (nb,nb,kk) states and mu_nm, when requested, contains the matching
+ * nstates consecutive (nb,nb,lld,lld) moment tensors. Each state is retained
+ * at trace_index + state, with exactly the scalar estimator semantics. */
+int rsrec_stochastic_moments_resident_batch(rsrec_ctx *ctx, const void *psiref,
+                                            int nstates, int lld, double a,
+                                            double b, int trace_index,
+                                            int download_host, void *mu_nm);
+int rsrec_clear_resident_moments(rsrec_ctx *ctx);
+int rsrec_resident_count(rsrec_ctx *ctx, int *count);
+int rsrec_resident_bytes(rsrec_ctx *ctx, long long *bytes);
+
+/* Tiled GPU Kubo-Bastin reconstruction. Gamma is generated block-by-block
+ * from the production basis formula and multiplied by retained U matrices
+ * with cuBLAS ZGEMM/CGEMM. c_out is complex double for fp64 precision and
+ * complex float for fp32 precision; its Fortran layout is (NE,nb,ntrace). */
+int rsrec_reconstruct_conductivity(rsrec_ctx *ctx, const double *energy,
+                                    int n_energy, int moments, double a,
+                                    double b, double factor, int ntrace,
+                                    int energy_block, void *c_out,
+                                    double *gamma_seconds,
+                                    double *gamma_basis_seconds,
+                                    double *gamma_fill_seconds,
+                                    double *gemm_seconds,
+                                    double *result_d2h_seconds,
+                                    long long *gamma_h2d_bytes,
+                                    long long *gamma_block_bytes,
+                                    long long *result_d2h_bytes,
+                                    int *actual_energy_block);
+
+/* Timing for the most recent stochastic-moment request.  The core interval
+ * excludes the host/device copies of psiref and mu_nm.  Bytes describe those
+ * same synchronous copies and are useful for a stage-level transport profile.
+ * Values are zero until a stochastic request has completed. */
+int rsrec_stochastic_profile(rsrec_ctx *ctx, double *h2d_seconds,
+                             double *cheb_seconds, double *d2h_seconds,
+                             double *conversion_seconds,
+                             double *mu_pack_seconds,
+                             long long *h2d_bytes, long long *d2h_bytes,
+                             long long *mu_pack_bytes);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* RSREC_H */

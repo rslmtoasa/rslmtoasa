@@ -28,17 +28,28 @@ module lattice_mod
    use globals_mod
    use control_mod
    use string_mod
+   use basis_mod, only: norb
    use math_mod
    use precision_mod, only: rp
    use symbolic_atom_mod, only: symbolic_atom, array_of_symbolic_atoms
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
+   use timer_mod, only: g_timer
+   use strux_lib, only: strux_compute, strux_lmto47_screening, strux_lmto47_autoalpha_screening, &
+      strux_options, strux_result, STRUX_METHOD_LMTO47, STRUX_LMTO47_IALPHA_MANUAL, &
+      STRUX_LMTO47_IALPHA_SIGMA, STRUX_LMTO47_IALPHA_FITD
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    implicit none
 
    private
+
+   real(rp), parameter :: default_screening_alpha_values(4) = [0.3485_rp, 0.0530_rp, 0.0107_rp, 0.00674_rp]
+   ! Exact l-resolved target used by the legacy MICHA/SHLDCH backend.
+   ! Keep this separate from the newer strux default table: the legacy path
+   ! has historically used distinct higher-channel values.
+   real(rp), parameter :: legacy_micha_alpha(0:3) = [0.3485_rp, 0.05303_rp, 0.010714_rp, 0.00337_rp]
 
    !> Module´s main structure
    type, public :: lattice
@@ -144,15 +155,21 @@ module lattice_mod
       integer :: kk
 
       !> TODO
-      !> Clust coordinates
+      !> Clust coordinates (expanded cluster)
       !>
-      !> Clust coordinates
+      !> ’cr’ holds the fully expanded cluster coordinates (cartesian coordinates)
+      !> after the Bravais/cluster build. Shape is (3, kk) where ’kk’ is the
+      !> actual number of atoms in the constructed cluster. During construction
+      !> a temporary local array with capacity (3, ndim) is often used and then
+      !> moved into ’this%cr’. We shrink ’this%cr’ to (3,kk) as soon as ’kk’ is
+      !> known to avoid holding a large buffer unnecessarily.
       real(rp), dimension(:, :), allocatable :: cr
 
       !> TODO
-      !> Clust coordinates
+      !> Clust coordinates (primitive cell / basis)
       !>
-      !> Clust coordinates
+      !> ’crd’ stores the primitive cell (basis) coordinates (3, ntot). It is
+      !> used as the starting point when expanding to the cluster (cr).
       real(rp), dimension(:, :), allocatable :: crd
       !> Clust atom number
       integer, dimension(:), allocatable :: ham_i
@@ -175,6 +192,7 @@ module lattice_mod
       !>TODO
       !> Nmax
       integer :: nmax
+
 
       !> TODO
       !> Atom number for calculation.
@@ -209,10 +227,31 @@ module lattice_mod
       !> Neighbouring map for each atom type
       integer, dimension(:, :), allocatable :: nn
 
+      !> Maximum number of neighbours found in current structure map.
+      integer :: nn_max
+
       !> Structure constant
       complex(rp), dimension(:, :, :, :), allocatable :: sbar
+      !> Structure constant derivative
+      complex(rp), dimension(:, :, :, :), allocatable :: sdot
       !> Vectors in the structure constant
       real(rp), dimension(:, :), allocatable :: sbarvec
+      !> Screening constants for the local strux solve cluster
+      real(rp), dimension(:, :, :), allocatable :: alpha
+      !> Screening constant derivatives for the local strux solve cluster
+      real(rp), dimension(:, :, :), allocatable :: alpha_dot
+      !> Structure-constant backend selector
+      character(len=16) :: strux_backend
+      !> Screening mode for the strux backend
+      character(len=16) :: screening
+      !> Request derivative structure constants from strux
+      logical :: strux_want_sdot
+      !> Multiplier for the solve-cluster radius squared used by strux
+      real(rp) :: strux_solve_scale
+      !> Global l-resolved screening constants for manual mode
+      real(rp), dimension(:), allocatable :: screening_alpha
+      !> Global l-resolved normalized hard-core radii for sigma mode
+      real(rp), dimension(:), allocatable :: screening_sigma
       ! Variables to build clust for bulk calculation
 
       !> TODO
@@ -225,10 +264,18 @@ module lattice_mod
       !>
       !> Primitive vectors in units of lattice parameter \ref alat
       real(rp), dimension(3, 3) :: a
+      !> Inverse lattice matrix in Cartesian coordinates (if available).
+      real(rp), dimension(3, 3) :: a_cart_inv
+      !> Flag indicating whether `a_cart_inv` is valid.
+      logical :: a_cart_inv_ready
       !> Variables to handle periodic boundary conditions
       !> 
       !> Variables to handle periodic boundary conditions
       logical :: pbc
+      !> Flag to reorder the bulk cluster along a Morton (Z-order) space-filling
+      !> curve to improve data locality in the recursion/Chebyshev kernels.
+      !> Default .false. (preserves legacy lattice-scan ordering).
+      logical :: morton_sfc
       logical :: b1, b2, b3
       integer :: n1, n2, n3  
       !> TODO
@@ -276,6 +323,40 @@ module lattice_mod
       !> Number of layers
       integer :: nlay
 
+      !> B7.5 (calctype=’L’): number of FROZEN atomic layers of region A (the
+      !> low-z semi-infinite reference) and of region B (the high-z one). The
+      !> active zone is whatever lies between them, so the layer stack is
+      !>     nlay_a  frozen A | nlay  active | nlay_b  frozen B
+      !> and the total layer count is nlay_a + nlay + nlay_b.
+      !>
+      !> These are the LATTICE-side copies, read from the &lattice namelist.
+      !> `charge%nlay_a`/`nlay_b` (from &charge) are the row counts the region
+      !> registry partitions on and are deliberately kept separate: they count
+      !> SITES (registry rows), while these count LAYERS. For a one-atom-per-
+      !> layer cluster the two coincide; in general they do not, and conflating
+      !> them would silently mis-place the A/active boundary.
+      integer :: nlay_a, nlay_b
+
+      !> B7.6 (calctype=’L’): what region B physically IS. Two values:
+      !>
+      !>   ’metal’  (default) region B is a second metallic reference, loaded
+      !>            from its own converged parameter set through &atoms
+      !>            label(:), exactly as region A is. This is the A | B
+      !>            geometry and the pre-B7.6 behaviour.
+      !>   ’vacuum’ region B is semi-infinite vacuum. Its frozen parameters
+      !>            are NOT read from a label; they are generated per run by
+      !>            `vacuum_lead` from the empty-sphere radius and the vacuum
+      !>            level (B7 §1.6), and regenerated whenever the alignment
+      !>            solver moves that level. This is the A | vacuum geometry.
+      !>
+      !> The distinction is confined to where region B’s frozen parameters
+      !> COME FROM and to the region kind the registry records. Layer binning,
+      !> structure constants and the recursion are unaware of it -- B7 §0.2 is
+      !> explicit that the Green-function machinery is region-agnostic and
+      !> that a vacuum Green function is an ordinary one whose frozen
+      !> parameters happen to describe an empty lattice.
+      character(len=16) :: region_b_kind
+
       !> TODO
       !> Surface indexes
       integer :: dx, dy, dz, dw
@@ -321,10 +402,12 @@ module lattice_mod
       procedure :: build_from_lattice
       procedure :: restore_to_default
       procedure :: bravais
+      procedure :: morton_reorder_bulk
       procedure :: build_data
       procedure :: build_clusup
       procedure :: build_surf
       procedure :: build_surf_full
+      procedure :: build_interface_full
       procedure :: newclu
       procedure :: structb
       procedure :: atomlist
@@ -336,6 +419,15 @@ module lattice_mod
       procedure :: remd
       procedure :: nncal
       procedure, private :: dbar1
+      procedure, private :: publish_legacy_screening_alpha
+      procedure, private :: structb_strux
+      procedure, private :: structb_strux_local
+      procedure, private :: init_strux_storage
+      procedure, private :: build_strux_inputs
+      procedure, private :: default_screening_alpha
+      procedure, private :: build_hcr
+      procedure, private :: build_rmt
+      procedure, private :: load_symbolic_atoms_if_needed
       procedure :: clusba
       procedure :: calculate_nbas
       procedure :: print_state
@@ -349,773 +441,157 @@ module lattice_mod
       procedure :: constructor
    end interface lattice
 
-contains
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Constructor
-   !
-   !> @param[in] fname Namelist file
-   !> @return type(lattice)
-   !---------------------------------------------------------------------------
-   function constructor(control_obj) result(obj)
+   interface
+   !> @brief Construct a lattice object from an initialized control object.
+   !> @details Wires the lattice to the run control state, restores default
+   !>          geometry/structure-constant storage, and reads lattice input.
+   !> @param[in] control_obj Control object that owns the input-file name and run options.
+   !> @return Initialized lattice object.
+   module function constructor(control_obj) result(obj)
       type(lattice) :: obj
       type(control), target, intent(in) :: control_obj
 
-      obj%control => control_obj
-
-      call obj%restore_to_default()
-      call obj%build_from_file()
    end function constructor
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Destructor
-   !---------------------------------------------------------------------------
-   subroutine destructor(this)
+   !> @brief Finalize a lattice object.
+   !> @details Releases cluster, neighbor, surface, impurity, screening, and
+   !>          structure-constant arrays owned by the object.
+   !> @param[inout] this Lattice object being finalized.
+   module subroutine destructor(this)
       type(lattice) :: this
-#ifdef USE_SAFE_ALLOC
-      if (allocated(this%ct)) call g_safe_alloc%deallocate('lattice.ct', this%ct)
-      if (allocated(this%cr)) call g_safe_alloc%deallocate('lattice.cr', this%cr)
-      if (allocated(this%crd)) call g_safe_alloc%deallocate('lattice.crd', this%crd)
-      if (allocated(this%iu)) call g_safe_alloc%deallocate('lattice.iu', this%iu)
-      if (allocated(this%ib)) call g_safe_alloc%deallocate('lattice.ib', this%ib)
-      if (allocated(this%irec)) call g_safe_alloc%deallocate('lattice.irec', this%irec)
-      if (allocated(this%izp)) call g_safe_alloc%deallocate('lattice.izp', this%izp)
-      if (allocated(this%iz)) call g_safe_alloc%deallocate('lattice.iz', this%iz)
-      if (allocated(this%num)) call g_safe_alloc%deallocate('lattice.num', this%num)
-      if (allocated(this%no)) call g_safe_alloc%deallocate('lattice.no', this%no)
-      if (allocated(this%z)) call g_safe_alloc%deallocate('lattice.z', this%z)
-      if (allocated(this%izpsurf)) call g_safe_alloc%deallocate('lattice.izpsurf', this%izpsurf)
-      if (allocated(this%izsurf)) call g_safe_alloc%deallocate('lattice.izsurf', this%izsurf)
-      if (allocated(this%nosurf)) call g_safe_alloc%deallocate('lattice.nosurf', this%nosurf)
-      if (allocated(this%crsurf)) call g_safe_alloc%deallocate('lattice.crsurf', this%crsurf)
-      if (allocated(this%inclu)) call g_safe_alloc%deallocate('lattice.inclu', this%inclu)
-      if (allocated(this%izpo)) call g_safe_alloc%deallocate('lattice.izpo', this%izpo)
-      if (allocated(this%acr)) call g_safe_alloc%deallocate('lattice.acr', this%acr)
-      if (allocated(this%atlist)) call g_safe_alloc%deallocate('lattice.atlist', this%atlist)
-      if (allocated(this%nn)) call g_safe_alloc%deallocate('lattice.nn', this%nn)
-      if (allocated(this%sbar)) call g_safe_alloc%deallocate('lattice.sbar', this%sbar)
-      if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
-      if (allocated(this%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', this%ijpair)
-      if (allocated(this%ijktrio)) call g_safe_alloc%deallocate('lattice.ijktrio', this%ijktrio)
-      if (allocated(this%natoms_layer)) call g_safe_alloc%deallocate('lattice.natoms_layer', this%natoms_layer)
-#else
-      if (allocated(this%ct)) deallocate (this%ct)
-      if (allocated(this%cr)) deallocate (this%cr)
-      if (allocated(this%crd)) deallocate (this%crd)
-      if (allocated(this%iu)) deallocate (this%iu)
-      if (allocated(this%ib)) deallocate (this%ib)
-      if (allocated(this%irec)) deallocate (this%irec)
-      if (allocated(this%izp)) deallocate (this%izp)
-      if (allocated(this%iz)) deallocate (this%iz)
-      if (allocated(this%num)) deallocate (this%num)
-      if (allocated(this%no)) deallocate (this%no)
-      if (allocated(this%z)) deallocate (this%z)
-      if (allocated(this%izpsurf)) deallocate (this%izpsurf)
-      if (allocated(this%izsurf)) deallocate (this%izsurf)
-      if (allocated(this%nosurf)) deallocate (this%nosurf)
-      if (allocated(this%crsurf)) deallocate (this%crsurf)
-      if (allocated(this%inclu)) deallocate (this%inclu)
-      if (allocated(this%izpo)) deallocate (this%izpo)
-      if (allocated(this%acr)) deallocate (this%acr)
-      if (allocated(this%atlist)) deallocate (this%atlist)
-      if (allocated(this%nn)) deallocate (this%nn)
-      if (allocated(this%sbar)) deallocate (this%sbar)
-      if (allocated(this%sbarvec)) deallocate (this%sbarvec)
-      if (allocated(this%ijpair)) deallocate (this%ijpair)
-      if (allocated(this%ijktrio)) deallocate (this%ijktrio)
-      if (allocated(this%natoms_layer)) deallocate (this%natoms_layer)
-#endif
    end subroutine destructor
 
-   ! Member functions
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Read parameters from input file
-   !
-   !> @param[in] fname Namelist file
-   !---------------------------------------------------------------------------
-   subroutine build_from_file(this, fname)
+   !> @brief Read the &lattice namelist and build derived lattice data.
+   !> @details Parses bulk/surface/impurity geometry, cluster cutoffs, periodic
+   !>          boundary flags, and strux-screening options, then prepares
+   !>          primitive-cell and cluster state for later stages.
+   !> @param[inout] this Lattice object to populate.
+   !> @param[in] fname Optional input file; defaults to this%control%fname.
+   !> @note This is an input boundary and may raise fatal diagnostics for invalid options.
+   module subroutine build_from_file(this, fname)
       class(lattice), intent(inout) :: this
       character(len=*), intent(in), optional :: fname
       ! variables associated with the reading processes
       integer :: iostatus, funit, i
       character(len=sl) :: fname_
-
-      include 'include_codes/namelists/lattice.f90'
-
-      if (present(fname)) then
-         fname_ = fname
-         this%control%fname = fname
-      else
-         fname_ = this%control%fname
-      end if
-
-      ! Save previous values
-      ! Bulk initialization
-      ndim = this%ndim
-      npe = this%npe
-      rc = this%rc
-      r2 = this%r2
-      ntype = this%ntype
-      crystal_sym = this%crystal_sym
-      a = this%a
-      wav = this%wav
-      celldm = this%celldm
-      b1 = this%b1
-      b2 = this%b2
-      b3 = this%b3
-      n1 = this%n1 
-      n2 = this%n2
-      n3 = this%n3
-      pbc = this%pbc
-
-      if (size(this%izp) .ne. this%ndim) then
-#ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.izp', this%izp)
-         call g_safe_alloc%allocate('lattice.izp', this%izp, (/this%ndim/))
-#else
-         deallocate (this%izp)
-         allocate (this%izp(this%ndim))
-#endif
-      end if
-      if (size(this%no) .ne. this%ndim) then
-#ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.no', this%no)
-         call g_safe_alloc%allocate('lattice.no', this%no, (/this%ndim/))
-#else
-         deallocate (this%no)
-         allocate (this%no(this%ndim))
-#endif
-      end if
-      if (size(this%crd) .ne. 3*this%ndim) then
-#ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.crd', this%crd)
-         call g_safe_alloc%allocate('lattice.crd', this%crd, (/3, this%ndim/))
-#else
-         deallocate (this%crd)
-         allocate (this%crd(3, this%ndim))
-#endif
-      end if
-
-      call move_alloc(this%izp, izp)
-      call move_alloc(this%no, no)
-      call move_alloc(this%crd, crd)
-
-      ! Impurity initialization
-      nclu = this%nclu
-      if (size(this%inclu) .ne. 3*this%nclu) then
-#ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.inclu', this%inclu)
-         call g_safe_alloc%allocate('lattice.inclu', this%inclu, (/this%nclu, 3/))
-#else
-         deallocate (this%inclu)
-         allocate (this%inclu(this%nclu, 3))
-#endif
-      end if
-      call move_alloc(this%inclu, inclu)
-
-      ! Surface initialization
-      surftype = this%surftype
-      nlay = this%nlay
-      ntype = this%ntype
-      call move_alloc(this%ct, ct)
-      njij = this%njij
-      call move_alloc(this%ijpair, ijpair)
-      njijk = this%njijk
-      call move_alloc(this%ijktrio, ijktrio)
-
-      ! Pre-size ct before the first read. ntype is unknown at this point
-      ! (local ntype = 0 from restore_to_default), so ct has size 0. 1000 is
-      ! a safe upper bound for atom types; the resize check below will shrink
-      ! it to the actual ntype read from the file.
-      if (.not. allocated(ct)) then
-         allocate (ct(size(izp)))
-      else if (size(ct) == 0) then
-         deallocate (ct)
-         allocate (ct(size(izp)))
-      end if
-
-      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
-      if (iostatus /= 0) then
-         call g_logger%fatal('file '//fmt('A', trim(fname_))//'not found', __FILE__, __LINE__)
-      end if
-
-      read (funit, nml=lattice, iostat=iostatus)
-
-      if (size(izp) .ne. ndim) then
-         deallocate (izp)
-         allocate (izp(ndim))
-      end if
-      if (size(no) .ne. ndim) then
-         deallocate (no)
-         allocate (no(ndim))
-      end if
-      if (size(crd) .ne. 3*ndim) then
-         deallocate (crd)
-         allocate (crd(3, ndim))
-      end if
-      if (size(inclu) .ne. 3*nclu) then
-         deallocate (inclu)
-         allocate (inclu(nclu, 3))
-      end if
-
-      if (size(ijpair) .ne. 2*njij) then
-         deallocate (ijpair)
-         allocate (ijpair(njij, 2))
-      end if
-
-      if (size(ct) .ne. ntype) then
-         deallocate (ct)
-         allocate (ct(ntype))
-      end if
-
-      if (size(ijktrio) .ne. 2*njijk) then
-         deallocate (ijktrio)
-         allocate (ijktrio(njijk, 6))
-      end if
-
-      rewind (funit)
-      read (funit, nml=lattice, iostat=iostatus)
-      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error(fmt('iostatus = , I0', iostatus), __FILE__, __LINE__)
-      end if
-      close (funit)
-
-      ! General intialization
-
-      this%r2 = r2
-      this%alat = alat
-      this%celldm = celldm
-      this%ntype = ntype
-      this%pbc = pbc
-      this%b1 = b1
-      this%b2 = b2
-      this%b3 = b3
-      this%n1 = n1
-      this%n2 = n2
-      this%n3 = n3
-
-      call move_alloc(ct, this%ct)
-      ! Reads Wigner-Seitz radius if available
-      this%wav = wav
-      ! Bulk initialization
-      this%ndim = ndim
-      this%npe = npe
-      this%rc = rc
-      this%crystal_sym = crystal_sym
-      this%a = a
-      call move_alloc(izp, this%izp)
-      call move_alloc(no, this%no)
-      call move_alloc(crd, this%crd)
-
-      ! Impurity initialization
-      this%nclu = nclu
-      call move_alloc(inclu, this%inclu)
-
-      ! Surface initialization
-      this%surftype = surftype
-      this%nlay = nlay
-
-      ! Exchange calculation initialization
-      call move_alloc(ijpair, this%ijpair)
-      this%njij = njij
-
-      ! Spin-lattice calculation initialization
-      call move_alloc(ijktrio, this%ijktrio)
-      this%njijk = njijk
-
-      ! Condition to store the trios in the original njij type
-
-      if ((njijk .ne. 0) .and. (njij .eq. 0)) then
-         this%njij = 3*this%njijk
-#ifdef USE_SAFE_ALLOC
-         if (allocated(this%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', this%ijpair)
-         call g_safe_alloc%allocate('lattice.ijpair', this%ijpair, (/this%njij, 2/))
-#else
-         if (allocated(this%ijpair)) deallocate (this%ijpair)
-         allocate (this%ijpair(this%njij, 2))
-#endif
-         do i = 1, this%njijk
-            this%ijpair(3*(i - 1) + 1, 1) = int(this%ijktrio(i, 1))
-            this%ijpair(3*(i - 1) + 1, 2) = int(this%ijktrio(i, 2))
-            this%ijpair(3*(i - 1) + 2, 1) = int(this%ijktrio(i, 1))
-            this%ijpair(3*(i - 1) + 2, 2) = int(this%ijktrio(i, 3))
-            this%ijpair(3*(i - 1) + 3, 1) = int(this%ijktrio(i, 2))
-            this%ijpair(3*(i - 1) + 3, 2) = int(this%ijktrio(i, 3))
-         end do
-      else if ((this%njijk .ne. 0) .and. (this%njij .ne. 0)) then
-         call g_logger%fatal('not possible to calculate Jij and Jijk at the same time', __FILE__, __LINE__)
-      end if
-
-      ! checks
-      call this%check_all()
+      real(rp), allocatable :: ct_first(:), screening_alpha_first(:), screening_sigma_first(:)
 
    end subroutine build_from_file
 
-   subroutine build_from_lattice(this)
+   !> @brief Rebuild lattice state from already installed lattice members.
+   !> @details Reuses current geometry and namelist-derived settings to run the
+   !>          same cluster, primitive-cell, and structure setup normally reached
+   !>          from build_from_file.
+   !> @param[inout] this Lattice object whose current members provide the input state.
+   module subroutine build_from_lattice(this)
       class(lattice), intent(inout) :: this
-      integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus
-      real(rp) :: r2
+      integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus, nsite_guess
+      real(rp) :: r2, strux_solve_scale
       real(rp), dimension(3, 3) :: a
-      real(rp), dimension(:), allocatable :: ct
+      real(rp), dimension(:), allocatable :: ct, screening_alpha, screening_sigma
+      real(rp), dimension(:), allocatable :: ct_first, screening_alpha_first, screening_sigma_first
       integer, dimension(:), allocatable :: izp, no, iu, ib, irec
       real(rp), dimension(:, :), allocatable :: crd
-      namelist /lattice/ r2, nbulk_bulk, ntot, nbas, nrec, &
-         a, crd, &
-         ct, izp, no, iu, ib, irec, ct
-
-      call move_alloc(this%crd, crd)
-      call move_alloc(this%izp, izp)
-      call move_alloc(this%no, no)
-
-      open (newunit=funit, file='lattice.nml', action='read', iostat=iostatus, status='old')
-      if (iostatus /= 0) then
-         call g_logger%fatal('file lattice.nml not found', __FILE__, __LINE__)
-      end if
-
-      ! Pre-allocate ib, iu, irec before the sizing read to avoid undefined
-      ! behaviour on compilers that write into unallocated storage when these
-      ! variables appear in the namelist file. crd was moved from this%crd and
-      ! has size (3, ntot), so its second dimension is a safe upper bound.
-      if (allocated(crd)) then
-         allocate (ib(size(crd, 2)), iu(size(crd, 2)), irec(size(crd, 2)))
-      else
-         allocate (ib(1), iu(1), irec(1))
-      end if
-      read (funit, nml=lattice, iostat=iostatus)
-      deallocate (ib, iu, irec)
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.ib', ib, (/ntot/))
-      call g_safe_alloc%allocate('lattice.iu', iu, (/ntot/))
-      call g_safe_alloc%allocate('lattice.irec', irec, (/nrec/))
-!      call g_safe_alloc%allocate('lattice.ct', ct, (/ntype/))
-#else
-      allocate (ib(ntot), iu(ntot), irec(nrec)) !, ct(ntype))
-#endif
-      rewind (funit)
-      read (funit, nml=lattice, iostat=iostatus)
-      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error(fmt('iostatus = , I0', iostatus), __FILE__, __LINE__)
-      end if
-      close (funit)
-
-      this%nbulk_bulk = nbulk_bulk
-      this%ntot = ntot
-      !this%ntype = ntype
-      this%nbas = nbas
-      this%nrec = nrec
-      !this%r2 = r2
-      this%nbulk = 0
-
-      !call move_alloc(ct, this%ct)
-      call move_alloc(izp, this%izp)
-      call move_alloc(no, this%no)
-      call move_alloc(ib, this%ib)
-      call move_alloc(irec, this%irec)
-      call move_alloc(iu, this%iu)
-      call move_alloc(crd, this%crd)
-      this%a = a
+      character(len=16) :: strux_backend, screening
+      logical :: strux_want_sdot
    end subroutine build_from_lattice
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Build structure according to crystal symetry provided
-   !---------------------------------------------------------------------------
-   subroutine build_data(this)
+
+   !> @brief Compute primitive-cell derived quantities.
+   !> @details Converts lattice vectors to internal units, computes cell volume
+   !>          and Wigner-Seitz radius, and prepares inverse Cartesian lattice
+   !>          data used by periodic wrapping and neighbor searches.
+   !> @param[inout] this Lattice object whose a/alat/celldm state is updated.
+   module subroutine build_data(this)
       class(lattice), intent(inout) :: this
       !> Local variables
       real(rp), dimension(3, 3) :: a
       integer :: i, j
 
-      select case (this%crystal_sym)
-      case ('bcc')
-         a(:, 1) = [-0.50000000, 0.50000000, 0.50000000]
-         a(:, 2) = [0.50000000, -0.50000000, 0.50000000]
-         a(:, 3) = [0.50000000, 0.50000000, -0.50000000]
-         this%crd(:, 1) = [0.0, 0.0, 0.0]
-         this%izp(1) = 1
-         this%no(1) = 1
-         this%nbulk_bulk = 1
-         this%ntot = 1
-         if (this%control%calctype == 'B') then
-            this%nrec = this%nbulk_bulk
-            this%nbulk = 0
-            this%ntype = 1
-            this%nbas = this%ntot
-#ifdef USE_SAFE_ALLOC
-            call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) ! Now ct is defined at &lattice
-#endif
-            this%iu(1) = 1
-            this%ib(1) = 1
-            this%irec(1) = 1
-!            this%ct(:) = this%alat + 0.1d0
-         end if
-         this%a = a
-      case ('b2')
-         a(:, 1) = [1.00000000, 0.00000000, 0.00000000]
-         a(:, 2) = [0.00000000, 1.00000000, 0.00000000]
-         a(:, 3) = [0.00000000, 0.00000000, 1.00000000]
-         this%crd(:, 1) = [0.0, 0.0, 0.0]
-         this%crd(:, 2) = [0.5, 0.5, 0.5]
-         this%izp(1) = 1
-         this%izp(2) = 2
-         this%no(1) = 1
-         this%no(2) = 2
-         this%nbulk_bulk = 2
-         this%ntot = 2
-         if (this%control%calctype == 'B') then
-            this%nrec = this%nbulk_bulk
-            this%nbulk = 0
-            this%ntype = 2
-            this%nbas = this%ntot
-#ifdef USE_SAFE_ALLOC
-            call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-            this%iu(1) = 1
-            this%iu(2) = 2
-            this%ib(1) = 1
-            this%ib(2) = 2
-            this%irec(1) = 1
-            this%irec(2) = 2
-!            this%ct(:) = this%alat + 0.3d0
-         end if
-         this%a = a
-      case ('fcc')
-         a(:, 1) = [0.00000000, 0.50000000, 0.50000000]
-         a(:, 2) = [0.50000000, 0.00000000, 0.50000000]
-         a(:, 3) = [0.50000000, 0.50000000, 0.00000000]
-         this%crd(:, 1) = [0.0, 0.0, 0.0]
-         this%izp(1) = 1
-         this%no(1) = 1
-         this%nbulk_bulk = 1
-         this%ntot = 1
-         if (this%control%calctype == 'B') then
-            this%nrec = this%nbulk_bulk
-            this%nbulk = 0
-            this%ntype = 1
-            this%nbas = this%ntot
-#ifdef USE_SAFE_ALLOC
-            call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-            this%iu(1) = 1
-            this%ib(1) = 1
-            this%irec(1) = 1
-!            this%ct(:) = this%alat + 0.1d0
-         end if
-         this%a = a
-      case ('fcc2')
-         a(:, 1) = [0.00000000, 0.50000000, 0.50000000]
-         a(:, 2) = [0.50000000, 0.00000000, 0.50000000]
-         a(:, 3) = [0.50000000, 0.50000000, 0.00000000]
-         this%crd(:, 1) = [0.00, 0.00, 0.00]
-         this%crd(:, 2) = [0.50, 0.50, 0.50]
-         this%izp(:) = [1, 2]
-         this%no(:) = [1, 2]
-         this%nbulk_bulk = 2
-         this%ntot = 2
-         if (this%control%calctype == 'B') then
-            this%nrec = this%nbulk_bulk
-            this%nbulk = 0
-            this%ntype = 2
-            this%nbas = this%ntot
-#ifdef USE_SAFE_ALLOC
-            call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-            this%iu(:) = [1, 2]
-            this%ib(:) = [1, 2]
-            this%irec(:) = [1, 2]
-!            this%ct(:) = this%alat - 1.5d0
-!            this%r2 = this%ct(1)**2
-         end if
-         this%a = a
-      case ('fcc3')
-         a(:, 1) = [0.50000000, 0.50000000, 0.00000000]
-         a(:, 2) = [0.50000000, 0.00000000, 0.50000000]
-         a(:, 3) = [0.00000000, 0.50000000, 0.50000000]
-         this%crd(:, 1) = [0.25000000, 0.25000000, 0.25000000]
-         this%crd(:, 2) = [0.00000000, 0.00000000, 0.00000000]
-         this%crd(:, 3) = [0.50000000, 0.50000000, 0.50000000]
-         this%crd(:, 4) = [-0.25000000, -0.25000000, -0.25000000]
-         this%izp(1:4) = [1, 2, 3, 4]
-         this%no(1:4) = [1, 2, 3, 4]
-         this%nbulk_bulk = 4
-         this%ntot = 4
-         if (this%control%calctype == 'B') then
-            this%nrec = this%nbulk_bulk
-            this%nbulk = 0
-            this%ntype = 4
-            this%nbas = this%ntot
-#ifdef USE_SAFE_ALLOC
-            call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-            this%iu(1:4) = [1, 2, 3, 4]
-            this%ib(1:4) = [1, 2, 3, 4]
-            this%irec(1:4) = [1, 2, 3, 4]
-!            this%ct(1:4) = this%alat - 1.5d0
-!            this%r2 = this%ct(1)**2
-         end if
-         this%a = a
-      case ('hcp')
-         if (this%celldm == 0.0d0) then
-            print *, 'WARNING: hcp structure using as default c/a = 1.633'
-            this%celldm = 1.633d0
-         end if
-         a(:, 1) = [1.00000000, 0.00000000, 0.00000000]
-         a(:, 2) = [-.50000000, 0.86602500, 0.00000000]
-         a(:, 3) = [0.00000000, 0.00000000, 0.00000000]
-         a(3, 3) = this%celldm
-         this%crd(:, 1) = [0.0, 0.0, 0.0]
-         this%crd(:, 2) = [0.0, 0.577350000, 0.00000000]
-         this%crd(3, 2) = (0.5d0)*this%celldm
-         this%nbulk_bulk = 2
-         this%ntot = 2
-         this%izp(:) = [1, 2]
-         this%no(:) = [1, 2]
-         if (this%control%calctype == 'B') then
-            this%nrec = this%nbulk_bulk
-            this%nbulk = 0
-            this%ntype = 2
-            this%nbas = this%ntot
-#ifdef USE_SAFE_ALLOC
-            call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-            call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-            this%iu(:) = [1, 2]
-            this%ib(:) = [1, 2]
-            this%irec(:) = [1, 2]
-!            this%ct(:) = this%alat + 0.1d0
-         end if
-         this%a = a
-      case ('file')
-         ! reads from input
-         call this%build_from_lattice()
-      end select
-      ! Volume in cubic Angstroms
-      this%vol = abs(dot_product(this%a(:, 3), cross_product(this%a(:, 1), this%a(:, 2))))*(this%alat**3)
-      if (this%wav .eq. 0) then
-         this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
-         write (*, *) 'wav', this%wav
-      end if
-      if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
    end subroutine build_data
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Reset all members to default
-   !---------------------------------------------------------------------------
-   subroutine restore_to_default(this, full)
+   !> @brief Reset lattice members to their default values.
+   !> @details Clears allocatable storage and restores scalar defaults; with the
+   !>          optional full flag it also clears persistent input-facing state.
+   !> @param[inout] this Lattice object to reset.
+   !> @param[in] full Optional flag requesting a full reset.
+   module subroutine restore_to_default(this, full)
       class(lattice) :: this
       logical, intent(in), optional :: full
 
-      this%ndim = 9900000
-      this%npe = 49
-      this%nclu = 0
-      this%surftype = 'none'
-      this%nlay = 0
-      this%ntype = 0
-      this%nbas = 0
-      this%wav = 0
-      this%celldm = 0.0d0
-      this%njij = 0
-      this%njijk = 0
-      this%b1 = .false.
-      this%b2 = .false.
-      this%b3 = .false.
-      this%pbc = .false.
-      this%n1 = 0
-      this%n2 = 0
-      this%n3 = 0
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.izp', this%izp, (/this%ndim/))
-      call g_safe_alloc%allocate('lattice.no', this%no, (/this%ndim/))
-      call g_safe_alloc%allocate('lattice.crd', this%crd, (/3, this%ndim/))
-      call g_safe_alloc%allocate('lattice.inclu', this%inclu, (/this%nclu, 3/))
-      call g_safe_alloc%allocate('lattice.ijpair', this%ijpair, (/this%njij, 2/))
-      call g_safe_alloc%allocate('lattice.ijktrio', this%ijktrio, (/this%njijk, 6/))
-      call g_safe_alloc%allocate('lattice.chargetrf_type', this%chargetrf_type, (/this%nbas/))
-      call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-      allocate (this%izp(this%ndim), this%no(this%ndim))
-      allocate (this%crd(3, this%ndim))
-      allocate (this%inclu(this%nclu, 3))
-      allocate (this%ijpair(this%njij, 2))
-      allocate (this%ijktrio(this%njijk, 6))
-      allocate (this%chargetrf_type(this%nbas))
-      allocate (this%ct(this%ntype))
-#endif
-
-      this%izp = 0.0d0
-      this%crd = 0.d0
-      this%inclu = 0.0d0
-      this%ijpair = 0.0d0
-      this%ijktrio = 0.0d0
-      this%chargetrf_type = 0.0d0
-      this%ct = 0.0d0
-      if (associated(this%control)) then
-         if (present(full)) then
-            if (full) then
-               call this%control%restore_to_default()
-            end if
-         end if
-      end if
-
    end subroutine restore_to_default
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Constructor
-   !---------------------------------------------------------------------------
-   subroutine bravais(this)
+   !> @brief Build the bulk Bravais cluster.
+   !> @details Expands primitive-cell sites through lattice translations, cuts
+   !>          them by the configured radius, and fills bulk cluster coordinates,
+   !>          atomic labels, and optional Morton ordering.
+   !> @param[inout] this Lattice object receiving cr/iz/num/no cluster state.
+   module subroutine bravais(this)
       class(lattice), intent(inout) :: this
       ! Local variables
       real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
+   real(rp), allocatable :: tmp(:, :)
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
 
-      inquire (unit=10, opened=isopen)
-      if (isopen) then
-         call g_logger%fatal('lattice%bravais, file clust: Unit 10 is already open', __FILE__, __LINE__)
-      else
-         open (unit=10, file='clust')
-      end if
-
-      n = this%ntot
-      ! Defining a size-like parameter for the clust before the cut
-      npe = this%npe
-      ndim = this%ndim
-      rc = this%rc
-      allocate (iz(ndim), num(ndim))
-      allocate (cr(3, ndim), crbravais(3, ndim))
-      ! Defining the cut radius
-      rs = (0.8d0*int((npe/(1.0d0))/2.0d0))**2
-      rs = dmin1(rs, rc)
-
-      npr = int((ndim/(n*1.0d0))**(1.0d0/3.0d0))
-
-      crbravais(:, :) = this%crd(:, :)
-      if (this%pbc) then
-         lcx = (this%n1 + 1)/2
-         lcy = (this%n2 + 1)/2
-         lcz = (this%n3 + 1)/2
-      else
-         lc = (npr + 1)/2
-         lcx = lc
-         lcy = lc
-         lcz = lc
-      end if
-      l = n
-      if (.not.this%pbc) then
-         this%n1 = npr; this%n2 = npr; this%n3 = npr
-      end if
-
-      do i = 1, l
-         do nx = 1, this%n1        
-            do ny = 1, this%n2 
-               do nz = 1, this%n3  
-                  if (nx .eq. lcx .and. ny .eq. lcy .and. nz .eq. lcz) go to 13
-                  n = n + 1
-!  ...........Verifies dimension NDIM.........................
-                  if (n .gt. ndim) then
-                     write (6, 600) n
-                     stop
-                  end if
-! ...............................................................
-                  crbravais(1, n) = this%crd(1, i) + (nx - lcx)*this%a(1, 1) + (ny - lcy)*this%a(1, 2) + (nz - lcz)*this%a(1, 3)
-                  crbravais(2, n) = this%crd(2, i) + (nx - lcx)*this%a(2, 1) + (ny - lcy)*this%a(2, 2) + (nz - lcz)*this%a(2, 3)
-                  crbravais(3, n) = this%crd(3, i) + (nx - lcx)*this%a(3, 1) + (ny - lcy)*this%a(3, 2) + (nz - lcz)*this%a(3, 3)
-                  this%no(n) = this%no(i)
-                  this%izp(n) = this%izp(i)
-13                continue
-               end do
-            end do
-         end do
-      end do
-      nl = l*(npr**3)
-
-      kk = 0
-      if (rc == 0.0d0) rs = npr**3
-
-      if (this%pbc) then
-         ndim = this%n1*this%n2*this%n3*l 
-         iz = this%izp
-         num = this%no
-         cr = crbravais
-         kk = n
-      else
-          do i = 1, nl
-             call cut(i, l, ndim, crbravais, cr, this%izp, iz, num, this%no, rs, kk)
-          end do
-      end if 
-
-      if (int(kk/2) /= kk/2.d0) kk = kk - 1
-
-      write (10, 300) kk
-      do k = 1, kk, 2
-         write (10, 200) (cr(1, k + i - 1), cr(2, k + i - 1), cr(3, k + i - 1), iz(k + i - 1), num(k + i - 1), i=1, 2)
-      end do
-      write (800, *) kk
-      do k = 1, kk
-         write (800, '(i5,3f14.8)') iz(k), cr(:, k)
-      end do
-
-200   format(3F14.8, 2I4, 3F14.8, 2I4)
-300   format(3X, "II =", I7)
-600   format(1X, 'K =', I7, 5X, 'redefine the dimension ndim')
-
-      this%kk = kk
-      call move_alloc(cr, this%cr)
-      call move_alloc(iz, this%iz)
-      call move_alloc(num, this%num)
-      close (10)
    end subroutine bravais
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Constructor
-   !---------------------------------------------------------------------------
-   subroutine build_clusup(this)
+   !> @brief Reorder the bulk cluster by Morton space-filling-curve key.
+   !> @details Sorts cluster atoms in normalized Cartesian space to improve
+   !>          locality for real-space recursion kernels while preserving the
+   !>          per-atom coordinate/type arrays as a consistent permutation.
+   !> @param[inout] this Lattice object whose bulk cluster arrays are reordered.
+   module subroutine morton_reorder_bulk(this)
+      class(lattice), intent(inout) :: this
+      integer :: kk, i, n
+      integer, allocatable :: perm(:)
+      integer(8), allocatable :: key(:)
+      real(rp) :: cmin(3), cmax(3), span(3), inv_span(3)
+      integer, parameter :: nbits = 21      ! 21 bits/axis -> 63-bit Morton key
+      integer, parameter :: gmax = 2**nbits - 1
+      real(rp), allocatable :: cr_new(:, :)
+      integer, allocatable :: iz_new(:), num_new(:)
+      integer :: q(3)
+
+   end subroutine morton_reorder_bulk
+
+   !> @brief Encode a 3D integer grid coordinate as a Morton key.
+   !> @param[in] x Grid coordinate on the first axis.
+   !> @param[in] y Grid coordinate on the second axis.
+   !> @param[in] z Grid coordinate on the third axis.
+   !> @param[in] nbits Number of bits to interleave from each coordinate.
+   !> @return Interleaved 64-bit Morton code.
+   module pure function morton_encode3(x, y, z, nbits) result(code)
+      integer, intent(in) :: x, y, z, nbits
+      integer(8) :: code
+      integer :: b
+   end function morton_encode3
+
+   !> @brief Sort an integer permutation by associated Morton keys.
+   !> @details Uses an in-place heapsort so key and permutation arrays are kept
+   !>          synchronized without extra sorting dependencies.
+   !> @param[inout] key Keys to sort in ascending order.
+   !> @param[inout] perm Permutation entries carried with each key.
+   !> @param[in] n Number of active entries in key and perm.
+   module subroutine sort_by_key(key, perm, n)
+      integer(8), intent(inout) :: key(:)
+      integer, intent(inout) :: perm(:)
+      integer, intent(in) :: n
+      integer :: i, start, bottom
+      integer(8) :: tkey
+      integer :: tperm
+
+      ! Build heap then sift down (standard heapsort, O(n log n)).
+   end subroutine sort_by_key
+
+   !> @brief Prepare surface-layer cluster metadata from a bulk cluster.
+   !> @details Builds layer z positions and surface index arrays used by the
+   !>          buildsurf path before selecting the active surface atoms.
+   !> @param[inout] this Lattice object whose surface helper arrays are filled.
+   module subroutine build_clusup(this)
       class(lattice), intent(inout) :: this
       character(len=10) :: surftype
       ! Local variables
@@ -1124,100 +600,14 @@ contains
       real(rp) :: ds, ds2, new, one
       integer :: i, j, n
 
-      select case (this%crystal_sym)
-      case ('hcp')
-         read (this%surftype, *) this%dx, this%dy, this%dz, this%dw
-         if ((this%dz) .ne. (-1*(this%dx + this%dy))) then
-            this%dz = -1*(this%dx + this%dy)
-            call g_logger%fatal('Hexagonal Miller indices not right. Does it should be ['// &
-                                fmt('I0', this%dx)//fmt('I0', this%dy)//fmt('I0', this%dz)//fmt('I0', this%dw)//']?', &
-                                __FILE__, __LINE__)
-         end if
-         this%dx = (2*this%dx + this%dy)
-         this%dy = (this%dx + 2*this%dy)
-         this%dz = this%dw
-      case default
-         read (this%surftype, *) this%dx, this%dy, this%dz
-      end select
-
-!  ............Find zstep, zmin, zmax....................
-      ds = 1000.0d0; ds2 = 1000.0d0
-      select case (this%crystal_sym)
-      case ('hcp')
-         do i = 1, this%kk
-            do j = 1, this%kk
-               new = this%dx*this%cr(1, i) + this%dy*this%cr(2, i) + this%dz*this%cr(3, i)
-               one = this%dx*this%cr(2, j) + this%dy*this%cr(2, j) + this%dz*this%cr(3, j)
-               if ((abs(new - one) .gt. 1.d-6) .and. (abs(new - one) .le. ds)) then
-                  ds = abs(new - one)
-               end if
-               if ((abs(new) .le. ds2)) then
-                  ds2 = abs(new)
-               end if
-            end do
-         end do
-      case default
-         do i = 1, this%kk
-            new = this%dx*this%cr(1, i) + this%dy*this%cr(2, i) + this%dz*this%cr(3, i)
-            if ((abs(new) .gt. 1.d-6) .and. (abs(new) .le. ds)) then
-               ds = abs(new)
-            end if
-            if ((abs(new) .le. ds2)) then
-               ds2 = abs(new)
-            end if
-         end do
-      end select
-
-      this%zstep = ds
-      this%zmin = ds2 - this%zstep
-      this%zmax = ds2 + 15*this%zstep
-
-!  ......................................................
-
-      n = int((this%zmax - this%zmin)/this%zstep) + 1
-
-      allocate (z(n), izpsurf(n))
-      do i = 1, n
-         z(i) = this%zmin + ((i - 1)*this%zstep)
-      end do
-      call move_alloc(z, this%z)
-
-      do i = 1, n
-         izpsurf(i) = mod(i, this%ntot) + 1
-      end do
-
-      j = this%ntot
-      do i = 1, this%nlay
-         j = j + 1
-         izpsurf(i) = j
-      end do
-      call move_alloc(izpsurf, this%izpsurf)
-      if (this%control%calctype == 'S') then
-         this%ntype = this%nbulk_bulk + this%nlay
-         this%nbulk = this%nbulk_bulk
-         this%nrec = this%ntype - this%nbulk
-         this%nbas = 51
-#ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%nbulk/))
-         call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-         call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-         call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot)) !, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-!         this%ct(:) = this%alat + 0.1d0
-!         this%r2 = this%ct(1)**2
-      end if
-
-      this%surftype = clean_str(this%surftype)
    end subroutine build_clusup
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Cuts the cluster in the desirable direction and builds the surface cluster
-   !---------------------------------------------------------------------------
-   subroutine build_surf_full(this)
+   !> @brief Build the full surface cluster representation.
+   !> @details Selects atoms by surface orientation and layer bounds, identifies
+   !>          unique layer/type representatives, and installs the full surface
+   !>          coordinate/type arrays for downstream surface calculations.
+   !> @param[inout] this Lattice object receiving the full surface cluster.
+   module subroutine build_surf_full(this)
       class(lattice), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, natoms, nsurf, currentType, newType, newCrystalType
@@ -1238,239 +628,28 @@ contains
       real(rp) :: norm
 
       ! Initial definitions
-      natoms = this%kk
-
-      ! Open the file and read header
-      inquire (unit=10, opened=isopen)
-      if (isopen) then
-         call g_logger%fatal('lattice%build_surf, file clust: Unit 10 is already open', __FILE__, __LINE__)
-      else
-         open (unit=10, file='clust')
-      end if
-      ! Open the output for surface information
-      inquire (unit=20, opened=isopen)
-      if (isopen) then
-         call g_logger%fatal('lattice%build_surf, file clust: Unit 10 is already open', __FILE__, __LINE__)
-      else
-         open (unit=20, file='surfclu.out')
-      end if
-
-      select case (this%crystal_sym)
-      case ('hcp')
-         read (this%surftype, *) this%dx, this%dy, this%dz, this%dw
-         if ((this%dz) .ne. (-1*(this%dx + this%dy))) then
-            this%dz = -1*(this%dx + this%dy)
-            call g_logger%fatal('Hexagonal Miller indices not right. Does it should be ['// &
-                                fmt('I0', this%dx)//fmt('I0', this%dy)//fmt('I0', this%dz)//fmt('I0', this%dw)//']?', &
-                                __FILE__, __LINE__)
-         end if
-         this%dx = (2*this%dx + this%dy)
-         this%dy = (this%dx + 2*this%dy)
-         this%dz = this%dw
-      case default
-         read (this%surftype, *) this%dx, this%dy, this%dz
-      end select
-
-      ! Allocate arrays to store atom details
-      allocate (crsurf(3, this%kk), crh(this%kk), typesurf(this%kk), crystalsurf(this%kk))
-      allocate (uniqueTypes(this%kk), ichoicen(this%kk), ichoicetypen(this%kk), crhd(this%kk))
-
-      ds = 1000.0d0
-      ds2 = 1000.0d0
-      do i = 1, this%kk
-         do j = 1, this%kk
-            new = this%dx*this%cr(1, i) + this%dy*this%cr(2, i) + this%dz*this%cr(3, i)
-            one = this%dx*this%cr(1, j) + this%dy*this%cr(2, j) + this%dz*this%cr(3, j)
-            if ((abs(new - one) .gt. 1.d-6) .and. (abs(new - one) .le. ds)) then
-               ds = abs(new - one)
-               write(*,*) ds
-            end if
-            if ((abs(new) .le. ds2)) then
-               ds2 = abs(new)
-            end if
-         end do
-      end do
-
-      this%zstep = ds
-      this%zmin = ds2 - this%zstep
-      this%zmax = ds2 + 50*this%zstep
-      write(*,*) this%zstep, this%zmin, this%zmax
-      write(*,*) this%dx, this%dy, this%dz
-      n = int((this%zmax - this%zmin)/this%zstep) + 1
-
-      ! Allocate the number of layers
-      allocate (z(n))
-      ! Allocate the number of atoms per layer variable
-      allocate (nTypesForCurrentLayer(n))
-
-      do i = 1, n
-         z(i) = this%zmin + ((i - 1)*this%zstep)
-      end do
-      call move_alloc(z, this%z)
-
-      ! Determining max atom type from input
-      maxType = maxval(this%iz(:))
-      call move_alloc(this%iz, atomType)
-      call move_alloc(this%num, crystalType)
-
-      nsurf = 0
-      write(*,*) natoms
-      do i = 1, n
-         nTypesForCurrentLayer(i) = 0
-         disi_min = sqrt(this%z(i)**2) + 1.0d0
-         do k = 1, natoms
-            crh(k) = 0.0d0
-            crh(k) = dot_product([this%dx, this%dy, this%dz], this%cr(:, k))
-            if (abs(crh(k) - this%z(i)) < 1.0d-6) then
-               nsurf = nsurf + 1
-               crsurf(:, nsurf) = this%cr(:, k)
-               crhd(nsurf) = dot_product([this%dx, this%dy, this%dz], crsurf(:, nsurf))
-               if (i <= this%nlay) then
-                  ! Determine the unique atom types and update typesurf and crystalsurf.
-                  isUnique = .true.
-                  do j = 1, nTypesForCurrentLayer(i)
-                     if (atomType(k) == uniqueTypes(j)) then
-                        isUnique = .false.
-                        exit
-                     end if
-                  end do
-
-                  if (isUnique) then
-                     nTypesForCurrentLayer(i) = nTypesForCurrentLayer(i) + 1
-                     uniqueTypes(nTypesForCurrentLayer(i)) = atomType(k)
-                     maxType = maxType + 1
-                     typesurf(nsurf) = maxType
-                     crystalsurf(nsurf) = crystalType(k) !maxType
-                     disi = norm2(crsurf(:, nsurf))
-                     if (disi < disi_min) then
-                        ichoicen(typesurf(nsurf)) = nsurf
-                        ichoicetypen(typesurf(nsurf)) = typesurf(nsurf)
-                     end if
-                  else
-                     typesurf(nsurf) = maxType - nTypesForCurrentLayer(i) + findloc(uniqueTypes, atomType(k), dim=1)
-                     crystalsurf(nsurf) = crystalType(k)
-                     disi = norm2(crsurf(:, nsurf))
-                     if (disi < disi_min) then
-                        ichoicen(typesurf(nsurf)) = nsurf
-                        ichoicetypen(typesurf(nsurf)) = typesurf(nsurf)
-                     end if
-                  end if
-               else
-                  typesurf(nsurf) = atomType(k)
-                  crystalsurf(nsurf) = crystalType(k)
-                  disi = norm2(crsurf(:, nsurf))
-                  if (i .le. (this%nlay + this%nbulk_bulk)) then
-                     if (disi < disi_min) then
-                        ichoicen(typesurf(nsurf)) = nsurf
-                        ichoicetypen(typesurf(nsurf)) = typesurf(nsurf)
-                     end if
-                  end if
-               end if
-            end if
-         end do
-      end do
-
-      ! Passing onto the global variable
-      call move_alloc(nTypesForCurrentLayer, this%natoms_layer)
-      write (20, *) 'Maxtype:', maxType
-      write (20, *) 'Type of atoms chosen:', ichoicetypen(1:maxType)
-      write (20, *) 'Atoms chosen:', ichoicen(1:maxType)
-      write (20, *) 'Unique atoms type per layer:', this%natoms_layer(:)
-      write (20, *) 'Layers are:', this%z
-      write (20, *) 'Step is:', this%zstep, this%zmax, this%zmin
-      if (this%control%calctype == 'S') then
-         this%ntype = maxType
-         this%nbulk = this%nbulk_bulk
-         this%nrec = this%ntype - this%nbulk
-         this%nbas = 49
-
-         if (allocated(this%chargetrf_type)) deallocate (this%chargetrf_type)
-         if (allocated(this%ib)) deallocate (this%ib)
-         if (allocated(this%irec)) deallocate (this%irec)
-         if (allocated(this%iu)) deallocate (this%iu)
-!         if (allocated(this%ct)) deallocate (this%ct)
-
-         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot))!, this%ct(this%ntype)) Now ct is defined at &lattice
-         allocate (this%chargetrf_type(this%nbas))
-
-!         this%ct(:) = 4.0d0 !this%alat + 0.1d0
-!         this%r2 = this%ct(1)**2
-
-         do i = 1, this%nrec
-            this%irec(i) = ichoicen(this%nbulk + i)
-         end do
-         do i = 1, this%ntot
-            this%iu(ichoicetypen(i)) = ichoicen(i)
-         end do
-         do i = 1, this%nbulk
-            this%ib(ichoicetypen(i)) = ichoicen(i)
-         end do
-      end if
-
-      if (int(nsurf/2) /= nsurf/2.d0) nsurf = nsurf - 1
-
-      ! Rotate the surface cluster so that z is perpendicular to the plane
-      ! Calculate the unit vector normal to the crystallographic plane
-      !axis(:) = [this%dx,this%dy,this%dz]
-
-      !theta = acos(dot_product(axis,[0.0_rp,0.0_rp,1.0_rp]))
-
-      !axis(:) = cross_product(axis(:),[0.0_rp,0.0_rp,1.0_rp])
-
-      !norm = norm2(axis)
-
-      !axis = axis / norm
-
-    !! Setup the rotation matrix using Rodrigues´ formula
-      !call setup_rotation_matrix(rotation_matrix, axis, theta)
-
-      !do i = 1, nsurf
-      !   rotated_cr(:,i) = matmul(rotation_matrix(:,:), crsurf(:,i))
-      !   crsurf(:,i) = rotated_cr(:,i)
-      !end do
-
-      !rotated_cr(:,:) = 0.0_rp
-    !! Rotate the primitive lattice vectors
-      !do i=1,3
-      !   rotated_cr(:,i) = matmul(rotation_matrix(:,:), this%a(:,i))
-      !   write(*,*) rotated_cr(:,i)
-      !end do
-
-      write (10, 10004) nsurf
-      do k = 1, nsurf - 1, 2
-         write (10, 10002) &
-            crsurf(1, k), crsurf(2, k), crsurf(3, k), typesurf(k), crystalsurf(k), crsurf(1, k + 1), crsurf(2, k + 1), &
-            crsurf(3, k + 1), typesurf(k + 1), crystalsurf(k + 1)
-      end do
-
-      do i = 1, maxtype
-         write (20, '(3f12.6, 2i5, f12.6)') crsurf(:, ichoicen(i)), ichoicetypen(i), crystalsurf(ichoicen(i)), &
-                    & dot_product([this%dx, this%dy, this%dz], crsurf(:, ichoicen(i)))   
-      end do
-
-      ! Cleanup
-      deallocate (crh, uniqueTypes)
-      deallocate (this%cr)
-
-      call move_alloc(crsurf, this%cr)
-      call move_alloc(typesurf, this%iz)
-      call move_alloc(crystalsurf, this%num)
-
-      this%kk = nsurf
-    !!!! FIX LATER
-      if (this%control%calctype == 'I') this%nlay = maxtype - this%nbulk_bulk
-    !!!!!
-10002 format(3f14.6, 2i4, 3f14.6, 2i4)
-10004 format(3x, "II =", i7)
-      close (10)
-      close (20)
    end subroutine build_surf_full
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Builds the surface cluster
-   !---------------------------------------------------------------------------
-   subroutine build_surf(this)
+
+   !> @brief Build the two-sided (region A | active | region B) interface cluster.
+   !> @details The calctype=’L’ counterpart of build_surf_full: instead of one
+   !>          vacuum boundary and one bulk boundary, it places two independent
+   !>          FROZEN semi-infinite references around a central active zone.
+   !>          Layers are selected by projecting onto the surface normal exactly
+   !>          as build_surf_full does; the only structural difference is the
+   !>          layer->type assignment, which now draws region-A types from the
+   !>          leading block of the &atoms label list and region-B types from
+   !>          the trailing block.
+   !> @param[inout] this Lattice object receiving the interface cluster.
+   module subroutine build_interface_full(this)
+      class(lattice), intent(inout) :: this
+   end subroutine build_interface_full
+
+   !> @brief Build the legacy compact surface cluster.
+   !> @details Chooses representative atoms from the bulk cluster for each
+   !>          requested surface layer and writes the compact surface cluster
+   !>          arrays consumed by newclu/buildsurf workflows.
+   !> @param[inout] this Lattice object receiving compact surface state.
+   module subroutine build_surf(this)
       class(lattice), intent(inout) :: this
       ! Local variables
       integer :: i, j, n, k, kk, ichoice, icont, ichoicetype
@@ -1480,97 +659,14 @@ contains
       integer, dimension(:), allocatable :: izp, no, ichoicen, ichoicetypen
       logical :: isopen
 
-      n = int((this%zmax - this%zmin)/this%zstep) + 1
-      kk = this%kk
-      allocate (crsurf(3, kk), izp(kk), no(kk), ichoicen(kk), ichoicetypen(kk))
-      icont = 0
-      crh = 0.0d0
-      crhd = 0.0d0
-      inquire (unit=10, opened=isopen)
-      if (isopen) then
-         call g_logger%fatal('lattice%build_surf, file clust: Unit 10 is already open', __FILE__, __LINE__)
-      else
-         open (unit=10, file='clust')
-      end if
-
-      do i = 1, n
-         disf = 1.0d0
-         disi_min = sqrt(this%z(i)**2) + 0.5d0
-         do k = 1, kk
-            crh(k) = 0.0d0
-            crh(k) = this%dx*this%cr(1, k) + this%dy*this%cr(2, k) + this%dz*this%cr(3, k)
-            if (abs(crh(k) - this%z(i)) < 1.0d-6) then
-               icont = icont + 1
-               do j = 1, 3
-                  crsurf(j, icont) = this%cr(j, k)
-               end do
-               crhd(icont) = this%dx*crsurf(1, icont) + this%dy*crsurf(2, icont) + this%dz*crsurf(3, icont)
-               if (abs(crhd(icont) - this%z(i)) < 1.0d-6) then
-                  izp(icont) = this%izpsurf(i)
-                  disi = norm2(crsurf(:, icont))
-                  if (disi < disi_min) then
-                     disi_min = disi
-                     ichoice = icont
-                     ichoicetype = izp(icont)
-                  end if
-                  no(icont) = this%num(k)
-               else
-               end if
-            end if
-         end do
-         ichoicetypen(i) = ichoicetype
-         ichoicen(i) = ichoice
-      end do
-
-      if (this%control%calctype == 'S') then
-         do i = 1, this%nrec
-            this%irec(i) = ichoicen(i)
-         end do
-         do i = 1, this%ntot
-            this%iu(ichoicetypen(i + this%nrec)) = ichoicen(i + this%nrec)
-         end do
-         do i = 1, this%nbulk
-            this%ib(ichoicetypen(i + this%nrec)) = ichoicen(i + this%nrec)
-         end do
-      end if
-
-      if (int(icont/2) /= icont/2.d0) icont = icont - 1
-
-      do k = 1, icont
-         write (805, *) no(k), crsurf(:, k)
-      end do
-      write (10, 10004) icont
-      do k = 1, icont - 1, 2
-         write (10, 10002) &
-            crsurf(1, k), crsurf(2, k), crsurf(3, k), izp(k), no(k), crsurf(1, k + 1), crsurf(2, k + 1), &
-            crsurf(3, k + 1), izp(k + 1), no(k + 1)
-      end do
-
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%deallocate('lattice.cr', this%cr)
-      call g_safe_alloc%deallocate('lattice.iz', this%iz)
-      call g_safe_alloc%deallocate('lattice.num', this%num)
-#else
-      deallocate (this%cr, this%iz, this%num)
-#endif
-
-      call move_alloc(crsurf, this%cr)
-      call move_alloc(izp, this%iz)
-      call move_alloc(no, this%num)
-
-      this%kk = icont
-
-10002 format(3f14.6, 2i4, 3f14.6, 2i4)
-10004 format(3x, "II =", i7)
-      close (10)
    end subroutine build_surf
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Adds the cluster/impurity atoms in ´inclu´ to ´clu0´ and outputs to ´clust´
-   !---------------------------------------------------------------------------
-   subroutine newclu(this)
+   !> @brief Build an impurity/local cluster from a bulk or surface host.
+   !> @details Combines host cluster coordinates with impurity inclusions,
+   !>          creates local atom/type maps, and builds neighbor tables for
+   !>          impurity and defect calculations.
+   !> @param[inout] this Lattice object receiving impurity cluster arrays.
+   module subroutine newclu(this)
       class(lattice), intent(inout) :: this
       ! Local variables
       integer :: ndi, nnmx, ncnt, nmax
@@ -1584,367 +680,285 @@ contains
       real(rp), dimension(:), allocatable :: ctnew
 
       ! Set clust variables
-      this%nbulk = this%nbulk_bulk + this%nlay
-      this%ntype = this%nbulk_bulk + this%nlay + this%nclu
-      this%nrec = this%ntype - this%nbulk
-      write (*, *) this%nbulk, this%ntype, this%nrec
-      ! Set the clust dimension
-      kk = this%kk
-      ndi = 150000
-      nnmx = 200
-
-      ! Allocating clust dimension
-      if (allocated(this%ib)) deallocate (this%ib)
-      if (allocated(this%irec)) deallocate (this%irec)
-      if (allocated(this%iu)) deallocate (this%iu)
-      !if (allocated(this%ct)) deallocate (this%ct)
-
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%nbulk/))
-      call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
-      call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!      call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
-#else
-      allocate (this%ib(this%nbulk), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
-#endif
-      allocate (ctnew(this%ntype), ibulk(this%nbulk))
-      allocate (nn(ndi, nnmx), nn2(ndi, nnmx))
-      allocate (izpo(kk), izp(kk), no(kk), nnmax(kk), izimp(kk), noimp(kk))
-      allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))
-      ! Setting ct values for impurity
-      !this%ct(:) = this%alat+0.1d0
-      ! Identify impurity atoms from ´inclu´
-      do i = 1, kk
-         izpo(i) = this%iz(i)
-      end do
-      ntypecount = this%nbulk
-      inclucheck = 0
-      do j = 1, this%nclu
-         do i = 1, kk
-            if (abs(this%cr(1, i) - this%inclu(j, 1)) < 1.0d-6 .and. &
-                abs(this%cr(2, i) - this%inclu(j, 2)) < 1.0d-6 .and. &
-                abs(this%cr(3, i) - this%inclu(j, 3)) < 1.0d-6) then
-               inclucheck = inclucheck + 1
-               ntypecount = ntypecount + 1
-               this%iz(i) = ntypecount
-            end if
-         end do
-      end do
-
-      if (inclucheck /= this%nclu) then
-         call g_logger%fatal('Atoms chosen for impurity were not found inside the clust. Please, check the inclu input', __FILE__, __LINE__)
-      end if
-
-      acr = 0.0d0
-      inquire (unit=10, opened=isopen)
-      if (isopen) then
-         call g_logger%fatal('lattice%newclu, file clust: Unit 10 is already open', __FILE__, __LINE__)
-      else
-         open (unit=10, file='clust')
-      end if
-
-      open (unit=11, file='outnewclu')
-
-      do k = 1, kk
-         do i = 1, 3
-            acr(k, i) = this%cr(i, k)
-            acr(k, 6) = acr(k, 6) + (this%cr(i, k) - this%inclu(1, i))**2
-         end do
-         acr(k, 4) = (this%iz(k))
-         acr(k, 5) = (this%num(k))
-         acr(k, 7) = (izpo(k))
-      end do
-      call bubble(this%nclu, this%nclu, acr(1:this%nclu, 1:7), 7, 4)
-      call bubble(kk - this%nclu, kk - this%nclu, acr(this%nclu + 1:kk, 1:7), 7, 6)
-
-      write (10, 10004) kk
-      do k = 1, kk - 1, 2
-         write (10, 10002) &
-            ( &
-            acr(k + i - 1, 1), acr(k + i - 1, 2), acr(k + i - 1, 3), int(acr(k + i - 1, 4)) &
-            , int(acr(k + i - 1, 5)), i=1, 2)
-      end do
-
-      rewind (10)
-
-#ifdef USE_MPI
-      call MPI_BARRIER(MPI_COMM_WORLD, ierr)
-#endif
-
-      call leia(this%alat, kk, crd, izp, no, 10)
-
-      close (10)
-
-      nnscale = 0.95d0
-
-      ctnew(:) = this%ct(:)*nnscale
-
-      call this%nncal(ctnew, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
-      nnmx = 200
-      call this%nncal(this%ct, crd, 3, kk, izp, nn2, ndi, nnmx, mapa, this%ntot)
-      nnmx = 200
-
-      do i = 1, kk
-         if (acr(i, 4) > this%nbulk .and. acr(i, 4) <= this%ntype) then
-            do j = 2, nn2(i, 1)
-               if (acr(nn2(i, j), 4) <= this%nbulk) acr(nn2(i, j), 4) = 2000 + acr(i, 7)
-            end do
-         end if
-      end do
-      do i = 1, kk
-         if (acr(i, 4) > this%nbulk .and. acr(I, 4) <= this%ntype) then
-            do j = 2, nn(i, 1)
-               if (acr(nn(i, j), 4) <= this%nbulk .or. acr(nn(i, j), 4) > 2000) acr(nn(i, j), 4) = 1000 + acr(i, 7)
-            end do
-         end if
-      end do
-      do i = 1, kk
-         if (acr(i, 4) == 1) acr(i, 4) = 4000 + acr(I, 7)
-      end do
-      do i = 1, kk
-         if (acr(i, 4) <= this%nbulk) acr(i, 4) = 3000 + acr(I, 7)
-      end do
-      call bubble(kk, kk, acr(1:kk, 1:7), 7, 4)
-      ncnt = 0
-      do I = 1, kk
-         if (acr(i, 4) < 2000) ncnt = ncnt + 1
-      end do
-      do i = 1, kk
-         if (acr(i, 4) > this%ntype) acr(i, 4) = acr(i, 7)
-      end do
-      call bubble(kk - ncnt, kk - ncnt, acr(ncnt + 1:(kk), 1:7), 7, 6)
-
-      open (unit=10, file='clust')
-      write (10, 10004) kk
-      do k = 1, kk, 2
-         write (10, 10002) &
-            ( &
-            acr(k + i - 1, 1), acr(k + i - 1, 2), acr(k + i - 1, 3), int(acr(k + i - 1, 4)) &
-            , int(acr(k + i - 1, 5)), i=1, 2)
-      end do
-      rewind (10)
-#ifdef USE_MPI
-      call MPI_BARRIER(MPI_COMM_WORLD, ierr)
-#endif
-      call leia(this%alat, kk, crd, izp, no, 10)
-      call this%nncal(this%ct, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
-      call outmap(11, izp, nn, no, ndi, nnmx, this%nrec)
-      close (10)
-      nmax = 0
-      do i = 1, this%nrec
-         do j = 2, nn(i, 1)
-            if (nmax < nn(i, j)) nmax = nn(i, j)
-         end do
-      end do
-      write (11, *) "--Info-for-bulcri------------------"
-      !
-      if (allocated(this%chargetrf_type)) deallocate (this%chargetrf_type)
-      allocate (this%chargetrf_type(ncnt))
-      !
-      do k = 1, ncnt
-         write (11, '(i5)') int(acr(k, 7))   !, int(ACR(K, 7))
-         this%chargetrf_type(k) = int(acr(k, 7))
-      end do
-      this%nbas = ncnt
-      this%nmax = nmax
-      write (11, *) "--Info-for-control-----------------"
-      write (11, '(a6, i4, a6, i6, a6, i6, a6, i6)') 'NTYPE=', this%ntype, 'NMAX=', this%nmax, 'NBAS=', this%nbas, 'NREC=', this%nrec
-
-      nnmax = 0
-      do i = nmax + 1, kk
-         if (nnmax(izp(i)) < nn(i, 1)) then
-            nnmax(izp(i)) = nn(i, 1)
-            ibulk(izp(i)) = i
-         end if
-      end do
-      write (11, '(50i7)') (nnmax(k), k=1, this%nbulk)
-      write (11, '(50i7)') (ibulk(k), k=1, this%nbulk)
-      do i = 1, this%nbulk
-         do j = 2, nn(ibulk(i), 1)
-            if (nn(ibulk(i), j) == 0) write (*, *) "Warning! Atom", ibulk(i), " is probably wrong."
-         end do
-      end do
-
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%deallocate('lattice.cr', this%cr)
-      call g_safe_alloc%deallocate('lattice.cr', this%cr)
-      call g_safe_alloc%deallocate('lattice.iz', this%iz)
-      call g_safe_alloc%deallocate('lattice.num', this%num)
-#else
-      deallocate (this%cr, this%iz, this%num)
-#endif
-
-      do k = 1, kk
-         crimp(1:3, k) = acr(k, 1:3)
-      end do
-
-      izimp(:) = int(acr(:, 4))
-      noimp(:) = int(acr(:, 5))
-
-      call move_alloc(izimp, this%iz)
-      call move_alloc(noimp, this%num)
-      call move_alloc(crimp, this%cr)
-
-      do i = 1, this%nbulk
-         this%ib(i) = ibulk(i)
-      end do
-
-      do i = 1, this%ntot
-         this%iu(i) = ibulk(i)
-      end do
-
-      ireccount = 0
-      do j = 1, this%nclu
-         do i = 1, kk
-            if (abs(this%cr(1, i) - this%inclu(j, 1)) < 1.0d-6 .and. &
-                abs(this%cr(2, i) - this%inclu(j, 2)) < 1.0d-6 .and. &
-                abs(this%cr(3, i) - this%inclu(j, 3)) < 1.0d-6) then
-               ireccount = ireccount + 1
-               this%irec(ireccount) = i
-            end if
-         end do
-      end do
-
-      close (11)
-10002 format(3f14.6, 2i4, 3f14.6, 2i4)
-10004 format(3x, "II =", i7)
    end subroutine newclu
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Calculates the tight-binding structure constant matrix elements from
-   !> information in ´control´ and ´clust.
-   !---------------------------------------------------------------------------
-   subroutine structb(this, do_str)
+   !> @brief Build neighbor maps and structure constants.
+   !> @details Constructs the neighbor table around representative atoms, then
+   !>          either computes screened structure constants or only prepares the
+   !>          neighbor geometry depending on do_str.
+   !> @param[inout] this Lattice object receiving nn/sbar/sdot/sbarvec state.
+   !> @param[in] do_str If true, compute structure constants after neighbor mapping.
+   module subroutine structb(this, do_str)
       class(lattice), intent(inout) :: this
       logical, intent(in) :: do_str
       ! Local variables
       integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
+      integer :: sbar_dim, nm_store, nt_tmp
       integer, dimension(:, :), allocatable :: nn
       integer, dimension(:), allocatable :: idnn
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
+      real(rp) :: t_structb_start, t_cluster_ready, t_nnmap_start, t_nnmap_end
+      real(rp) :: t_remd_start, t_remd_end, t_nm_store_start, t_nm_store_end
+      real(rp) :: t_outmap_start, t_outmap_end, t_str_stage_end
 
-      ! Open files
-      open (12, file='map', form='unformatted')
-      open (13, file="sbar", FORM="unformatted")
-      open (16, file="view.sbar")
-      open (17, file='str.out')
-
-      ! Clust parameters
-      ncut = 9
-      nnmx = 5250
-      nomx = this%ntot
-      kk = this%kk
-      allocate (set(3, nomx, nnmx)); set = 0.0d0
-      allocate (nn(kk, nnmx))
-      allocate (idnn(nnmx))
-      nm = nnmx
-      write (17, *) 'irec', this%nrec, this%irec
-      write (17, *) 'irec type', this%iz(this%irec(:))
-      write (17, *) 'ndi=', kk
-      write (17, 10000) kk
-      write (17, 10001)
-      write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
-      call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
-
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.nn', this%nn, (/this%kk, nm + 1/))
-#else
-      allocate (this%nn(this%kk, nm + 1))
-#endif
-      do ii = 1, nm + 1
-         this%nn(:, ii) = nn(:, ii)
-      end do
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/9, 9, nm, this%ntot/))
-#else
-      allocate (this%sbar(9, 9, nm, this%ntot))
-#endif
-      write (17, *) 'ndi=', kk
-      write (17, *) 'remd'
-      call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
-      write (17, *) 'outmap', this%nmax, maxval(this%irec)
-      call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
-      write (17, 10003) kk, nm
-      if (do_str) then
-         do ii = 1, this%ntot
-            ia = this%iu(ii)
-            nr = this%nn(ia, 1)
-            write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
-            call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, this%control%npold, nr, ii)
-         end do
-      end if
-10000 format(i5)
-10001 format(" LATTICE COORDINATES")
-10002 format(2(i5, 3f8.4))
-10003 format(3i5)
-10004 format(3i5)
-10005 format(7x, i7)
    end subroutine structb
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Makes a list of atoms with their respective number inside the clust file
-   !---------------------------------------------------------------------------
-   subroutine atomlist(this)
+   !> @brief Allocate storage for strux structure constants.
+   !> @param[inout] this Lattice object whose sbar/sdot/alpha storage is reset.
+   !> @param[in] sbar_dim Orbital dimension of each structure-constant block.
+   !> @param[in] nm Number of neighbor slots to store.
+   module subroutine init_strux_storage(this, sbar_dim, nm)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: sbar_dim, nm
+
+   end subroutine init_strux_storage
+
+   !> @brief Publish the exact target alpha used by legacy structure screening.
+   module subroutine publish_legacy_screening_alpha(this, ia)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: ia
+   end subroutine publish_legacy_screening_alpha
+
+   !> @brief Return default l-resolved screening constants.
+   !> @param[in] this Lattice object providing context for the pure helper.
+   !> @param[in] nl Number of angular-momentum channels requested.
+   !> @return Default screening-alpha array of length nl.
+   module pure function default_screening_alpha(this, nl) result(alpha_default)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: nl
+      real(rp) :: alpha_default(nl)
+      integer :: i
+
+   end function default_screening_alpha
+
+   !> @brief Load symbolic-atom data needed by strux helpers.
+   !> @details Lazily populates this%symbolic_atoms from the control input when
+   !>          muffin-tin radii or species labels are required.
+   !> @param[inout] this Lattice object whose symbolic_atoms cache may be filled.
+   module subroutine load_symbolic_atoms_if_needed(this)
+      class(lattice), intent(inout) :: this
+      
+      ! 1. Declare the temporary array. 
+      type(symbolic_atom), allocatable :: temp_atoms(:)
+
+   end subroutine load_symbolic_atoms_if_needed
+
+   !> @brief Build species muffin-tin radii for strux input.
+   !> @param[inout] this Lattice object providing symbolic-atom data.
+   !> @param[in] nspec Number of distinct species.
+   !> @param[in] species_labels Atomic/species labels to map.
+   !> @param[out] rmt Muffin-tin radius for each species.
+   module subroutine build_rmt(this, nspec, species_labels, rmt)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: nspec
+      integer, intent(in) :: species_labels(nspec)
+      real(rp), intent(out) :: rmt(nspec)
+      integer :: is, label
+
+   end subroutine build_rmt
+
+   !> @brief Build hard-core radii for strux sigma screening.
+   !> @param[in] this Lattice object containing screening_sigma settings.
+   !> @param[in] nl Number of angular-momentum channels.
+   !> @param[in] nspec Number of distinct species.
+   !> @param[in] rmt Muffin-tin radii for each species.
+   !> @param[out] hcr Hard-core radii indexed by l channel and species.
+   module subroutine build_hcr(this, nl, nspec, rmt, hcr)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: nl, nspec
+      real(rp), intent(in) :: rmt(nspec)
+      real(rp), intent(out) :: hcr(nl, nspec)
+      integer :: is, l
+
+   end subroutine build_hcr
+
+   !> @brief Assemble alpha, hard-core, and muffin-tin arrays for strux_compute.
+   !> @details Combines manual/default screening inputs with per-species radius
+   !>          data in the layout expected by the local strux library.
+   !> @param[inout] this Lattice object providing screening and symbolic-atom data.
+   !> @param[in] nspec Number of species in the strux solve cluster.
+   !> @param[in] nl Number of angular-momentum channels.
+   !> @param[in] species_labels Species labels in strux order.
+   !> @param[out] alpha_in Screening constants in strux l/species layout.
+   !> @param[out] hcr Hard-core radii in strux l/species layout.
+   !> @param[out] rmt Muffin-tin radii by species.
+   module subroutine build_strux_inputs(this, nspec, nl, species_labels, alpha_in, hcr, rmt)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: nspec, nl
+      integer, intent(in) :: species_labels(nspec)
+      real(rp), intent(out) :: alpha_in(0:nl - 1, nspec)
+      real(rp), intent(out) :: hcr(nl, nspec)
+      real(rp), intent(out) :: rmt(nspec)
+      integer :: is
+      real(rp) :: alpha_global(nl)
+
+   end subroutine build_strux_inputs
+
+   !> @brief Compute screened structure constants through the strux backend.
+   !> @details Maps the RS-LMTO cluster and basis labels into strux input,
+   !>          calls strux_compute, and remaps the returned screened constants
+   !>          and optional derivatives back into lattice storage.
+   !> @param[inout] this Lattice object receiving sbar/sdot/alpha data.
+   module subroutine structb_strux(this)
+      class(lattice), intent(inout) :: this
+
+      integer, parameter :: max_orb = 16
+      real(rp), parameter :: match_tol = 1.0e-5_rp
+      integer :: ii, ia, ib, ja, jb, m, is, js, nspec, nl, nl2, sbar_dim, pair_idx, nt_store
+      integer :: nbas, nttab
+      integer :: label, species_idx
+      integer, allocatable :: ips(:), lmxb(:), orb_map(:), species_labels(:)
+      real(rp) :: pair_cutoff, solve_cutoff, pair_cutoff_bohr, solve_cutoff_bohr, alat_bohr, wav_bohr
+      real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end, t_inputs_start, t_inputs_end, t_store_start, t_store_end, t_remap_end
+      real(rp) :: alpha_debug(4)
+      character(len=16) :: effective_screening
+      real(rp) :: vec_target(3)
+      real(rp), allocatable :: pos(:,:), cralat(:,:), rmt(:), alpha_in(:,:), hcr(:,:), alpha_site(:,:), &
+         adot_site(:,:), alpha_l_out(:,:), tral(:,:,:), trad(:,:,:)
+      type(strux_options) :: opts
+      type(strux_result) :: result
+
+   end subroutine structb_strux
+
+   !> @brief Compute strux constants from the finite non-periodic cluster.
+   module subroutine structb_strux_local(this, opts, nl, nl2, nspec, species_labels, lmxb, rmt, alpha_in, hcr, result)
+      class(lattice), intent(inout) :: this
+      type(strux_options), intent(in) :: opts
+      integer, intent(in) :: nl, nl2, nspec
+      integer, intent(in) :: species_labels(nspec), lmxb(nspec)
+      real(rp), intent(in) :: rmt(nspec), alpha_in(0:nl - 1, nspec), hcr(nl, nspec)
+      type(strux_result), intent(inout) :: result
+   end subroutine structb_strux_local
+
+   !> @brief Write one strux structure-constant neighbor block for diagnostics.
+   !> @param[in] this Lattice object containing sbar and neighbor vectors.
+   !> @param[in] nl2 Block dimension to write.
+   !> @param[in] m Neighbor slot.
+   !> @param[in] ii Type index of the sbar/sdot block to write.
+   !> @param[in] iclus Cluster atom index used as the ICLUS label.
+   !> @param[in] jclus Cluster atom index associated with the block.
+   module subroutine write_strux_block(this, nl2, m, ii, iclus, jclus)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: nl2, m, ii, iclus, jclus
+      integer :: is, js
+
+      ! write (*, ’(″ SBAR neighbor center=″,i5,″ slot=″,i5,″ iclus=″,i5,″ vec=″,3f12.6)’) ii, m, iclus, &
+      !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
+   end subroutine write_strux_block
+
+   !> @brief Write stored neighbor vectors to a diagnostic unit.
+   !> @param[in] iunit Output unit.
+   !> @param[in] sbarvec Neighbor vectors to dump.
+   !> @param[in] nt Number of active vectors.
+   module subroutine write_neighbor_vector_dump(iunit, sbarvec, nt)
+      integer, intent(in) :: iunit, nt
+      real(rp), intent(in) :: sbarvec(:, :)
+      integer :: i
+
+   end subroutine write_neighbor_vector_dump
+
+   !> @brief Return the representative cluster atom for an inequivalent type.
+   !> @param[in] this Lattice object containing irec/iu mappings.
+   !> @param[in] ii Inequivalent atom/type index.
+   !> @return Cluster atom index used as representative for ii.
+   module integer function representative_atom_index(this, ii)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: ii
+
+   end function representative_atom_index
+
+   !> @brief Return the primitive-basis label associated with a cluster atom.
+   !> @param[in] this Lattice object containing primitive and cluster labels.
+   !> @param[in] ia Cluster atom index.
+   !> @return Primitive-cell basis label for ia.
+   module integer function primitive_basis_label(this, ia)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: ia
+
+   end function primitive_basis_label
+
+   !> @brief Find a strux pair table entry matching a target neighbor vector.
+   !> @details Searches lattice translations and basis-pair labels for the
+   !>          pair whose Cartesian displacement matches vec_target within tol.
+   !> @param[in] nttab Number of pair-table entries.
+   !> @param[in] iax Pair translation/index table from strux.
+   !> @param[in] plat Primitive lattice vectors.
+   !> @param[in] pos Basis positions.
+   !> @param[in] alat Lattice parameter used to scale vectors.
+   !> @param[in] ib Source basis label.
+   !> @param[in] jb Target basis label.
+   !> @param[in] vec_target Target displacement vector.
+   !> @param[in] tol Matching tolerance.
+   !> @return Matching pair-table index, or zero if no match is found.
+   module integer function find_pair_by_vector(nttab, iax, plat, pos, alat, ib, jb, vec_target, tol)
+      integer, intent(in) :: nttab, ib, jb
+      integer, intent(in) :: iax(:,:)
+      real(rp), intent(in) :: plat(3, 3), pos(:, :), alat, vec_target(3), tol
+      integer :: i, n1, n2, n3
+      real(rp) :: vec(3)
+      real(rp) :: dmax, best_d
+      integer :: best_i
+
+   end function find_pair_by_vector
+
+   !> @brief Find a cluster neighbor atom by displacement vector.
+   !> @param[in] this Lattice object containing cluster metadata.
+   !> @param[in] ia Source cluster atom.
+   !> @param[in] vec_target Target displacement in lattice-scaled coordinates.
+   !> @param[in] cralat Cluster coordinates scaled by the lattice parameter.
+   !> @param[in] tol Matching tolerance.
+   !> @return Cluster atom index matching the displacement, or zero if not found.
+   module integer function find_neighbor_atom_by_vector(this, ia, vec_target, cralat, tol)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: ia
+      real(rp), intent(in) :: vec_target(:), cralat(:, :)
+      real(rp), intent(in) :: tol
+      integer :: ja
+      real(rp) :: dv(3)
+
+   end function find_neighbor_atom_by_vector
+
+   !> @brief Build the orbital-order map between RS-LMTO and strux layouts.
+   !> @param[in] norb Number of orbitals in the active basis.
+   !> @param[out] orb_map Mapping from local orbital index to strux orbital index.
+   module subroutine build_orbital_map(norb, orb_map)
+      integer, intent(in) :: norb
+      integer, intent(out) :: orb_map(16)
+      integer :: i
+      integer, parameter :: full_map(16) = [ &
+         1, 4, 2, 3, 5, 6, 8, 9, 7, 13, 14, 12, 15, 11, 16, 10 ]
+
+   end subroutine build_orbital_map
+
+   !> @brief Build atom-list metadata for self-consistent atom types.
+   !> @details Fills atlist/chargetrf_type-style mappings used by impurity and
+   !>          local-cluster charge transfer paths.
+   !> @param[inout] this Lattice object whose atom-list arrays are updated.
+   module subroutine atomlist(this)
       class(lattice), intent(inout) :: this
       ! Local variables
-      integer :: i, j
+      integer :: i, j, itype
+      real(rp) :: mom_tmp(3)
 
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.atlist', this%atlist, (/this%ntype/))
-      call g_safe_alloc%allocate('lattice.ham_i', this%ham_i, (/this%kk/))
-#else
-      allocate (this%atlist(this%ntype))
-      allocate (this%ham_i(this%kk))
-#endif
-
-      do i = 1, this%kk
-         this%ham_i(i) = i
-      end do
-
-      j = 0
-      do i = 1, this%nbulk
-         j = j + 1
-         this%atlist(j) = this%ib(i)
-      end do
-      do i = 1, this%nrec
-         j = j + 1
-         this%atlist(j) = this%irec(i)
-      end do
-      this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
-
-      
-      write (805, *) this%kk
-      write (805, *)
-      do i = 1, this%kk
-            write (805, '(A6,6F16.6)') (elem_var(int(this%symbolic_atoms(this%iz(i))%element%atomic_number))), &
-            this%cr(:, i), this%symbolic_atoms(this%iz(i))%potential%mom(:)
-      end do
    end subroutine atomlist
 
-   !**************************************************************************
-   !> @brief Identifies atoms within the volume defined by vectors a1, a2, and a3.
-   !> 
-   !> This subroutine checks if atoms, relative to a central atom, are located 
-   !> within the parallelepiped volume formed by translating vectors a1, a2, and a3.
-   !> 
-   !> @param[in]  cr              A 2D real(rp) array (3 x num_atoms) containing the coordinates of all atoms.
-   !> @param[in]  num             An integer array (num_atoms) representing structure identifiers for all atoms.
-   !> @param[in]  num_atoms       An integer representing the total number of atoms.
-   !> @param[in]  central_atom    An integer representing the index of the central atom.
-   !> @param[in]  a1, a2, a3      3-element real(rp) arrays representing the primitive vectors defining the volume.
-   !> @param[in]  plane_constant  A real(rp) value representing the constant of the plane equation for the surface.
-   !> @param[out] atoms_in_volume An allocatable integer array containing the indices of atoms found within the volume.
-   !> @param[out] atom_count      An integer representing the number of atoms found within the volume.
-   !>
-   !> @note The volume is defined by the parallelepiped formed from vectors a1, a2, and a3.
-   !**************************************************************************
-   subroutine check_atoms_in_volume(this, cr, num, num_atoms, central_atom, a1, a2, a3, plane_constant, atoms_in_volume, atom_count)
+   !> @brief Select cluster atoms inside a primitive-cell volume.
+   !> @details Tests positions relative to a central atom against the three
+   !>          primitive vectors and returns the atom indices that lie inside.
+   !> @param[inout] this Lattice object providing volume-test helper methods.
+   !> @param[in] cr Cluster coordinates.
+   !> @param[in] num Cluster atom labels.
+   !> @param[in] num_atoms Number of atoms in cr/num.
+   !> @param[in] central_atom Index of the atom used as the volume origin.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[in] plane_constant Boundary tolerance/plane constant.
+   !> @param[out] atoms_in_volume Atom indices found inside the volume.
+   !> @param[out] atom_count Number of returned atoms.
+   module subroutine check_atoms_in_volume(this, cr, num, num_atoms, central_atom, a1, a2, a3, plane_constant, atoms_in_volume, atom_count)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
        integer, intent(in) :: num(num_atoms), num_atoms, central_atom
@@ -1956,60 +970,16 @@ contains
        integer :: i
    
        ! Initialize array for atoms inside the primitive cell volume
-       allocate(atoms_in_volume(num_atoms))
-       atom_count = 0
-       atoms_in_volume = 0
-       ! Loop over all atoms to find those inside the primitive cell volume
-       do i = 1, num_atoms
-          ! Calculate the position relative to the central atom
-          relative_pos = cr(:, i) - cr(:, central_atom)
-          ! Check if the atom is within the parallelepiped defined by a1, a2, and a3
-          call this%check_within_volume(relative_pos, a1, a2, a3, inside)
-   
-          if (inside) then
-             atom_count = atom_count + 1
-             atoms_in_volume(atom_count) = i
-          end if
-       end do
-       !write(*,*) 'atoms_in_volume', atoms_in_volume
-       ! Resize atoms_in_volume array to the actual number of atoms found
-       !if (atom_count > 0) then
-       !   deallocate(atoms_in_volume); allocate(atoms_in_volume(atom_count))
-       !else
-       !   deallocate(atoms_in_volume)
-       !end if
-   
    end subroutine check_atoms_in_volume
 
-   !**************************************************************************
-   !> @brief Checks if an atom is inside the volume defined by a1, a2, and a3.
-   !> 
-   !> This subroutine checks if an atom's position, relative to a central atom, is 
-   !> inside the parallelepiped volume formed by the vectors a1, a2, and a3.
-   !>
-   !> The atom's position, relative to the central atom, is expressed as a linear 
-   !> combination of the vectors a1, a2, and a3, i.e.:
-   !>
-   !> \f$ \mathbf{r}_{\text{rel}} = u \mathbf{a}_1 + v \mathbf{a}_2 + w \mathbf{a}_3 \f$
-   !>
-   !> Where \f$ u, v, w \f$ are the coordinates in the basis defined by \f$ \mathbf{a}_1, \mathbf{a}_2, \mathbf{a}_3 \f$.
-   !>
-   !> The atom is considered inside the volume if:
-   !> \f$ 0 \leq u \leq 1 \f$, \f$ 0 \leq v \leq 1 \f$, and \f$ 0 \leq w \leq 1 \f$
-   !>
-   !> @param[in]  relative_pos  A 3-element real(rp) array representing the atom's position relative to the central atom.
-   !> @param[in]  a1, a2, a3    3-element real(rp) arrays representing the vectors defining the volume.
-   !> @param[out] inside        A logical value indicating whether the atom is inside the parallelepiped.
-   !>
-   !> @note The coordinates \( u, v, w \) are computed by solving the linear system:
-   !>       \f[
-   !>       \begin{aligned}
-   !>       \mathbf{r}_{\text{rel}} &= u \mathbf{a}_1 + v \mathbf{a}_2 + w \mathbf{a}_3 \\
-   !>       \end{aligned}
-   !>       \f]
-   !>       The inverse of the matrix of dot products is used to calculate \( u \), \( v \), and \( w \).
-   !**************************************************************************
-   subroutine check_within_volume(this, relative_pos, a1, a2, a3, inside)
+   !> @brief Test whether a relative position is inside a primitive parallelepiped.
+   !> @param[inout] this Lattice object providing the type-bound helper context.
+   !> @param[in] relative_pos Position measured from the cell origin.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[out] inside True if the point is inside the primitive volume.
+   module subroutine check_within_volume(this, relative_pos, a1, a2, a3, inside)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: relative_pos(3), a1(3), a2(3), a3(3)
        logical, intent(out) :: inside
@@ -2017,54 +987,14 @@ contains
        real(rp) :: dot1r, dot2r, dot3r, inv_denom, u, v, w
    
        ! Calculate dot products between the vectors
-       dot11 = dot_product(a1, a1)
-       dot12 = dot_product(a1, a2)
-       dot13 = dot_product(a1, a3)
-       dot22 = dot_product(a2, a2)
-       dot23 = dot_product(a2, a3)
-       dot33 = dot_product(a3, a3)
-       dot1r = dot_product(a1, relative_pos)
-       dot2r = dot_product(a2, relative_pos)
-       dot3r = dot_product(a3, relative_pos)
-   
-       ! Calculate inverse of the denominator for the linear combination
-       inv_denom = 1.0_rp / (dot11 * (dot22 * dot33 - dot23 * dot23) &
-                           - dot12 * (dot12 * dot33 - dot23 * dot13) &
-                           + dot13 * (dot12 * dot23 - dot22 * dot13))
-   
-       ! Calculate coordinates (u, v, w) in the basis defined by a1, a2, and a3
-       u = ((dot22 * dot33 - dot23 * dot23) * dot1r + &
-           (dot13 * dot23 - dot12 * dot33) * dot2r + &
-           (dot12 * dot23 - dot13 * dot22) * dot3r) * inv_denom
-   
-       v = ((dot13 * dot23 - dot12 * dot33) * dot1r + &
-           (dot11 * dot33 - dot13 * dot13) * dot2r + &
-           (dot12 * dot13 - dot11 * dot23) * dot3r) * inv_denom
-   
-       w = ((dot12 * dot23 - dot13 * dot22) * dot1r + &
-           (dot12 * dot13 - dot11 * dot23) * dot2r + &
-           (dot11 * dot22 - dot12 * dot12) * dot3r) * inv_denom
-   
-       ! Check if the atom is inside the parallelepiped
-       inside = (u >= 0.0_rp .and. u <= 1.0_rp .and. &
-                 v >= 0.0_rp .and. v <= 1.0_rp .and. &
-                 w >= 0.0_rp .and. w <= 1.0_rp)
    end subroutine check_within_volume
 
-   !**************************************************************************
-   !> @brief Finds all unique structure types within a given list of atoms.
-   !> 
-   !> This subroutine identifies all unique structure types (or identifiers) present 
-   !> within a set of atoms and returns a list of these unique identifiers.
-   !> 
-   !> @param[in]  num          An integer array (num_atoms) containing structure identifiers for all atoms.
-   !> @param[in]  num_atoms    An integer representing the total number of atoms.
-   !> @param[out] unique_nums  An allocatable integer array containing the unique structure identifiers.
-   !> 
-   !> @note This subroutine loops through the structure identifiers and ensures only
-   !>       unique ones are collected.
-   !**************************************************************************
-   subroutine find_unique_struct(this, num, num_atoms, unique_nums)
+   !> @brief Return unique integer structure/type labels.
+   !> @param[inout] this Lattice object providing the type-bound helper context.
+   !> @param[in] num Input labels.
+   !> @param[in] num_atoms Number of active labels.
+   !> @param[out] unique_nums Unique labels in first-seen order.
+   module subroutine find_unique_struct(this, num, num_atoms, unique_nums)
        class(lattice), intent(inout) :: this
        integer, intent(in) :: num(:), num_atoms
        integer, allocatable, intent(out) :: unique_nums(:)
@@ -2073,51 +1003,22 @@ contains
        logical :: found
    
        ! Allocate temporary array for unique numbers
-       allocate(temp_nums(num_atoms))
-       num_unique = 0
-   
-       ! Loop over all atoms to find unique structure types
-       do i = 1, num_atoms
-          found = .false.
-          do j = 1, num_unique
-             if (num(i) == temp_nums(j)) then
-                found = .true.
-                exit
-             end if
-          end do
-          if (.not. found) then
-             num_unique = num_unique + 1
-             temp_nums(num_unique) = num(i)
-          end if
-       end do
-   
-       ! Resize array to the actual number of unique nums
-       allocate(unique_nums(num_unique))
-       unique_nums(:) = temp_nums(1:num_unique)
-       ! Deallocate temporary array
-       deallocate(temp_nums)
    end subroutine find_unique_struct
 
-   !**************************************************************************
-   !> @brief Identifies unique atomic positions within the primitive cell volume.
-   !> 
-   !> This subroutine identifies which atomic positions within the primitive cell 
-   !> volume are unique. An atom is considered unique if it cannot be generated 
-   !> from another atom using a combination of translations along a1, a2, and a3.
-   !> 
-   !> @param[in]  cr                A 2D real(rp) array (3 x num_atoms) containing coordinates of all atoms.
-   !> @param[in]  num_atoms         An integer representing the total number of atoms.
-   !> @param[in]  atoms_in_volume   An integer array containing indices of atoms within the volume.
-   !> @param[in]  atom_count        An integer representing the number of atoms within the volume.
-   !> @param[in]  a1, a2, a3        3-element real(rp) arrays representing the vectors defining the volume.
-   !> @param[out] unique_atoms      An allocatable integer array containing indices of unique atoms within the volume.
-   !> @param[out] unique_atom_count An integer representing the number of unique atoms within the volume.
-   !> 
-   !> @note The uniqueness of an atom is determined by comparing its position to all
-   !>       other atoms and checking if it can be generated by a translation using 
-   !>       a1, a2, and a3.
-   !**************************************************************************
-   subroutine identify_unique_atoms(this, cr, num_atoms, atoms_in_volume, atom_count, a1, a2, a3, unique_atoms, unique_atom_count)
+   !> @brief Identify symmetry-unique atoms inside a primitive volume.
+   !> @details Removes atoms related by primitive translations from an input
+   !>          volume selection and returns one representative per unique site.
+   !> @param[inout] this Lattice object providing helper context.
+   !> @param[in] cr Cluster coordinates.
+   !> @param[in] num_atoms Number of atoms in cr.
+   !> @param[in] atoms_in_volume Candidate atom indices.
+   !> @param[in] atom_count Number of candidate atoms.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[out] unique_atoms Representative atom indices.
+   !> @param[out] unique_atom_count Number of representatives.
+   module subroutine identify_unique_atoms(this, cr, num_atoms, atoms_in_volume, atom_count, a1, a2, a3, unique_atoms, unique_atom_count)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
        integer, intent(in) :: num_atoms, atoms_in_volume(:), atom_count
@@ -2129,53 +1030,22 @@ contains
        integer, allocatable :: temp_unique_atoms(:)
    
        ! Initialize temporary array for unique atoms list
-       allocate(temp_unique_atoms(atom_count))
-       unique_atom_count = 0
-       temp_unique_atoms = -1
-       ! First pass to identify all unique atoms within the primitive cell volume
-       do i = 1, atom_count
-           found = .false.
-   
-           ! Check if this atom can be generated by translating another atom
-           do j = 1, unique_atom_count
-               ! Translate atom by all combinations of a1, a2, and a3 within the cell
-               do k = -1, 1
-                   do n = -1, 1
-                       do p = -1, 1
-                           trans_atom = cr(:, temp_unique_atoms(j)) + k * a1 + n * a2 + p * a3
-                           delta = cr(:, atoms_in_volume(i)) - trans_atom
-                           if (norm2(delta) < 1.0d-6) then
-                               found = .true.
-                               exit
-                           end if
-                       end do
-                       if (found) exit
-                   end do
-                   if (found) exit
-               end do
-           end do
-   
-           ! If the atom is not redundant, add it to the temporary list of unique atoms
-           if (.not. found) then
-               unique_atom_count = unique_atom_count + 1
-               temp_unique_atoms(unique_atom_count) = atoms_in_volume(i)
-           end if
-       end do
-   
-       ! Allocate the final unique_atoms array to the correct size
-       allocate(unique_atoms(unique_atom_count))
-       unique_atoms(:) = temp_unique_atoms(1:unique_atom_count)
-       ! Deallocate temporary array
-       deallocate(temp_unique_atoms)
    end subroutine identify_unique_atoms
 
-   ! Local library
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !---------------------------------------------------------------------------
-   subroutine dbar1(this, ia, r2, wav, crd, nat, ndi, np, nr, ii)
+   !> @brief Build one legacy screened-structure-constant block.
+   !> @details Forms a local cluster around atom ia and drives the legacy
+   !>          CLUSBA/MICHA screening path used by the non-strux backend.
+   !> @param[inout] this Lattice object receiving legacy sbar data.
+   !> @param[in] ia Center atom index.
+   !> @param[in] r2 Cluster cutoff radius squared.
+   !> @param[in] wav Wigner-Seitz radius.
+   !> @param[in] crd Cluster coordinates.
+   !> @param[in] nat Number of atoms in crd.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[in] np Number of primitive atoms/neighbor entries.
+   !> @param[in] nr Number of local-cluster vectors.
+   !> @param[in] ii Inequivalent atom/type index.
+   module subroutine dbar1(this, ia, r2, wav, crd, nat, ndi, np, nr, ii)
       implicit none
       class(lattice), intent(inout) :: this
       ! Inputs
@@ -2184,69 +1054,31 @@ contains
       real(rp), intent(in) :: r2, wav
       real(rp), dimension(3, ndi), intent(in) :: crd
       ! Local Scalars
-      integer :: i, j, k, m, na, nrl, nt
+      integer :: i, j, k, m, na, nrl, nt, jclus_dbg
       real(rp), dimension(:), allocatable :: bet, wk
       real(rp), dimension(:), allocatable :: a
       real(rp), dimension(:, :), allocatable :: cr
       real(rp), dimension(:, :), allocatable :: s
       real(rp), dimension(:, :, :), allocatable :: sbar
+      real(rp), dimension(:, :), allocatable :: sbarvec
       !
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 5250 !350
-      allocate (cr(3, nt))
-      allocate (sbar(np, np, nt))
-      call this%clusba(r2, crd, ia, nat, ndi, nt)
-      write (17, 10000) nt
-      write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
-      nrl = np*nt
-      na = (nrl*(nrl + 1))/2
-      allocate (a(na))
-      allocate (bet(nrl))
-      allocate (wk(nrl))
-      allocate (s(nrl, nrl))
-      call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
-
-      ! Saving parameters to be used in the Hamiltonian build
-      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
-
-      do m = 1, nt
-         do i = 1, 9
-            do j = 1, 9
-               this%sbar(i, j, m, ii) = sbar(i, j, m)
-            end do
-         end do
-      end do
-
-      !do m=1, nt
-      !  write(*, *) ia, m
-      !  do i=1, 9
-      !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
-      !  end do
-      !end do
-      deallocate (a, bet, cr, wk, s, sbar)
-      return
-
-10000 format(i5)
-10001 format(3f8.4)
    end subroutine dbar1
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !
-   !> @param[in] r2
-   !> @param[in] crd
-   !> @param[in] ia
-   !> @param[in] nat
-   !> @param[in] ndi
-   !> @param[inout] n
-   !> @param[inout] cr
-   !> @return type(calculation)
-   !---------------------------------------------------------------------------
-   subroutine clusba(this, r2, crd, ia, nat, ndi, n)
+   !> @brief Collect local cluster vectors within a cutoff.
+   !> @details Selects neighbors around atom ia from crd, sorted by distance, for
+   !>          use in the legacy structure-constant screening routines.
+   !> @param[inout] this Lattice object providing helper context.
+   !> @param[in] r2 Cutoff radius squared.
+   !> @param[in] crd Candidate cluster coordinates.
+   !> @param[in] ia Center atom index.
+   !> @param[in] nat Number of candidate atoms.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[inout] n Number of vectors found.
+   !> @param[inout] sbarvec_out Optional output neighbor-vector storage.
+   module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out)
       implicit none
       class(lattice), intent(inout) :: this
       ! Inputs
@@ -2255,65 +1087,31 @@ contains
       real(rp), dimension(3, ndi), intent(in) :: crd
       ! Output
       integer, intent(inout) :: n
-!    real(rp), dimension(3, n), intent(inout) :: cr
+      real(rp), dimension(:, :), intent(inout), optional :: sbarvec_out
       ! Local variables
       integer :: i, ii, k, nn
       real(rp) :: s1
       real(rp), dimension(3) :: dum
 
-#ifdef USE_SAFE_ALLOC
-      if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
-      call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
-#else
-      if (allocated(this%sbarvec)) deallocate (this%sbarvec)
-      allocate (this%sbarvec(3, this%kk))
-#endif
-
-      this%sbarvec(:, :) = 0.0d0
-
-      ii = 1
-      do k = 1, 3
-         this%sbarvec(k, 1) = 0.0d0
-      end do
-      do nn = 1, nat
-         s1 = 0.0
-         do i = 1, 3
-            dum(i) = (crd(i, nn) - crd(i, ia))**2
-            s1 = s1 + dum(i)
-         end do
-         if (s1 < r2 .and. s1 > 0.0001) then
-            ii = ii + 1
-            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
-         end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
-!!    "in DBAR1."
-      end do
-      n = ii
    end subroutine clusba
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Program to make screened structure constants
-   !> S(ME)=-0.5*S(OLE)   J(ME)=2*J(OLE)  QBAR(ME)=2*QBAR(OLE)
-   !
-   !> @param[in] rws
-   !> @param[in] r
-   !> @param[in] nr
-   !> @param[in] nlm
-   !> @param[in] nrl
-   !> @param[in] na
-   !> @param[inout] sbar
-   !> @param[inout] a
-   !> @param[inout] wk
-   !> @param[inout] bet
-   !> @param[inout] s
-   !> @param[in] iclus
-   !> @param[in] r2
-   !---------------------------------------------------------------------------
-   subroutine micha(rws, r, nr, nlm, nrl, na, sbar, a, wk, bet, s, iclus, r2)
+   !> @brief Run the legacy MICHA screening construction.
+   !> @details Builds raw structure constants, applies shell decomposition and
+   !>          Cholesky-style screening, and accumulates screened sbar blocks.
+   !> @param[in] rws Wigner-Seitz radius.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[in] nlm Orbital block dimension.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[in] na Length of screening-coefficient storage.
+   !> @param[inout] sbar Screened structure constants.
+   !> @param[inout] a Screening coefficient work array.
+   !> @param[inout] wk Work array.
+   !> @param[inout] bet Screening beta work array.
+   !> @param[inout] s Raw structure-constant work matrix.
+   !> @param[in] iclus Center-cluster index.
+   !> @param[in] r2 Cutoff radius squared.
+   module subroutine micha(rws, r, nr, nlm, nrl, na, sbar, a, wk, bet, s, iclus, r2)
       implicit none
       ! Inputs              .
       integer, intent(in) :: iclus, na, nlm, nr, nrl
@@ -2326,46 +1124,22 @@ contains
       real(rp), dimension(nlm, nlm, nr), intent(inout) :: sbar
       ! Local variables
       real(rp) :: fak, pi
-      real(rp), dimension(3) :: q
+      real(rp), dimension(4) :: q
       ! External Calls
       !external SHLDCH, STREZE
       ! Intrinsic Functions
       intrinsic ATAN
 
-      pi = 4.d0*ATAN(1.d0)
-      ! ----------------------------------
-      call STREZE(rws, r, nr, s, nrl, nlm)
-      ! -------------------------------------------
-      fak = 2.d0
-      !Original faktors
-      q(1) = 0.3485d0*fak
-      q(2) = 0.05303d0*fak
-      q(3) = 0.010714d0*fak
-      ! Factors from LMTO47
-      !q(1) = 0.33727d0 * fak
-      !q(2) = 0.05115d0 * fak
-      !q(3) = 0.01397d0 * fak
-  !! ! New from LMTO47 (fcc Pt/Es)    data QM/0.3500000d0, 0.0571667d0, 0.0168070d0/
-      !q(1) = 0.3500000d0* fak
-      !q(2) = 0.0571667d0* fak
-      !q(3) = 0.0168070d0* fak
-      !     NA=(NRL*(NRL+1))/2
-      call SHLDCH(r, nr, nlm, nrl, s, a, na, q, bet, wk, sbar, iclus, r2)
    end subroutine micha
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !>  Makes big matrix of all structure constants connecting sites R
-   !
-   !> @param[in] w
-   !> @param[in] r
-   !> @param[in] nr
-   !> @param[inout] s
-   !> @param[in] nrl
-   !> @param[in] nlm
-   !---------------------------------------------------------------------------
-   subroutine STREZE(w, r, nr, s, nrl, nlm)
+   !> @brief Build raw canonical structure constants for a local cluster.
+   !> @param[in] w Distance scaling factor.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[inout] s Raw structure-constant matrix.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[in] nlm Orbital block dimension.
+   module subroutine STREZE(w, r, nr, s, nrl, nlm)
       implicit none
       ! Input
       integer, intent(in) :: nlm, nr, nrl
@@ -2377,59 +1151,35 @@ contains
       integer :: ilm, ir, irl0, jlm, jr, jrl0
       real(rp) :: rr, w1
       real(rp), dimension(3) :: dr
-      real(rp), dimension(81) :: s0
+      real(rp), dimension(16, 16) :: s0
       ! External calls
       !external CANSO
       ! Intrinsic Functions
       intrinsic SQRT
-
-      if (nlm > 9) stop "**** CHANGE DIMS IN STRMAT"
-      do ir = 1, nr
-         irl0 = (ir - 1)*nlm
-         do jr = 1, nr
-            jrl0 = (jr - 1)*nlm
-            dr(1) = (r(1, jr) - r(1, ir))/w
-            dr(2) = (r(2, jr) - r(2, ir))/w
-            dr(3) = (r(3, jr) - r(3, ir))/w
-            rr = SQRT(dr(1)**2 + dr(2)**2 + dr(3)**2)
-            w1 = 1.d0
-            call CANSO(w1, dr, s0)
-            do jlm = 1, nlm
-               do ilm = 1, nlm
-                  s(ilm + irl0, jlm + jrl0) = s0(ilm + (jlm - 1)*nlm)
-               end do
-            end do
-         end do
-      end do
    end subroutine streze
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !>  Solves for the screened structure constants
-   !
-   !> @param[in] r
-   !> @param[in] nr
-   !> @param[in] nlm
-   !> @param[in] nrl
-   !> @param[inout] s
-   !> @param[inout] a
-   !> @param[in] na
-   !> @param[in] q
-   !> @param[inout] bet
-   !> @param[inout] wk
-   !> @param[inout] sbar
-   !> @param[in] iclus
-   !> @param[in] r2
-   !---------------------------------------------------------------------------
-   subroutine shldch(r, nr, nlm, nrl, s, a, na, q, bet, wk, sbar, iclus, r2)
+   !> @brief Apply shell decomposition and screening to legacy structure constants.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[in] nlm Orbital block dimension.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[inout] s Raw/screened structure-constant work matrix.
+   !> @param[inout] a Screening coefficient work array.
+   !> @param[in] na Length of a.
+   !> @param[in] q Angular-momentum shell weights.
+   !> @param[inout] bet Screening beta work array.
+   !> @param[inout] wk Work array.
+   !> @param[inout] sbar Screened structure constants.
+   !> @param[in] iclus Center-cluster index.
+   !> @param[in] r2 Cutoff radius squared.
+   module subroutine shldch(r, nr, nlm, nrl, s, a, na, q, bet, wk, sbar, iclus, r2)
       implicit none
       !parameter for cutoff of sbar construction
       integer, parameter :: ncut = 9
       ! Input
       integer, intent(in) :: iclus, na, nlm, nr, nrl
       real(rp), intent(in) ::r2
-      real(rp), dimension(3), intent(in) :: q
+      real(rp), dimension(4), intent(in) :: q
       real(rp), dimension(3, nr), intent(in) :: r
       ! Output
       real(rp), dimension(na), intent(inout) :: a
@@ -2443,255 +1193,40 @@ contains
       !external chlr2f, chlr2s
       ! External Functions  .
       !integer, external :: LL
-      ndef = 0
-      lmax = LL(nlm)
-      allocate (s_temp(nrl, nrl))
-      write (17, 10000) lmax, q
-      irl = 0
-      do ir = 1, nr
-         do l = 0, lmax
-            do m = 1, 2*l + 1
-               irl = irl + 1
-               bet(irl) = 1.d0/q(l + 1)
-            end do
-         end do
-      end do
-      s_temp = s
-      do i = 1, nrl
-         s_temp(i, i) = s_temp(i, i) + bet(i)
-      end do
-!    ia = 0
-!    do i = 1, nrl
-!      do j = 1, i
-!        ia = ia + 1
-!        a(ia) = s(i, j)
-!        if (i == j) then
-!          a(ia) = a(ia) + bet(i)
-!        end if
-!      end do
-!    end do
-!    call chlr2f(a, na, wk, nrl, ndef)
-      call DPOTRF('U', nrl, s_temp, nrl, info)
-      write (17, 10001) ndef
-!    call chlr2s(a, na, s, nrl, nlm)
-      call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
-      deallocate (s_temp)
-      do ilm = 1, nlm
-         do irl = 1, nrl
-            s(irl, ilm) = -bet(irl)*s(irl, ilm)
-         end do
-      end do
-      ! --------------------------------
-      ir = 0
-      hitc = 0
-      !print *, ´ nr = ´, nr
-      do ir = 1, nr
-         if (abs(R(1, IR)**2 + R(2, IR)**2 + R(3, IR)**2 - &
-                 R(1, 1)**2 + R(2, 1)**2 + R(3, 1)**2) <= (R2/ncut)) then
-            write (16, 10002) r(1, ir), r(2, ir), r(3, ir), iclus
-            hitc = hitc + 1
-            irl0 = (ir - 1)*nlm
-            do ilm = 1, nlm
-               do jlm = 1, nlm
-                  sbar(ilm, jlm, hitc) = 2.*s(ilm + irl0, jlm)
-               end do
-            end do
-          !!! Changed for ´symmetrizing´ Sbar
-          !! NOT NEEDED SINCE WITH LARGER CUTOFF
-          !! SBAR IS CALCULATED PROPERLY
-            ! do l = 2, 9
-            !    l2 = l - 1
-            !    do j = 1, l2
-            !       sbar(l, j, ir) = sbar(j, l, ir)
-            !    end do
-            ! end do
-            ! do l = 1, 3
-            !    sbar(l+1, 1, ir) = -sbar(l+1, 1, ir)
-            ! end do
-            ! do l = 5, 9
-            !    do j = 2, 4
-            !       sbar(l, j, ir) = -sbar(l, j, ir)
-            !    end do
-            ! end do
-            !
-            do isb = 1, nlm
-               write (13) (sbar(isb, jsb, hitc), jsb=1, nlm)
-            end do
-            ! 208 FORMAT(5F12.6:/(12X, 4F12.6))
-            do isb = 1, nlm
-               write (16, 10003) (sbar(isb, jsb, hitc), jsb=1, nlm)
-            end do
-         end if
-      end do
-      !print *, ´ hitc = ´, hitc
-      return
-      !
-      ! ... Format Declarations ...
-      !
-10000 format(" LMAX=", i2, "   Q=", 3f10.6)
-10001 format(" NDEF=", i10)
-10002 format(" VECTOR=", 3f12.6, "   ICLUS=", i5)
-10003 format(9f10.4)
    end subroutine shldch
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Calculation of the unscreened structure constants in real
-   !> space using the slater_koster table.
-   !
-   !> @param[in] w
-   !> @param[in] dr
-   !> @param[inout] sc
-   !---------------------------------------------------------------------------
-   subroutine canso(w, dr, sc)
+   !> @brief Evaluate canonical structure-constant angular blocks.
+   !> @param[in] w Distance scaling factor.
+   !> @param[in] dr Displacement vector.
+   !> @param[out] sc 16-by-16 orbital structure-constant block.
+   module subroutine canso(w, dr, sc)
       implicit none
       ! Input
       real(rp), intent(in) :: w
       real(rp), dimension(3), intent(in) :: dr
       ! Output
-      real(rp), dimension(9, 9), intent(out) :: sc
+      real(rp), dimension(16, 16), intent(out) :: sc
       ! Local variables
       integer :: i, j, l, ll
-      real(rp) :: el, el2, elem, elen, em, em2, emen, en, en2, r1, r2, r3, rr, s2, s3, s4, s5, &
-                  sbyr, sq3, sq5
-      integer, dimension(9) :: ip
-      real(rp), dimension(9, 9) :: s
+      real(rp) :: el, el2, elem, elen, em, em2, emen, en, en2, r1, r2, r3, rr, s2, s3, s4, s5, s6, s7, &
+                  sbyr, sq3, sq5, sq7
+      integer, dimension(16) :: ip
+      real(rp), dimension(16, 16) :: s
       ! Intrinsic Functions
       intrinsic SQRT
       !.. Data Declarations ..
       ! original and correct
       !     S=1, X=2, Y=3, Z=4, XY=5, YZ=6, ZX=7, X**2-Y**2=8, 3Z*Z-R*R=9
-      data ip/1, 2, 3, 4, 5, 6, 7, 8, 9/
-      !data ip/1, 2, 3, 4, 5, 7, 6, 8, 9/
-      !data ip/1, 2, 3, 4, 5, 6, 7, 9, 8/
-      ! testing (old convention)
-      !data ip /  1,  4, 2, 3,   5, 6, 8, 9, 7  /
-      ! testing reversing d-orbitals (bstr convention)
-      !data ip/1, 2, 3, 4, 9, 8, 7, 6, 5/
-      !     S=1, X=2, Y=3, Z=4, XY=5, YZ=6, ZX=7, X**2-Y**2=8, 3Z*Z-R*R=9
-      r1 = dr(1)
-      r2 = dr(2)
-      r3 = dr(3)
-      rr = SQRT(r1*r1 + r2*r2 + r3*r3)
-      do i = 1, 9
-         do j = 1, 9
-            sc(i, j) = 0.0d0
-         end do
-      end do
-      if (rr/w <= 0.30d0) return
-      sbyr = w/rr
-      s2 = sbyr*sbyr
-      s3 = s2*sbyr
-      s4 = s3*sbyr
-      s5 = s4*sbyr
-      sq3 = SQRT(3.d0)
-      sq5 = SQRT(5.d0)
-      el = r1/rr
-      em = r2/rr
-      en = r3/rr
-      el2 = el*el
-      em2 = em*em
-      en2 = en*en
-      elem = el*em
-      elen = el*en
-      emen = em*en
-      !
-      sc(1, 1) = -2.0d0*sbyr
-      sc(1, 2) = el*s2*2.d0*sq3
-      sc(1, 3) = em*s2*2.d0*sq3
-      sc(1, 4) = en*s2*2.d0*sq3
-      sc(1, 5) = -2.d0*sq3*sq5*elem*s3
-      sc(1, 6) = -2.d0*sq3*sq5*emen*s3
-      sc(1, 7) = -2.d0*sq3*sq5*elen*s3
-      sc(1, 8) = -sq3*sq5*s3*(el2 - em2)
-      sc(1, 9) = sq5*s3*(1.d0 - 3.d0*en2)
-      !-----------------------------------------------------------------------
-      sc(2, 2) = (3.0d0*el2 - 1.0)*6.d0*s3
-      sc(2, 3) = 18.0d0*s3*elem
-      sc(2, 4) = 18.0d0*s3*elen
-      sc(2, 5) = 6.d0*sq5*s4*em*(1.0d0 - 5.0d0*el2)
-      sc(2, 6) = -30.0d0*sq5*s4*elem*en
-      sc(2, 7) = 6.d0*sq5*s4*en*(1.0d0 - 5.0d0*el2)
-      sc(2, 8) = 6.0d0*sq5*s4*el*(1.0d0 - 2.5d0*el2 + 2.5d0*em2)
-      sc(2, 9) = 3.d0*sq3*sq5*s4*el*(1.0d0 - 5.0d0*en2)
-      !-----------------------------------------------------------------------
-      sc(3, 3) = 6.d0*s3*(3.0d0*em2 - 1.d0)
-      sc(3, 4) = 18.d0*s3*emen
-      sc(3, 5) = 6.0d0*sq5*s4*el*(1.d0 - 5.d0*em2)
-      sc(3, 6) = 6.d0*sq5*s4*en*(1.d0 - 5.d0*em2)
-      sc(3, 7) = sc(2, 6)
-      sc(3, 8) = -6.d0*sq5*s4*em*(1.d0 - 2.5d0*em2 + 2.5d0*el2)
-      sc(3, 9) = 3.d0*sq3*sq5*s4*em*(1.d0 - 5.d0*en2)
-      !----------------------------------------------------------------------
-      sc(4, 4) = 6.d0*s3*(3.d0*en2 - 1.d0)
-      sc(4, 5) = sc(2, 6)
-      sc(4, 6) = 6.d0*sq5*s4*em*(1.d0 - 5.d0*en2)
-      sc(4, 7) = 6.d0*sq5*s4*el*(1.d0 - 5.d0*en2)
-      sc(4, 8) = -15.d0*sq5*s4*en*(el*el - em2)
-      sc(4, 9) = 3.d0*sq3*sq5*s4*en*(3.0d0 - 5.0d0*en2)
-      !-----------------------------------------------------------------------
-      sc(5, 5) = 10.d0*s5*(-35.d0*el2*em2 - 5.d0*en2 + 4.d0)
-      sc(5, 6) = -50.d0*s5*elen*(7.d0*em2 - 1.d0)
-      sc(5, 7) = -50.d0*s5*emen*(7.d0*el2 - 1.d0)
-      sc(5, 8) = -175.d0*s5*elem*(el2 - em2)
-      sc(5, 9) = -25.d0*sq3*s5*elem*(7.d0*en2 - 1.d0)
-      !----------------------------------------------------------------------
-      sc(6, 6) = 10.d0*s5*(-35.d0*em2*en2 - 5.d0*el2 + 4.d0)
-      sc(6, 7) = -50.d0*s5*elem*(7.d0*en2 - 1.d0)
-      sc(6, 8) = 50.d0*s5*emen*(3.5d0*em2 - 3.5d0*el2 - 1.d0)
-      sc(6, 9) = -25.d0*sq3*s5*emen*(7.d0*en2 - 3.d0)
-      !-----------------------------------------------------------------------
-      sc(7, 7) = 10.d0*s5*(-35.d0*el2*en2 - 5.d0*em2 + 4.d0)
-      sc(7, 8) = -50.d0*s5*elen*(3.5d0*el2 - 3.5d0*em2 - 1.0d0)
-      sc(7, 9) = -25.d0*sq3*s5*elen*(7.d0*en2 - 3.d0)
-      !-----------------------------------------------------------------------
-      sc(8, 8) = 10.d0*s5*(-8.75d0*(el2 - em2)**2 - 5.d0*en2 + 4.d0)
-      sc(8, 9) = -12.5d0*sq3*s5*(7.d0*en2 - 1.d0)*(el2 - em2)
-      !-----------------------------------------------------------------------
-      sc(9, 9) = -7.5d0*s5*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
-      !-----------------------------------------------------------------------
-      do l = 2, 9
-         ll = l - 1
-         do j = 1, ll
-            sc(l, j) = sc(j, l)
-         end do
-      end do
-      do l = 1, 3
-         sc(l + 1, 1) = -sc(l + 1, 1)
-      end do
-      do l = 5, 9
-         do j = 2, 4
-            sc(l, j) = -sc(l, j)
-         end do
-      end do
-      ! ------ THIS PART CHANGES THE YLM ORDER AND MULTIPLIES BY -0.5 ----
-      do i = 1, 9
-         do j = 1, 9
-            s(ip(j), ip(i)) = -0.5d0*sc(j, i)
-         end do
-      end do
-      do i = 1, 9
-         do j = 1, 9
-            sc(j, i) = s(j, i)
-         end do
-      end do
+      !     f-orbitals (10-16): fz3, fxz2, fyz2, fz(x2-y2), fxyz, fx3, fy3
    end subroutine canso
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Cholesky factorization of (N X N) REAL*8 matrix c.
-   !> returns as soon as matrix becomes indefinite, rest is unchanged
-   !>
-   !
-   !> @param[inout] C
-   !> @param[in] NA
-   !> @param[inout] W Workspace of dimension N
-   !> @param[in] N
-   !> @param[out] NDEF
-   !---------------------------------------------------------------------------
-   subroutine chlr2f(c, na, w, n, ndef)
+   !> @brief Factor a packed real symmetric matrix for legacy screening.
+   !> @param[inout] c Packed matrix/coefficient storage.
+   !> @param[in] na Length of c.
+   !> @param[inout] w Work/vector storage.
+   !> @param[in] n Matrix order.
+   !> @param[out] ndef Number of non-positive/deficient pivots detected.
+   module subroutine chlr2f(c, na, w, n, ndef)
       implicit none
       ! Input
       integer, intent(in) :: n, na
@@ -2705,55 +1240,15 @@ contains
       ! Intrinsic Functions
       intrinsic SQRT
 
-      write (17, *) 'chol', na, n
-      ic0 = 0
-      do i = 1, n
-         jc0 = 0
-         do j = 1, i - 1
-            csum = c(ic0 + j)
-            do k = 1, j - 1
-               csum = csum - w(k)*c(jc0 + k)
-            end do
-            jc0 = jc0 + j
-            w(j) = csum/c(jc0)
-         end do
-         csum = c(ic0 + i)
-         do k = 1, i - 1
-            csum = csum - w(k)*w(k)
-         end do
-         if (csum <= 0.d0) then
-            ndef = i - 1
-            goto 1000
-         else
-            do j = 1, i - 1
-               c(ic0 + j) = w(j)
-            end do
-            !
-            ic0 = ic0 + i
-            c(ic0) = SQRT(csum)
-         end if
-      end do
-      ndef = n
-1000  if (ndef < n) then
-         write (17, 10000) n, ndef
-      end if
-      return
-10000 format(" CHLR2F:    N=", i4, "    NDEF=", i4)
    end subroutine chlr2f
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Back substitution after cholesky factorization
-   !> solution overwrites RHS in V
-   !
-   !> @param[in] C
-   !> @param[in] NA
-   !> @param[inout] V
-   !> @param[in] N
-   !> @param[in] M Number of RHS´s
-   !---------------------------------------------------------------------------
-   subroutine chlr2s(c, na, v, n, m)
+   !> @brief Solve against a packed Cholesky factor for legacy screening.
+   !> @param[in] c Packed factor storage.
+   !> @param[in] na Length of c.
+   !> @param[inout] v Right-hand sides overwritten by solved vectors.
+   !> @param[in] n Matrix order.
+   !> @param[in] m Number of right-hand sides.
+   module subroutine chlr2s(c, na, v, n, m)
       implicit none
       ! Input
       integer, intent(in) :: m, n, na
@@ -2764,31 +1259,12 @@ contains
       integer :: i, ic0, ind1, ind2, k, mm
       real(rp) :: csum
 
-      do mm = 1, m
-         ic0 = 0
-         do i = 1, n
-            csum = v(i, mm)
-            do k = 1, i - 1
-               csum = csum - v(k, mm)*c(ic0 + k)
-            end do
-            ic0 = ic0 + i
-            v(i, mm) = csum/c(ic0)
-         end do
-         !
-         do i = n, 1, -1
-            ind2 = (i*(i + 1))/2
-            csum = v(i, mm)
-            ind1 = ind2 + i
-            do k = i + 1, n
-               csum = csum - v(k, mm)*c(ind1)
-               ind1 = ind1 + k
-            end do
-            v(i, mm) = csum/c(ind2)
-         end do
-      end do
    end subroutine chlr2s
 
-   function LL(ilm)
+   !> @brief Map an LM orbital index to angular-momentum quantum number l.
+   !> @param[in] ilm One-based LM orbital index.
+   !> @return Angular-momentum shell index for ilm.
+   module function LL(ilm)
       implicit none
       ! Input
       integer, intent(in) :: ilm
@@ -2797,30 +1273,25 @@ contains
       ! Local variables
       integer, dimension(100) :: lla
       ! Data Declarations
-      data lla/0, 3*1, 5*2, 7*3, 9*4, 11*5, 13*6, 15*7, 17*8, 19*9/
-
-      LL = lla(ilm)
    end function LL
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Reorders map according to eq vectors
-   !
-   !> @param[in] crd
-   !> @param[in] no
-   !> @param[in] iu
-   !> @param[inout] nn
-   !> @param[in] nat
-   !> @param[in] ntot
-   !> @param[in] nomx
-   !> @param[in] ndi
-   !> @param[in] nnmx
-   !> @param[inout] set
-   !> @param[inout] idnn
-   !> @param[out] ret
-   !---------------------------------------------------------------------------
-   subroutine remd(this, crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
+   !> @brief Build representative neighbor vectors for each atom type.
+   !> @details Compares cluster coordinates around representative atoms and
+   !>          fills neighbor maps plus displacement sets used by structb.
+   !> @param[inout] this Lattice object providing tolerance and helper context.
+   !> @param[in] crd Cluster coordinates.
+   !> @param[in] no Atom type labels for cluster atoms.
+   !> @param[in] iu Representative atom indices.
+   !> @param[inout] nn Neighbor table to fill.
+   !> @param[in] nat Number of cluster atoms.
+   !> @param[in] ntot Number of representative atoms.
+   !> @param[in] nomx Number of representative/type slots.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[in] nnmx Maximum neighbor slots.
+   !> @param[inout] set Neighbor displacement vectors.
+   !> @param[inout] idnn Neighbor identifier list.
+   !> @param[out] ret Return/status vector used by legacy callers.
+   module subroutine remd(this, crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
       implicit none
       ! Inputs
       class(lattice), intent(inout) :: this
@@ -2837,89 +1308,17 @@ contains
       integer :: i, ii, iii, imax, inn, ino, j, jj, jnn, jsz, k, la, lk, lm, m, n
       real(rp) :: a1, a2, a3, aaa, eps
       !-BUILDS VECTORS SET(3, NOMX, NNMX) CONNECTING NEIGHBORS OF EACH TYPE NO-
-      do i = 1, ntot
-         la = iu(i)
-         jsz = nn(la, 1)
-         do j = 2, jsz
-            jj = nn(la, j)
-            if (this%pbc) then 
-               call this%f_wrap_coord_diff(nat,crd,la,jj,set(:,i,j))
-            else
-               do m = 1, 3
-                  set(m, i, j) = crd(m, la) - crd(m, jj)
-               end do
-            end if
-         end do
-      end do
-      do i = 1, nat
-         n = no(i)
-         do lk = 1, ntot
-            ino = iu(lk)
-            lm = no(ino)
-            if (n == lm) goto 1000
-         end do
-         write (17, 10003)
-1000     imax = nn(ino, 1)
-         do iii = 1, imax
-            idnn(iii) = 0
-         end do
-         jsz = nn(i, 1)
-         do j = 2, jsz
-            jj = nn(i, j)
-            if (this%pbc) then
-               call this%f_wrap_coord_diff(nat,crd,i,jj,ret)
-            else
-               do m = 1, 3
-                  ret(m) = crd(m, i) - crd(m, jj)
-               end do
-            end if
-            !----------FINDS EQUIVALENT VECTOR------------------------
-            eps = .0001
-            do ii = 2, imax
-               a1 = ret(1) - set(1, n, ii)
-               a2 = ret(2) - set(2, n, ii)
-               a3 = ret(3) - set(3, n, ii)
-               aaa = a1**2 + a2**2 + a3**2
-               if (aaa < eps) goto 1100
-            end do
-            goto 1200
-1100        k = ii
-            idnn(k) = jj
-         end do
-         nn(i, 1) = imax
-         do j = 2, imax
-            nn(i, j) = idnn(j)
-         end do
-      end do
-      do inn = 1, nat
-         write (12) (nn(inn, jnn), jnn=1, nn(inn, 1))
-      end do
-      return
-1200  write (17, 10002)
-      print *, 'atom:', i
-      stop
-      !  9  WRITE(6, 223)I, SET(1, I, J), SET(2, I, J), SET(3, I, J)
-10000 format(i5, 3f9.4)
-      !--REORDERS NEIGHBORS FOR I LARGER THAN NTOT ACCORDING TO TYPICAL NO--
-10001 format(3i5)
-10002 format(" VECTOR   NOT FOUND ")
-10003 format(" TYPE NO  NOT FOUND ")
    end subroutine remd
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> TODO
-   !
-   !> @param[in] IM
-   !> @param[in] IZP
-   !> @param[in] NN
-   !> @param[in] NO
-   !> @param[in] ND
-   !> @param[in] NM
-   !> @param[in] NTOT
-   !---------------------------------------------------------------------------
-   subroutine outmap(IM, IZP, NN, NO, ND, NM, NTOT)
+   !> @brief Write the neighbor-map table in legacy text format.
+   !> @param[in] IM Output unit.
+   !> @param[in] IZP Atomic numbers/labels for printed atoms.
+   !> @param[in] NN Neighbor table.
+   !> @param[in] NO Atom type labels.
+   !> @param[in] ND Number of atoms in NO/IZP.
+   !> @param[in] NM Number of neighbor slots.
+   !> @param[in] NTOT Number of representative atoms.
+   module subroutine outmap(IM, IZP, NN, NO, ND, NM, NTOT)
       implicit none
       ! Input
       integer, intent(in) :: IM, ND, NM, NTOT
@@ -2931,29 +1330,16 @@ contains
       ! Intrinsic functions
       intrinsic MIN
 
-      write (IM, 10000)
-      do I = 1, NTOT
-!!    K = NO(I)
-         K = IZP(I)
-         ID = NN(I, 1)
-!!    IDM = MIN(ID, 21)
-         IDM = MIN(ID, 16)
-         write (IM, 10001) I, K, ID, (NN(I, J), J=2, IDM)
-         if (IDM /= NN(I, 1)) then
-            !     ID=NN(I, 1)
-            write (IM, 10002) (NN(I, J), J=17, ID)
-         end if
-      end do
-      return
-
-10000 format( &
-         " NEAREST NEIGHBOUR MAP"/, "      ATOM   TYPE  CONNECTIVITY", 5x, &
-         "NEIGHBOURS")
-10001 format(1x, 3i4, 2x, 20i5)
-10002 format(29x, 16i5)
    end subroutine outmap
 
-   integer function mapa(I, J, R2, DD, CT)
+   !> @brief Classify a neighbor-shell pair by distance cutoff.
+   !> @param[in] I First shell/type index.
+   !> @param[in] J Second shell/type index.
+   !> @param[in] R2 Squared distance between sites.
+   !> @param[in] DD Distance tolerance or shell spacing.
+   !> @param[in] CT Shell cutoff radii.
+   !> @return Legacy neighbor-shell map value.
+   module integer function mapa(I, J, R2, DD, CT)
       implicit none
       ! Input
       integer, intent(in) :: I, J
@@ -2963,19 +1349,17 @@ contains
       ! Local variables
       real(rp) :: CTM, CTSM
 
-      CTM = (CT(1) + CT(1))/2.
-      CTSM = CTM**2
-      if (R2 >= CTSM) then
-         MAPA = 0
-      else
-         MAPA = 1
-      end if
    end function mapa
 
-   ! Return j-i in physical length units, using the same finite image search
-   ! as nncal/remd/chbar_nc. The caller controls pbc; b1:b3 enable translations.
-   ! Optional ambiguity detection does not alter the historical chosen image.
-   subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff,ambiguous)
+   !> @brief Compute the minimum-image coordinate difference between two atoms.
+   !> @param[inout] this Lattice object containing periodic-boundary settings.
+   !> @param[in] Natom Number of atoms in coord.
+   !> @param[in] coord Atomic coordinates.
+   !> @param[in] i_atom First atom index.
+   !> @param[in] j_atom Second atom index.
+   !> @param[out] cdiff Minimum-image displacement from i_atom to j_atom.
+   !> @param[out] ambiguous Optional; true if another image is equally short. The chosen image is unchanged.
+   module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff,ambiguous)
       implicit none
       class(lattice), intent(inout) :: this
       integer, intent(in) :: Natom
@@ -2983,7 +1367,6 @@ contains
       integer, intent(in) :: i_atom
       integer, intent(in) :: j_atom
       real(rp), dimension(3), intent(out) :: cdiff
-      ! Optional diagnostic only: retain the historical image selection.
       logical, intent(out), optional :: ambiguous
       real(rp) :: tolerance
       !
@@ -2991,69 +1374,23 @@ contains
       integer :: x,y,z
       integer :: xmin,xmax,ymin,ymax,zmin,zmax
       !
-      odiff=coord(:,j_atom) - coord(:,i_atom)
-      !
-      xmax=0;xmin=0;ymax=0;ymin=0;zmax=0;zmin=0
-      if(this%b1)then
-         xmax=1
-         xmin=-1
-      end if
-      if(this%b2)then
-         ymax=1
-         ymin=-1
-      end if
-      if(this%b3)then
-         zmax=1
-         zmin=-1
-      end if
-      
-      mdiff=odiff
-      do z=zmin,zmax
-         do y=ymin,ymax
-            do x=xmin,xmax
-               oshift = odiff + x*(this%n1)*this%a(:, 1)*this%alat& 
-                              + y*(this%n2)*this%a(:, 2)*this%alat&
-                              + z*(this%n3)*this%a(:, 3)*this%alat
-               if(norm2(oshift)<norm2(mdiff))  mdiff = oshift
-            end do
-         end do
-      end do
-      cdiff=mdiff
-      if (present(ambiguous)) then
-         ambiguous = .false.
-         tolerance = 128*spacing(1.0_rp)*max(1.0_rp, sum(mdiff**2))
-         do z=zmin,zmax
-            do y=ymin,ymax
-               do x=xmin,xmax
-                  oshift = odiff + x*this%n1*this%a(:,1)*this%alat &
-                                 + y*this%n2*this%a(:,2)*this%alat &
-                                 + z*this%n3*this%a(:,3)*this%alat
-                  if (abs(sum(oshift**2)-sum(mdiff**2)) <= tolerance .and. &
-                      sum((oshift-mdiff)**2) > tolerance) ambiguous = .true.
-               end do
-            end do
-         end do
-      end if
-      return
-      !
    end subroutine f_wrap_coord_diff
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Recursion library
-   !
-   !> @param[inout] ct
-   !> @param[in] crd
-   !> @param[in] ndim
-   !> @param[in] nat
-   !> @param[in] izp
-   !> @param[inout] nn
-   !> @param[in] nd
-   !> @param[inout] nm
-   !> @param[in] ngbr
-   !> @param[in] ntot
-   !---------------------------------------------------------------------------
-   subroutine nncal(this,ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
+
+   !> @brief Build the atom neighbor table using shell cutoffs.
+   !> @details Uses spatial binning and optional periodic wrapping to find
+   !>          neighbors within the configured cutoff shells and populate NN.
+   !> @param[inout] this Lattice object containing cell/PBC state.
+   !> @param[inout] ct Shell cutoff radii.
+   !> @param[in] crd Atomic coordinates.
+   !> @param[in] ndim Coordinate leading dimension.
+   !> @param[in] nat Number of atoms.
+   !> @param[in] izp Atomic numbers/labels.
+   !> @param[inout] nn Neighbor table.
+   !> @param[in] nd Number of atoms represented in nn.
+   !> @param[inout] nm Maximum/actual neighbor slots.
+   !> @param[in] ngbr Legacy neighbor-shell classification function.
+   !> @param[in] ntot Number of representative atoms.
+   module subroutine nncal(this,ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
       implicit none
       class(lattice), intent(inout) :: this
       ! Input
@@ -3067,94 +1404,30 @@ contains
       ! External function
       integer, external :: NGBR
       ! Intrinsic function
-      intrinsic ABS, MAX
+      intrinsic ABS, MAX, MIN, FLOOR, NINT
       ! Local variables
       integer :: I, IADD, ID, II, IIP, ILJ, J, JJP, L, NNMAX
-      real(rp) :: R2
+      integer :: NX, NY, NZ, NBIN, BX, BY, BZ, DBX, DBY, DBZ, BIN_ID
+      integer :: CAP, CAND_COUNT, K, IX, IY, IZ, RX, RY, RZ
+      real(rp) :: R2, RCUT, RCUT2, DETC
       real(rp), dimension(3) :: DDUM
+      real(rp), dimension(3) :: MINC, MAXC, SPAN, BINW, DS
+      real(rp), dimension(3, 3) :: CELL, CELL_INV
+      real(rp), dimension(3, 2) :: CROSS_TMP
       real(rp), dimension(NM) :: DUM
+      real(rp), allocatable :: FRAC(:, :)
+      integer, allocatable :: HEAD(:), NEXT_ATOM(:), BIN_X(:), BIN_Y(:), BIN_Z(:), CANDIDATES(:)
 
-      NNMAX = 0
-      IADD = 1
-      if (IZP(1) < 0) then
-         NN(1, 1) = 1
-      end if
-      do II = 1, NAT
-         if (IZP(II) < 0) goto 1000
-      end do
-      NN(1, 1) = 1
-      do I = 1, NAT
-         do J = 2, NM
-            NN(I, J) = 0
-         end do
-      end do
-      IADD = 0
-      II = 2
-1000  if (II <= 1) then
-         II = 2
-      end if
-      do I = II, NAT
-         if (IZP(I)*IADD <= 0) then
-            NN(I, 1) = 1
-            IIP = IZP(I)
-            IIP = ABS(IIP)
-            ILJ = I - 1
-            do J = 1, ILJ
-               JJP = IZP(J)
-               JJP = ABS(JJP)
-               R2 = 0.0
-               if (this%pbc) then
-                  call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
-                  r2 = sum(ddum(:)**2)
-               else        
-                  do L = 1, 3
-                     DDUM(L) = CRD(L, I) - CRD(L, J)
-                     R2 = R2 + DDUM(L)*DDUM(L)
-                  end do
-               end if
-               ID = NGBR(IIP, JJP, R2, DUM, CT)
-               !       if (ID /= 0 .and. ( IZP(I) > NTOT  .or. IZP(J) > NTOT) ) then
-               if (ID /= 0) then
-                  ID = NN(I, 1) + 1
-                  NN(I, 1) = ID
-                  !         NN(I, ID) = IZP(J)
-                  NN(I, ID) = J
-                  NNMAX = MAX(NNMAX, ID)
-                  ID = NN(J, 1) + 1
-                  NN(J, 1) = ID
-                  !         NN(J, ID) = IZP(I)
-                  NN(J, ID) = I
-                  NNMAX = MAX(NNMAX, ID)
-                  if (NNMAX > NM) then
-                     write (6, 10001)
-                     write (6, 10002) I
-                     write (6, *) NNMAX, ID, NM
-                     stop
-                  end if
-               end if
-            end do
-         end if
-      end do
-      nm = nnmax
-      return
-
-10000 format("FROM NNCAL ")
-10001 format(" TOO MANY NEIGHBOURS")
-10002 format(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")
    end subroutine
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Read CR of clust file
-   !
-   !> @param[in] alat
-   !> @param[in] nndim
-   !> @param[inout] cr
-   !> @param[inout] iz
-   !> @param[inout] n
-   !> @param[in] ip Unit of opened file
-   !---------------------------------------------------------------------------
-   subroutine leia(alat, nndim, cr, iz, n, ip)
+
+   !> @brief Read legacy cluster coordinate records from a unit.
+   !> @param[in] alat Lattice parameter used for coordinate scaling.
+   !> @param[in] nndim Maximum number of cluster atoms.
+   !> @param[inout] cr Coordinate array to fill.
+   !> @param[inout] iz Atomic numbers/labels.
+   !> @param[inout] n Atom-number labels.
+   !> @param[in] ip Input unit.
+   module subroutine leia(alat, nndim, cr, iz, n, ip)
       implicit none
       ! Input
       integer, intent(in) :: ip, nndim
@@ -3165,36 +1438,15 @@ contains
       ! Local variables
       integer :: i, j
 
-      read (IP, *)
-      do I = 1, nndim, 2
-         read (IP, *) &
-            CR(1, I), CR(2, I), CR(3, I), IZ(I), N(I), CR(1, I + 1), CR(2, I + 1), &
-            CR(3, I + 1), IZ(I + 1), N(I + 1)
-      end do
-      do I = 1, nndim
-         do J = 1, 3
-            CR(J, I) = ALAT*CR(J, I)
-         end do
-      end do
-      return
    end subroutine
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Subrotina que ordena um determinado vetor ´M´ em ordem decrescente
-   !>     segundo o metodo da bolha (BUBBLE)
-   !> ...M(1) >= M(2)...  ; onde:
-   !>     NL, ndim   -  input
-   !>     M         -  input/output (na saida M contem os elementos dispostos
-   !>     em ordem decrescente em modulo.
-   !>
-   !> @param[in] nl
-   !> @param[in] ndim
-   !> @param[inout] m
-   !> @param[in] nd
-   !> @param[in] nt
-   !---------------------------------------------------------------------------
-   subroutine bubble(nl, ndim, m, nd, nt)
+
+   !> @brief Sort a legacy matrix block by its first column.
+   !> @param[in] nl First active row/starting index.
+   !> @param[in] ndim Leading dimension of m.
+   !> @param[inout] m Matrix block to sort.
+   !> @param[in] nd Number of columns.
+   !> @param[in] nt Number of active rows.
+   module subroutine bubble(nl, ndim, m, nd, nt)
       implicit none
       ! Inputs
       integer, intent(in) :: ndim, nl, nd, nt
@@ -3204,57 +1456,21 @@ contains
       integer :: ind, inic, j, k
       real(rp) :: fim, z
 
-      IND = 1
-      INIC = 2
-      FIM = NL
-      do while ((IND == 1) .and. (INIC <= FIM))
-         IND = 0
-         do J = INT(FIM), INIC, -1
-            if (M(J, NT) < M(J - 1, NT)) then
-            do K = 1, ND
-               Z = M(J, K)
-               M(J, K) = M(J - 1, K)
-               M(J - 1, K) = Z
-            end do
-            end if
-         end do
-         FIM = FIM - 1
-         do J = INIC, INT(FIM)
-            if (M(J + 1, NT) < M(J, NT)) then
-            do K = 1, ND
-               Z = M(J + 1, K)
-               M(J + 1, K) = M(J, K)
-               M(J, K) = Z
-            end do
-            IND = 1
-            end if
-         end do
-         INIC = INIC + 1
-      end do
    end subroutine bubble
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> CUT:subprogram of the builds package
-   !> Cuts a sphere of square raius RS around every atom in the unit
-   !> cell. Best for cells with large numbers of atoms...  hould
-   !> Carefull with monoatomic systems!!! In this case should cut
-   !> around several sites, since spherical clusters should be avoided.
-   !>
-   !> @param[in] i
-   !> @param[in] l
-   !> @param[in] ndim
-   !> @param[in] crd
-   !> @param[inout] cr
-   !> @param[in] izp
-   !> @param[inout] iz
-   !> @param[inout] num
-   !> @param[in] no
-   !> @param[in] rs
-   !> @param[in] ii
-   !---------------------------------------------------------------------------
-   subroutine cut(i, l, ndim, crd, cr, izp, iz, num, no, rs, ii)
+   !> @brief Cut translated primitive-cell atoms to a spherical cluster.
+   !> @param[in] i Center atom index.
+   !> @param[in] l Number of candidate atoms.
+   !> @param[in] ndim Array capacity.
+   !> @param[in] crd Candidate coordinates.
+   !> @param[out] cr Coordinates that survive the cut.
+   !> @param[in] izp Candidate atomic labels.
+   !> @param[out] iz Atomic labels that survive the cut.
+   !> @param[out] num Atom-number labels that survive the cut.
+   !> @param[in] no Candidate atom-number labels.
+   !> @param[in] rs Cut radius.
+   !> @param[out] ii Number of atoms that survived the cut.
+   module subroutine cut(i, l, ndim, crd, cr, izp, iz, num, no, rs, ii)
       ! Inputs
       real(rp), intent(in) :: rs
       integer, intent(in) :: i, l, ndim
@@ -3269,296 +1485,47 @@ contains
       real(rp), dimension(3) :: dum
       integer :: na, j
 
-      do na = 1, l
-         r2 = 0.0d0
-         do j = 1, 3
-            dum(j) = (crd(j, na) - crd(j, i))**2
-            r2 = r2 + dum(j)
-         end do
-         if (r2 .le. rs) then
-            ii = ii + 1
-            cr(1, ii) = crd(1, i)
-            cr(2, ii) = crd(2, i)
-            cr(3, ii) = crd(3, i)
-            iz(ii) = izp(i)
-            num(ii) = no(i)
-            return
-         end if
-      end do
-      return
    end subroutine cut
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Check if object is well fulfilled
-   !---------------------------------------------------------------------------
-   subroutine check_all(this)
+   !> @brief Check lattice option consistency after input parsing.
+   !> @param[inout] this Lattice object whose options are validated.
+   module subroutine check_all(this)
       implicit none
       class(lattice) :: this
 
-      if (this%crystal_sym /= 'bcc' &
-          .and. this%crystal_sym /= 'b2' &
-          .and. this%crystal_sym /= 'fcc' &
-          .and. this%crystal_sym /= 'hcp' &
-          .and. this%crystal_sym /= 'fcc2' &
-          .and. this%crystal_sym /= 'fcc3' &
-          .and. this%crystal_sym /= 'file') then
-         call g_logger%fatal('lattice%crystal_sym must be one of: ''bcc'', ''fcc'', ''hcp'' or  ''file''")', __FILE__, __LINE__)
-      end if
    end subroutine check_all
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Calculate reduced_acr and reduced_nbas
-   !---------------------------------------------------------------------------
-   subroutine calculate_nbas(this)
+   !> @brief Count reduced basis/species entries from the cluster atom labels.
+   !> @details Computes nbas/reduced_nbas-style counts used by charge and
+   !>          Hamiltonian setup after the cluster atom types are known.
+   !> @param[inout] this Lattice object whose basis counters are updated.
+   module subroutine calculate_nbas(this)
       implicit none
       class(lattice) :: this
       integer :: size_iz
       integer, dimension(:) :: atype(this%nbas), amount(this%nbas)
       integer :: i, j
 
-      amount(:) = 0
-      atype(:) = 0
-
-      j = 1
-
-      amount(j) = 1
-      atype(j) = this%iz(j)
-
-      do i = 2, this%nbas
-         if (this%iz(i) .eq. this%iz(i - 1)) then
-            amount(j) = amount(j) + 1
-         else
-            j = j + 1
-            atype(j) = this%iz(i)
-            amount(j) = 1
-         end if
-      end do
-
-      this%reduced_nbas = 0
-
-      do i = 1, size(amount)
-         if (amount(i) .eq. 0) exit
-         this%reduced_nbas = this%reduced_nbas + 1
-      end do
-
-#ifdef USE_SAFE_ALLOC
-      if (allocated(this%reduced_acr)) call g_safe_alloc%deallocate('lattice.reduced_acr', this%reduced_acr)
-      call g_safe_alloc%allocate('lattice.reduced_acr', this%reduced_acr, (/this%reduced_nbas/))
-#else
-      if (allocated(this%reduced_acr)) deallocate (this%reduced_acr)
-      allocate (this%reduced_acr(this%reduced_nbas))
-#endif
-
-      do i = 1, size(this%reduced_acr)
-         this%reduced_acr(i) = atype(i)
-      end do
-
    end subroutine calculate_nbas
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Print class members values in namelist format
-   !>
-   !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
-   !> @param[in] unit File unit used to write namelist
-   !> @param[in] file File name used to write namelist
-   !---------------------------------------------------------------------------
-   subroutine print_state_full(this, unit, file)
+   !> @brief Print the complete lattice state in the legacy diagnostic format.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
+   module subroutine print_state_full(this, unit, file)
       class(lattice), intent(in) :: this
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
       integer :: newunit
 
-      include 'include_codes/namelists/lattice.f90'
-
-      ! scalar
-
-      zmin = this%zmin
-      zmax = this%zmax
-      zstep = this%zstep
-      wav = this%wav
-      vol = this%vol
-      rc = this%rc
-      r2 = this%r2
-      celldm = this%celldm
-      alat = this%alat
-      reduced_nbas = this%reduced_nbas
-      ntype = this%ntype
-      ntot = this%ntot
-      nrec = this%nrec
-      nmax = this%nmax
-      nlay = this%nlay
-      ndim = this%ndim
-      npe = this%npe
-      nclu = this%nclu
-      nbulk_bulk = this%nbulk_bulk
-      nbulk = this%nbulk
-      nbas = this%nbas
-      kk = this%kk
-      dx = this%dx
-      dy = this%dy
-      dz = this%dz
-      dw = this%dw
-      crystal_sym = this%crystal_sym
-      surftype = this%surftype
-      a = this%a
-
-      ! one dimensional allocatables
-
-      if (allocated(this%z)) then
-         allocate (z, mold=this%z)
-         z = this%z
-      else
-         allocate (z(0))
-      end if
-      if (allocated(this%ct)) then
-         allocate (ct, mold=this%ct)
-         ct = this%ct
-      else
-         allocate (ct(0))
-      end if
-      if (allocated(this%reduced_acr)) then
-         allocate (reduced_acr, mold=this%reduced_acr)
-         reduced_acr = this%reduced_acr
-      else
-         allocate (reduced_acr(0))
-      end if
-      if (allocated(this%num)) then
-         allocate (num, mold=this%num)
-         num = this%num
-      else
-         allocate (num(0))
-      end if
-      if (allocated(this%no)) then
-         allocate (no, mold=this%no)
-         no = this%no
-      else
-         allocate (no(0))
-      end if
-      if (allocated(this%izpsurf)) then
-         allocate (izpsurf, mold=this%izpsurf)
-         izpsurf = this%izpsurf
-      else
-         allocate (izpsurf(0))
-      end if
-      if (allocated(this%izsurf)) then
-         allocate (izsurf, mold=this%izsurf)
-         izsurf = this%izsurf
-      else
-         allocate (izsurf(0))
-      end if
-      if (allocated(this%nosurf)) then
-         allocate (nosurf, mold=this%nosurf)
-         nosurf = this%nosurf
-      else
-         allocate (nosurf(0))
-      end if
-      if (allocated(this%izpo)) then
-         allocate (izpo, mold=this%izpo)
-         izpo = this%izpo
-      else
-         allocate (izpo(0))
-      end if
-      if (allocated(this%izp)) then
-         allocate (izp, mold=this%izp)
-         izp = this%izp
-      else
-         allocate (izp(0))
-      end if
-      if (allocated(this%iz)) then
-         allocate (iz, mold=this%iz)
-         iz = this%iz
-      else
-         allocate (iz(0))
-      end if
-      if (allocated(this%iu)) then
-         allocate (iu, mold=this%iu)
-         iu = this%iu
-      else
-         allocate (iu(0))
-      end if
-      if (allocated(this%irec)) then
-         allocate (irec, mold=this%irec)
-         irec = this%irec
-      else
-         allocate (irec(0))
-      end if
-      if (allocated(this%ib)) then
-         allocate (ib, mold=this%ib)
-         ib = this%ib
-      else
-         allocate (ib(0))
-      end if
-
-      ! two dimensional allocatables
-
-      if (allocated(this%primcell)) then
-         allocate (primcell, mold=this%primcell)
-         primcell = this%primcell
-      else
-         allocate (primcell(0, 0))
-      end if
-      if (allocated(this%inclu)) then
-         allocate (inclu, mold=this%inclu)
-         inclu = this%inclu
-      else
-         allocate (inclu(0, 0))
-      end if
-      if (allocated(this%crsurf)) then
-         allocate (crsurf, mold=this%crsurf)
-         crsurf = this%crsurf
-      else
-         allocate (crsurf(0, 0))
-      end if
-      if (allocated(this%crd)) then
-         allocate (crd, mold=this%crd)
-         crd = this%crd
-      else
-         allocate (crd(0, 0))
-      end if
-      if (allocated(this%cr)) then
-         allocate (cr, mold=this%cr)
-         cr = this%cr
-      else
-         allocate (cr(0, 0))
-      end if
-      if (allocated(this%acr)) then
-         allocate (acr, mold=this%acr)
-         acr = this%acr
-      else
-         allocate (acr(0, 0))
-      end if
-
-      if (present(unit) .and. present(file)) then
-         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
-      else if (present(unit)) then
-         write (unit, nml=lattice)
-      else if (present(file)) then
-         open (unit=newunit, file=file)
-         write (newunit, nml=lattice)
-         close (newunit)
-      else
-         write (*, nml=lattice)
-      end if
-
    end subroutine print_state_full
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Print class members values in namelist format
-   !>
-   !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
-   !> @param[in] unit File unit used to write namelist
-   !> @param[in] file File name used to write namelist
-   !---------------------------------------------------------------------------
-   subroutine print_state(this, unit, file)
+   !> @brief Print the compact lattice state in the legacy diagnostic format.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
+   module subroutine print_state(this, unit, file)
       implicit none
       class(lattice), intent(in) :: this
 
@@ -3566,76 +1533,15 @@ contains
       character(len=*), intent(in), optional :: file
       integer :: newunit
 
-      include 'include_codes/namelists/lattice.f90'
-
-      ! scalar
-
-      wav = this%wav
-      rc = this%rc
-      celldm = this%celldm
-      alat = this%alat
-      nlay = this%nlay
-      ndim = this%ndim
-      npe = this%npe
-      nclu = this%nclu
-      crystal_sym = this%crystal_sym
-      surftype = this%surftype
-      a = this%a
-
-      ! ! one dimensional allocatables
-
-      if (allocated(this%no)) then
-         allocate (no, mold=this%no)
-         no = this%no
-      else
-         allocate (no(0))
-      end if
-      if (allocated(this%izp)) then
-         allocate (izp, mold=this%izp)
-         izp = this%izp
-      else
-         allocate (izp(0))
-      end if
-
-      ! ! two dimensional allocatables
-
-      if (allocated(this%inclu)) then
-         allocate (inclu, mold=this%inclu)
-         inclu = this%inclu
-      else
-         allocate (inclu(0, 0))
-      end if
-      if (allocated(this%crd)) then
-         allocate (crd, mold=this%crd)
-         crd = this%crd
-      else
-         allocate (crd(0, 0))
-      end if
-
-      if (present(unit) .and. present(file)) then
-         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
-      else if (present(unit)) then
-         write (unit, nml=lattice)
-      else if (present(file)) then
-         open (unit=newunit, file=file, action='write')
-         write (newunit, nml=lattice)
-         close (newunit)
-      else
-         write (*, nml=lattice)
-      end if
-
    end subroutine print_state
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Print class members values in namelist format
-   !>
-   !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
-   !> @param[in] unit File unit used to write namelist
-   !> @param[in] file File name used to write namelist
-   !---------------------------------------------------------------------------
-   subroutine print_state_formatted(this, unit, file)
+   !> @brief Print lattice state as a generated namelist.
+   !> @details Emits the current lattice configuration with namelist_generator
+   !>          so diagnostics can be compared with input-facing settings.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
+   module subroutine print_state_formatted(this, unit, file)
       class(lattice), intent(in) :: this
 
       integer, intent(in), optional :: unit
@@ -3644,77 +1550,8 @@ contains
       type(namelist_generator) :: nml
       integer :: i
 
-      nml = namelist_generator('lattice')
-
-      ! scalar
-
-      call nml%add('zmin', this%zmin)
-      call nml%add('zmax', this%zmax)
-      call nml%add('zstep', this%zstep)
-      call nml%add('wav', this%wav)
-      call nml%add('vol', this%vol)
-      call nml%add('rc', this%rc)
-      call nml%add('r2', this%r2)
-      call nml%add('celldm', this%celldm)
-      call nml%add('alat', this%alat)
-      call nml%add('reduced_nbas', this%reduced_nbas)
-      call nml%add('ntype', this%ntype)
-      call nml%add('ntot', this%ntot)
-      call nml%add('nrec', this%nrec)
-      call nml%add('nmax', this%nmax)
-      call nml%add('nlay', this%nlay)
-      call nml%add('ndim', this%ndim)
-      call nml%add('npe', this%npe)
-      call nml%add('nclu', this%nclu)
-      call nml%add('nbulk_bulk', this%nbulk_bulk)
-      call nml%add('nbulk', this%nbulk)
-      call nml%add('nbas', this%nbas)
-      call nml%add('kk', this%kk)
-      call nml%add('dx', this%dx)
-      call nml%add('dy', this%dy)
-      call nml%add('dz', this%dz)
-      call nml%add('dw', this%dw)
-      call nml%add('crystal_sym', this%crystal_sym)
-      call nml%add('surftype', this%surftype)
-      call nml%add('njij', this%njij)
-      call nml%add('njijk', this%njijk)
-
-      ! one dimensional allocatables
-      ! TODO: implement test inside namelist_generator
-      if (allocated(this%z)) call nml%add('z', this%z)
-      if (allocated(this%ct)) call nml%add('ct', this%ct)
-      if (allocated(this%reduced_acr)) call nml%add('reduced_acr', this%reduced_acr)
-      if (allocated(this%num)) call nml%add('num', this%num)
-      if (allocated(this%no)) call nml%add('no', this%no)
-      if (allocated(this%izpsurf)) call nml%add('izpsurf', this%izpsurf)
-      if (allocated(this%izsurf)) call nml%add('izsurf', this%izsurf)
-      if (allocated(this%nosurf)) call nml%add('nosurf', this%nosurf)
-      if (allocated(this%izpo)) call nml%add('izpo', this%izpo)
-      if (allocated(this%izp)) call nml%add('izp', this%izp)
-      if (allocated(this%iz)) call nml%add('iz', this%iz)
-      if (allocated(this%iu)) call nml%add('iu', this%iu)
-      if (allocated(this%irec)) call nml%add('irec', this%irec)
-      if (allocated(this%ib)) call nml%add('ib', this%ib)
-
-      ! ! two dimensional allocatables
-      ! TODO: implement test inside namelist_generator
-      call nml%add('a', this%a)
-      if (allocated(this%primcell)) call nml%add('primcell', this%primcell)
-      if (allocated(this%inclu)) call nml%add('inclu', this%inclu)
-      if (allocated(this%crsurf)) call nml%add('crsurf', this%crsurf)
-      if (allocated(this%crd)) call nml%add('crd', this%crd)
-      if (allocated(this%cr)) call nml%add('cr', this%cr)
-      if (allocated(this%acr)) call nml%add('acr', this%acr)
-
-      if (present(unit) .and. present(file)) then
-         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
-      else if (present(unit)) then
-         call nml%generate_namelist(unit=unit)
-      else if (present(file)) then
-         call nml%generate_namelist(file=file)
-      else
-         call nml%generate_namelist()
-      end if
    end subroutine print_state_formatted
+
+   end interface
 
 end module lattice_mod

@@ -1,0 +1,37 @@
+! Tolerances for the spin_response tests. Developer-owned; tests read them
+! from here and must not hard-code their own. All are relative unless noted.
+! Measured value on the reference data in brackets.
+&spin_response_tolerances
+  a1_rel            = 1.0e-12   ! A1 arrays and scalars vs closed form [2e-16]
+  a2_chi_rel        = 1.0e-10   ! A2 chi0 and chi arrays [5e-15]
+  a2_identity_rel   = 1.0e-12   ! A2 Goldstone and full-line zeroth moment [7e-16]
+  static_eta0_rel   = 1.0e-12   ! chi0(q,0) at eta = 0, divided differences, A1 and A2
+  a3_rel            = 1.0e-10   ! A3 trace and determinant vs primitive [1e-14]
+  window_moment_rel = 1.0e-6    ! E1: trapezoid over the omega grid vs exact window [2e-8]
+  dyson_u0_rel      = 1.0e-14   ! E3: U = 0 gives chi = chi0
+  pole_peak_rel     = 1.0e-2    ! C6: A1 pole from the parabolic peak of tr L [2.1e-3]
+  pole_crossing_rel = 5.0e-3    ! C6: A1 pole from the Re(1 + chi0 U) zero crossing [7.3e-4]
+  electron_count_abs = 1.0e-6    ! C1: electron count on the response mesh vs target (electrons)
+  eigen_contract_abs = 1.0e-10   ! C1 tests 1-2: arbitrary-k vs mesh eigenvalues (Ry)
+  moment_rel         = 1.0e-10   ! C2 tests 2-3: response moments vs band_moments, same mesh and occupations
+  s1_rel      = 1.0e-10
+  e1_fe_rel   = 1.0e-2
+  q0_pole_abs = 1.0e-5
+  s2_rel             = 1.0e-10  ! S2: normal vs spin-reversed Fe [2.0e-13]
+  region1_rel        = 0.35     ! Stage 2, xi <= 0.25: J(r) cutoff spread of the reference
+  region2_rel        = 0.25     ! Stage 2, 0.25 < xi < 0.45: projector spread + reference cutoff spread
+  baseline_repro_rel = 1.0e-8   ! reproduction test vs frozen 24^3 outputs [Debug vs Release 8.4e-12]
+  static_u_rel = 1.0e-10   ! C4.3: interaction() U_Juelich vs eta = 0 static reference [0.0]
+  s3_rel = 1.0e-9   ! S3: three-atom supercell vs folded one-site pair [5.7e-13]
+  channel_d_rel = 1.0e-10   ! 3c: spd with U on d vs d-only [1.3e-13]
+  a4_rel = 1.0e-10   ! A4 chi0, chi and static arrays vs numpy [9.9e-16, 5.4e-15, 4.3e-16]
+  a4_identity_rel = 1.0e-12   ! A4 Goldstone identity, (1 + chi0 I) m, lambda controls, zeroth moment [1.4e-14]
+  r1_rel = 1.0e-6   ! R1 kernel matrix vs analytic integral, both cases [9.2e-8, 9.1e-8; Simpson alone 9.2e-8]
+  radial_moment_rel = 3.0e-5   ! 3d: sphere integral of n_up - n_dn vs sum_l (Q0_up - Q0_dn) of Fe.nml [2.8e-6]
+  radial_enu_abs = 1.0e-10   ! 3d: E_nu of the lmtst re-run vs Fe.nml, Ry [5.3e-12]
+  a5_rel = 1.0e-10   ! A5 chi0, chi, static chi0 and eigenvalues of 1 + chi0 U vs the files [worst 2.5e-12, chi of af at q #2]
+  a5_identity_rel = 1.0e-12   ! A5 Goldstone identities, U from u_juelich, zeroth moments [worst 2.7e-15]
+  a5_adiabatic_rel = 1.0e-10   ! A5 Omega eigenvalues, max abs Im / max abs Re, exponents vs the oracle [worst 2.9e-12; af Omega pair 2.1e-12]
+  a5_exponent_abs = 0.05   ! A5 exponent minus 1 (af), minus 2 (ferri acoustic): physics bound, separates 1 from 2 by 20 [2.0e-3, 1.8e-2]
+  inversion_odd_abs = 1.0e-12  ! Ry; odd part of omega in centrosymmetric Fe with SOC [2.6e-16]
+/

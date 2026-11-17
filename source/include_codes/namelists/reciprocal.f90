@@ -1,0 +1,77 @@
+! ============================================================================
+! &reciprocal NAMELIST - K-space calculations and post-processing
+! ============================================================================
+! This namelist is used for reciprocal-space calculations and post-processing:
+!   - post_processing = 'band_structure'
+!   - post_processing = 'density_of_states'
+!   - post_processing = 'fermi_surface'
+!   - K-space SCF (calctype = 'K')
+!
+! NOTE: Replaces deprecated &dos namelist (see NAMELIST_HOMOGENIZATION.md)
+! ============================================================================
+
+! K-point mesh settings
+integer :: nk1, nk2, nk3                   ! K-mesh dimensions (e.g., 20, 20, 20)
+real :: k_offset_x, k_offset_y, k_offset_z ! K-mesh offsets (0.0 = Gamma-centered)
+logical :: use_symmetry_reduction          ! Use crystal symmetry (recommended: .true.)
+logical :: use_time_reversal               ! Use time-reversal symmetry (recommended: .true.)
+logical :: strict_symmetry_checks          ! Enforce strict symmetry-map checks
+logical :: dump_symmetry_kmap              ! Dump full->irreducible map diagnostics
+character(len=32) :: tetra_symmetry_mode   ! 'full_expand_ref' or 'irreducible_native'
+
+! Dense Fermi-surface export settings (for post_processing = 'fermi_surface').
+! The FS route always writes the complete BZ mesh; fs_use_symmetry_reduction is
+! retained as an explicit input knob for compatibility, but is ignored for the
+! exported payload because every k-point eigenvector is needed for colouring.
+integer :: fs_nk1, fs_nk2, fs_nk3             ! Dense FS mesh (<=0 uses nk1/nk2/nk3)
+logical :: fs_use_symmetry_reduction          ! Ignored: FS export is always full BZ
+
+! Density of states settings (for post_processing = 'density_of_states')
+! **CRITICAL**: All energy values are in RYDBERGS (Ry), NOT eV!
+!               Conversion: 1 Ry = 13.6057 eV,  1 eV = 0.07350 Ry
+!
+! Typical values for 3d transition metals (e.g., Fe, Co, Ni):
+!   dos_energy_min = -0.8 Ry   (≈ -11 eV below Fermi level)
+!   dos_energy_max =  0.9 Ry   (≈ +12 eV above Fermi level)
+!   gaussian_sigma =  0.02 Ry  (≈ 0.27 eV smearing, for 'gaussian' method)
+!
+! DOS methods:
+!   'tetrahedron' - Linear tetrahedron method (accurate, needs dense k-mesh)
+!   'blochl'      - Blöchl improved tetrahedron (recommended, more stable)
+!   'gaussian'    - Gaussian broadening (smoother, good for quick tests)
+!
+integer :: n_energy_points                 ! Number of DOS energy grid points (e.g., 2000)
+real :: dos_energy_min, dos_energy_max     ! Energy window in Ry (NOT eV!)
+real :: gaussian_sigma                     ! Gaussian smearing in Ry (only for 'gaussian')
+real :: temperature                        ! Temperature in Kelvin (e.g., 300.0)
+real :: total_electrons                    ! Total valence electrons (for auto_find_fermi)
+character(len=20) :: dos_method            ! 'tetrahedron', 'blochl', or 'gaussian'
+logical :: auto_find_fermi                 ! Find Fermi from charge conservation
+logical :: suppress_internal_logs          ! Reduce verbosity (.true. recommended)
+character(len=32) :: reciprocal_mode       ! 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'
+character(len=16) :: reciprocal_backend    ! 'lapack' (default) or 'cuda'
+character(len=16) :: kspace_ham_order      ! 'auto' (second if hoh on, else first), 'first' (h(k) + L.S for nsp = 2, 4), or 'second' (E_nu + h - hoh + L.S)
+logical :: kanpur_diagnostics              ! Print Kanpur-mapping diagnostics
+logical :: gamma_bounds_diagnostics        ! Compute H(Gamma) bounds diagnostics
+logical :: hall_diag_experimental          ! Experimental finite real-space HALL diagonalization
+
+! k-space Green's-function engine (milestone B2, reciprocal_green)
+real :: green_eta                          ! Retarded broadening for z = E + i*green_eta (Ry, default 0.01)
+character(len=16) :: green_backend         ! fill_green backend: 'lehmann' (E, Sigma=0) or 'dyson' (D)
+
+! Fermi-surface eigenpair export.  The configured file is a base name; the
+! writer appends '.bin' and '.meta'.
+logical :: write_eigenpair_projections      ! Also write site/orbital/local-spin weights
+logical :: write_spin_resolved_eigenpairs   ! Also write independently solved global up/down sectors
+character(len=256) :: eigenpair_output_file ! Base name, default 'fermi_surface'
+
+namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
+   use_symmetry_reduction, use_time_reversal, strict_symmetry_checks, &
+   dump_symmetry_kmap, tetra_symmetry_mode, &
+   fs_nk1, fs_nk2, fs_nk3, fs_use_symmetry_reduction, &
+   n_energy_points, dos_energy_min, dos_energy_max, &
+   gaussian_sigma, temperature, total_electrons, dos_method, &
+   auto_find_fermi, suppress_internal_logs, reciprocal_mode, reciprocal_backend, &
+   kspace_ham_order, &
+   kanpur_diagnostics, gamma_bounds_diagnostics, hall_diag_experimental, &
+   green_eta, green_backend, write_eigenpair_projections, write_spin_resolved_eigenpairs, eigenpair_output_file

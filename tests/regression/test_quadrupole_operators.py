@@ -19,15 +19,15 @@ def operators():
     env = {'matmul': np.matmul}
     angular = []
     for axis in 'xyz':
-        block = math_source.split('parameter :: L_' + axis, 1)[1]
-        values = block.split('reshape((/', 1)[1].split('/),', 1)[0]
+        block = math_source.split('L_' + axis + ' = reshape((/', 1)[1]
+        values = block.split('/),', 1)[0]
         values = values.replace('&', '').replace('_rp', '')
         values = values.replace('sqrt_three', str(np.sqrt(3)))
         matrix = -1j * np.array([float(v) for v in values.split(',')]).reshape((9, 9), order='F')
         angular.append(matrix)
         env['mL' + axis] = matrix
-    source = (ROOT / 'source/hamiltonian.f90').read_text()
-    selector = source.split('   subroutine select_quadrupole_operator(', 1)[1]
+    source = (ROOT / 'source/hamiltonian_build.f90').read_text()
+    selector = source.split('   module subroutine select_quadrupole_operator(', 1)[1]
     selector = selector.split('   end subroutine select_quadrupole_operator', 1)[0]
     for name, expr in re.findall(r'^\s*(L[xyz]2|L2) = (.+)$', selector, re.M):
         env[name] = eval(expr.replace('_rp', ''), {'__builtins__': {}}, env)

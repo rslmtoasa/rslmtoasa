@@ -31,7 +31,6 @@ v_alpha = 0, 1, 0
 v_beta =  1, 0, 0
 pol_alpha = 'z'
 pol_beta = 'z'
-hoh = .false. ! Baseline comparison with the original non-HOH calculation
 /
 &energy
 fermi = -0.089509

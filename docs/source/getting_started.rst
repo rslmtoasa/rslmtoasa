@@ -1,0 +1,323 @@
+.. _getting_started:
+
+=======================================
+Getting Started
+=======================================
+
+Overview
+========
+
+This section guides you through installing, compiling, and running the RS-LMTO-ASA code.
+
+**RS-LMTO-ASA** is a Fortran 2008 code that performs first-principles electronic structure 
+calculations using the Linear Muffin-Tin Orbital method with the Atomic Sphere Approximation. 
+It supports both scalar-relativistic and fully relativistic calculations with spin-orbit coupling, 
+collinear and non-collinear magnetism, and magnetic impurity calculations.
+
+Prerequisites
+=============
+
+**Required:**
+
+- Fortran 2008 compiler (Intel ifort, GNU gfortran, or equivalent)
+- CMake 3.19 or later
+- Make
+
+**Optional:**
+
+- OpenMP (for shared-memory parallelization, recommended)
+- MPI (for distributed-memory parallelization)
+- Python 3.7+ (for auxiliary scripts)
+
+Building RS-LMTO-ASA
+====================
+
+Clone the Repository
+--------------------
+
+.. code-block:: bash
+
+   git clone https://github.com/rslmtoasa/rslmtoasa.git
+   cd rslmtoasa
+
+Create a Build Directory
+------------------------
+
+.. code-block:: bash
+
+   mkdir build
+   cd build
+
+Configure with CMake
+--------------------
+
+**Default configuration (OpenMP enabled, MPI disabled):**
+
+.. code-block:: bash
+
+   cmake ..
+
+**With MPI support:**
+
+.. code-block:: bash
+
+   cmake -DENABLE_MPI=ON ..
+
+**With custom compiler:**
+
+.. code-block:: bash
+
+   cmake -DCMAKE_Fortran_COMPILER=ifort ..
+
+**View available CMake options:**
+
+.. code-block:: bash
+
+   cmake -LAH ..
+
+Key CMake Options
+~~~~~~~~~~~~~~~~~
+
+.. table::
+   :align: left
+
+   +-------------------------+---------------------------------------------+-------------------+
+   | Option                  | Description                                 | Default           |
+   +=========================+=============================================+===================+
+   | ENABLE_OPENMP           | Enable OpenMP parallelization               | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_MPI              | Enable MPI parallelization                  | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_MARCH_NATIVE     | Optimize for the build host's CPU           | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_LIBXC            | Use libXC exchange-correlation functionals  | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_SPGLIB           | Use spglib for symmetry / k-path            | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_CUDA_PLUGIN      | Build the CUDA recursion plugin backend     | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_CUDA_RECIPROCAL  | Build the CUDA reciprocal backend           | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_FUSED_RECIPROCAL | Fuse H(k) assembly and eigensolution        | ON (OFF on macOS) |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_MKL_KERNELS      | Build MKL Chebyshev kernels (batch/sparse)  | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | COLOR                   | Enable colored terminal output              | ON                |
+   +-------------------------+---------------------------------------------+-------------------+
+   | ENABLE_FLUSH            | Flush print output to files                 | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | RUN_REG_TESTS           | Run regression tests                        | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | RUN_EXAMPLE_TESTS       | Run fast example-based SCF tests            | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+   | RUN_UNIT_TESTS          | Build and run standalone Fortran unit tests | OFF               |
+   +-------------------------+---------------------------------------------+-------------------+
+
+For GPU acceleration via the CUDA plugin, see :ref:`theory/gpu_acceleration`.
+
+CUDA architecture selection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When either CUDA backend is enabled, CMake 3.24 or newer builds for the GPU
+detected on the host that runs configuration (``CMAKE_CUDA_ARCHITECTURES=native``).
+This avoids reusing device code compiled for a different GPU generation.
+
+An explicit architecture always takes precedence and is needed when the build
+host has no available GPU, when cross-compiling, or when distributing one
+binary to machines with different GPU generations.  For example, an Ada GPU
+uses compute capability 8.9:
+
+.. code-block:: bash
+
+   cmake -DENABLE_CUDA_PLUGIN=ON -DCMAKE_CUDA_ARCHITECTURES=89 ..
+
+Use a semicolon-separated list for a multi-architecture binary (quote it to
+prevent shell interpretation), for example ``-DCMAKE_CUDA_ARCHITECTURES="75;89"``.
+The ``CUDAARCHS`` environment variable may also be used.  With CMake versions
+older than 3.24, set one of these explicit values because ``native`` is not
+available.
+
+Compile
+-------
+
+.. code-block:: bash
+
+   make -j 4
+
+The executable will be created at ``build/bin/rslmto.x``.
+
+Verify Installation
+-------------------
+
+.. code-block:: bash
+
+   ls build/bin/rslmto.x
+
+The executable has no ``--help`` option: its first argument is the input file name. Run it in a
+folder with an ``input.nml`` (see :ref:`Example Calculation <getting_started_example>` below).
+
+Running a Calculation
+=====================
+
+Basic Syntax
+------------
+
+The code reads from ``input.nml`` in the current directory by default. Optionally, you can 
+specify a different input filename as the first argument.
+
+**Default usage (reads input.nml):**
+
+.. code-block:: bash
+
+   ./rslmto.x
+
+**Specify a different input file:**
+
+.. code-block:: bash
+
+   ./rslmto.x my_calculation.nml
+
+.. _getting_started_example:
+
+Example Calculation
+-------------------
+
+Navigate to an example directory. It already contains an ``input.nml`` (the files ``Si1.nml`` and
+``Si2.nml`` are the per-atom parameter files read through ``&atoms``):
+
+.. code-block:: bash
+
+   cd example/bulk/Si
+
+Run the calculation:
+
+.. code-block:: bash
+
+   ../../../build/bin/rslmto.x
+
+With OpenMP parallelization:
+
+.. code-block:: bash
+
+   OMP_NUM_THREADS=4 ../../../build/bin/rslmto.x
+
+With MPI (if compiled with MPI support):
+
+.. code-block:: bash
+
+   mpirun -np 4 ../../../build/bin/rslmto.x
+
+Input and Output
+================
+
+**Input files** are specified in Fortran namelist format (``.nml``), containing all control 
+parameters, structure information, and calculation settings.
+
+See :ref:`user_guide/input_files` for detailed information on input file structure.
+
+Output files are written to the current directory and include:
+
+- ``<label>_out.nml``: Per atom type, element and potential parameters at the end of the run (restart file)
+- ``report.out``: Total energy, Fermi energy, spin moments and charge transfer
+- Energy values and convergence information
+- Band structure and density of states (if requested)
+- Magnetic properties (if applicable)
+- Additional analysis files (forces, exchange parameters, etc.)
+
+See :ref:`user_guide/output_files` for details.
+
+Environment Variables
+======================
+
+**OpenMP Control**
+
+.. code-block:: bash
+
+   export OMP_NUM_THREADS=4          # Number of threads
+   export OMP_NESTED=TRUE            # Nested parallelism
+   export OMP_STACKSIZE=256M         # Stack size per thread
+
+**MPI Control**
+
+.. code-block:: bash
+
+   export OMP_NUM_THREADS=2          # Threads per MPI rank (hybrid)
+   mpirun -np 8 ./rslmto.x
+
+**I/O Tuning**
+
+.. code-block:: bash
+
+   export OMP_PROC_BIND=CLOSE        # CPU affinity
+
+Troubleshooting
+===============
+
+**Compilation fails with "module not found"**
+
+This usually indicates a build directory issue. Try cleaning and rebuilding:
+
+.. code-block:: bash
+
+   rm -rf build
+   mkdir build && cd build
+   cmake .. -DCMAKE_Fortran_COMPILER=gfortran
+   make -j 4
+
+**Executable crashes with MPI**
+
+Ensure MPI libraries are linked correctly:
+
+.. code-block:: bash
+
+   cmake -DENABLE_MPI=ON -DMPI_Fortran_COMPILER=mpif90 ..
+
+**Performance issues with OpenMP**
+
+Check thread affinity and pinning. Use ``OMP_PROC_BIND=CLOSE`` for better locality.
+
+**gfortran warns that chebyshev_fast requires an executable stack**
+
+Some gfortran builds emit a linker warning like::
+
+   requires executable stack (because the .note.GNU-stack section is executable)
+
+for ``chebyshev_fast.f90.o``. **Cause:** ``chebyshev_fast.f90`` implements
+its Chebyshev backends (fast/batched/MKL) as *internal* (nested) subroutines
+passed as actual arguments to the shared ``cheb_three_term_moments`` driver
+(the ``ham_apply_t`` callback interface — see ``docs/DEVELOPER_MAP.md``,
+section 3, for the callback interface). Passing an internal procedure as an
+argument is gfortran's classic trigger for a "trampoline": the compiler
+generates a small executable code stub on the stack at runtime to capture
+the host procedure's context, which is why the object file's ``.note.GNU-stack``
+section ends up executable. This is expected for the current callback
+structure and is safe on standard Linux systems.
+
+**Symptom on hardened systems:** systems that disallow executable stacks
+(e.g. SELinux/PaX-hardened kernels, some HPC cluster login/compute nodes
+with W^X enforcement) may refuse to execute the resulting binary outright,
+or crash it at the first call into the trampoline-using code path
+(a segfault inside ``chebyshev_fast``-backed recursion, not at startup). If
+you hit this, rebuild with the legacy Chebyshev backend
+(``cheb_backend='legacy'``) for validation runs, which does not use nested
+procedures as callback arguments.
+
+Provenance
+==========
+
+This section documents the codebase locations used:
+
+- **Compilation system**: ``CMakeLists.txt`` (root), ``source/CMakeLists.txt``
+- **Entry point**: ``source/main.f90`` (program entry, MPI initialization, timer)
+- **Build options**: ``cmake/SetFortranFlags.cmake`` (compiler flags)
+- **Example inputs**: ``example/bulk/Si/input.nml``, ``example/bulk/bccFe/``, etc.
+
+Next Steps
+==========
+
+After successful installation:
+
+1. Read :doc:`code_structure` to understand the repository layout
+2. Review :ref:`theory/lmto_asa_overview` for theoretical background
+3. Check :ref:`user_guide/examples` for worked examples
+4. Consult :ref:`keywords/index` for input parameter reference

@@ -1,0 +1,35 @@
+{
+ "row": "U_rs_soc0",
+ "description": "+U RS nsp=2 SOC held at zero against nsp=1",
+ "kind": "soc0",
+ "tolerance": 1e-09,
+ "reason": "stored from the reference build 90f57c3 built with -DENABLE_MARCH_NATIVE=OFF (the CI configuration; reference binary of the former tools/ldau_regression.py)",
+ "binary_sha256": "bd44e48fa1428bcd29452d32d2bdbf16691e2b5f9d7de4d550949c579bf7e513",
+ "date": "2026-11-05",
+ "reference": {
+  "diff": [
+   0.0172568909,
+   0.0203304856,
+   0.02442917,
+   0.025143988
+  ],
+  "fermi": [
+   -0.00369,
+   -0.098361,
+   -0.103252,
+   -0.103581
+  ],
+  "spin_moment": [
+   2.101203,
+   2.307835,
+   2.354314,
+   2.365375
+  ],
+  "energy": [
+   -2541.852609911931,
+   -2541.865185348065,
+   -2541.867059010116,
+   -2541.867409302873
+  ]
+ }
+}

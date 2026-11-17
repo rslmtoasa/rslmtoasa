@@ -1,0 +1,455 @@
+! TEST-15: lean production contracts for charge, spin, and orbital transport.
+!
+! The fixture is deliberately tiny: two sites, an sp basis, and reverse bonds.
+! The charge velocity is built by the production Hamiltonian routine and the
+! spin/orbital polarization operators by the production selectors; the current
+! operators are the anticommutators 1/2 {q, v} of the Kubo transport (kind
+! 'current'), formed here with plain matmul.  The moment check compares the production eigenpair moment kernel with a direct
+! matrix Chebyshev recurrence for the same finite Hamiltonian; it does not
+! implement a second Kubo-Bastin or conductivity solver.
+program test_kpm_transport
+   use iso_fortran_env, only: real32
+   use precision_mod, only: rp
+   use basis_mod, only: basis_init, nb, spin_off
+   use control_mod, only: control
+   use charge_mod, only: charge
+   use hamiltonian_mod, only: hamiltonian, select_spin_operator, select_orbital_operator
+   use lattice_mod, only: lattice
+   use logger_mod, only: g_logger
+   use math_mod, only: init_math_operators, i_unit
+   use moment_kernel_mod, only: moment_onsite_block
+   use conductivity_mod, only: gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, pack_gamma_mu_diagonal
+   implicit none
+
+   integer, parameter :: nsite = 2
+   integer, parameter :: ll = 4
+   real(rp), parameter :: tolerance = 2.0e-11_rp
+   real(rp), parameter :: cheb_scale = 2.0_rp
+   real(rp), parameter :: cheb_shift = 0.0_rp
+
+   type(control), target :: ctl
+   type(lattice), target :: lat
+   type(charge), target :: charge_obj
+   type(hamiltonian), target :: ham
+   logical :: failed
+
+   failed = .false.
+   call g_logger%init()
+   call basis_init(1)
+   call init_math_operators()
+   call setup_fixture()
+
+   call test_charge_current()
+   call test_spin_operator()
+   call test_orbital_operator()
+   call test_transport_moments()
+   call test_s_only_orbital_symmetry()
+   call test_gamma_mu_layout()
+   call test_gamma_mu_cblas()
+   call test_gamma_mu_trace_modes()
+
+   if (failed) then
+      write (*, '(a)') 'RESULT: FAIL'
+      error stop 1
+   else
+      write (*, '(a)') 'RESULT: PASS'
+   end if
+
+contains
+
+   subroutine setup_fixture()
+      integer :: i
+
+      call ctl%restore_to_default()
+      ctl%lmax = 1
+      ctl%nsp = 2
+
+      lat%ntype = 1
+      lat%nrec = 1
+      lat%kk = 3
+      lat%nn_max = 3
+      lat%alat = 1.0_rp
+      allocate(lat%atlist(1), lat%iz(nsite + 1), lat%nn(1, 3), lat%cr(3, nsite + 1))
+      lat%atlist = 1
+      lat%iz = 1
+      ! Site 1 sees site 2 at -x and site 3 at +x.  The two directed
+      ! hopping blocks below are Hermitian reverses of one another.
+      lat%nn(1, :) = [3, 2, 3]
+      lat%cr = 0.0_rp
+      lat%cr(1, 2) = -1.0_rp
+      lat%cr(1, 3) = 1.0_rp
+
+      charge_obj%lattice => lat
+      ham%charge => charge_obj
+      ham%lattice => lat
+      ham%control => ctl
+      ham%hoh = .false.
+      ham%pol_alpha = 'z'
+      ham%pol_beta = 'z'
+      ham%v_alpha = [1.0_rp, 0.0_rp, 0.0_rp]
+      ham%v_beta = ham%v_alpha
+
+      allocate(ham%ee(nb, nb, 3, 1), ham%v_a(nb, nb, 3, 1), ham%v_b(nb, nb, 3, 1))
+      allocate(ham%velocity_scale(1))
+      ham%velocity_scale = 1.0_rp
+      ham%ee = (0.0_rp, 0.0_rp)
+
+      do i = 1, nb
+         ham%ee(i, i, 1, 1) = cmplx(0.10_rp + 0.01_rp*real(i, rp), 0.0_rp, rp)
+         ham%ee(i, i, 2, 1) = cmplx(0.03_rp + 0.002_rp*real(i, rp), 0.0_rp, rp)
+         ham%ee(i, i, 3, 1) = conjg(ham%ee(i, i, 2, 1))
+      end do
+   end subroutine setup_fixture
+
+   subroutine test_charge_current()
+      complex(rp) :: v_forward(nb, nb)
+
+      call ham%build_realspace_velocity_operators()
+      v_forward = ham%v_a(:, :, 2, 1)
+      call require(maxval(abs(ham%v_a(:, :, 3, 1) - conjg(transpose(v_forward)))) < tolerance, &
+         'charge current reverse bond is Hermitian conjugate')
+      call require(maxval(abs(ham%v_a(:, :, 2, 1) - ham%v_b(:, :, 2, 1))) < tolerance, &
+         'equal charge-current directions share the same operator')
+      call require(hermiticity_error(make_full_operator(v_forward)) < tolerance, &
+         'charge current finite model is Hermitian')
+   end subroutine test_charge_current
+
+   ! Would catch: a wrong polarization mapping (x/y/z swapped or sign-flipped), a non-Hermitian or
+   ! spin-mixing selector. Expected values are the closed forms S_z = diag(+1/2, -1/2) and
+   ! [S_x, S_y] = i S_z written here (hbar = 1).
+   subroutine test_spin_operator()
+      complex(rp), dimension(nb, nb) :: sx, sy, sz, sz_exact
+      integer :: i
+
+      call select_spin_operator('x', sx)
+      call select_spin_operator('y', sy)
+      call select_spin_operator('z', sz)
+      sz_exact = (0.0_rp, 0.0_rp)
+      do i = 1, spin_off
+         sz_exact(i, i) = cmplx(0.5_rp, 0.0_rp, rp)
+         sz_exact(i + spin_off, i + spin_off) = cmplx(-0.5_rp, 0.0_rp, rp)
+      end do
+      call require(maxval(abs(sz - sz_exact)) < tolerance, 'spin operator z is diag(+1/2, -1/2)')
+      call require(maxval(abs(matmul(sx, sy) - matmul(sy, sx) - i_unit*sz)) < tolerance, &
+         'spin operators satisfy [S_x, S_y] = i S_z')
+      call require(hermiticity_error(sx) < tolerance .and. hermiticity_error(sy) < tolerance, &
+         'spin operators are Hermitian')
+      call require(maxval(abs(current_block(sz, ham%v_a(:, :, 3, 1)) - &
+                              conjg(transpose(current_block(sz, ham%v_a(:, :, 2, 1)))))) < tolerance, &
+         'spin current reverse bond is Hermitian conjugate')
+      call require(hermiticity_error(make_full_operator(current_block(sz, ham%v_a(:, :, 2, 1)))) < tolerance, &
+         'spin current finite model is Hermitian')
+   end subroutine test_spin_operator
+
+   ! Would catch: a wrong orbital polarization mapping or basis transformation. Expected values are the
+   ! angular-momentum algebra [L_x, L_y] = i L_z and L^2 = l(l+1) (0 on s, 2 on p), hbar = 1.
+   subroutine test_orbital_operator()
+      complex(rp), dimension(nb, nb) :: lx, ly, lz, l2
+      real(rp) :: s_block, p_block
+
+      call select_orbital_operator('x', lx)
+      call select_orbital_operator('y', ly)
+      call select_orbital_operator('z', lz)
+      call require(maxval(abs(matmul(lx, ly) - matmul(ly, lx) - i_unit*lz)) < tolerance, &
+         'orbital operators satisfy [L_x, L_y] = i L_z')
+      l2 = matmul(lx, lx) + matmul(ly, ly) + matmul(lz, lz)
+      s_block = maxval(abs(l2(1:1, 1:1)))
+      p_block = maxval(abs(l2(2:4, 2:4) - 2.0_rp*reshape([1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])))
+      call require(s_block < tolerance .and. p_block < tolerance, 'orbital operators give L^2 = 0 on s and 2 on p')
+      call require(hermiticity_error(lx) < tolerance .and. hermiticity_error(ly) < tolerance, &
+         'orbital operators are Hermitian')
+      call require(maxval(abs(current_block(lz, ham%v_a(:, :, 3, 1)) - &
+                              conjg(transpose(current_block(lz, ham%v_a(:, :, 2, 1)))))) < tolerance, &
+         'orbital current reverse bond is Hermitian conjugate')
+      call require(hermiticity_error(make_full_operator(current_block(lz, ham%v_a(:, :, 2, 1)))) < tolerance, &
+         'orbital current finite model is Hermitian')
+      call require(maxval(abs(current_block(lz, ham%v_a(:, :, 2, 1)))) > tolerance, &
+         'orbital current is nonzero when p-orbital hopping is present')
+   end subroutine test_orbital_operator
+
+   ! The Kubo current operator 1/2 {q, v} for the forward bond of the fixture.
+   function current_block(q, v) result(j)
+      complex(rp), intent(in) :: q(nb, nb), v(nb, nb)
+      complex(rp) :: j(nb, nb)
+      j = 0.5_rp*(matmul(q, v) + matmul(v, q))
+   end function current_block
+
+   subroutine test_transport_moments()
+      integer :: nmat
+      real(rp), allocatable :: eigenvalues(:, :)
+      complex(rp), allocatable :: eigenvectors(:, :, :), hk(:, :)
+      complex(rp), allocatable :: va_k(:, :, :), vb_k(:, :, :)
+      complex(rp) :: mu_exact(nb, nb, ll, ll)
+      complex(rp), allocatable :: va(:, :), vb(:, :)
+      character(len=*), parameter :: route_names(3) = ['charge  ', 'spin    ', 'orbital ']
+      integer :: route
+      complex(rp), dimension(nb, nb) :: q_spin, q_orbital
+
+      call select_spin_operator('z', q_spin)
+      call select_orbital_operator('z', q_orbital)
+      nmat = nsite*nb
+      allocate(eigenvalues(nmat, 1), eigenvectors(nmat, nmat, 1), hk(nmat, nmat))
+      allocate(va_k(nmat, nmat, 1), vb_k(nmat, nmat, 1), va(nmat, nmat), vb(nmat, nmat))
+      hk = make_hamiltonian()
+      call diagonalize_hermitian(hk, eigenvalues(:, 1), eigenvectors(:, :, 1))
+      vb = make_full_operator(ham%v_b(:, :, 2, 1))
+
+      do route = 1, 3
+         select case(route)
+         case(1)
+            va = make_full_operator(ham%v_a(:, :, 2, 1))
+         case(2)
+            va = make_full_operator(current_block(q_spin, ham%v_a(:, :, 2, 1)))
+         case(3)
+            va = make_full_operator(current_block(q_orbital, ham%v_a(:, :, 2, 1)))
+         end select
+         va_k(:, :, 1) = va
+         vb_k(:, :, 1) = vb
+
+         call moment_onsite_block(eigenvalues, eigenvectors, va_k, vb_k, cheb_scale, cheb_shift, &
+            0, nb, ll, mu_exact)
+         call compare_direct_chebyshev(trim(route_names(route)), hk, va, vb, mu_exact)
+      end do
+      deallocate(eigenvalues, eigenvectors, hk, va_k, vb_k, va, vb)
+   end subroutine test_transport_moments
+
+   subroutine compare_direct_chebyshev(name, hamiltonian_matrix, va, vb, exact_moments)
+      character(len=*), intent(in) :: name
+      complex(rp), intent(in) :: hamiltonian_matrix(:, :), va(:, :), vb(:, :)
+      complex(rp), intent(in) :: exact_moments(:, :, :, :)
+      complex(rp) :: tmat(size(hamiltonian_matrix, 1), size(hamiltonian_matrix, 1), ll)
+      complex(rp) :: direct(size(exact_moments, 1), size(exact_moments, 2))
+      real(rp) :: max_error
+      integer :: n, m
+
+      call matrix_chebyshev(hamiltonian_matrix, cheb_scale, cheb_shift, tmat)
+      max_error = 0.0_rp
+      do n = 1, ll
+         do m = 1, ll
+            direct = matmul(tmat(1:nb, :, m), matmul(va, matmul(tmat(:, :, n), vb(:, 1:nb))))
+            max_error = max(max_error, maxval(abs(exact_moments(:, :, n, m) - direct)))
+         end do
+      end do
+      write (*, '(a,a,es12.4)') 'Moment route ', trim(name)//' max_err = ', max_error
+      call require(max_error < tolerance, trim(name)//' KPM/eigenpair moment agreement')
+   end subroutine compare_direct_chebyshev
+
+   subroutine test_s_only_orbital_symmetry()
+      complex(rp), dimension(nb, nb) :: q_orbital
+
+      ham%ee = (0.0_rp, 0.0_rp)
+      ham%ee(1, 1, 2, 1) = cmplx(0.08_rp, 0.0_rp, rp)
+      ham%ee(1, 1, 3, 1) = cmplx(0.08_rp, 0.0_rp, rp)
+      ham%ee(spin_off + 1, spin_off + 1, 2, 1) = cmplx(0.08_rp, 0.0_rp, rp)
+      ham%ee(spin_off + 1, spin_off + 1, 3, 1) = cmplx(0.08_rp, 0.0_rp, rp)
+      call ham%build_realspace_velocity_operators()
+      call select_orbital_operator('z', q_orbital)
+      call require(maxval(abs(current_block(q_orbital, ham%v_a(:, :, 2, 1)))) < tolerance .and. &
+                   maxval(abs(current_block(q_orbital, ham%v_a(:, :, 3, 1)))) < tolerance, &
+         'orbital current vanishes for s-only hopping by angular-momentum symmetry')
+   end subroutine test_s_only_orbital_symmetry
+
+   subroutine test_gamma_mu_layout()
+      integer, parameter :: ne_test = 4, m_test = 3, nb_test = 2
+      complex(rp) :: gamma(ne_test, m_test, m_test)
+      complex(rp) :: mu(nb_test, nb_test, m_test, m_test)
+      complex(rp) :: u(m_test*m_test, nb_test), c(ne_test, nb_test)
+      integer :: i, l, n, m
+      real(rp), parameter :: factor_test = 2.5_rp
+
+      ! Encode the Fortran storage position in Gamma.  With only the first
+      ! diagonal mu entry active, this directly checks that q=n+(m-1)*M is
+      ! the zero-copy matrix view used by ZGEMM.
+      do m = 1, m_test
+         do n = 1, m_test
+            do i = 1, ne_test
+               gamma(i, n, m) = cmplx(real(i + ne_test*(n - 1 + m_test*(m - 1)), rp), 0.0_rp, rp)
+            end do
+         end do
+      end do
+      mu = (0.0_rp, 0.0_rp)
+      mu(1, 1, 1, 1) = (1.0_rp, 0.0_rp)
+
+      call pack_gamma_mu_diagonal(mu, u)
+      call gamma_mu_blas(gamma, u, factor_test, c)
+      do i = 1, ne_test
+         call require(abs(c(i, 1) - factor_test*gamma(i, 1, 1)) < tolerance, &
+            'Gamma storage flattening q=n+(m-1)*M')
+         call require(abs(c(i, 2)) < tolerance, 'Gamma layout leaves inactive orbital column zero')
+      end do
+   end subroutine test_gamma_mu_layout
+
+   subroutine test_gamma_mu_cblas()
+      integer, parameter :: ne_test = 3, k_test = 4, ncol_test = 2
+      complex(real32) :: gamma_sp(ne_test, k_test), u_sp(k_test, ncol_test), c_sp(ne_test, ncol_test)
+      complex(real32) :: expected
+      integer :: i, j, k
+
+      do k = 1, k_test
+         do i = 1, ne_test
+            gamma_sp(i, k) = cmplx(real(i + 2*k, real32), real(k - i, real32), kind=real32)
+         end do
+         do j = 1, ncol_test
+            u_sp(k, j) = cmplx(real(k + j, real32), real(2*j - k, real32), kind=real32)
+         end do
+      end do
+
+      call gamma_mu_cblas(gamma_sp, u_sp, 0.25_real32, c_sp)
+      do j = 1, ncol_test
+         do i = 1, ne_test
+            expected = (0.0_real32, 0.0_real32)
+            do k = 1, k_test
+               expected = expected + 0.25_real32*gamma_sp(i, k)*u_sp(k, j)
+            end do
+            call require(abs(real(c_sp(i, j) - expected, rp)) < 1.0e-5_rp, &
+               'CGEMM precision-fair reconstruction analogue')
+         end do
+      end do
+   end subroutine test_gamma_mu_cblas
+
+   subroutine test_gamma_mu_trace_modes()
+      integer, parameter :: ne_test = 5, m_test = 3, nb_test = 3, ntrace = 2
+      complex(rp) :: gamma(ne_test, m_test, m_test)
+      complex(rp) :: mu(nb_test, nb_test, m_test, m_test, ntrace)
+      integer :: i, l1, l2, n, m, trace
+
+      do m = 1, m_test
+         do n = 1, m_test
+            do i = 1, ne_test
+               gamma(i, n, m) = cmplx(0.01_rp*real(i + 2*n + 3*m, rp), &
+                  0.02_rp*real(2*i + n + m, rp), rp)
+            end do
+         end do
+      end do
+      do trace = 1, ntrace
+         do m = 1, m_test
+            do n = 1, m_test
+               do l2 = 1, nb_test
+                  do l1 = 1, nb_test
+                     mu(l1, l2, n, m, trace) = cmplx(0.003_rp*real(l1 + 2*l2 + n + m + trace, rp), &
+                        -0.002_rp*real(2*l1 + l2 + 2*n + m + trace, rp), rp)
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      ! The same accumulation is the production meaning of both supported
+      ! modes: per_type retains each contribution and adds all of them to the
+      ! total, while random_vec adds each stochastic realization to the total.
+      call compare_trace_mode('per_type', gamma, mu)
+      call compare_trace_mode('random_vec', gamma, mu)
+   end subroutine test_gamma_mu_trace_modes
+
+   subroutine compare_trace_mode(mode, gamma, mu)
+      character(len=*), intent(in) :: mode
+      complex(rp), intent(in) :: gamma(:, :, :)
+      complex(rp), intent(in) :: mu(:, :, :, :, :)
+      complex(rp) :: u(size(mu, 3)*size(mu, 4), size(mu, 1))
+      complex(rp) :: c_blas(size(gamma, 1), size(mu, 1)), c_ref(size(gamma, 1), size(mu, 1))
+      complex(rp) :: total_blas(size(gamma, 1), size(mu, 1)), total_ref(size(gamma, 1), size(mu, 1))
+      complex(rp) :: resolved_blas(size(gamma, 1), size(mu, 1), size(mu, 5))
+      complex(rp) :: resolved_ref(size(gamma, 1), size(mu, 1), size(mu, 5))
+      integer :: trace
+      real(rp), parameter :: factor_test = 0.75_rp
+
+      total_blas = (0.0_rp, 0.0_rp)
+      total_ref = (0.0_rp, 0.0_rp)
+      do trace = 1, size(mu, 5)
+         call pack_gamma_mu_diagonal(mu(:, :, :, :, trace), u)
+         call gamma_mu_blas(gamma, u, factor_test, c_blas)
+         call gamma_mu_reference(gamma, mu(:, :, :, :, trace), factor_test, c_ref)
+         resolved_blas(:, :, trace) = c_blas
+         resolved_ref(:, :, trace) = c_ref
+         total_blas = total_blas + c_blas
+         total_ref = total_ref + c_ref
+      end do
+      call require(maxval(abs(total_blas - total_ref)) < tolerance, &
+         trim(mode)//' total Gamma-mu accumulation')
+      if (trim(mode) == 'per_type') then
+         call require(maxval(abs(resolved_blas - resolved_ref)) < tolerance, &
+            'per_type resolved Gamma-mu contributions')
+      end if
+   end subroutine compare_trace_mode
+
+   function make_hamiltonian() result(hk)
+      complex(rp) :: hk(nsite*nb, nsite*nb)
+
+      hk = (0.0_rp, 0.0_rp)
+      hk(1:nb, 1:nb) = ham%ee(:, :, 1, 1)
+      hk(nb + 1:nsite*nb, nb + 1:nsite*nb) = ham%ee(:, :, 1, 1)
+      hk(1:nb, nb + 1:nsite*nb) = ham%ee(:, :, 2, 1)
+      hk(nb + 1:nsite*nb, 1:nb) = conjg(transpose(ham%ee(:, :, 2, 1)))
+   end function make_hamiltonian
+
+   function make_full_operator(block) result(operator)
+      complex(rp), intent(in) :: block(:, :)
+      complex(rp) :: operator(nsite*nb, nsite*nb)
+
+      operator = (0.0_rp, 0.0_rp)
+      operator(1:nb, nb + 1:nsite*nb) = block
+      operator(nb + 1:nsite*nb, 1:nb) = conjg(transpose(block))
+   end function make_full_operator
+
+   subroutine matrix_chebyshev(matrix, a, b, tmat)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(out) :: tmat(:, :, :)
+      complex(rp), allocatable :: scaled(:, :)
+      integer :: p, i, n
+
+      n = size(matrix, 1)
+      allocate(scaled(n, n))
+      scaled = matrix/cmplx(a, 0.0_rp, rp)
+      do i = 1, n
+         scaled(i, i) = scaled(i, i) - cmplx(b/a, 0.0_rp, rp)
+      end do
+      tmat = (0.0_rp, 0.0_rp)
+      do i = 1, n
+         tmat(i, i, 1) = (1.0_rp, 0.0_rp)
+      end do
+      if (size(tmat, 3) >= 2) tmat(:, :, 2) = scaled
+      do p = 3, size(tmat, 3)
+         tmat(:, :, p) = 2.0_rp*matmul(scaled, tmat(:, :, p - 1)) - tmat(:, :, p - 2)
+      end do
+      deallocate(scaled)
+   end subroutine matrix_chebyshev
+
+   subroutine diagonalize_hermitian(matrix, eigenvalues, eigenvectors)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: eigenvalues(:)
+      complex(rp), intent(out) :: eigenvectors(:, :)
+      complex(rp) :: work_query(1)
+      complex(rp), allocatable :: work(:)
+      real(rp), allocatable :: rwork(:)
+      integer :: n, lwork, info
+      external :: zheev
+
+      n = size(matrix, 1)
+      eigenvectors = matrix
+      allocate(rwork(max(1, 3*n - 2)))
+      call zheev('V', 'U', n, eigenvectors, n, eigenvalues, work_query, -1, rwork, info)
+      lwork = max(1, int(real(work_query(1), rp)))
+      allocate(work(lwork))
+      call zheev('V', 'U', n, eigenvectors, n, eigenvalues, work, lwork, rwork, info)
+      call require(info == 0, 'tiny transport Hamiltonian diagonalization succeeds')
+      deallocate(work, rwork)
+   end subroutine diagonalize_hermitian
+
+   real(rp) function hermiticity_error(matrix)
+      complex(rp), intent(in) :: matrix(:, :)
+
+      hermiticity_error = maxval(abs(matrix - conjg(transpose(matrix))))
+   end function hermiticity_error
+
+   subroutine require(condition, description)
+      logical, intent(in) :: condition
+      character(len=*), intent(in) :: description
+
+      if (.not. condition) then
+         write (*, '(a,a)') 'FAIL: ', trim(description)
+         failed = .true.
+      end if
+   end subroutine require
+
+end program test_kpm_transport

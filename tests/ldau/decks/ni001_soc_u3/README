@@ -1,0 +1,47 @@
+RS Chebyshev Ni(001) surface, calctype S, nsp=2, U=3/J=0.7 local on types 1 (frozen Ni host), 3 (Ni-S), 4 (Ni-S-1); ES without U. Same geometry and recursion settings as ni001_u3 (lld=200, 2500 channels, beta 0.005 Broyden, ldm_beta 0.3). input.nml is the SOC-on z-axis smoke run (nstep 5, fermi -0.076576 = host_soc E_F); fermi must equal the E_F of the host in use.
+
+Files: ES.nml, Ni-S.nml, Ni-S-1.nml, Ni-S_dm.nml, Ni-S-1_dm.nml: the *_out.nml and dm files of the 200-step ni001_u3 run (nsp=1, Diff about 3e-6 oscillating) used as seeds, zero spin coherences. host_soc0/: nsp=2 host with soc_scale=0 and fix_soc (b2, see ni_host_soc). host_soc/: nsp=2 SOC-on host, converged b1 (ni_host_soc README), E_F -0.076843. Copy one host's Ni.nml and Ni_dm.nml next to input.nml before a run; soc_scale=0 and fix_soc go in &self for the SOC->0 runs.
+
+Short runs, per-step values from the log (d trace, spin moment mspin, orbital moment |L| in muB, max |P_up,dn|):
+SOC->0 against nsp=1, iteration 1 (host_soc0 against its nsp=1 copy with the same numbers; spinor_d line dropped, hubbard_nsp 1, new dm hash): Diff 3.1737e-6 in both; max |delta ql| 6.9e-18 (Ni-S-1), 0 (ES, Ni-S); gravity_center 1.4e-16. Against the independently converged ni001_u3 host the same run differs by max |delta ql| 2.5e-10 and Diff 3.1727e-6 against 3.1737e-6 (host difference, see ni_host_soc); etot differs by up to 1.9e-8 Ry in both comparisons (not diagnosed). max |P_up,dn| 0.
+SOC on, z axis, 5 steps from the seeds, with the step-7 (unconverged, E_F -0.076576) b1 host that preceded the converged one; the 5-step state is the seed of the Tier 2 runs:
+step  Diff       Ni-S: n_d    mspin     |L|      max|Pud|   Ni-S-1: n_d  mspin    |L|     max|Pud|
+1     1.31e-4    8.642433  0.769655  0.06620  1.1e-2     8.634824  0.713043  0.03728  8.2e-3
+2     1.28e-4    8.642505  0.769412  0.07902  1.2e-2     8.635339  0.712508  0.04153  8.7e-3
+3     1.25e-4    8.642755  0.769071  0.09030  1.3e-2     8.635914  0.711937  0.04478  9.2e-3
+4     1.85e-4    8.640668  0.770793  0.10055  1.3e-2     8.635578  0.712074  0.04725  9.5e-3
+5     1.69e-4    8.641406  0.770146  0.10936  1.4e-2     8.636404  0.711339  0.04904  9.8e-3
+ES: n_d 0.03878 -> 0.03883, mspin 0.012405 -> 0.012398, |L| 4.6e-4 -> 5.6e-4. The orbital moment of Ni-S rises by 0.0128, 0.0111, 0.0102, 0.0088 per step (ratio 0.87, 0.92, 0.86); the step-7 host rose in the same way (ni_host_soc). Diff does not fall over the 5 steps. Seed n_d (nsp=1): 8.646895 (Ni-S), 8.635798 (Ni-S-1).
+Tilted axis, iteration 1, SOC->0, x against z: the z state above and the same state rotated about y by 90 degrees (host and seeds rotated with tests/validation/fixed_ldau/rotate_spin_frame.py: P' = W P W^+, mom and hubbard_axis along x, dm hashes updated; <sx> of the rotated Ni-S seed 0.807432 equals <sz> of the original): max |delta ql| 7.0e-9, gravity_center 1.6e-6 (Ni-S), 9.0e-6 (ES), etot 1.5e-8 Ry (Ni-S-1), Diff 3.171e-6 against 3.174e-6. Iteration 1 only; no converged anisotropy was computed.
+
+Tier 2 (TESTING_POLICY.md): 20-step continuations from the step-5 state above (its *_out.nml and dm files as seeds, ldm_beta 0.3, nstep 20); steps counted from the restart; mspin and |L| in muB.
+(a) with the unconverged step-7 host (E_F -0.076576):
+step  Diff       Ni-S: n_d    mspin     |L|      max|Pud|   Ni-S-1: n_d  mspin    |L|     max|Pud|
+1     1.50e-4    8.642736  0.768630  0.11696  1.5e-2     8.637321  0.710413  0.05034  1.0e-2
+5     1.94e-4    8.641268  0.770949  0.14119  1.3e-2     8.637616  0.710118  0.05226  9.9e-3
+10    2.21e-4    8.640894  0.771433  0.15934  1.5e-2     8.638451  0.709078  0.05138  1.0e-2
+13    2.25e-4    8.640884  0.771618  0.16636  1.5e-2     8.638587  0.708808  0.05041  1.1e-2
+14    2.25e-4    8.640909  0.771657  0.16825  1.6e-2     8.638581  0.708767  0.05007  1.1e-2
+15    4.18e-4    8.656924  0.758436  0.16647  1.5e-2     8.635283  0.710819  0.05025  1.1e-2
+20    2.35e-4    8.647432  0.766278  0.17347  1.6e-2     8.641578  0.707005  0.04883  1.1e-2
+(b) with the converged b1 host (E_F -0.076843, as in this deck), J=0.7:
+1     2.45e-4    8.638674  0.772218  0.11768  1.5e-2     8.634395  0.712665  0.04988  1.1e-2
+2     1.22e-4    8.643355  0.769461  0.12439  1.2e-2     8.636498  0.711415  0.05058  8.9e-3
+5     1.66e-4    8.641832  0.770542  0.14142  1.3e-2     8.636755  0.710876  0.05147  9.8e-3
+10    1.98e-4    8.641292  0.771126  0.15965  1.5e-2     8.637740  0.709739  0.05043  1.0e-2
+15    2.08e-4    8.641185  0.771513  0.17034  1.6e-2     8.638083  0.709223  0.04870  1.1e-2
+16    2.08e-4    8.641205  0.771555  0.17189  1.6e-2     8.638084  0.709184  0.04838  1.1e-2
+17    2.68e-4    8.652607  0.762221  0.17079  1.6e-2     8.635623  0.710725  0.04843  1.1e-2
+18    1.45e-4    8.648388  0.765730  0.17247  1.6e-2     8.633222  0.712625  0.04829  1.1e-2
+20    1.26e-4    8.646146  0.767643  0.17472  1.6e-2     8.632044  0.713699  0.04793  1.1e-2
+Diff rises smoothly from 1.22e-4 (step 2) to 2.08e-4 (steps 15-16), increments falling from 2.0e-5 to 0; then the excursion at step 17 (Ni-S n_d +1.1e-2, mspin -9.3e-3), after which Diff falls to 1.2e-4. The Ni-S orbital moment rises 0.118 -> 0.175 with increments 6.7e-3 (step 2) -> 1.6e-3 (step 16) per step (not saturated); Ni-S-1 peaks at 0.0515 (step 5) and falls to 0.0479. The orbital moment of the converged host is 0.0751, of the surface layer Ni-S 0.175 at step 20.
+(c) diagnostic, converged b1 host, layers Ni-S and Ni-S-1 at J=0 (U=3), host Ni still stored and applied at J=0.7 (no J=0 host exists: host-J mismatch), same seed:
+1     9.26e-3    8.874581  0.595870  0.09250  1.0e-2     8.809411  0.599279  0.04166  8.6e-3
+3     2.50e-3    8.623021  0.814482  0.14010  1.2e-2     8.687510  0.692050  0.04494  8.3e-3
+10    1.53e-3    8.691438  0.754817  0.16877  1.3e-2     8.664009  0.709189  0.04428  9.7e-3
+16    1.65e-3    8.700392  0.744352  0.17738  1.3e-2     8.653535  0.719858  0.04490  1.0e-2
+17    1.60e-3    8.699126  0.744989  0.17865  1.3e-2     8.653321  0.720298  0.04498  1.0e-2
+18    1.19e-3    8.651532  0.779611  0.18937  1.4e-2     8.679496  0.700643  0.04295  9.8e-3
+20    1.02e-3    8.671772  0.766188  0.19064  1.3e-2     8.673905  0.703793  0.04287  9.9e-3
+Removing J on the layers changes the state strongly (Ni-S n_d +0.23, mspin -0.18 at step 1) and Diff stays at 1.0e-3 to 2.5e-3; the Ni-S orbital moment still rises (0.093 -> 0.191, increments 1.1e-3 to 1.3e-3 per step at steps 16-17) and a jump of the same kind as in (a) and (b) occurs at step 18 (Ni-S n_d -4.8e-2, mspin +3.5e-2, |L| +1.1e-2). The drift is not removed by J=0.
+The jump occurs at step 15 in (a), 17 in (b), 18 in (c).

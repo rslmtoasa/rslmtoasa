@@ -1,0 +1,50 @@
+&calculation
+pre_processing = 'newclubulk'
+verbose = T
+/
+
+&lattice
+rc = 80
+alat = 2.8612
+crystal_sym = 'bcc'
+wav = 1.4088
+nclu = 1
+inclu(1,:) = 0.0, 0.0, 0.0
+/
+
+&atoms
+database = './'
+label(1) = 'Fe-bulk'
+label(2) = 'Fe-imp'
+/
+
+&self
+nstep = 100
+/
+
+&energy
+fermi = -0.163560
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+fix_fermi = .true.
+/
+
+&control
+calctype = 'I'
+nsp = 2
+lld = 21
+recur = 'block'
+/
+
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+
+&hamiltonian
+hubbard_u_general(1,3) = 3.8
+hubbard_j_general(1,3) = 1.1
+hubbard_u_general(2,3) = 3.8
+hubbard_j_general(2,3) = 1.1
+/
