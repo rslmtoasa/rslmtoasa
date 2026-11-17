@@ -723,7 +723,7 @@ module hamiltonian_mod
    !> @note This is the legacy export entry point; export_rs_tb_all is the newer dispatcher.
    module subroutine rs2pao(this)
       implicit none
-      class(hamiltonian), intent(inout) :: this
+      class(hamiltonian), intent(in) :: this
       ! Local variables
       real(rp), dimension(3) :: rij, rijtest
       integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao

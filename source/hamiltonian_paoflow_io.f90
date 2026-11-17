@@ -10,21 +10,23 @@ contains
    !> @note This is the legacy export entry point; export_rs_tb_all is the newer dispatcher.
    module subroutine rs2pao(this)
       implicit none
-      class(hamiltonian), intent(inout) :: this
+      class(hamiltonian), intent(in) :: this
       ! Local variables
-      real(rp), dimension(3) :: rij, rijtest
-      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
-      integer :: jj, jt, max_orbital, n_atoms
-      integer :: ntype, iostat1, iostat2, iostatus
-      real(rp), dimension(3) :: vet, vetpao, idx
-      real(rp), dimension(3, 3) :: a_inv
+      integer :: i, j, k, nr, ia, ipao, jpao
+      integer :: jj, max_orbital, n_atoms, ntype, iostatus
+      integer :: idx(3)
+      logical :: found
+      complex(rp), dimension(nb, nb) :: hblock
+
       n_atoms = this%charge%lattice%ntype
       max_orbital = norb
 
       open (unit=92, file='rs2paoham.dat', action='write', iostat=iostatus, status='replace')
+      if (iostatus /= 0) then
+         call g_logger%fatal('could not open rs2paoham.dat for writing', __FILE__, __LINE__)
+      end if
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
-         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          do k = 1, nr
             jj = this%charge%lattice%nn(ia, k)
@@ -33,33 +35,26 @@ contains
                jj = ia
             end if
             if (jj /= 0) then
-               rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
+               call rs_neighbor_lattice_index(this, ia, jj, idx, found, 1.0e-3_rp)
+               if (.not. found) then
+                  call g_logger%fatal('could not map rs2pao neighbour to a lattice translation', __FILE__, __LINE__)
+               end if
 
-               rijtest(:) = 0.0d0
-               do idxi = -5, 5
-                  do idxj = -5, 5
-                     do idxk = -5, 5
-                        rijtest(:) = this%charge%lattice%cr(:, ia) - (this%charge%lattice%cr(:, this%charge%lattice%iz(jj)) &
-                                                                      + idxi*this%charge%lattice%a(:, 1) + idxj*this%charge%lattice%a(:, 2) + idxk*this%charge%lattice%a(:, 3))
-                        if (norm2(rij(:) - rijtest(:)) < 1.0d-3) then
-                           idx(:) = [idxi, idxj, idxk]
-                        end if
-                     end do
-                  end do
-               end do
+               ! Work on a local copy: export must not add SOC to or transform the
+               ! Hamiltonian that subsequent diagnostics or post-processing use.
+               hblock(:, :) = this%ee(:, :, k, ntype)
+               if (k == 1) hblock(:, :) = hblock(:, :) + this%lsham(:, :, ntype)
 
-               if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
-
-               call hcpx(this%ee(1:norb,1:norb,k,ntype), 'sph2cart')
-               call hcpx(this%ee(1:norb,norb+1:nb,k,ntype), 'sph2cart')
-               call hcpx(this%ee(norb+1:nb,1:norb,k,ntype), 'sph2cart')
-               call hcpx(this%ee(norb+1:nb,norb+1:nb,k,ntype), 'sph2cart')
+               call hcpx(hblock(1:norb,1:norb), 'sph2cart')
+               call hcpx(hblock(1:norb,norb+1:nb), 'sph2cart')
+               call hcpx(hblock(norb+1:nb,1:norb), 'sph2cart')
+               call hcpx(hblock(norb+1:nb,norb+1:nb), 'sph2cart')
                do i = 1, nb
                   do j = 1, nb
                      ipao = 0; jpao = 0
                      call site2orb(i, ia, ipao, n_atoms, max_orbital)
                      call site2orb(j, this%charge%lattice%iz(jj), jpao, n_atoms, max_orbital)
-                     write (92, '(3I4,2I7,2F22.14)') int(idx(:)), ipao, jpao, real(this%ee(i, j, k, ntype))*ry2ev, aimag(this%ee(i, j, k, ntype))*ry2ev
+                     write (92, '(3I4,2I7,2F22.14)') idx(:), ipao, jpao, real(hblock(i, j))*ry2ev, aimag(hblock(i, j))*ry2ev
                   end do
                end do
             end if
