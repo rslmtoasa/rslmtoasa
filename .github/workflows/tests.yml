@@ -90,8 +90,9 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        # The GBT oracle/unit checks import NumPy in addition to f90nml.
-        run: pip install f90nml numpy
+        # The GBT oracle/unit checks import NumPy in addition to f90nml, and the
+        # TransportOperatorSource test runs under pytest.
+        run: pip install f90nml numpy pytest
 
       # -----------------------------------------------------------------------
       # Configure and build the checked-out source.
@@ -425,6 +426,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-numpy
             git
 
       - name: Install Python dependencies

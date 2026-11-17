@@ -514,9 +514,10 @@ if(RUN_UNIT_TESTS)
   endif()
 
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
-    # Homebrew Open MPI on macOS may report one slot; the parallel-context unit uses four ranks.
+    # Open MPI refuses to start more ranks than it counts slots (Homebrew on macOS may report
+    # one; GitHub's Linux runners can count fewer than four); the parallel-context unit uses four ranks.
     set(_rslmto_mpi_unit_preflags ${MPIEXEC_PREFLAGS})
-    if(APPLE)
+    if(APPLE OR MPI_Fortran_LIBRARY_VERSION_STRING MATCHES "Open MPI")
       list(APPEND _rslmto_mpi_unit_preflags --map-by :OVERSUBSCRIBE)
     endif()
     foreach(_parallel_context_ranks IN ITEMS 1 2 4)

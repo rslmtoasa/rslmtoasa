@@ -13,20 +13,20 @@ root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else pathlib.Path(__file__)
 sources = sorted(root.glob('source/**/*.f90'))
 included = set()
 for path in sources:
-    included |= set(re.findall(r"^\s*include\s*['\"]([^'\"]+)['\"]", path.read_text(errors='replace'), re.I | re.M))
+    included |= set(re.findall(r"^\s*include\s*['\"]([^'\"]+)['\"]", path.read_text(encoding='utf-8', errors='replace'), re.I | re.M))
 keys = {}
 for path in sources:
     rel = path.relative_to(root / 'source').as_posix()
     if rel.startswith('include_codes/namelists/') and rel not in included:
         continue
-    text = re.sub(r'!.*', '', path.read_text(errors='replace'))
+    text = re.sub(r'!.*', '', path.read_text(encoding='utf-8', errors='replace'))
     text = re.sub(r'&\s*\n\s*&?', ' ', text)
     for group, body in re.findall(r'^\s*namelist\s*/\s*(\w+)\s*/\s*([^\n]*)', text, re.I | re.M):
         for key in body.split(','):
             if key.strip():
                 keys.setdefault(key.strip().lower(), set()).add(group.lower())
 
-docs = '\n'.join(p.read_text() for p in sorted(root.glob('docs/source/keywords/*.rst'))).lower()
+docs = '\n'.join(p.read_text(encoding='utf-8') for p in sorted(root.glob('docs/source/keywords/*.rst'))).lower()
 documented = set(re.findall(r'``(\w+)', docs))
 documented |= set(re.findall(r'(?m)^(\w+)\s*$', docs))
 documented |= set(re.findall(r'(?m)^\s*(\w+)\s*(?:\([^)]*\))?\s*=', docs))
