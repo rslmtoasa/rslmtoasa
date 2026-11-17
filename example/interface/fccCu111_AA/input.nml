@@ -1,0 +1,160 @@
+! ===========================================================================
+! B7.6 example 1 -- A | A identity, fcc Cu(111)
+! ===========================================================================
+!
+! The layered (calctype='L') counterpart of example/surface/fccCu111/Single.
+! One fcc Cu(111) atomic layer forms the ACTIVE zone, embedded between two
+! FROZEN Cu reference regions -- A below, B above -- both loaded from the
+! same converged bulk Cu parameter set.
+!
+! WHAT THIS EXAMPLE IS FOR
+!
+! Because all three regions are the same material starting from the same
+! parameter set (with vmad ~ 0), the active atom is physically
+! indistinguishable from bulk fcc Cu. This is the IDENTITY case of B7 §5.4,
+! and it is the example to run first when checking that a build of the
+! layered path is sane. Every iteration must report, EXACTLY:
+!
+!     Q                  0.0000E+00   sum of deviation charges. Also a KERNEL
+!                                     PRECONDITION, not merely physics: the
+!                                     half-space AM gauge is valid only at
+!                                     Q = 0 (B7 §1.4, §2.6).
+!     P                  0.0000E+00   dipole moment of the deviation profile
+!     step               0.000000     potential step across the cell
+!     V(B)               0.000000 Ry  region B needs no alignment shift
+!     alignment residual 0.0000E+00
+!
+! Verified: all five hold to printed precision for 30 consecutive iterations.
+! Any nonzero value here is the cheapest available signal that something in
+! the layered path is wrong.
+!
+! ONE WARNING IS EXPECTED, AND IS NOT A FAILURE
+!
+! The run prints, most iterations:
+!
+!   <warning> align_regions: deviation charge ... at frozen anchor-region
+!   site 1 exceeds the 1.00E-03 threshold. ... this means the active zone is
+!   too thin AND that the alignment gauge is inconsistent. Widen the active
+!   zone (B7 §1.3).
+!
+! Widen the buffer through &lattice nlay_a/nlay_b (below), not through the
+! &charge pair -- see the next note. It is worth knowing that the warning
+! still fires even after widening, in runs where the identity holds exactly,
+! so on this path read it as "check your buffer" rather than as proof that
+! something is wrong. Threshold recalibration is deferred to B7.7 (G-B7-3).
+!
+! BUFFER WIDTH -- TWO DIFFERENT nlay_a / nlay_b, READ BEFORE EDITING EITHER
+!
+! The same names appear in two namelists and mean different things:
+!
+!   &lattice nlay_a/nlay_b  count ATOMIC LAYERS. This is the frozen-buffer
+!                           width and the knob to reach for.
+!   &charge  nlay_a/nlay_b  count ROWS OF THE SYNTHETIC 2D MADELUNG STACK,
+!                           whose size is a fixed constant (nbas = 49 here,
+!                           set in build_interface_full, deliberately
+!                           decoupled from the physical layer count so
+!                           set2d's NLAMA/NLAMB split stays balanced).
+!
+! To thicken the frozen buffer, raise the &lattice pair.
+!
+! The &charge pair positions the active zone WITHIN the Madelung stack: the
+! active charge occupies rows nlay_a+1 .. nlay_a+nlay, and the two deep probes
+! are the extreme rows of the frozen regions either side. That split must be
+! CENTRED, or one probe sits next to the active charge while the other is ~49
+! rows away, and the alignment solver then reports a nonzero V_B for a cell
+! that is physically symmetric. Measured on this geometry:
+!
+!   &charge unset (centred, 24/24)  ->  V(B) = 0.000000 Ry   identity holds
+!   &charge 1/1   (active at row 2) ->  V(B) = -0.0109  Ry   asymmetric probes
+!
+! So leave the &charge pair UNSET unless you specifically want an asymmetric
+! stack; build_interface_registry then centres the active zone automatically
+! and says so in the log.
+!
+! WHAT THIS EXAMPLE IS NOT
+!
+! Not a surface: there is no vacuum anywhere in this cell, both boundaries
+! are metallic. For the one-sided (vacuum | active | bulk) geometry use
+! pre_processing = 'buildsurf', which B7 leaves untouched and which remains
+! the permanent regression oracle for that case
+! (example/surface/fccCu111/Single).
+!
+! Not a test of alignment either. A | A alone cannot test the alignment
+! solver, because the two regions' potential zeros are identical and cancel
+! (B7 §5.3). The alignment machinery is exercised by ../fccCu111_AB_misaligned.
+!
+! RELATION TO THE TEST SUITE
+!
+! tests/scf/cases/interface/fccCu111 is this same geometry at nstep = 1, used
+! as one leg of the cross-calctype oracle in tests/scf/README.md. This copy
+! runs it to convergence instead, which is what makes the identity claim
+! above meaningful.
+!
+! Runtime: ~10 s per SCF iteration on one core; ~5 min for the 30 steps here.
+! ===========================================================================
+&calculation
+pre_processing = 'buildinterface'
+verbose = T
+/
+&lattice
+rc = 30
+alat = 3.614
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.41237
+nbulk_bulk = 1            ! inequivalent sites per cell in EACH frozen region
+nlay = 1                  ! active layers
+nlay_a = 1                ! frozen region A width, in ATOMIC LAYERS.
+nlay_b = 1                ! frozen region B width. Raise BOTH of these (not
+                          ! the &charge pair) to thicken the buffer.
+surftype = '1 1 1'
+ntype = 3                 ! A + B + one type per active layer
+ct(:) = 3*4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+! Label order is load bearing: the frozen blocks come first, in region order,
+! then one self-consistent type per active layer. build_interface_full builds
+! the layer->type map on exactly this ordering.
+label(1) = 'A'            ! frozen region A reference
+label(2) = 'B'            ! frozen region B reference
+label(3) = 'Ac1'          ! active layer 1
+/
+&self
+nstep = 30
+/
+&energy
+! Pinned to the converged bulk Cu value so this run samples the same energy
+! mesh as the bulk and impurity legs of the cross-calctype oracle. With a
+! free E_F each route determines its own, the meshes shift, and a pointwise
+! DOS comparison compares grids rather than physics.
+fermi = -0.089874
+energy_min = -1.5
+energy_max = 2.0
+channels_ldos = 2000
+fix_fermi = .true.
+/
+&control
+calctype = 'L'            ! layered / interface
+nsp = 1
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.0020
+mixtype = 'broyden'
+/
+&charge
+! ROW counts in the synthetic Madelung stack -- NOT atomic layers, and
+! deliberately separate from the &lattice entries above.
+!
+! LEFT UNSET ON PURPOSE. The active zone must be CENTRED in the stack, or the
+! two deep probes sit at very different distances from the active charge and
+! the alignment solver reports a nonzero V_B for a physically symmetric cell.
+! Unset, build_interface_registry centres it automatically -- (nbas - nlay)/2
+! either side. Set these only for a deliberately asymmetric stack.
+/

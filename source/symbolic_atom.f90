@@ -23,11 +23,16 @@ module symbolic_atom_mod
 
    use element_mod, only: element
    use potential_mod, only: potential
-   use string_mod, only: sl, replace, endswith, fmt
+   use string_mod, only: sl, pl, replace, endswith, fmt
+   use string_mod, only: path_join
+   use os_mod, only: exists
+   use globals_mod, only: GLOBAL_DATABASE_FOLDER
+   use mpi_mod, only: rank
    use precision_mod, only: rp
    use potential_mod
    use math_mod
    use logger_mod, only: g_logger
+   use radial_ground_state_mod, only: radial_ground_state
    implicit none
 
    private
@@ -64,6 +69,13 @@ module symbolic_atom_mod
       ! TODO
       ! From common_cnstr
       real(rp), dimension(3) :: mag_cfield, mag_cfield_diff
+      !> Fixed constraint target in the site’s active spin frame.  For
+      !> gbt_single_q this is the primitive rotating frame; an explicit
+      !> supercell stores the corresponding lab-frame target per site/type.
+      real(rp), dimension(3) :: constraint_target
+      !> Last measured moment retained when GBT exposes a collinear reference
+      !> marker to the Hamiltonian validator.
+      real(rp), dimension(3) :: constraint_actual
       real(rp) :: chg_cfield, chg_cfield_diff
       real(rp) :: chg_con_val, mag_con_val
       ! TODO
@@ -73,6 +85,9 @@ module symbolic_atom_mod
 
       type(element) :: element
       type(potential) :: potential
+      ! Exact radial density/XC state retained by the converged atomic update.
+      ! This is intentionally separate from compressed LMTO potential data.
+      type(radial_ground_state) :: radial_ground_state
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -105,6 +120,45 @@ module symbolic_atom_mod
 
 contains
 
+   !> Resolve the same source-selection policy used by element and potential.
+   !> Keeping this small audit beside the symbolic-atom constructor makes the
+   !> selected restart/fresh source visible before either component is read.
+   function selected_symbolic_atom_source(label, database, reload, is_restart) result(path)
+      character(len=*), intent(in) :: label
+      character(len=*), intent(in), optional :: database
+      logical, intent(in) :: reload
+      logical, intent(out) :: is_restart
+      character(len=pl) :: path
+      character(len=pl) :: directory, filename
+      character(len=pl), dimension(2) :: path_parts
+
+      path = ''
+      is_restart = .false.
+      if (present(database)) then
+         directory = database
+      else
+         directory = './'
+      end if
+
+      if (reload) then
+         filename = trim(label)//'_out.nml'
+         path_parts = [directory, filename]
+         path = path_join(path_parts)
+         if (exists(path)) then
+            is_restart = .true.
+            return
+         end if
+      end if
+
+      filename = trim(label)//'.nml'
+      path_parts = [directory, filename]
+      path = path_join(path_parts)
+      if (exists(path)) return
+
+      path_parts = [character(len=pl) :: GLOBAL_DATABASE_FOLDER, filename]
+      path = path_join(path_parts)
+   end function selected_symbolic_atom_source
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -120,6 +174,8 @@ contains
       character(len=*), intent(in), optional :: database
       logical, optional, intent(in) :: reload
       logical :: reload_
+      logical :: source_is_restart
+      character(len=pl) :: source_path
 
       !reload_ = merge(reload, .True., present(reload))
       if (present(reload)) then
@@ -128,6 +184,14 @@ contains
          reload_ = .True.
       end if
       call obj%restore_to_default()
+      source_path = selected_symbolic_atom_source(label, database, reload_, source_is_restart)
+      if (rank == 0) then
+         if (source_is_restart) then
+            call g_logger%info('SCF input provenance: restart loaded from '//trim(source_path), __FILE__, __LINE__)
+         else
+            call g_logger%info('SCF input provenance: fresh atomic starting potential from '//trim(source_path), __FILE__, __LINE__)
+         end if
+      end if
       obj%element = element(label, database, reload_)
       obj%potential = potential(label, database, reload_)
    end function constructor
@@ -157,6 +221,14 @@ contains
       this%mix = -1
       this%mixmag = -1
       this%rb = -1
+      this%mag_cfield = 0.0_rp
+      this%mag_cfield_diff = 0.0_rp
+      this%constraint_target = 0.0_rp
+      this%constraint_actual = 0.0_rp
+      this%chg_cfield = 0.0_rp
+      this%chg_cfield_diff = 0.0_rp
+      this%chg_con_val = 0.0_rp
+      this%mag_con_val = 0.0_rp
       this%a = 0.02d0
 
       call this%element%restore_to_default()
@@ -175,28 +247,21 @@ contains
 
    subroutine build_pot(this)
       class(symbolic_atom), intent(inout) :: this
-      integer :: i
+      integer :: l, m, ml
 
       call this%enforce_nonmagnetic()
 
       ! Setting the potential parameters
       ! Imaginary part is set to 0
       ! kind is rp (same as real part)
-      this%potential%cx(1, :) = cmplx(this%potential%center_band(1, :), 0, rp)
-      this%potential%wx(1, :) = cmplx(this%potential%width_band(1, :), 0, rp)
-      this%potential%cex(1, :) = cmplx(this%potential%shifted_band(1, :), 0, rp)
-      this%potential%obx(1, :) = cmplx(this%potential%obar(1, :), 0, rp)
-      do i = 2, 4
-         this%potential%cx(i, :) = cmplx(this%potential%center_band(2, :), 0, rp)
-         this%potential%wx(i, :) = cmplx(this%potential%width_band(2, :), 0, rp)
-         this%potential%cex(i, :) = cmplx(this%potential%shifted_band(2, :), 0, rp)
-         this%potential%obx(i, :) = cmplx(this%potential%obar(2, :), 0, rp)
-      end do
-      do i = 5, 9
-         this%potential%cx(i, :) = cmplx(this%potential%center_band(3, :), 0, rp)
-         this%potential%wx(i, :) = cmplx(this%potential%width_band(3, :), 0, rp)
-         this%potential%cex(i, :) = cmplx(this%potential%shifted_band(3, :), 0, rp)
-         this%potential%obx(i, :) = cmplx(this%potential%obar(3, :), 0, rp)
+      do l = 0, this%potential%lmax
+         do m = 1, 2*l + 1
+            ml = l*l + m
+            this%potential%cx(ml, :) = cmplx(this%potential%center_band(l + 1, :), 0, rp)
+            this%potential%wx(ml, :) = cmplx(this%potential%width_band(l + 1, :), 0, rp)
+            this%potential%cex(ml, :) = cmplx(this%potential%shifted_band(l + 1, :), 0, rp)
+            this%potential%obx(ml, :) = cmplx(this%potential%obar(l + 1, :), 0, rp)
+         end do
       end do
 
       this%potential%cx0(:) = 0.5d0*(this%potential%cx(:, 1) + this%potential%cx(:, 2))
@@ -222,8 +287,8 @@ contains
       real(rp) :: wsm
       real(rp) :: x, y, wow, vmad
       real(rp), dimension(this%potential%lmax + 1, 2) :: dele, qi, del, q, c, enu
-      real(rp), dimension(3) :: qm
-      integer :: i, j, lmax
+      real(rp), dimension(this%potential%lmax + 1) :: qm
+      integer :: i, j, lmax, ncopy
 
       wow = wsm/this%potential%ws_r
       lmax = this%potential%lmax
@@ -233,7 +298,14 @@ contains
       q(:, :) = this%potential%qpar(0:lmax, :)
       vmad = this%potential%vmad
       lmax = this%potential%lmax
-      qm(:) = qm_canonical(:)
+      ncopy = min(size(qm_canonical), size(qm))
+      qm(1:ncopy) = qm_canonical(1:ncopy)
+      if (size(qm) > ncopy) qm(ncopy + 1:) = qm_canonical(ncopy)
+      if (allocated(this%potential%screening_alpha)) then
+         if (size(this%potential%screening_alpha) == this%potential%lmax + 1) then
+            qm(:) = this%potential%screening_alpha(:)
+         end if
+      end if
 
       do J = 1, 2
          do I = 1, lmax + 1
@@ -258,24 +330,28 @@ contains
       class(symbolic_atom) :: this
       !
       real(rp), intent(in) :: e
-      complex(rp), dimension(9, 9), intent(inout) :: mat
-      integer :: k, l, m, ml
+      complex(rp), dimension(:, :), intent(inout) :: mat
+      integer :: l, m, ml, lmax_eff
       complex(rp):: cu, cd, wu, wd, de, wuwd
 
-      mat = 0.0d0
-      do l = 0, 2
+      mat = cmplx(0.0_rp, 0.0_rp, rp)
+      lmax_eff = this%potential%lmax
+      do while ((lmax_eff + 1)*(lmax_eff + 1) > min(size(mat, 1), size(mat, 2)))
+         lmax_eff = lmax_eff - 1
+      end do
+      do l = 0, lmax_eff
          ml = l*l + 1
-         cu = cmplx(this%potential%c(l, 1) + this%potential%vmad, 0.0d0)
-         cd = cmplx(this%potential%c(l, 2) + this%potential%vmad, 0.0d0)
-         wu = cmplx(this%potential%dele(l, 1), 0.0d0)
-         wd = cmplx(this%potential%dele(l, 2), 0.0d0)
+         cu = cmplx(this%potential%c(l, 1) + this%potential%vmad, 0.0_rp, rp)
+         cd = cmplx(this%potential%c(l, 2) + this%potential%vmad, 0.0_rp, rp)
+         wu = cmplx(this%potential%dele(l, 1), 0.0_rp, rp)
+         wd = cmplx(this%potential%dele(l, 2), 0.0_rp, rp)
          wuwd = wu*wd
          wu = wu*wu
          wd = wd*wd
-         de = (cd*wu - cu*wd + 1.0d0*(wd - wu)*e)/(wuwd)
+         de = (cd*wu - cu*wd + cmplx(1.0_rp, 0.0_rp, rp)*(wd - wu)*cmplx(e, 0.0_rp, rp))/(wuwd)
          do m = 1, 2*l + 1
             ml = l*l + m
-            mat(ml, ml) = de
+            if (ml <= min(size(mat, 1), size(mat, 2))) mat(ml, ml) = de
          end do
       end do
    end subroutine d_matrix
@@ -433,10 +509,10 @@ contains
          do l = 0, l_max ! l index
             do m = 1, 2*l + 1
                mls = l*l + m + ((l_max + 1)**2)*(s - 1) ! Composed diagonal index
-               temp1 = cmplx(this%potential%c(l, s) + this%potential%vmad, 0.0_rp)
-               temp2 = cmplx(this%potential%dele(l, s), 0.0_rp)
+               temp1 = cmplx(this%potential%c(l, s) + this%potential%vmad, 0.0_rp, rp)
+               temp2 = cmplx(this%potential%dele(l, s), 0.0_rp, rp)
                do ie = 1, size(energy_array)
-                  temp3 = cmplx(energy_array(ie), 0.0_rp)
+                  temp3 = cmplx(energy_array(ie), 0.0_rp, rp)
                   pmat(mls, mls, ie) = (temp3 - temp1)/(temp2*temp2)
                end do
             end do
@@ -476,8 +552,8 @@ contains
          do l = 0, size(screening_in, 1) - 1 ! lmax
             do m = 1, 2*l + 1
                mls = l*l + m + ((size(screening_in, 1))**2)*(s - 1) ! Composed diagonal index
-               temp1 = cmplx(screening_in(l, s), 0.0_rp) ! Screening constants (in)
-               temp2 = cmplx(screening_out(l, s), 0.0_rp) ! Screening constants (out)
+               temp1 = cmplx(screening_in(l, s), 0.0_rp, rp) ! Screening constants (in)
+               temp2 = cmplx(screening_out(l, s), 0.0_rp, rp) ! Screening constants (out)
                do ie = 1, size(pmat_in, 3) ! Energy channel
                   pmat_out(mls, mls, ie) = pmat_in(mls, mls, ie)/(cone + ((temp1 - temp2)*pmat_in(mls, mls, ie)))
                end do
@@ -561,11 +637,13 @@ contains
          call this%element%print_state_formatted(unit=unit)
          call this%potential%print_state_formatted(unit=unit)
       else if (present(file)) then
+         call this%potential%write_density_matrix_file(this%element%symbol)
          open (newunit=newunit, file=file, action='write')
          call this%element%print_state_formatted(unit=newunit)
          call this%potential%print_state_formatted(unit=newunit)
          close (newunit)
       else
+         call this%potential%write_density_matrix_file(this%element%symbol)
          call this%element%print_state_formatted()
          call this%potential%print_state_formatted()
       end if
@@ -648,19 +726,28 @@ contains
    !> @param[in] database Directory with files used as database
    !> @return type(symbolic_atom), dimension(:), allocatable
    !---------------------------------------------------------------------------
-   function array_of_symbolic_atoms_from_memory(symbolic_atoms, database)
+   function array_of_symbolic_atoms_from_memory(symbolic_atoms, database, reload)
       type(symbolic_atom), dimension(:), allocatable :: array_of_symbolic_atoms_from_memory
       character(len=*), dimension(:), intent(in) :: symbolic_atoms
       character(len=*), intent(in), optional :: database
+      logical, intent(in), optional :: reload
       integer :: i, j
       allocate (array_of_symbolic_atoms_from_memory(size(symbolic_atoms)))
       if (present(database)) then
          do i = 1, size(symbolic_atoms)
-            array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), database)
+            if (present(reload)) then
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), database, reload)
+            else
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), database)
+            end if
          end do
       else
          do i = 1, size(symbolic_atoms)
-            array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i))
+            if (present(reload)) then
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), reload=reload)
+            else
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i))
+            end if
          end do
       end if
    end function array_of_symbolic_atoms_from_memory
@@ -673,11 +760,12 @@ contains
    !> @param[in] size Size (integer) or array
    !> @return type(symbolic_atom), dimension(:), allocatable
    !---------------------------------------------------------------------------
-   function array_of_symbolic_atoms_from_file(fname, size)
+   function array_of_symbolic_atoms_from_file(fname, size, reload)
       use string_mod, only: sl
       type(symbolic_atom), dimension(:), allocatable :: array_of_symbolic_atoms_from_file
       integer, intent(in) :: size
       character(len=*), intent(in) :: fname
+      logical, intent(in), optional :: reload
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
@@ -693,12 +781,15 @@ contains
 
       read (funit, nml=atoms, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &atoms namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
-      array_of_symbolic_atoms_from_file = array_of_symbolic_atoms(label, database)
+      if (present(reload)) then
+         array_of_symbolic_atoms_from_file = array_of_symbolic_atoms(label, database, reload)
+      else
+         array_of_symbolic_atoms_from_file = array_of_symbolic_atoms(label, database)
+      end if
 
    end function array_of_symbolic_atoms_from_file
 
@@ -831,9 +922,9 @@ contains
       !---------------------------------------------------------------------------
       ! DESCRIPTION:
       !> @brief
-      !> Shortcut for print_state_full with suffix="_out"
+      !> Shortcut for print_state_full with suffix=″_out″
       !>
-      !> Shortcut for print_state_full with suffix="_out"
+      !> Shortcut for print_state_full with suffix=″_out″
       !---------------------------------------------------------------------------
       subroutine save_state(array)
          type(symbolic_atom), dimension(:), intent(in) :: array
@@ -844,9 +935,9 @@ contains
       !---------------------------------------------------------------------------
       ! DESCRIPTION:
       !> @brief
-      !> Shortcut for print_state_full with suffix="_scf"
+      !> Shortcut for print_state_full with suffix=″_scf″
       !>
-      !> Shortcut for print_state_full with suffix="_scf"
+      !> Shortcut for print_state_full with suffix=″_scf″
       !---------------------------------------------------------------------------
       subroutine save_state_scf(array)
          type(symbolic_atom), dimension(:), intent(in) :: array
@@ -856,9 +947,9 @@ contains
       !---------------------------------------------------------------------------
       ! DESCRIPTION:
       !> @brief
-      !> Checks the existence of checkpoint files (those with fname = symbol//"_out.nml" )
+      !> Checks the existence of checkpoint files (those with fname = symbol//″_out.nml″ )
       !>
-      !> Checks the existence of checkpoint files (those with fname = symbol//"_out.nml" )
+      !> Checks the existence of checkpoint files (those with fname = symbol//″_out.nml″ )
       !---------------------------------------------------------------------------
       subroutine load_state(array)
          type(symbolic_atom), dimension(:), intent(inout) :: array

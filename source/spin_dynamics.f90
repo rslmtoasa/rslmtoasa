@@ -45,6 +45,8 @@ module spin_dynamics_mod
    use logger_mod, only: g_logger
    implicit none
 
+   real(rp), parameter :: ps_to_s = 1.0d-12
+
    private
 
    type, public :: spin_dynamics
@@ -107,8 +109,6 @@ module spin_dynamics_mod
       procedure :: restore_to_default
       procedure :: asd_pred
       procedure :: asd_corr
-      procedure :: asd_pred_euler
-      procedure :: asd_corr_euler
       procedure :: sd_run
       procedure :: writelammpstraj
    end type spin_dynamics
@@ -138,6 +138,10 @@ contains
       obj%bands => self_obj%bands
 
       call obj%restore_to_default()
+      call setup_rng_hb(1, 'Y', 'N')
+      call allocate_randomwork(obj%lattice%nrec, 1, 1, 'N')
+      call mt_ran_init_c(1)
+      call allocate_depondtfields(obj%lattice%nrec, 1, 1)
       call obj%build_from_file()
    end function
 
@@ -203,8 +207,7 @@ contains
 
       read (funit, nml=sd, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &sd namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -280,25 +283,36 @@ contains
       real(rp), intent(in)                     :: temp_in
       integer, intent(in)                      :: na_in
       ! Local variables
-      integer                                  :: i, j, natom, nplusbulk
+      integer                                  :: i, nplusbulk
       real(rp)                                 :: mnorm, dummy
-      real(rp), dimension(3)                   :: thermal_field
+      real(rp)                                 :: thermal_field(3, na_in, 1)
+      real(rp)                                 :: beff(3, na_in, 1), b2eff(3, na_in, 1)
+      real(rp)                                 :: btorque(3, na_in, 1), she_btorque(3, na_in, 1)
+      real(rp)                                 :: emom(3, na_in, 1), emom2(3, na_in, 1), emomM(3, na_in, 1)
+      real(rp)                                 :: mmom(na_in, 1)
 
       dummy = 1.0d0
-      this%emom2 = 0.0d0
       thermal_field = 0.0d0
-      this%b2eff = 0.0d0
+      b2eff = 0.0d0
+      btorque = 0.0d0
+      she_btorque = 0.0d0
 
       do i = 1, na_in
          mnorm = norm2(mom_in(:, i))
-         this%mmom(i) = mnorm
-         this%emom(:, i) = mom_in(:, i)/mnorm
-         this%emomM(:, i) = mom_in(:, i)
-         this%beff(:, i) = -field_in(:, i) ! Check units
+         mmom(i, 1) = mnorm
+         emom(:, i, 1) = mom_in(:, i)/mnorm
+         emomM(:, i, 1) = mom_in(:, i)
+         beff(:, i, 1) = -field_in(:, i)
       end do
 
-      call depondt_evolve_first(na_in, 1, [this%alpha], this%beff, this%b2eff, [0.0d0, 0.0d0, 0.0d0], this%emom, this%emom2, this%emomM, this%mmom, &
-                                this%dt, [this%sd_temp], dummy, 'N', thermal_field, 'N', [0.0d0, 0.0d0, 0.0d0])
+      call depondt_evolve_first(na_in, 1, [this%alpha], beff, b2eff, btorque, emom, emom2, emomM, mmom, &
+                                this%dt*ps_to_s, [this%sd_temp], dummy, 'N', thermal_field, 'N', she_btorque)
+      this%emom = emom(:, :, 1)
+      this%emom2 = emom2(:, :, 1)
+      this%emomM = emomM(:, :, 1)
+      this%mmom = mmom(:, 1)
+      this%beff = beff(:, :, 1)
+      this%b2eff = b2eff(:, :, 1)
       do i = 1, na_in
          nplusbulk = i + this%lattice%nbulk
          !if(.not.this%mix%is_induced(i)) then
@@ -326,17 +340,26 @@ contains
       real(rp), intent(in)                     :: temp_in
       integer, intent(in)                      :: na_in
       ! Local variables
-      integer                                  :: i, j, natom, nplusbulk
+      integer                                  :: i, nplusbulk
       real(rp)                                 :: mnorm
+      real(rp)                                 :: beff(3, na_in, 1), b2eff(3, na_in, 1)
+      real(rp)                                 :: btorque(3, na_in, 1), she_btorque(3, na_in, 1)
+      real(rp)                                 :: emom(3, na_in, 1), emom2(3, na_in, 1)
 
       do i = 1, na_in
          mnorm = norm2(mom_in(:, i))
          this%mmom(i) = mnorm
-         this%emom(:, i) = mom_in(:, i)/mnorm
-         this%emomM(:, i) = mom_in(:, i)
-         this%beff(:, i) = -field_in(:, i) ! Check units
+         emom(:, i, 1) = mom_in(:, i)/mnorm
+         beff(:, i, 1) = -field_in(:, i)
       end do
-      call depondt_evolve_second(na_in, 1, [this%alpha], this%beff, this%b2eff, [0.0d0, 0.0d0, 0.0d0], this%emom, this%emom2, this%dt, 'N', 'N', [0.0d0, 0.0d0, 0.0d0])
+      b2eff(:, :, 1) = this%b2eff
+      emom2(:, :, 1) = this%emom2
+      btorque = 0.0d0
+      she_btorque = 0.0d0
+      call depondt_evolve_second(na_in, 1, [this%alpha], beff, b2eff, btorque, emom, emom2, this%dt*ps_to_s, 'N', 'N', she_btorque)
+      this%emom = emom(:, :, 1)
+      this%emom2 = emom2(:, :, 1)
+      this%beff = beff(:, :, 1)
       do i = 1, na_in
          nplusbulk = i + this%lattice%nbulk
          mnorm = norm2(mom_in(:, i))
@@ -348,64 +371,6 @@ contains
          !end if
       end do
    end subroutine asd_corr
-
-   subroutine asd_pred_euler(this, mom_in, field_in, temp_in, dt_in, na_in)
-      implicit none
-      class(spin_dynamics), intent(inout)      :: this
-      real(rp), dimension(3, na_in), intent(in) :: mom_in
-      real(rp), dimension(3, na_in), intent(in) :: field_in
-      real(rp), intent(in)                     :: dt_in
-      real(rp), intent(in)                     :: temp_in
-      integer, intent(in)                      :: na_in
-      !real(rp), dimension(3,na_in), intent(out) :: mom_pred
-      integer :: i, nplusbulk
-      real(rp) :: alpha
-      real(rp), dimension(3) :: torque_term1, torque_term2, dm
-
-      alpha = this%alpha
-
-      this%b2eff(:, :) = 0.0d0
-
-      do i = 1, na_in
-         nplusbulk = i + this%lattice%nbulk
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = 0.0d0
-         torque_term1 = -gama*cross_product(mom_in(:, i), field_in(:, i))
-         torque_term2 = -alpha*gama*cross_product(mom_in(:, i), cross_product(mom_in(:, i), field_in(:, i)))
-         dm = torque_term1 + torque_term2
-         this%b2eff(:, i) = dm
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = mom_in(:, i) + dt_in*dm
-         this%emom(:, i) = this%symbolic_atom(nplusbulk)%potential%mom0(:)/norm2(this%symbolic_atom(nplusbulk)%potential%mom0(:))
-      end do
-   end subroutine asd_pred_euler
-
-   subroutine asd_corr_euler(this, mom_pred, field_in, temp_in, dt_in, na_in)
-      implicit none
-      class(spin_dynamics), intent(inout)      :: this
-      real(rp), dimension(3, na_in), intent(in) :: mom_pred
-      real(rp), dimension(3, na_in), intent(in) :: field_in
-      real(rp), intent(in)                     :: dt_in
-      real(rp), intent(in)                     :: temp_in
-      integer, intent(in)                      :: na_in
-      !real(rp), dimension(3,na_in), intent(out) :: mom_corr
-
-      integer :: i, nplusbulk
-      real(rp) :: alpha
-      real(rp), dimension(3) :: torque_term1, torque_term2, dm
-
-      this%alpha = alpha
-
-      do i = 1, na_in
-         nplusbulk = i + this%lattice%nbulk
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = 0.0d0
-         ! Recalculating the torque terms using the predicted moments
-         torque_term1 = -gama*cross_product(mom_pred(:, i), field_in(:, i))
-         torque_term2 = -alpha*gama*cross_product(mom_pred(:, i), cross_product(mom_pred(:, i), field_in(:, i)))
-         dm = 0.5d0*(this%b2eff(:, i) + (torque_term1 + torque_term2))
-         ! Updating the magnetic moments based on the corrected torque
-         this%symbolic_atom(nplusbulk)%potential%mom0(:) = mom_pred(:, i) + dt_in*dm
-         this%emom2(:, i) = this%symbolic_atom(nplusbulk)%potential%mom0(:)/norm2(this%symbolic_atom(nplusbulk)%potential%mom0(:))
-      end do
-   end subroutine asd_corr_euler
 
    subroutine sd_run(this)
       implicit none
@@ -435,24 +400,44 @@ contains
 
          if (rank == 0) call g_logger%info('Spin dynamics at step '//int2str(n_step), __FILE__, __LINE__)
 
-         ! Calculate the effective field for the predictor step
-         call this%self%run()
+         ! Calculate the effective field for the predictor step from the
+         ! current self-consistent electronic state.
          call this%bands%calculate_magnetic_torques()
 
          do na = 1, na_in
             mom_in(:, na) = mom_prev(:, na)
          end do
          field_in(:, :) = 0.0d0
-         field_in(:, :) = -this%bands%mag_for(:, :)
+         ! mag_for is the effective field B_eff = -B_con, the negative of the constraining field (with an applied B_con the
+         ! printed field is antiparallel to it), in mRy/mu_B.  field_in = B_eff in Tesla (1 mRy/mu_B = ry2tesla/1000 T) is
+         ! the field of the Euler helpers.
+         field_in(:, :) = this%bands%mag_for(:, :)*ry2tesla/1000.0_rp
 
-         ! Do the predictor step
-         call this%asd_pred_euler(mom_in, field_in, temp_in, dt_in, na_in)
+         ! Do the abspinlib predictor step.  asd_pred converts field_in to the Depondt
+         ! field (beff = -field_in) and preserves the spin norm.
+         call this%asd_pred(mom_in, field_in, temp_in, dt_in, na_in)
 
          do na = 1, na_in
             this%symbolic_atom(na + this%lattice%nbulk)%potential%mom(:) = this%emom(:, na) ! Save the updated magnetic moments for the next loop
-            mom_prev(:, na) = this%symbolic_atom(na + this%lattice%nbulk)%potential%mom0(:)
          end do
-         call this%writelammpstraj(this%lattice%nrec, this%emom, this%lattice%cr(:, 1:this%lattice%nrec), timestep)
+
+         ! Refresh the electronic state at the predicted direction before
+         ! asking abspinlib for its corrector field.  This is the production
+         ! LMTO -> field -> integrator -> electronic feedback loop.
+         call this%self%run()
+         call this%bands%calculate_magnetic_torques()
+         field_in(:, :) = this%bands%mag_for(:, :)*ry2tesla/1000.0_rp
+         call this%asd_corr(mom_in, field_in, temp_in, dt_in, na_in)
+
+         do na = 1, na_in
+            this%symbolic_atom(na + this%lattice%nbulk)%potential%mom(:) = this%emom2(:, na)
+            mom_prev(:, na) = this%emom2(:, na)*this%mmom(na)
+         end do
+         call this%writelammpstraj(this%lattice%nrec, this%emom2, this%lattice%cr(:, 1:this%lattice%nrec), timestep)
+
+         ! Leave the electronic state synchronized with the corrected moment;
+         ! the next step consumes this refreshed state directly.
+         call this%self%run()
       end do
    end subroutine sd_run
 
@@ -486,7 +471,7 @@ contains
       write (unit_num, '(A)') 'ITEM: ATOMS type x y z vx vy vz'
 
       do i = 1, num_atoms
-         write (unit_num, '(I4,6F12.4)') this%lattice%iz(this%lattice%nbulk + i), lattice(1, i), lattice(2, i), lattice(3, i), &
+         write (unit_num, '(I4,6ES20.12)') this%lattice%iz(this%lattice%nbulk + i), lattice(1, i), lattice(2, i), lattice(3, i), &
             spins(1, i), spins(2, i), spins(3, i)
       end do
 

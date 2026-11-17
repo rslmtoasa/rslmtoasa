@@ -1,0 +1,61 @@
+! Copy this file to input.nml in this directory for the WP08 corrected-MFT
+! example.  Fe.nml is the ordinary reference potential database entry.
+&calculation
+pre_processing = 'none'
+post_processing = 'frozen_magnon'
+verbose = T
+/
+&lattice
+rc = 080
+alat = 2.86120
+crystal_sym = 'bcc'
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+strux_backend = 'strux_lib'
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 3
+soc_scale = 0.0
+fix_soc = .true.
+/
+&energy
+fermi = -0.042265
+energy_min = -2.0
+energy_max = 0.8
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 4
+lld = 20
+recur = 'block'
+/
+&mix
+beta = 0.01
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+theta_ss = 90.0
+/
+&frozen_magnon
+mode = 'mft_constrained'
+branch_mode = 'acoustic'
+q_file = 'q_wp08.dat'
+q_coordinates = 'cartesian'
+constraint_max_iterations = 20
+constraint_tolerance = 1.0d-6
+constraint_start_from_zero = .true.
+/
+&constraints
+constraints_enable = .true.
+constraints_i_cons = 3
+constraints_tolerance = 1.0d-6
+constraints_diagnostics = .false.
+/

@@ -75,13 +75,16 @@ def main():
         text = path.read_text()
         needle = '      call recursion_obj%compute_moments_stochastic()'
         assert needle in text
+        # The conductivity driver of the slim layout calls the moments under `if (rec_moments)`.
+        guarded = '      if (rec_moments) call recursion_obj%compute_moments_stochastic()'
+        text = text.replace(guarded, '      if (rec_moments) then\n' + TIMER + '\n      end if')
         path.write_text(text.replace(needle,TIMER))
         if version == 'fixed':
-            path = src/'source/recursion.f90'
+            path = src/'source/recursion_transport.f90'
             text = path.read_text()
-            needle = '      call this%setup_kubo_bonds()\n      na ='
+            needle = '      call this%setup_kubo_bonds()\n      norm_a ='
             assert needle in text
-            path.write_text(text.replace(needle,BONDS_TIMER+'\n      na =',1))
+            path.write_text(text.replace(needle,BONDS_TIMER+'\n      norm_a =',1))
         build = dest/('build-'+version)
         commands = [[cmake,'-S',str(src),'-B',str(build),'-DCMAKE_BUILD_TYPE=Release',
                      '-DENABLE_OPENMP=ON','-DENABLE_MPI=OFF','-DBUILD_TESTING=OFF',

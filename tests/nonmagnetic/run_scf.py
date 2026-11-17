@@ -77,7 +77,8 @@ def run(name, flags, binary):
                   for label in ('Fe', 'Co')}
     for par in potentials.values():
         assert all(math.isfinite(v) for v in flatten(list(par.values())) if isinstance(v, (int, float)))
-    assert 'Error while reading namelist' not in (directory / 'run.log').read_text()
+    log = (directory / 'run.log').read_text()
+    assert 'Error while reading namelist' not in log and 'namelist; iostatus' not in log
     report = (directory / 'report.out').read_text()
     moments = [float(v) for v in re.findall(r'Spin moment of atom\s+\d+:\s*([\d.Ee+-]+)', report)]
     assert len(moments) == 2

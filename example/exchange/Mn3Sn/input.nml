@@ -1,0 +1,83 @@
+&calculation
+! B2 C2 validation on a genuine noncollinear background (Mn3Sn, 120 deg AFM).
+! Cross-checks the on-site k-space Lehmann G_ii against the real-space
+! recursion route IN THE LOCAL SPIN FRAME (local_axis=.true.). The driver
+! picks an on-site pair whose moment is off the global z axis (an Mn site),
+! so the C2 rotation is genuinely exercised. Writes kspace_green_c1.dat.
+post_processing = 'kspace_green'
+verbose = T
+/
+&lattice
+rc = 60
+alat = 5.677000
+crystal_sym = 'file'
+wav = 1.5261136945
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+ntype = 8
+ct(1:8) = 8*4.0d0
+r2 = 16.0d0
+! On-site self-pairs (pair index == recursed atom index, so the central-atom
+! moment used by both routes is symbolic_atoms(k)%mom). The driver reads G_ii
+! from the first on-site pair with an off-axis moment -> pair 3 = Mn1 (an Mn
+! site, moment in-plane). Only 3 pairs to keep the naive Lehmann fill tractable.
+njij = 3
+ijpair(1, :) = 1, 1
+ijpair(2, :) = 2, 2
+ijpair(3, :) = 3, 3
+/
+&atoms
+database = './'
+label(1) = 'Sn1'
+label(2) = 'Sn2'
+label(3) = 'Mn1'
+label(4) = 'Mn2'
+label(5) = 'Mn3'
+label(6) = 'Mn4'
+label(7) = 'Mn5'
+label(8) = 'Mn6'
+/
+&self
+nstep = 10
+freeze = .true.
+/
+&hamiltonian
+! The intersite recursion (recur_b_ij) stores gij in the GLOBAL spin frame
+! regardless of local_axis, so backend E fills the global-frame block directly
+! and no rotation is applied. The C2 check here is that the k-space Lehmann NC
+! block reproduces the RS global-frame spin structure: the z-projected spin DOS
+! m_z agrees to ~4e-4 (both ~0 for the in-plane Mn moment). local_axis left off.
+local_axis = .false.
+/
+&reciprocal
+nk1 = 8
+nk2 = 8
+nk3 = 8
+use_symmetry_reduction = .false.
+green_backend = 'lehmann'
+green_eta = 0.02
+dos_method = 'tetrahedron'
+/
+&energy
+fermi = -0.091013
+energy_min = -1.2
+energy_max = 1.0
+channels_ldos = 300
+/
+&control
+calctype = 'B'
+nsp = 3 ! noncollinear scalar-relativistic (no SOC); matches the k-space H(k)
+lld = 21
+recur = 'block'
+sym_term = .true.
+/
+&mix
+beta = 0.10
+mixtype = 'broyden'
+magbeta(1:8) = 8*0.0d0
+/

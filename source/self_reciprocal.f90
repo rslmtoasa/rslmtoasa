@@ -1,0 +1,293 @@
+!------------------------------------------------------------------------------
+! RS-LMTO-ASA
+!
+! SUBMODULE: Self reciprocal helpers
+!
+!> Reciprocal-space SCF output and spinor moment helpers for `self`.
+!------------------------------------------------------------------------------
+
+submodule(self_mod) self_reciprocal
+   use gbt_kspace_mod, only: gbt_newton_field
+
+   implicit none
+
+contains
+
+   !=========================================================================
+   !       FINALIZE THE ACCEPTED RECIPROCAL k-SPACE SCF STATE
+   !=========================================================================
+   !> The SCF DOS pass diagonalizes the Hamiltonian before mixing the newly
+   !> computed moments into the accepted potential.  At convergence the
+   !> difference is normally small, but the production handoff must not rely
+   !> on that approximation.  Rebuild and diagonalize once, on the already
+   !> accepted final potential, then solve EF from that same eigensystem.
+   !> This routine deliberately does not map a new density back into SCF or
+   !> perform another mixer update: it only refreshes the state being handed
+   !> to TDDFT.
+   module subroutine finalize_kspace_scf_state(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+
+      if (.not. this%use_kspace) return
+      if (.not. this%converged) then
+         call g_logger%fatal('self%finalize_kspace_scf_state: a non-converged k-space state cannot be handed to TDDFT.', &
+                             __FILE__, __LINE__)
+      end if
+      if (.not. allocated(this%reciprocal_scf_cache)) then
+         call g_logger%fatal('self%finalize_kspace_scf_state: reciprocal SCF cache is missing.', __FILE__, __LINE__)
+      end if
+
+      select case (this%control%calctype)
+      case ('B')
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
+         call this%hamiltonian%build_bulkham()
+      case ('S', 'I', 'L')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
+         call this%hamiltonian%build_bulkham()
+         if (this%control%calctype == 'I') call this%hamiltonian%build_locham()
+      case default
+         call g_logger%fatal('self%finalize_kspace_scf_state: unsupported calculation type.', __FILE__, __LINE__)
+      end select
+
+      call this%reciprocal_scf_cache%build_kspace_hamiltonian()
+      call this%reciprocal_scf_cache%diagonalize_hamiltonian()
+      this%reciprocal_scf_cache%auto_find_fermi = .true.
+      this%bands%eband = this%reciprocal_scf_cache%calculate_canonical_band_energy(.true.)
+      this%en%fermi = this%reciprocal_scf_cache%fermi_level
+      call this%reciprocal_scf_cache%require_replicated_k_workset('self%finalize_kspace_scf_state')
+   end subroutine finalize_kspace_scf_state
+
+   !=========================================================================
+   !      WRITE k-SPACE SCF DOS OUTPUTS IN LEGACY-COMPATIBLE FILE FORMAT
+   !=========================================================================
+   module subroutine write_kspace_scf_dos_outputs(this, reciprocal_obj)
+      class(self), intent(inout) :: this
+      type(reciprocal), intent(in) :: reciprocal_obj
+      integer :: i, isite, iorb
+      real(rp), allocatable :: dos_up_tot(:), dos_dw_tot(:), dos_mx_tot(:), dos_my_tot(:), dos_mz_tot(:), dos_nmag_tot(:)
+
+      call update_gbt_constraint_field(this)
+      if (rank /= 0) return
+      if (.not. allocated(reciprocal_obj%total_dos)) return
+      if (.not. allocated(reciprocal_obj%dos_energy_grid)) return
+
+      allocate(dos_up_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_dw_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_mx_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_my_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_mz_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_nmag_tot(reciprocal_obj%n_energy_points))
+      dos_up_tot = 0.0_rp
+      dos_dw_tot = 0.0_rp
+      dos_mx_tot = 0.0_rp
+      dos_my_tot = 0.0_rp
+      dos_mz_tot = 0.0_rp
+      dos_nmag_tot = 0.0_rp
+
+      if (allocated(reciprocal_obj%projected_dos)) then
+         do i = 1, reciprocal_obj%n_energy_points
+            do isite = 1, reciprocal_obj%n_sites
+               do iorb = 1, reciprocal_obj%n_orb_types
+                  dos_up_tot(i) = dos_up_tot(i) + reciprocal_obj%projected_dos(isite, iorb, 1, i)
+                  dos_dw_tot(i) = dos_dw_tot(i) + reciprocal_obj%projected_dos(isite, iorb, 2, i)
+               end do
+            end do
+         end do
+      else
+         dos_up_tot = 0.5_rp*reciprocal_obj%total_dos
+         dos_dw_tot = 0.5_rp*reciprocal_obj%total_dos
+      end if
+
+      dos_mz_tot = dos_up_tot - dos_dw_tot
+      dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
+
+      if (allocated(reciprocal_obj%dos_mx_tot)) dos_mx_tot = reciprocal_obj%dos_mx_tot
+      if (allocated(reciprocal_obj%dos_my_tot)) dos_my_tot = reciprocal_obj%dos_my_tot
+      if (allocated(reciprocal_obj%dos_mz_tot)) dos_mz_tot = reciprocal_obj%dos_mz_tot
+
+      open(unit=125, file='totaldos.out', status='replace', action='write')
+      do i = 1, reciprocal_obj%n_energy_points
+         write(125, '(2f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, reciprocal_obj%total_dos(i)
+      end do
+      close(125)
+
+      open(unit=126, file='magneticdos.out', status='replace', action='write')
+      write(126, '(a)') '# energy_minus_fermi dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
+      do i = 1, reciprocal_obj%n_energy_points
+         write(126, '(7f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, &
+            dos_up_tot(i), dos_dw_tot(i), dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
+      end do
+      close(126)
+
+      deallocate(dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot)
+   end subroutine write_kspace_scf_dos_outputs
+
+   !=========================================================================
+   !  SPINOR-RIGOROUS SITE MOMENTS FROM k-SPACE EIGENVECTORS (nsp=2/SOC path)
+   !=========================================================================
+   !> The returned components are in the eigenvector spin basis.  For
+   !> `gbt_single_q` this is the primitive rotating frame: no cell-dependent
+   !> spiral phase is present in a primitive k-space eigenvector sum.  The
+   !> lab-frame moment belongs to output/comparison code and must be obtained
+   !> through `gbt_structure_mod`’s authoritative frame transformation.
+   module subroutine compute_kspace_spin_moments_spinor(this, reciprocal_obj, site_mom)
+      class(self), intent(in) :: this
+      type(reciprocal), intent(in) :: reciprocal_obj
+      real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
+      integer :: ik, ik_global, ib, ia, io, iup, idn, site_offset
+      real(rp) :: wk, occ, e, kT, farg
+      complex(rp) :: u, d, ud
+      real(rp) :: mxs, mys, mzs
+
+      site_mom(:, :) = 0.0_rp
+      kT = reciprocal_obj%temperature*kB_Ry_per_K
+
+      do ik = 1, size(reciprocal_obj%eigenvalues, 2)
+         ik_global = ik
+         if (allocated(reciprocal_obj%k_l2g_map)) then
+            if (ik <= size(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
+         end if
+         wk = reciprocal_obj%k_weights(ik_global)
+         do ib = 1, size(reciprocal_obj%eigenvalues, 1)
+            e = reciprocal_obj%eigenvalues(ib, ik)
+            if (kT > 1.0e-12_rp) then
+               farg = (e - reciprocal_obj%fermi_level)/kT
+               if (farg > 50.0_rp) then
+                  occ = 0.0_rp
+               else if (farg < -50.0_rp) then
+                  occ = 1.0_rp
+               else
+                  occ = 1.0_rp/(exp(farg) + 1.0_rp)
+               end if
+            else
+               occ = merge(1.0_rp, 0.0_rp, e <= reciprocal_obj%fermi_level)
+            end if
+            if (occ <= 1.0e-14_rp) cycle
+
+            do ia = 1, this%lattice%nrec
+               site_offset = (ia - 1)*nb
+               mxs = 0.0_rp
+               mys = 0.0_rp
+               mzs = 0.0_rp
+               do io = 1, norb
+                  iup = site_offset + io
+                  idn = site_offset + norb + io
+                  if (idn > size(reciprocal_obj%eigenvectors, 1)) cycle
+                  u = reciprocal_obj%eigenvectors(iup, ib, ik)
+                  d = reciprocal_obj%eigenvectors(idn, ib, ik)
+                  ud = conjg(u)*d
+                  mxs = mxs + 2.0_rp*real(ud, rp)
+                  mys = mys + 2.0_rp*aimag(ud)
+                  mzs = mzs + real(conjg(u)*u - conjg(d)*d, rp)
+               end do
+               site_mom(1, ia) = site_mom(1, ia) + wk*occ*mxs
+               site_mom(2, ia) = site_mom(2, ia) + wk*occ*mys
+               site_mom(3, ia) = site_mom(3, ia) + wk*occ*mzs
+            end do
+         end do
+      end do
+#ifdef USE_MPI
+      if (reciprocal_obj%k_mesh_distributed_active) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, site_mom, product(shape(site_mom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
+#endif
+   end subroutine compute_kspace_spin_moments_spinor
+
+   !> Field update of the k-space GBT constrained spiral, replacing the lambda controller of apply_constraints on this path
+   !> (its output in mag_cfield is overwritten here). Constant-Jacobian Newton step per site in the local frame,
+   !> B_new = B_used - alpha chi^-1 m_perp, with chi = dm_perp/dB measured by forward differences of two extra band solves per
+   !> site at the potential and field of this iteration; it is measured again when the residual sum_a |B_a||m_a_perp| has grown
+   !> for two consecutive iterations. alpha and the probe field are internal constants. The orientation potential%mom that
+   !> apply_constraints overwrote is restored from the copy taken before the first assembly.
+   subroutine update_gbt_constraint_field(this)
+      class(self), intent(inout) :: this
+      real(rp), parameter :: alpha = 0.5_rp, b_probe = 1.0e-4_rp
+      integer :: nrec, ia, ja, idir
+      real(rp), allocatable :: m(:, :), b_used(:, :), b_new(:, :), site_mom(:, :)
+      real(rp) :: residual
+      character(len=256) :: line
+
+      if (.not. this%control%constraints_enable .or. trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) return
+      nrec = this%lattice%nrec
+      allocate (m(2, nrec), b_used(2, nrec), b_new(2, nrec), site_mom(3, nrec))
+      do ia = 1, nrec
+         m(:, ia) = this%symbolic_atom(this%lattice%nbulk + ia)%constraint_actual(1:2)
+      end do
+      if (allocated(this%hamiltonian%gbt_bfield)) then
+         b_used = this%hamiltonian%gbt_bfield
+      else   ! first iteration: the seed the Hamiltonian was built with
+         b_used = 0.0_rp
+         if (allocated(this%control%constraints_bfield)) then
+            if (size(this%control%constraints_bfield, 1) == 3 .and. size(this%control%constraints_bfield, 2) >= nrec) &
+               b_used = this%control%constraints_bfield(1:2, 1:nrec)
+         end if
+      end if
+      residual = 0.0_rp
+      do ia = 1, nrec
+         residual = residual + norm2(b_used(:, ia))*norm2(m(:, ia))
+      end do
+      associate (ham => this%hamiltonian)
+         if (.not. allocated(ham%gbt_chi) .or. (residual > ham%gbt_residual(1) .and. ham%gbt_residual(1) > ham%gbt_residual(2))) then
+            if (.not. allocated(ham%gbt_chi)) allocate (ham%gbt_chi(2, 2, nrec))
+            ham%gbt_residual = huge(1.0_rp)
+            do ia = 1, nrec
+               do idir = 1, 2
+                  do ja = 1, nrec
+                     this%symbolic_atom(this%lattice%nbulk + ja)%mag_cfield = [b_used(:, ja), 0.0_rp]
+                  end do
+                  this%symbolic_atom(this%lattice%nbulk + ia)%mag_cfield(idir) = b_used(idir, ia) + b_probe
+                  call solve_site_moments(site_mom)
+                  ham%gbt_chi(:, idir, ia) = (site_mom(1:2, ia) - m(:, ia))/b_probe
+               end do
+            end do
+         end if
+         do ia = 1, nrec
+            call gbt_newton_field(ham%gbt_chi(:, :, ia), b_used(:, ia), m(:, ia), alpha, b_new(:, ia))
+            this%symbolic_atom(this%lattice%nbulk + ia)%mag_cfield = [b_new(:, ia), 0.0_rp]
+         end do
+         if (.not. allocated(ham%gbt_bfield)) allocate (ham%gbt_bfield(2, nrec))
+         ham%gbt_bfield = b_new
+         ham%gbt_residual = [residual, ham%gbt_residual(1)]
+         do ia = 1, nrec   ! apply_constraints rewrote potential%mom to (0,0,+1); the potential written next keeps the reference
+            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = ham%gbt_ref_mom(:, ia)
+         end do
+      end associate
+      do ia = 1, nrec
+         if (this%symbolic_atom(this%lattice%nbulk + ia)%constraint_actual(3) < 0.0_rp .and. rank == 0) call g_logger%warning( &
+            'GBT_CONSTRAINT: the moment of site '//fmt('i0', ia)//' is antiparallel to its local axis; channel 1 of its potential must be '// &
+            'the majority spin.', __FILE__, __LINE__)
+      end do
+      write (line, '(*(es15.7))') b_new
+      if (rank == 0) call g_logger%info('GBT_CONSTRAINT residual sum_a |B_a||m_a_perp| (Ry) = '//fmt('es14.6', residual)// &
+                                        ' max |m_perp| (muB) = '//fmt('es14.6', maxval(norm2(m, dim=1)))// &
+                                        ' B_next_xy_per_site (Ry) ='//trim(line), __FILE__, __LINE__)
+
+   contains
+
+      !> Spin moments of the occupied states of the current Hamiltonian (canonical mu), on a fresh reciprocal object.
+      subroutine solve_site_moments(mom)
+         real(rp), intent(out) :: mom(:, :)
+         type(reciprocal) :: probe
+         real(rp) :: eband
+
+         probe = reciprocal(this%hamiltonian)
+         if (probe%use_symmetry_reduction) then
+            call probe%generate_reduced_kpoint_mesh(probe%nk_mesh, sum(abs(probe%k_offset)) > 1.0e-12_rp)
+         else
+            call probe%generate_mp_mesh()
+         end if
+         call probe%build_kspace_hamiltonian()
+         call probe%diagonalize_hamiltonian()
+         eband = probe%calculate_canonical_band_energy(.true.)
+         call this%compute_kspace_spin_moments_spinor(probe, mom)
+      end subroutine solve_site_moments
+
+   end subroutine update_gbt_constraint_field
+
+end submodule self_reciprocal

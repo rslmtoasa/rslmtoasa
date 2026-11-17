@@ -1,0 +1,194 @@
+!------------------------------------------------------------------------------
+! ACC-04 -- production arbitrary-k CPU/CUDA reciprocal integration
+!------------------------------------------------------------------------------
+program test_reciprocal_cuda_arbitrary_k
+   use, intrinsic :: iso_c_binding, only: c_int
+   use precision_mod, only: rp
+   use basis_mod, only: nb
+   use reciprocal_mod, only: reciprocal
+   use hamiltonian_mod, only: hamiltonian
+   use lattice_mod, only: lattice
+   use control_mod, only: control
+   use logger_mod, only: g_logger
+   use mpi_mod, only: parallel_context, g_parallel_context, ierr
+#ifdef USE_MPI
+   use mpi
+#endif
+   implicit none
+
+   interface
+      function cuda_device_count(count) bind(C, name='rslmto_reciprocal_cuda_device_count') result(status)
+         import c_int
+         integer(c_int), intent(out) :: count
+         integer(c_int) :: status
+      end function cuda_device_count
+   end interface
+
+   type(reciprocal) :: recip
+   type(hamiltonian), target :: ham
+   type(lattice), target :: lat
+   type(control), target :: ctl
+   real(rp), parameter :: points(3,4) = reshape([ &
+      0.125_rp, 0.0_rp, 0.0_rp, &
+      0.371_rp, -0.217_rp, 0.083_rp, &
+      1.125_rp, 0.0_rp, 0.0_rp, &
+      -0.125_rp, 0.0_rp, 0.0_rp], [3,4])
+   real(rp), allocatable :: cpu_values(:, :), cuda_values(:, :)
+   complex(rp), allocatable :: cpu_vectors(:, :, :), cuda_vectors(:, :, :)
+   complex(rp), allocatable :: h(:, :), cpu_projector(:, :), cuda_projector(:, :)
+   complex(rp), allocatable :: cpu_mesh_h(:, :, :), cuda_mesh_h(:, :, :)
+   real(rp), allocatable :: cpu_mesh_values(:, :), cuda_mesh_values(:, :)
+   complex(rp), allocatable :: cpu_mesh_vectors(:, :, :), cuda_mesh_vectors(:, :, :)
+   integer(c_int) :: device_count, status
+   integer :: ik, execute_requests, combined_requests, assemble_requests, input_solves
+   real(rp) :: eigenvalue_error, projector_error, residual_error, orthogonality_error
+
+   call g_logger%init()
+#ifdef USE_MPI
+   call MPI_INIT(ierr)
+   g_parallel_context = parallel_context()
+#endif
+   status = cuda_device_count(device_count)
+   if (status /= 0_c_int .or. device_count <= 0_c_int) then
+      write (*, '(a)') 'SKIP: no CUDA device is available'
+#ifdef USE_MPI
+      call MPI_FINALIZE(ierr)
+#endif
+      stop 77
+   end if
+
+   call setup_one_site_model(recip, ham, lat)
+   recip%reciprocal_tile_size = 2
+
+   call recip%make_execution_backend('lapack')
+   call recip%calculate_eigenpairs_at_kpoints(points, cpu_values, cpu_vectors)
+
+   call recip%make_execution_backend('cuda')
+   call recip%calculate_eigenpairs_at_kpoints(points, cuda_values, cuda_vectors)
+
+   eigenvalue_error = maxval(abs(cpu_values - cuda_values))
+   if (eigenvalue_error > 5.0e-11_rp) then
+      write (*, '(a,es14.6)') 'FAIL: CPU/CUDA arbitrary-k eigenvalue error = ', eigenvalue_error
+      error stop 1
+   end if
+
+   allocate(h(nb,nb), cpu_projector(nb,nb), cuda_projector(nb,nb))
+   residual_error = 0.0_rp
+   orthogonality_error = 0.0_rp
+   projector_error = 0.0_rp
+   do ik = 1, size(points,2)
+      call recip%build_hamiltonian_at_kpoint(points(:,ik), h)
+      residual_error = max(residual_error, maxval(abs(matmul(h, cuda_vectors(:,:,ik)) - &
+         cuda_vectors(:,:,ik)*spread(cuda_values(:,ik), 1, nb))))
+      orthogonality_error = max(orthogonality_error, maxval(abs(&
+         matmul(conjg(transpose(cuda_vectors(:,:,ik))), cuda_vectors(:,:,ik)) - identity(nb))))
+      cpu_projector = matmul(cpu_vectors(:,:,ik), conjg(transpose(cpu_vectors(:,:,ik))))
+      cuda_projector = matmul(cuda_vectors(:,:,ik), conjg(transpose(cuda_vectors(:,:,ik))))
+      projector_error = max(projector_error, maxval(abs(cpu_projector - cuda_projector)))
+   end do
+
+   if (residual_error > 5.0e-11_rp .or. orthogonality_error > 5.0e-11_rp .or. projector_error > 5.0e-10_rp) then
+      write (*, '(a,3(es14.6,1x))') 'FAIL: CUDA residual/orthogonality/projector errors = ', &
+         residual_error, orthogonality_error, projector_error
+      error stop 1
+   end if
+   if (maxval(abs(cuda_values(:,1) - cuda_values(:,3))) > 5.0e-11_rp .or. &
+       maxval(abs(cuda_values(:,1) - cuda_values(:,4))) > 5.0e-11_rp) then
+      write (*, '(a)') 'FAIL: CUDA folded/duplicate arbitrary-k behavior changed'
+      error stop 1
+   end if
+
+   ! ACC-05: the ordinary mesh keeps its host H(k) compatibility cache while
+   ! the selected CUDA backend consumes host-assembled tiles for eigensolution.
+   recip%nk_total = size(points, 2)
+   allocate(recip%k_points(3, recip%nk_total), recip%k_weights(recip%nk_total))
+   recip%k_points = points
+   recip%k_weights = 1.0_rp / real(recip%nk_total, rp)
+   recip%reciprocal_tile_size = 2
+
+   call recip%make_execution_backend('lapack')
+   call recip%build_kspace_hamiltonian()
+   call recip%diagonalize_hamiltonian()
+   allocate(cpu_mesh_h, source=recip%hk_bulk)
+   allocate(cpu_mesh_values, source=recip%eigenvalues)
+   allocate(cpu_mesh_vectors, source=recip%eigenvectors)
+
+   call recip%make_execution_backend('cuda')
+   call recip%build_kspace_hamiltonian()
+   call recip%execution_backend%execution_metrics(execute_requests, combined_requests, assemble_requests, input_solves)
+   if (execute_requests /= 2 .or. combined_requests /= 0 .or. assemble_requests /= 0 .or. input_solves /= 2) then
+      write (*, '(a,4(i0,1x))') 'FAIL: ACC-05 CUDA normal-mesh request metrics = ', execute_requests, &
+         combined_requests, assemble_requests, input_solves
+      error stop 1
+   end if
+   call recip%diagonalize_hamiltonian()
+   allocate(cuda_mesh_h, source=recip%hk_bulk)
+   allocate(cuda_mesh_values, source=recip%eigenvalues)
+   allocate(cuda_mesh_vectors, source=recip%eigenvectors)
+
+   if (maxval(abs(cpu_mesh_h - cuda_mesh_h)) > 5.0e-12_rp .or. &
+       maxval(abs(cpu_mesh_values - cuda_mesh_values)) > 5.0e-11_rp .or. &
+       maxval(abs(cpu_mesh_vectors - cuda_mesh_vectors)) > 5.0e-10_rp) then
+      write (*, '(a,3(es14.6,1x))') 'FAIL: ACC-05 CPU/CUDA normal-mesh errors = ', &
+         maxval(abs(cpu_mesh_h - cuda_mesh_h)), maxval(abs(cpu_mesh_values - cuda_mesh_values)), &
+         maxval(abs(cpu_mesh_vectors - cuda_mesh_vectors))
+      error stop 1
+   end if
+
+   write (*, '(a,3(es14.6,1x))') 'PASS: CUDA arbitrary-k eigenpairs; eigenvalue/projector/residual errors = ', &
+      eigenvalue_error, projector_error, residual_error
+   write (*, '(a)') 'PASS: CUDA normal-mesh host cache/eigenpair integration'
+
+#ifdef USE_MPI
+   call MPI_FINALIZE(ierr)
+#endif
+
+contains
+
+   subroutine setup_one_site_model(obj, ham_obj, lat_obj)
+      type(reciprocal), intent(out) :: obj
+      type(hamiltonian), target, intent(out) :: ham_obj
+      type(lattice), target, intent(out) :: lat_obj
+      integer :: i
+
+      call obj%restore_to_default()
+      obj%control => ctl   ! make_reciprocal_assembler reads control%constraints_enable
+      lat_obj%nrec = 1; lat_obj%ntype = 1; lat_obj%nn_max = 3; lat_obj%kk = 1
+      allocate(lat_obj%ib(1), lat_obj%atlist(1), lat_obj%iz(1), lat_obj%nn(1,3))
+      lat_obj%ib = 1; lat_obj%atlist = 1; lat_obj%iz = 1; lat_obj%nn(1,:) = [3,1,1]
+      ! build_kspace_hamiltonian checks every atom's potential parameters c, qpar and srdel for NaN.
+      allocate(lat_obj%symbolic_atoms(lat_obj%ntype))
+      do i = 1, lat_obj%ntype
+         allocate(lat_obj%symbolic_atoms(i)%potential%c(0:2, 2), lat_obj%symbolic_atoms(i)%potential%qpar(0:2, 2), &
+                  lat_obj%symbolic_atoms(i)%potential%srdel(0:2, 2))
+         lat_obj%symbolic_atoms(i)%potential%c = 0.0_rp
+         lat_obj%symbolic_atoms(i)%potential%qpar = 0.0_rp
+         lat_obj%symbolic_atoms(i)%potential%srdel = 0.0_rp
+      end do
+      ham_obj%lattice => lat_obj; ham_obj%hoh = .false.; ham_obj%ccor_2c = .false.
+      allocate(ham_obj%ee(nb,nb,3,1)); ham_obj%ee = (0.0_rp,0.0_rp)
+      do i = 1, nb
+         ham_obj%ee(i,i,1,1) = cmplx(0.05_rp*real(i,rp),0.0_rp,rp)
+         ham_obj%ee(i,i,2,1) = cmplx(0.01_rp*real(i,rp),0.0_rp,rp)
+         ham_obj%ee(i,i,3,1) = cmplx(0.01_rp*real(i,rp),0.0_rp,rp)
+      end do
+      obj%hamiltonian => ham_obj; obj%lattice => lat_obj
+      obj%reciprocal_mode = 'ham_only'; obj%kspace_ham_order = 'first'; obj%max_orbs = nb
+      obj%dos_method = 'tetrahedron'; obj%cached_operator_generation = 0
+      ham_obj%operator_generation = 0; ham_obj%magnetic_representation = 'periodic_nc'
+      allocate(obj%ham_vec_type(3,3,1), obj%ham_vec_type_direct(3,3,1))
+      obj%ham_vec_type = 0.0_rp; obj%ham_vec_type_direct = 0.0_rp
+      obj%ham_vec_type_direct(1,2,1) = 1.0_rp; obj%ham_vec_type_direct(1,3,1) = -1.0_rp
+   end subroutine setup_one_site_model
+
+   function identity(n) result(value)
+      integer, intent(in) :: n
+      complex(rp) :: value(n,n)
+      integer :: i
+      value = cmplx(0.0_rp,0.0_rp,rp)
+      do i = 1, n
+         value(i,i) = cmplx(1.0_rp,0.0_rp,rp)
+      end do
+   end function identity
+
+end program test_reciprocal_cuda_arbitrary_k

@@ -1,0 +1,29 @@
+{
+ "row": "U_rs",
+ "description": "+U RS bulk bcc Fe nsp=1",
+ "kind": "abs",
+ "tolerance": 1e-10,
+ "reason": "regenerated at e68327bf with -DENABLE_MARCH_NATIVE=OFF: cheb_backend default fast_dp (double-precision Chebyshev moments and DOS reconstruction); the single-precision reference differed by 1.0e-6",
+ "binary_sha256": "d9d5cbb941fc33e998214c9affca2310216a5f1b595297405208520e318b3c93",
+ "date": "2026-11-07",
+ "reference": {
+  "diff": [
+   0.017256892,
+   0.0203304672,
+   0.0244291007,
+   0.0251439629
+  ],
+  "fermi": [
+   -0.00369,
+   -0.098361,
+   -0.103252,
+   -0.103581
+  ],
+  "spin_moment": [
+   2.101202,
+   2.307835,
+   2.354313,
+   2.365375
+  ]
+ }
+}

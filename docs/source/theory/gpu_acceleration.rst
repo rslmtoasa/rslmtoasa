@@ -1,0 +1,159 @@
+.. _theory/gpu_acceleration:
+
+================================
+GPU Acceleration (CUDA plugin)
+================================
+
+Overview
+========
+
+The recursion kernels — the computational hot path of a real-space RS-LMTO
+calculation — can optionally be offloaded to an NVIDIA GPU through a CUDA
+*plugin*. The plugin is a self-contained backend: a Fortran ``iso_c_binding``
+wrapper (``source/rsrec_cuda_plugin.f90``) over a C/CUDA library
+(``source/cuda/rsrec_gpu.cu`` + ``rsrec_cuda.h``, dispatched through
+``rsrec_cuda.cpp``). When enabled and available, it replaces the CPU recursion
+kernels; when unavailable it falls back transparently to the CPU path, so the
+same input runs on both GPU and non-GPU builds.
+
+.. note::
+
+   The CUDA plugin is **off by default** and must be compiled in explicitly
+   (see below). A build without it behaves exactly as before — the ``gpu_*``
+   keywords are simply ignored on the CPU path.
+
+Building with the CUDA plugin
+=============================
+
+Configure with ``ENABLE_CUDA_PLUGIN=ON`` (requires the CUDA toolkit —
+``cudart``, ``cusparse``, ``cufft``, ``cublas``):
+
+.. code-block:: bash
+
+   cmake -DENABLE_CUDA_PLUGIN=ON ..
+   make -j 4
+
+This defines ``USE_CUDA_PLUGIN`` and links the ``rsrec_cuda`` backend into
+``rslmto.x``. See :ref:`getting_started` for the full build-options table.
+
+Enabling the GPU at runtime
+===========================
+
+Three ``&control`` keywords select the GPU path:
+
+.. list-table::
+   :widths: 25 20 55
+   :header-rows: 1
+
+   * - Keyword
+     - Default
+     - Meaning
+   * - ``gpu_plugin``
+     - ``.false.``
+     - Master switch. When ``.true.`` (and the plugin is compiled in and a
+       device is available), the supported recursion kernels dispatch to the
+       GPU. When ``.false.``, or when no device is available, the CPU path is
+       used.
+   * - ``gpu_backend``
+     - ``'csr'``
+     - Sparse storage / matvec strategy on the device. One of ``'csr'``,
+       ``'bsr'``, ``'fft'``, ``'conv'`` (see below).
+   * - ``gpu_precision``
+     - ``'fp32'``
+     - Arithmetic of the GPU kernels, ``'fp32'`` or ``'fp64'`` (see below).
+
+Example:
+
+.. code-block:: fortran
+
+   &control
+      recur       = 'chebyshev'
+      gpu_plugin  = .true.
+      gpu_backend = 'bsr'
+   /
+
+``gpu_backend`` values
+----------------------
+
+- ``'csr'`` — compressed sparse row matvec (default, general).
+- ``'bsr'`` — block sparse row; groups per-site orbital blocks, typically
+  faster for the dense per-atom blocks of the LMTO Hamiltonian.
+- ``'fft'`` — FFT-based periodic operator apply. **Requires a fully periodic
+  lattice** (``pbc=.true.`` with all of ``b1``/``b2``/``b3``); otherwise the
+  run warns and falls back to the CPU path.
+- ``'conv'`` — real-space convolution periodic operator apply; same periodicity
+  requirement as ``'fft'``.
+
+An unrecognized ``gpu_backend`` (or ``gpu_precision``) stops the run at input,
+also in builds without the GPU plugin.
+
+``gpu_precision``
+-----------------
+
+``gpu_precision`` sets the arithmetic of every GPU kernel: the Chebyshev
+moments, the stochastic and orbital moments, the block-Lanczos recursion and
+the DOS / Green-function reconstruction. The default ``'fp32'`` is the fast
+setting; ``'fp64'`` is meant for cross-checks. The run logs the precision in use
+(``GPU precision: ...``) when it uploads the Hamiltonian.
+
+- ``'fp64'`` is much slower on GPUs with reduced double-precision throughput
+  (for example RTX A-series cards, about 18 times for the conductivity moments
+  in one measurement) and needs more device memory.
+- The scalar Lanczos recursion always runs in fp64, whatever ``gpu_precision``
+  says.
+- ``cheb_backend = 'fast_dp'`` also gives fp64 for the GPU block-Lanczos
+  recursion, as before. The log line then says so.
+
+Which kernels are offloaded
+===========================
+
+The plugin covers the recursion features that dominate runtime. Each is
+guarded by ``gpu_plugin_ready`` (``recursion_core.f90``), which checks device
+availability, backend compatibility, and per-feature constraints before
+choosing the GPU path:
+
+- Chebyshev moment recursion (``chebyshev_recur``)
+- Block-Lanczos recursion (``recur_b``)
+- Scalar Lanczos recursion (``recur``) — scalar-relativistic only (``nsp=1``)
+- Stochastic Chebyshev moments (``compute_moments_stochastic``)
+- Intersite / transport variants (``recur_b_ij``, ``chebyshev_recur_ij``)
+- Orbital moments (``chebyshev_orbital_mod``)
+
+When ``gpu_plugin=.true.``, these bypass the CPU Chebyshev/Lanczos backends
+(``chebyshev_fast.f90`` / ``haydock_fast.f90``) entirely — the GPU backend is
+not layered on top of them.
+
+Fallback and correctness
+========================
+
+The GPU path is designed to be **numerically consistent** with the CPU path,
+not a separate approximation: it computes the same recursion coefficients /
+moments to the same tolerances. If any checked precondition fails (plugin not
+compiled in, incompatible backend, feature guard such as the ``nsp=1``
+restriction on scalar Lanczos or the periodicity requirement on ``fft``/``conv``),
+the run emits a warning and continues on the CPU path. A CUDA-enabled build
+still requires a working CUDA device when the GPU route is actually selected.
+
+GPU route decisions are recorded in ``docs/DECISIONS.md``. The CPU
+Kubo-Bastin transport study is
+``docs/validation/VAL-09_KUBO_BASTIN_TRANSPORT.md``.
+
+Device data is fingerprinted and cached (context creation, BSR upload) so that
+repeated calls with the same Hamiltonian — e.g. across energy points — do not
+re-upload or re-pack, mirroring the CPU ``cheb_cache_t`` lifecycle.
+
+Testing
+=======
+
+Real-GPU consistency is checked out-of-CI with ``tests/run_gpu_matrix.sh``
+(compares GPU output against the CPU reference across the recursion matrix).
+CI itself only *compiles* the plugin (the ``cuda_compile`` job) since the
+runners have no GPU. See ``docs/DEVELOPER_MAP.md`` for the kernel-level plugin
+surface and ``tests/README.md`` for the GPU coverage tiers.
+
+See Also
+========
+
+- :ref:`theory/recursion_method` — the recursion kernels the plugin accelerates
+- :ref:`code_structure` — where the plugin sits in the source tree
+- :ref:`getting_started` — build-options table

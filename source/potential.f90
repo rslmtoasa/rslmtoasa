@@ -24,10 +24,15 @@ module potential_mod
    use os_mod, only: exists
    use precision_mod, only: rp
    use mpi_mod
+#ifdef USE_MPI
+   use mpi
+#endif
    use globals_mod, only: GLOBAL_DATABASE_FOLDER, GLOBAL_CHAR_SIZE
-   use string_mod, only: path_join, sl, fmt, real2str, int2str
+   use string_mod, only: path_join, sl, pl, fmt, real2str, int2str
    use logger_mod, only: g_logger
    use namelist_generator_mod, only: namelist_generator
+   use basis_mod, only: lmax_basis
+   use math_mod, only: ry2ev
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -69,7 +74,7 @@ module potential_mod
       real(rp), dimension(:, :), allocatable :: pl
       !> Moments as defined in Eq. 48. of Phys. Rev. B 43, 9538 (1991).
       !> 1st index 1 = s-orbital, 2 = p-orbital, 3 = d-orbital
-      !> 2nd index 1 = spin-up, 2 = spin-dw
+      !> 2nd index 1 = spin-up, 2 = spin-dw (I think the third index is spin /Viktor Frilén)
       real(rp), dimension(:, :, :), allocatable :: ql
       !> Potential parameters on the orthogonal basis
       real(rp), dimension(:, :), allocatable :: c, enu, ppar, qpar, srdel, vl, pnu, qi, dele
@@ -93,10 +98,52 @@ module potential_mod
       real(rp) :: sumec, sumev, etot, utot, ekin, rhoeps
       ! Madelung potential
       real(rp) :: vmad
+      !> l=1 (z) dipole charge moment Q_{10} of the sphere (surface electrostatics, B6).
+      !> Derived each SCF step from the on-site density matrix; zero in the bulk limit.
+      real(rp) :: q10
+      !> Sphere-boundary potential used to construct the muffin-tin zero.
+      !> vrmax(1) is the spin average; vrmax(2) is up-down.
+      real(rp), dimension(2) :: vrmax
       ! Spin-orbit coupling coefficients and Racah parameters
       real(rp), dimension(2) :: xi_p, xi_d, rac
       ! Hyperfine fields
       real(rp), dimension(2) :: hyper_field(2)
+      !> Hubbard parameters
+      !> 1 = s-orbital, 2 = p-orbital, 3 = d-orbital (possible to generalize to f-orbitals)
+      real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
+      !> Radial-moment convention and backend that produced a U-carrying potential.
+      character(len=16) :: hubbard_radial_moments, hubbard_backend
+      character(len=256) :: dm_file = ''
+      !> Frozen host of an embedded run (calctype I/S): its dm file is never written.
+      logical :: frozen_host = .false.
+      !> nsp of the run that wrote a U-carrying potential; 0 = not recorded.
+      integer :: hubbard_nsp = 0
+      !> Spin axis of the radial channels of the run that wrote a U-carrying potential; 0 = not recorded.
+      real(rp), dimension(3) :: hubbard_axis = 0.0_rp
+      logical :: hubbard_axis_logged = .false.
+      character(len=128) :: dm_run_id = 'run'
+      integer :: dm_iteration = 0
+      logical :: hubbard_file_has_uj
+      !> Local density matrix /occupation matrix (integrated -im(g0)/pi)
+      !> 1st index: 1 = s-orbital, 2 = p-orbital, 3 = d-orbital 
+      !> 2nd index: 1 = spin-up, 2= spin-dw
+      !> 3rd and 4th index: m-quantum numbers (projected angular momentum)
+      complex(rp), dimension(:,:,:,:), allocatable :: ldm
+      !> Real part of the legacy flattened restart representation.
+      real(rp), dimension(:,:,:), allocatable :: ldm_flatten
+      !> Imaginary part paired with ldm_flatten; absent in legacy restart files.
+      real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
+      !> Spinor d-shell P and M1, index (sigma-1)*5+(m+3); allocated only by the spinor diagnostic
+      !> (nsp>=2). The spin-diagonal blocks of ldm_spinor are those of ldm(3,:,:,:). M1 is not persisted.
+      complex(rp), dimension(:,:), allocatable :: ldm_spinor, m1_spinor
+      !> Spinor P of the previous iteration (the P that built the Hamiltonian's V_in); not persisted.
+      complex(rp), dimension(:,:), allocatable :: ldm_spinor_prev
+      !> Linearly mixed spinor P (ldm_beta) that builds V at nsp>=2; the mixing history. Not persisted.
+      complex(rp), dimension(:,:), allocatable :: ldm_spinor_mix
+      !> Optional screening constants used by the strux backend (indexed by l=0..lmax).
+      real(rp), dimension(:), allocatable :: screening_alpha
+      !> Optional screening sigma values used by the strux backend (indexed by l=0..lmax).
+      real(rp), dimension(:), allocatable :: screening_sigma
    contains
 
       procedure :: build_from_file
@@ -118,6 +165,10 @@ module potential_mod
       procedure :: symmetrize_parameters
       procedure :: clear_spin_moment
       procedure :: copy_mom_to_scal
+      procedure :: set_hubbard_axis
+      procedure :: flatten_ldm
+      procedure :: expand_ldm
+      procedure :: write_density_matrix_file
       final :: destructor
    end type potential
 
@@ -177,7 +228,7 @@ contains
       logical, optional, intent(in) :: reload
       logical :: reload_, built
       character(len=:), allocatable :: path_to_file
-      character(len=sl), dimension(2) :: lst_path_to_file
+      character(len=pl), dimension(2) :: lst_path_to_file
 
       !reload_ = merge(reload, .True., present(reload))
       if (present(reload)) then
@@ -242,9 +293,17 @@ contains
       integer :: iostatus, funit
 
       ! Local variables
-      integer :: i
+      integer :: l, is, file_lmax, lsrc
 
       include 'include_codes/namelists/potential.f90'
+
+      ! Pre-size containers to the active basis before namelist read.
+      ! This avoids truncated/failed reads when restart files carry lmax=3
+      ! while the default constructor started from lmax=2.
+      if (this%lmax < lmax_basis) then
+         this%lmax = lmax_basis
+         call ensure_lmax_consistency(this)
+      end if
 
       ! Save previous values
       ws_r = this%ws_r
@@ -255,31 +314,128 @@ contains
       ekin = this%ekin
       rhoeps = this%rhoeps
       lmax = this%lmax
-      vmad = this%vmad
-      xi_p = this%xi_p
+          vmad = this%vmad
+          vrmax = this%vrmax
+          xi_p = this%xi_p
       xi_d = this%xi_d
       rac = this%rac
+      hubbard_radial_moments = ''
+      hubbard_backend = ''
+      dm_file = ''
+      hubbard_nsp = 0
+      hubbard_axis = 0.0_rp
 
       ! Normalize the magnetic moments
-      this%mom(:) = this%mom(:)/norm2(this%mom(:))
+      if (allocated(this%mom)) then
+         if (norm2(this%mom(:)) > tiny(1.0_rp)) then
+            this%mom(:) = this%mom(:)/norm2(this%mom(:))
+         else
+            this%mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         end if
+      end if
 
-      call move_alloc(this%ql, ql)
-      call move_alloc(this%mom, mom)
-      call move_alloc(this%lmom, lmom)
-      call move_alloc(this%pl, pl)
+      if (allocated(this%ql)) call move_alloc(this%ql, ql)
+      if (allocated(this%mom)) call move_alloc(this%mom, mom)
+      if (allocated(this%lmom)) call move_alloc(this%lmom, lmom)
+      if (allocated(this%pl)) call move_alloc(this%pl, pl)
 
-      call move_alloc(this%center_band, center_band)
-      call move_alloc(this%width_band, width_band)
-      call move_alloc(this%gravity_center, gravity_center)
-      call move_alloc(this%shifted_band, shifted_band)
-      call move_alloc(this%obar, obar)
+      if (allocated(this%center_band)) call move_alloc(this%center_band, center_band)
+      if (allocated(this%width_band)) call move_alloc(this%width_band, width_band)
+      if (allocated(this%gravity_center)) call move_alloc(this%gravity_center, gravity_center)
+      if (allocated(this%shifted_band)) call move_alloc(this%shifted_band, shifted_band)
+      if (allocated(this%obar)) call move_alloc(this%obar, obar)
 
-      call move_alloc(this%c, c)
-      call move_alloc(this%enu, enu)
-      call move_alloc(this%ppar, ppar)
-      call move_alloc(this%qpar, qpar)
-      call move_alloc(this%srdel, srdel)
-      call move_alloc(this%vl, vl)
+      if (allocated(this%c)) call move_alloc(this%c, c)
+      if (allocated(this%enu)) call move_alloc(this%enu, enu)
+      if (allocated(this%ppar)) call move_alloc(this%ppar, ppar)
+      if (allocated(this%qpar)) call move_alloc(this%qpar, qpar)
+      if (allocated(this%srdel)) call move_alloc(this%srdel, srdel)
+      if (allocated(this%vl)) call move_alloc(this%vl, vl)
+
+      if (allocated(this%hubbard_u)) call move_alloc(this%hubbard_u, hubbard_u)
+      if (allocated(this%hubbard_j)) call move_alloc(this%hubbard_j, hubbard_j)
+      ! call move_alloc(this%ldm, ldm)
+      if (allocated(this%ldm_flatten)) call move_alloc(this%ldm_flatten, ldm_flatten)
+      if (allocated(this%ldm_flatten_imag)) call move_alloc(this%ldm_flatten_imag, ldm_flatten_imag)
+      ! The new imaginary field is optional so old restart namelists remain valid.
+      if (allocated(ldm_flatten_imag)) ldm_flatten_imag = 0.0_rp
+
+      if (.not. allocated(ql)) then
+         allocate(ql(3, 0:this%lmax, 2))
+         ql = 0.0_rp
+      end if
+      if (.not. allocated(pl)) then
+         allocate(pl(0:this%lmax, 2))
+         pl = 0.0_rp
+      end if
+      if (.not. allocated(center_band)) then
+         allocate(center_band(this%lmax + 1, 2))
+         center_band = 0.0_rp
+      end if
+      if (.not. allocated(width_band)) then
+         allocate(width_band(this%lmax + 1, 2))
+         width_band = 0.0_rp
+      end if
+      if (.not. allocated(gravity_center)) then
+         allocate(gravity_center(this%lmax + 1, 2))
+         gravity_center = 0.0_rp
+      end if
+      if (.not. allocated(shifted_band)) then
+         allocate(shifted_band(this%lmax + 1, 2))
+         shifted_band = 0.0_rp
+      end if
+      if (.not. allocated(obar)) then
+         allocate(obar(this%lmax + 1, 2))
+         obar = 0.0_rp
+      end if
+      if (.not. allocated(c)) then
+         allocate(c(0:this%lmax, 2))
+         c = 0.0_rp
+      end if
+      if (.not. allocated(enu)) then
+         allocate(enu(0:this%lmax, 2))
+         enu = 0.0_rp
+      end if
+      if (.not. allocated(ppar)) then
+         allocate(ppar(0:this%lmax, 2))
+         ppar = 0.0_rp
+      end if
+      if (.not. allocated(qpar)) then
+         allocate(qpar(0:this%lmax, 2))
+         qpar = 0.0_rp
+      end if
+      if (.not. allocated(srdel)) then
+         allocate(srdel(0:this%lmax, 2))
+         srdel = 0.0_rp
+      end if
+      if (.not. allocated(vl)) then
+         allocate(vl(0:this%lmax, 2))
+         vl = 0.0_rp
+      end if
+      if (.not. allocated(mom)) then
+         allocate(mom(3))
+         mom = [0.0_rp, 0.0_rp, 1.0_rp]
+      end if
+      if (.not. allocated(lmom)) then
+         allocate(lmom(3))
+         lmom = 0.0_rp
+      end if
+      if (.not. allocated(hubbard_u)) then
+         allocate(hubbard_u(this%lmax + 1))
+         hubbard_u = 0.0_rp
+      end if
+      if (.not. allocated(hubbard_j)) then
+         allocate(hubbard_j(this%lmax + 1))
+         hubbard_j = 0.0_rp
+      end if
+      if (.not. allocated(ldm_flatten)) then
+         allocate(ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2))
+         ldm_flatten = 0.0_rp
+      end if
+      if (.not. allocated(ldm_flatten_imag)) then
+         allocate(ldm_flatten_imag(this%lmax + 1, 2, (2*this%lmax + 1)**2))
+         ldm_flatten_imag = 0.0_rp
+      end if
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -290,13 +446,53 @@ contains
       if ( &
          iostatus /= 0 .and. &
          .not. IS_IOSTAT_END(iostatus) .and. &
-         iostatus /= 5010 & ! LIBERROR_READ_VALUE (according to https://www.hep.manchester.ac.uk/u/samt/misc/gfortran_errors.html)
+         iostatus /= 5010 & ! LIBERROR_READ_VALUE
          ) then
          call g_logger%fatal('Error while reading namelist', __FILE__, __LINE__)
          call g_logger%fatal('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
+      if (iostatus == 5010) then
+         call g_logger%warning('Non-fatal namelist read value mismatch in '//trim(fname)//' (iostatus=5010).', __FILE__, __LINE__)
+      end if
       close (funit)
 
+      file_lmax = lmax
+
+      ! Older formatted restart files were written by a generic assumed-shape
+      ! namelist helper which lost the zero lower bound of the orbital-channel
+      ! arrays.  Thus their pl(1,:), ql(:,1,:), c(1,:), ... entries contain the
+      ! in-memory l=0 values.  The extra slot retained by the legacy reader
+      ! lets us repair those files before the active-basis resize below.
+      if (file_lmax >= 0 .and. lbound(pl, 1) == 0 .and. any(pl(0, :) < 1.0_rp)) then
+         do is = 1, size(pl, 2)
+            do l = 0, min(file_lmax, ubound(pl, 1) - 1)
+               pl(l, is) = pl(l + 1, is)
+               c(l, is) = c(l + 1, is)
+               enu(l, is) = enu(l + 1, is)
+               ppar(l, is) = ppar(l + 1, is)
+               qpar(l, is) = qpar(l + 1, is)
+               srdel(l, is) = srdel(l + 1, is)
+               vl(l, is) = vl(l + 1, is)
+               ql(:, l, is) = ql(:, l + 1, is)
+            end do
+         end do
+         if (rank == 0) call g_logger%warning('Restart file '//trim(fname)// &
+                                              ' uses legacy one-based orbital indices; shifted channels to l=0-based storage.', &
+                                              __FILE__, __LINE__)
+      end if
+
+      if (lmax < lmax_basis) then
+         call g_logger%warning('Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
+                               ' while active basis lmax='//int2str(lmax_basis)//'. Promoting potential arrays.', __FILE__, __LINE__)
+         lmax = lmax_basis
+      else if (lmax > lmax_basis) then
+         call g_logger%warning('Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
+                               ' while active basis lmax='//int2str(lmax_basis)//'. Truncating to active basis.', __FILE__, __LINE__)
+         lmax = lmax_basis
+      end if
+
+      !print *,'AB build_from_file: lmax from file = '//int2str(file_lmax)//', active basis lmax = '//int2str(lmax_basis)// &
+      !      ', final potential lmax = '//int2str(lmax)
       ! Setting user values
       this%ws_r = ws_r
       this%sumec = sumec
@@ -306,10 +502,14 @@ contains
       this%ekin = ekin
       this%rhoeps = rhoeps
       this%lmax = lmax
-      this%vmad = vmad
-      this%xi_p = xi_p
+          this%vmad = vmad
+          this%vrmax = vrmax
+          this%xi_p = xi_p
       this%xi_d = xi_d
       this%rac = rac
+      this%hubbard_radial_moments = trim(hubbard_radial_moments)
+      this%hubbard_backend = trim(hubbard_backend)
+      this%hubbard_file_has_uj = any(abs(hubbard_u) > 1.0e-10_rp) .or. any(abs(hubbard_j) > 1.0e-10_rp)
 
       call move_alloc(center_band, this%center_band)
       call move_alloc(width_band, this%width_band)
@@ -317,7 +517,11 @@ contains
       call move_alloc(shifted_band, this%shifted_band)
       call move_alloc(obar, this%obar)
 
-      mom(:) = mom(:)/norm2(mom(:))
+      if (norm2(mom(:)) > tiny(1.0_rp)) then
+         mom(:) = mom(:)/norm2(mom(:))
+      else
+         mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+      end if
 
       call move_alloc(mom, this%mom)
       call move_alloc(lmom, this%lmom)
@@ -330,7 +534,283 @@ contains
       call move_alloc(qpar, this%qpar)
       call move_alloc(srdel, this%srdel)
       call move_alloc(vl, this%vl)
+
+      call move_alloc(hubbard_u, this%hubbard_u)
+      call move_alloc(hubbard_j, this%hubbard_j)
+      this%dm_file = trim(dm_file)
+      this%hubbard_nsp = hubbard_nsp
+      this%hubbard_axis = hubbard_axis
+      ! call move_alloc(ldm, this%ldm)
+      call move_alloc(ldm_flatten, this%ldm_flatten)
+      call move_alloc(ldm_flatten_imag, this%ldm_flatten_imag)
+
+      ! Ensure all potential containers are dimensionally consistent with lmax.
+      call ensure_lmax_consistency(this)
+      ! Reconstruct 4D density matrix from serialized restart storage.
+      ! Without this, potential%ldm can stay at constructor defaults (zeros)
+      ! even when ldm_flatten was read from *_out.nml.
+      if (len_trim(this%dm_file) > 0 .and. .not. exists(trim(density_matrix_path(this, fname)))) then
+         ! The potential names a density-matrix file that is not there: continue as for a potential without one (P starts from
+         ! ldm_flatten, zero if absent, and the first Green function provides it); the orbital occupation pattern of the
+         ! restart is lost, so the run may settle in a different state.
+         if (rank == 0) call g_logger%warning('Referenced density-matrix file is missing: '// &
+            trim(density_matrix_path(this, fname))//'; continuing without it.', __FILE__, __LINE__)
+         this%dm_file = ''
+      end if
+      if (len_trim(this%dm_file) > 0) then
+         call read_density_matrix_file(this, fname)
+         call this%flatten_ldm()
+      else
+         call this%expand_ldm()
+      end if
+
+      !print *,'AB Finished building potential from file '//trim(fname)//'. Final lmax = '//int2str(this%lmax)
+      ! If we promoted from a smaller basis, seed newly introduced channels with
+      ! minimal sane defaults for atomic solver initialization.
+      if (file_lmax < this%lmax) then
+         lsrc = max(0, min(file_lmax, this%lmax))
+         do is = 1, 2
+            do l = file_lmax + 1, this%lmax
+               !print *,'AB Promoting potential parameters for spin='//int2str(is)//' and l='//int2str(l)//' from file lmax='//int2str(file_lmax)
+               ! Scalar orbital-channel quantities: inherit from highest
+               ! available channel in the input file.
+               this%center_band(l + 1, is) = this%center_band(lsrc + 1, is)
+               this%width_band(l + 1, is) = this%width_band(lsrc + 1, is)
+               this%gravity_center(l + 1, is) = this%gravity_center(lsrc + 1, is)
+               this%shifted_band(l + 1, is) = this%shifted_band(lsrc + 1, is)
+               this%obar(l + 1, is) = this%obar(lsrc + 1, is)
+               this%c(l, is) = this%c(lsrc, is)
+               this%enu(l, is) = this%enu(lsrc, is)
+               this%ppar(l, is) = this%ppar(lsrc, is)
+               this%qpar(l, is) = this%qpar(lsrc, is)
+               this%srdel(l, is) = this%srdel(lsrc, is)
+               this%vl(l, is) = this%vl(lsrc, is)
+               this%pnu(l, is) = this%pnu(lsrc, is)
+               this%qi(l, is) = this%qi(lsrc, is)
+               this%dele(l, is) = this%dele(lsrc, is)
+
+               !print *,'AB Before promotion, l='//int2str(l)//' has pl='//real2str(this%pl(l, is))//' and ql(1)='//real2str(this%ql(1, l, is))
+               ! Keep PL/KONFIG valid for atomic setup in promoted channels.
+               if (this%pl(l, is) < real(l + 1, rp)) this%pl(l, is) = real(l + 1, rp) + 0.3_rp
+               ! Seed promoted-channel moments conservatively: near-empty default.
+               this%ql(:, l, is) = 0.0_rp
+               this%ql(1, l, is) = 1.0e-3_rp
+
+               !print *,'AB After promotion, l='//int2str(l)//' has pl='//real2str(this%pl(l, is))//' and ql(1)='//real2str(this%ql(1, l, is))
+               ! Safety for invalid promoted values.
+               if (this%srdel(l, is) /= this%srdel(l, is) .or. abs(this%srdel(l, is)) <= tiny(1.0_rp)) then
+                  this%srdel(l, is) = max(abs(this%srdel(lsrc, is)), 1.0e-3_rp)
+               end if
+               !print *, 'AB After promotion, l='//int2str(l)//' has srdel='//real2str(this%srdel(l, is))
+               if (this%ppar(l, is) /= this%ppar(l, is)) this%ppar(l, is) = this%ppar(lsrc, is)
+               if (this%qpar(l, is) /= this%qpar(l, is)) this%qpar(l, is) = this%qpar(lsrc, is)
+               if (this%c(l, is) /= this%c(l, is)) this%c(l, is) = this%c(lsrc, is)
+               if (this%enu(l, is) /= this%enu(l, is)) this%enu(l, is) = this%enu(lsrc, is)
+            end do
+         end do
+      end if
+      !print *,'AB Finished potential promotion from file lmax='//int2str(file_lmax)//' to lmax='//int2str(this%lmax)
+      !print *,'exiting potential%build_from_file with lmax='//int2str(this%lmax)
    end subroutine build_from_file
+
+   subroutine ensure_lmax_consistency(this)
+      class(potential), intent(inout) :: this
+      integer :: lmax_new, norb_new, nspin_orb_new
+
+      !print *,'AB ensure_lmax_consistency'
+      lmax_new = this%lmax
+      norb_new = (lmax_new + 1)*(lmax_new + 1)
+      nspin_orb_new = (2*(lmax_new + 1))*(2*(lmax_new + 1))
+      call resize_2d_l1(this%center_band, lmax_new + 1, 2)
+      call resize_2d_l1(this%width_band, lmax_new + 1, 2)
+      call resize_2d_l1(this%gravity_center, lmax_new + 1, 2)
+      call resize_2d_l1(this%shifted_band, lmax_new + 1, 2)
+      call resize_2d_l1(this%obar, lmax_new + 1, 2)
+      call resize_c2d_l1(this%cx, norb_new, 2)
+      call resize_c2d_l1(this%wx, norb_new, 2)
+      call resize_c2d_l1(this%cex, norb_new, 2)
+      call resize_c2d_l1(this%obx, norb_new, 2)
+      call resize_c1d(this%cx0, norb_new)
+      call resize_c1d(this%cx1, norb_new)
+      call resize_c1d(this%wx0, norb_new)
+      call resize_c1d(this%wx1, norb_new)
+      call resize_c1d(this%cex0, norb_new)
+      call resize_c1d(this%cex1, norb_new)
+      call resize_c1d(this%obx0, norb_new)
+      call resize_c1d(this%obx1, norb_new)
+      call resize_1d(this%cshi, nspin_orb_new)
+      call resize_1d(this%dw_l, nspin_orb_new)
+      call resize_2d_l0(this%pl, 0, lmax_new, 2)
+      call resize_3d_ql(this%ql, 3, 0, lmax_new, 2)
+      call resize_2d_l0(this%c, 0, lmax_new, 2)
+      call resize_2d_l0(this%enu, 0, lmax_new, 2)
+      call resize_2d_l0(this%ppar, 0, lmax_new, 2)
+      call resize_2d_l0(this%qpar, 0, lmax_new, 2)
+      call resize_2d_l0(this%srdel, 0, lmax_new, 2)
+      call resize_2d_l0(this%vl, 0, lmax_new, 2)
+      call resize_2d_l0(this%pnu, 0, lmax_new, 2)
+      call resize_2d_l0(this%qi, 0, lmax_new, 2)
+      call resize_2d_l0(this%dele, 0, lmax_new, 2)
+      call resize_1d(this%hubbard_u, lmax_new + 1)
+      call resize_1d(this%hubbard_j, lmax_new + 1)
+      call resize_4d_ldm(this%ldm, lmax_new + 1, 2, 2*lmax_new + 1, 2*lmax_new + 1)
+      call resize_3d_lm_flat(this%ldm_flatten, lmax_new + 1, 2, (2*lmax_new + 1)**2)
+      call resize_3d_lm_flat(this%ldm_flatten_imag, lmax_new + 1, 2, (2*lmax_new + 1)**2)
+   end subroutine ensure_lmax_consistency
+
+   subroutine resize_1d(arr, n1)
+      real(rp), allocatable, intent(inout) :: arr(:)
+      integer, intent(in) :: n1
+      real(rp), allocatable :: tmp(:)
+      integer :: c1
+      if (.not. allocated(arr)) then
+         allocate(arr(n1))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1) return
+      allocate(tmp(n1))
+      tmp = 0.0_rp
+      c1 = min(size(arr, 1), n1)
+      tmp(1:c1) = arr(1:c1)
+      call move_alloc(tmp, arr)
+   end subroutine resize_1d
+
+   subroutine resize_c1d(arr, n1)
+      complex(rp), allocatable, intent(inout) :: arr(:)
+      integer, intent(in) :: n1
+      complex(rp), allocatable :: tmp(:)
+      integer :: c1
+      if (.not. allocated(arr)) then
+         allocate(arr(n1))
+         arr = cmplx(0.0_rp, 0.0_rp, kind=rp)
+         return
+      end if
+      if (size(arr, 1) == n1) return
+      allocate(tmp(n1))
+      tmp = cmplx(0.0_rp, 0.0_rp, kind=rp)
+      c1 = min(size(arr, 1), n1)
+      tmp(1:c1) = arr(1:c1)
+      call move_alloc(tmp, arr)
+   end subroutine resize_c1d
+
+   subroutine resize_c2d_l1(arr, n1, n2)
+      complex(rp), allocatable, intent(inout) :: arr(:, :)
+      integer, intent(in) :: n1, n2
+      complex(rp), allocatable :: tmp(:, :)
+      integer :: c1, c2
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2))
+         arr = cmplx(0.0_rp, 0.0_rp, kind=rp)
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2) return
+      allocate(tmp(n1, n2))
+      tmp = cmplx(0.0_rp, 0.0_rp, kind=rp)
+      c1 = min(size(arr, 1), n1)
+      c2 = min(size(arr, 2), n2)
+      tmp(1:c1, 1:c2) = arr(1:c1, 1:c2)
+      call move_alloc(tmp, arr)
+   end subroutine resize_c2d_l1
+
+   subroutine resize_2d_l1(arr, n1, n2)
+      real(rp), allocatable, intent(inout) :: arr(:, :)
+      integer, intent(in) :: n1, n2
+      real(rp), allocatable :: tmp(:, :)
+      integer :: c1, c2
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2) return
+      allocate(tmp(n1, n2))
+      tmp = 0.0_rp
+      c1 = min(size(arr, 1), n1)
+      c2 = min(size(arr, 2), n2)
+      tmp(1:c1, 1:c2) = arr(1:c1, 1:c2)
+      call move_alloc(tmp, arr)
+   end subroutine resize_2d_l1
+
+   subroutine resize_2d_l0(arr, lb1, ub1, n2)
+      real(rp), allocatable, intent(inout) :: arr(:, :)
+      integer, intent(in) :: lb1, ub1, n2
+      real(rp), allocatable :: tmp(:, :)
+      integer :: l1, u1, l2, u2
+      if (.not. allocated(arr)) then
+         allocate(arr(lb1:ub1, n2))
+         arr = 0.0_rp
+         return
+      end if
+      if (lbound(arr, 1) == lb1 .and. ubound(arr, 1) == ub1 .and. size(arr, 2) == n2) return
+      allocate(tmp(lb1:ub1, n2))
+      tmp = 0.0_rp
+      l1 = max(lb1, lbound(arr, 1)); u1 = min(ub1, ubound(arr, 1))
+      l2 = 1; u2 = min(n2, size(arr, 2))
+      if (u1 >= l1 .and. u2 >= l2) tmp(l1:u1, l2:u2) = arr(l1:u1, l2:u2)
+      call move_alloc(tmp, arr)
+   end subroutine resize_2d_l0
+
+   subroutine resize_3d_ql(arr, n1, lb2, ub2, n3)
+      real(rp), allocatable, intent(inout) :: arr(:, :, :)
+      integer, intent(in) :: n1, lb2, ub2, n3
+      real(rp), allocatable :: tmp(:, :, :)
+      integer :: l2, u2, c1, c3
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, lb2:ub2, n3))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. lbound(arr, 2) == lb2 .and. ubound(arr, 2) == ub2 .and. size(arr, 3) == n3) return
+      allocate(tmp(n1, lb2:ub2, n3))
+      tmp = 0.0_rp
+      c1 = min(n1, size(arr, 1))
+      l2 = max(lb2, lbound(arr, 2)); u2 = min(ub2, ubound(arr, 2))
+      c3 = min(n3, size(arr, 3))
+      if (u2 >= l2 .and. c1 > 0 .and. c3 > 0) tmp(1:c1, l2:u2, 1:c3) = arr(1:c1, l2:u2, 1:c3)
+      call move_alloc(tmp, arr)
+   end subroutine resize_3d_ql
+
+   subroutine resize_3d_lm_flat(arr, n1, n2, n3)
+      real(rp), allocatable, intent(inout) :: arr(:, :, :)
+      integer, intent(in) :: n1, n2, n3
+      real(rp), allocatable :: tmp(:, :, :)
+      integer :: c1, c2, c3
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2, n3))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2 .and. size(arr, 3) == n3) return
+      allocate(tmp(n1, n2, n3))
+      tmp = 0.0_rp
+      c1 = min(n1, size(arr, 1))
+      c2 = min(n2, size(arr, 2))
+      c3 = min(n3, size(arr, 3))
+      tmp(1:c1, 1:c2, 1:c3) = arr(1:c1, 1:c2, 1:c3)
+      call move_alloc(tmp, arr)
+   end subroutine resize_3d_lm_flat
+
+   subroutine resize_4d_ldm(arr, n1, n2, n3, n4)
+      complex(rp), allocatable, intent(inout) :: arr(:, :, :, :)
+      integer, intent(in) :: n1, n2, n3, n4
+      complex(rp), allocatable :: tmp(:, :, :, :)
+      integer :: c1, c2, c3, c4
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2, n3, n4))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2 .and. size(arr, 3) == n3 .and. size(arr, 4) == n4) return
+      allocate(tmp(n1, n2, n3, n4))
+      tmp = 0.0_rp
+      c1 = min(n1, size(arr, 1))
+      c2 = min(n2, size(arr, 2))
+      c3 = min(n3, size(arr, 3))
+      c4 = min(n4, size(arr, 4))
+      tmp(1:c1, 1:c2, 1:c3, 1:c4) = arr(1:c1, 1:c2, 1:c3, 1:c4)
+      call move_alloc(tmp, arr)
+   end subroutine resize_4d_ldm
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -396,7 +876,13 @@ contains
       allocate (this%c(0:this%lmax, 2), this%enu(0:this%lmax, 2), this%ppar(0:this%lmax, 2), this%qpar(0:this%lmax, 2), &
                 this%srdel(0:this%lmax, 2), this%vl(0:this%lmax, 2), this%pnu(0:this%lmax, 2), this%qi(0:this%lmax, 2), this%dele(0:this%lmax, 2))
       allocate (this%shifted_band(this%lmax + 1, 2), this%obar(this%lmax + 1, 2))
+      allocate (this%hubbard_u(this%lmax + 1))
+      allocate (this%hubbard_j(this%lmax + 1))
 #endif
+
+      if (.not. allocated(this%ldm)) allocate (this%ldm(this%lmax + 1, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+      if (.not. allocated(this%ldm_flatten)) allocate (this%ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2))
+      if (.not. allocated(this%ldm_flatten_imag)) allocate (this%ldm_flatten_imag(this%lmax + 1, 2, (2*this%lmax + 1)**2))
 
       this%xi_p(:) = 0.0d0
       this%xi_d(:) = 0.0d0
@@ -412,8 +898,10 @@ contains
       this%utot = 0.0d0
       this%ekin = 0.0d0
       this%rhoeps = 0.0d0
-      this%vmad = 0.0d0
-      this%pl(:, :) = 0.0d0
+       this%vmad = 0.0d0
+       this%q10 = 0.0d0
+       this%vrmax(:) = 0.0d0
+       this%pl(:, :) = 0.0d0
       this%ql(:, :, :) = 0.0d0
       this%cx(:, :) = 0.0d0
       this%wx(:, :) = 0.0d0
@@ -438,6 +926,25 @@ contains
       this%pnu(:, :) = 0.0d0
       this%qi(:, :) = 0.0d0
       this%dele(:, :) = 0.0d0
+      this%hubbard_u(:) = 0.0d0
+      this%hubbard_j(:) = 0.0d0
+      this%hubbard_radial_moments = ''
+      this%hubbard_backend = ''
+      this%hubbard_file_has_uj = .false.
+      this%dm_file = ''
+      this%frozen_host = .false.
+      this%hubbard_nsp = 0
+      this%hubbard_axis = 0.0_rp
+      this%hubbard_axis_logged = .false.
+      this%dm_run_id = 'run'
+      this%dm_iteration = 0
+      this%ldm(:,:,:,:) = 0.0d0
+      this%ldm_flatten(:,:,:) = 0.0d0
+      this%ldm_flatten_imag(:,:,:) = 0.0d0
+      if (allocated(this%ldm_spinor)) deallocate (this%ldm_spinor)
+      if (allocated(this%m1_spinor)) deallocate (this%m1_spinor)
+      if (allocated(this%ldm_spinor_prev)) deallocate (this%ldm_spinor_prev)
+      if (allocated(this%ldm_spinor_mix)) deallocate (this%ldm_spinor_mix)
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -459,6 +966,7 @@ contains
 
       include 'include_codes/namelists/potential.f90'
 
+      newunit = -1
       mom = this%mom
       lmom = this%lmom
       !mom0 = this%mom0
@@ -474,8 +982,9 @@ contains
       utot = this%utot
       ekin = this%ekin
       rhoeps = this%rhoeps
-      vmad = this%vmad
-      lmax = this%lmax
+          vmad = this%vmad
+          vrmax = this%vrmax
+          lmax = this%lmax
       ws_r = this%ws_r
       c = this%c
       enu = this%enu
@@ -483,6 +992,11 @@ contains
       qpar = this%qpar
       srdel = this%srdel
       vl = this%vl
+      hubbard_radial_moments = this%hubbard_radial_moments
+      hubbard_backend = this%hubbard_backend
+      dm_file = this%dm_file
+      hubbard_nsp = this%hubbard_nsp
+      hubbard_axis = this%hubbard_axis
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -517,6 +1031,7 @@ contains
 
       include 'include_codes/namelists/potential.f90'
 
+      newunit = -1
       center_band_s_up = this%center_band(1, 1)
       center_band_s_dw = this%center_band(1, 2)
       center_band_p_up = this%center_band(2, 1)
@@ -542,6 +1057,11 @@ contains
       wx0 = this%wx0
       cx1 = this%cx1
       wx1 = this%wx1
+      hubbard_radial_moments = this%hubbard_radial_moments
+      hubbard_backend = this%hubbard_backend
+      dm_file = this%dm_file
+      hubbard_nsp = this%hubbard_nsp
+      hubbard_axis = this%hubbard_axis
 
       pl = this%pl
       cshi = this%cshi
@@ -578,7 +1098,6 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
 
       type(namelist_generator) :: nml
 
@@ -595,22 +1114,38 @@ contains
       call nml%add('utot', this%utot)
       call nml%add('ekin', this%ekin)
       call nml%add('rhoeps', this%rhoeps)
-      call nml%add('c', this%c)
-      call nml%add('enu', this%enu)
-      call nml%add('ppar', this%ppar)
-      call nml%add('qpar', this%qpar)
-      call nml%add('srdel', this%srdel)
-      call nml%add('vl', this%vl)
-      call nml%add('pl', this%pl)
+      call nml%add('c', this%c, lbound(this%c))
+      call nml%add('enu', this%enu, lbound(this%enu))
+      call nml%add('ppar', this%ppar, lbound(this%ppar))
+      call nml%add('qpar', this%qpar, lbound(this%qpar))
+      call nml%add('srdel', this%srdel, lbound(this%srdel))
+      call nml%add('vl', this%vl, lbound(this%vl))
+      call nml%add('pl', this%pl, lbound(this%pl))
       call nml%add('ws_r', this%ws_r)
-      call nml%add('ql', this%ql)
+      call nml%add('ql', this%ql, lbound(this%ql))
       call nml%add('lmax', this%lmax)
-      call nml%add('vmad', this%vmad)
-      call nml%add('mom', this%mom)
+       call nml%add('vmad', this%vmad)
+       call nml%add('q10', this%q10)
+       call nml%add('vrmax', this%vrmax)
+       call nml%add('mom', this%mom)
       call nml%add('lmom', this%lmom)
       call nml%add('xi_p', this%xi_p)
       call nml%add('xi_d', this%xi_d)
       call nml%add('rac', this%rac)
+      call nml%add('hubbard_u', this%hubbard_u)
+      call nml%add('hubbard_j', this%hubbard_j)
+      if (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp)) then
+         call nml%add('hubbard_radial_moments', trim(this%hubbard_radial_moments))
+         call nml%add('hubbard_backend', trim(this%hubbard_backend))
+         call nml%add('dm_file', trim(this%dm_file))
+         call nml%add('hubbard_nsp', this%hubbard_nsp)
+         if (any(this%hubbard_axis /= 0.0_rp)) call nml%add('hubbard_axis', this%hubbard_axis)
+      end if
+      ! call nml%add('ldm', this%ldm)
+      if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) then
+         call nml%add('ldm_flatten', this%ldm_flatten)
+         if (any(this%ldm_flatten_imag /= 0.0_rp)) call nml%add('ldm_flatten_imag', this%ldm_flatten_imag)
+      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -738,9 +1273,10 @@ contains
                                    this%etot, &
                                    this%utot, &
                                    this%ekin, &
-                                   this%rhoeps, &
-                                   this%vmad, &
-                                   this%mtot/)
+                                       this%rhoeps, &
+                                       this%vmad, &
+                                       pack(this%vrmax, .true.), &
+                                       this%mtot/)
       return
 
    end subroutine flatten_potential_full
@@ -803,9 +1339,10 @@ contains
                    + 1 & ! etot
                    + 1 & ! utot
                    + 1 & ! ekin
-                   + 1 & ! rhoeps
-                   + 1 & ! vmad
-                   + 1 !mtot
+                       + 1 & ! rhoeps
+                       + 1 & ! vmad
+                       + size(this%vrmax) &
+                       + 1 !mtot
 
    end function sizeof_potential_full
 
@@ -1092,6 +1629,10 @@ contains
       d_size = 1
       this%vmad = flat_array(d_pos)
       d_pos = d_pos + d_size
+      ! vrmax
+      d_size = size(this%vrmax)
+      this%vrmax = reshape(flat_array(d_pos:d_pos + d_size), shape(this%vrmax))
+      d_pos = d_pos + d_size
       ! mtot
       d_size = 1
       this%mtot = flat_array(d_pos)
@@ -1118,6 +1659,24 @@ contains
 
    end subroutine print_hyperfine
 
+   !> Store the radial spin axis the density resolver returned for this site (nsp=2). For a U-carrying
+   !> site it is logged the first time and whenever it moves by more than 1e-8.
+   subroutine set_hubbard_axis(this, axis, site)
+      class(potential), intent(inout) :: this
+      real(rp), intent(in) :: axis(3)
+      integer, intent(in) :: site
+
+      if (allocated(this%hubbard_u) .and. allocated(this%hubbard_j)) then
+         if ((any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp)) .and. &
+             (.not. this%hubbard_axis_logged .or. maxval(abs(axis - this%hubbard_axis)) > 1.0e-8_rp)) then
+            if (rank == 0) call g_logger%info('HUBBARD_AXIS atom='//fmt('i4', site)//' axis=('// &
+               fmt('f12.8', axis(1))//','//fmt('f12.8', axis(2))//','//fmt('f12.8', axis(3))//')', __FILE__, __LINE__)
+            this%hubbard_axis_logged = .true.
+         end if
+      end if
+      this%hubbard_axis = axis
+   end subroutine set_hubbard_axis
+
    subroutine copy_mom_to_scal(this)
       class(potential) :: this
 
@@ -1130,5 +1689,195 @@ contains
       this%lz = this%lmom(3)
 
    end subroutine copy_mom_to_scal
+
+   subroutine flatten_ldm(this)
+      class(potential) :: this
+      integer :: l, i, j, ispin, k
+
+      this%ldm_flatten(:,:,:) = 0.0d0
+      this%ldm_flatten_imag(:,:,:) = 0.0d0
+      do l = 1, this%lmax + 1
+         do ispin = 1, 2
+            k = 0
+            do i = 1, 2*l - 1
+               do j = 1, 2*l - 1
+                  k = k + 1
+                  this%ldm_flatten(l, ispin, k) = real(this%ldm(l, ispin, i, j), rp)
+                  this%ldm_flatten_imag(l, ispin, k) = aimag(this%ldm(l, ispin, i, j))
+               end do
+            end do
+         end do
+      end do
+      
+   end subroutine flatten_ldm
+
+   subroutine expand_ldm(this)
+      class(potential) :: this
+      integer :: l, i, j, ispin, k
+      ! Continue
+      this%ldm(:,:,:,:) = 0.0d0
+      do l = 1, this%lmax + 1
+         do ispin = 1, 2
+            k = 0
+            do i = 1, 2*l - 1
+               do j = 1, 2*l - 1
+                  k = k + 1
+                  this%ldm(l, ispin, i, j) = cmplx(this%ldm_flatten(l, ispin, k), this%ldm_flatten_imag(l, ispin, k), rp)
+               end do
+            end do
+         end do
+      end do
+   end subroutine expand_ldm
+
+   subroutine write_density_matrix_file(this, label)
+      class(potential), intent(inout) :: this
+      character(len=*), intent(in) :: label
+      integer :: unit, l, spin, tspin, i, j, ios
+      character(len=256) :: filename
+      real(rp) :: value
+
+      if (rank /= 0) return
+      if (this%frozen_host) return
+      if (.not. allocated(this%hubbard_u) .or. .not. allocated(this%hubbard_j)) return
+      if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) return
+      filename = trim(label)//'_dm.nml'
+      this%dm_file = trim(filename)
+      call this%flatten_ldm()
+      open(newunit=unit, file=trim(filename), status='replace', action='write', iostat=ios)
+      if (ios /= 0) call g_logger%fatal('Cannot create density-matrix file '//trim(filename), __FILE__, __LINE__)
+      write(unit, '(a)') '&density_matrix'
+      write(unit, '(a)') " label = '"//trim(label)//"'"
+      write(unit, '(a)') " radial_mode = '"//trim(this%hubbard_radial_moments)//"'"
+      write(unit, '(a)') " backend = '"//trim(this%hubbard_backend)//"'"
+      write(unit, '(a)') " run_id = '"//trim(this%dm_run_id)//"'"
+      write(unit, '(a,i0)') ' iteration = ', this%dm_iteration
+      if (allocated(this%ldm_spinor)) write(unit, '(a)') ' spinor_d = 1'
+      do l = 1, min(size(this%hubbard_u), size(this%hubbard_j))
+         write(unit, '(a,i0,a,es24.16)') ' hubbard_u_ev(',l,') = ', this%hubbard_u(l)*ry2ev
+         write(unit, '(a,i0,a,es24.16)') ' hubbard_j_ev(',l,') = ', this%hubbard_j(l)*ry2ev
+      end do
+      do l = 1, size(this%ldm, 1)
+         do spin = 1, 2
+            do i = 1, 2*l - 1
+               write(unit, '(a,i0,a,i0,a,i0,a,i0,a)', advance='no') ' dm_re(',l,',',spin,',',spin,',',i,',:) ='
+               do j = 1, 2*l - 1
+                  value = real(this%ldm(l, spin, i, j), rp)
+                  write(unit, '(1x,es24.16)', advance='no') value
+               end do
+               write(unit, *)
+               write(unit, '(a,i0,a,i0,a,i0,a,i0,a)', advance='no') ' dm_im(',l,',',spin,',',spin,',',i,',:) ='
+               do j = 1, 2*l - 1
+                  value = aimag(this%ldm(l, spin, i, j))
+                  write(unit, '(1x,es24.16)', advance='no') value
+               end do
+               write(unit, *)
+            end do
+         end do
+      end do
+      ! Spinor d shell: the spin-off-diagonal blocks (the diagonal blocks are those of ldm above).
+      if (allocated(this%ldm_spinor)) then
+         do spin = 1, 2
+            do tspin = 1, 2
+               if (tspin == spin) cycle
+               do i = 1, 5
+                  write(unit, '(a,i0,a,i0,a,i0,a)', advance='no') ' dm_re(3,', spin, ',', tspin, ',', i, ',:) ='
+                  do j = 1, 5
+                     write(unit, '(1x,es24.16)', advance='no') real(this%ldm_spinor((spin - 1)*5 + i, (tspin - 1)*5 + j), rp)
+                  end do
+                  write(unit, *)
+                  write(unit, '(a,i0,a,i0,a,i0,a)', advance='no') ' dm_im(3,', spin, ',', tspin, ',', i, ',:) ='
+                  do j = 1, 5
+                     write(unit, '(1x,es24.16)', advance='no') aimag(this%ldm_spinor((spin - 1)*5 + i, (tspin - 1)*5 + j))
+                  end do
+                  write(unit, *)
+               end do
+            end do
+         end do
+      end if
+      write(unit, '(a)') '/'
+      close(unit)
+   end subroutine write_density_matrix_file
+
+   !> Path of the density-matrix file named by the potential: relative to the directory of the potential file.
+   function density_matrix_path(this, potential_file) result(dm_path)
+      class(potential), intent(in) :: this
+      character(len=*), intent(in) :: potential_file
+      character(len=pl) :: dm_path
+      integer :: slash
+
+      slash = index(trim(potential_file), '/', back=.true.)
+      dm_path = trim(this%dm_file)
+      if (slash > 0) dm_path = potential_file(:slash)//trim(this%dm_file)
+   end function density_matrix_path
+
+   subroutine read_density_matrix_file(this, potential_file)
+      class(potential), intent(inout) :: this
+      character(len=*), intent(in) :: potential_file
+      character(len=256) :: dm_file
+      character(len=128) :: label, radial_mode, backend, run_id
+      character(len=pl) :: dm_path
+      real(rp), allocatable :: dm_re(:, :, :, :, :), dm_im(:, :, :, :, :)
+      real(rp) :: hubbard_u_ev(4), hubbard_j_ev(4)
+      integer :: iteration, unit, ios, l, spin, nm, spinor_d, tspin
+      character(len=256) :: ios_message
+#ifdef USE_MPI
+      integer :: mpi_error
+#endif
+      namelist /density_matrix/ label, radial_mode, backend, hubbard_u_ev, hubbard_j_ev, run_id, iteration, dm_re, dm_im, spinor_d
+
+      dm_file = trim(this%dm_file)
+      spinor_d = 0
+      dm_path = density_matrix_path(this, potential_file)
+      if (rank == 0) then
+         if (.not. exists(trim(dm_path))) &
+            call g_logger%fatal('Referenced density-matrix file is missing: '//trim(dm_path), __FILE__, __LINE__)
+         allocate(dm_re(this%lmax + 1, 2, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+         allocate(dm_im(this%lmax + 1, 2, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+         dm_re = 0.0_rp
+         dm_im = 0.0_rp
+         hubbard_u_ev = 0.0_rp
+         hubbard_j_ev = 0.0_rp
+         label = ''
+         radial_mode = ''
+         backend = ''
+         run_id = ''
+         iteration = 0
+         open(newunit=unit, file=trim(dm_path), status='old', action='read', iostat=ios)
+         if (ios /= 0) call g_logger%fatal('Cannot open referenced density-matrix file '//trim(dm_path), __FILE__, __LINE__)
+         read(unit, nml=density_matrix, iostat=ios, iomsg=ios_message)
+         close(unit)
+         if (ios /= 0) call g_logger%fatal('Invalid density-matrix namelist in '//trim(dm_path)//': '//trim(ios_message), &
+            __FILE__, __LINE__)
+         do l = 1, size(this%ldm, 1)
+            nm = 2*l - 1
+            do spin = 1, 2
+               this%ldm(l, spin, 1:nm, 1:nm) = cmplx(dm_re(l, spin, spin, 1:nm, 1:nm), &
+                                                       dm_im(l, spin, spin, 1:nm, 1:nm), rp)
+            end do
+         end do
+         if (spinor_d == 1 .and. this%lmax >= 2) then
+            if (.not. allocated(this%ldm_spinor)) allocate(this%ldm_spinor(10, 10))
+            do spin = 1, 2
+               do tspin = 1, 2
+                  if (spin == tspin) then
+                     this%ldm_spinor((spin - 1)*5 + 1:spin*5, (tspin - 1)*5 + 1:tspin*5) = this%ldm(3, spin, 1:5, 1:5)
+                  else
+                     this%ldm_spinor((spin - 1)*5 + 1:spin*5, (tspin - 1)*5 + 1:tspin*5) = &
+                        cmplx(dm_re(3, spin, tspin, 1:5, 1:5), dm_im(3, spin, tspin, 1:5, 1:5), rp)
+                  end if
+               end do
+            end do
+         end if
+         deallocate(dm_re, dm_im)
+      end if
+#ifdef USE_MPI
+      call MPI_BCAST(this%ldm, size(this%ldm), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
+      call MPI_BCAST(spinor_d, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, mpi_error)
+      if (spinor_d == 1) then
+         if (.not. allocated(this%ldm_spinor)) allocate(this%ldm_spinor(10, 10))
+         call MPI_BCAST(this%ldm_spinor, 100, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
+      end if
+#endif
+   end subroutine read_density_matrix_file
 
 end module potential_mod

@@ -2,7 +2,7 @@
 program transport_driver
  use precision_mod, only: rp
  use logger_mod, only: g_logger
- use math_mod, only: cone, czero
+ use math_mod, only: cone, czero, init_math_operators
  use recursion_mod, only: recursion
  use hamiltonian_mod, only: hamiltonian
  use lattice_mod, only: lattice
@@ -26,6 +26,7 @@ program transport_driver
  type(hamiltonian), target :: ham
  type(lattice), target :: lat
  complex(rp) :: work(b,d,n,6)
+ call init_math_operators()
  call get_command_argument(1,mode)
  if (trim(mode)=='degenerate') then
   call g_logger%init()

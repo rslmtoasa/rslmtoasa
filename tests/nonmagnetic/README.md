@@ -44,19 +44,16 @@ The coefficients are evaluated by `build_pot` after the final atomic update.
 
 ## Run regression tests
 
-Requires the usual Fortran/BLAS/LAPACK toolchain and Python `f90nml`.
+Requires the usual Fortran/BLAS/LAPACK toolchain and Python `f90nml`. The projection test is
+`UnitNonmagneticProjection` (`tests/unit/test_nonmagnetic_projection.f90`, `-DRUN_UNIT_TESTS=ON`); the SCF
+runs are `Nonmagnetic_SCF_nsp1`, `Nonmagnetic_SCF_nsp4` and, with `-DENABLE_MPI=ON`, `Nonmagnetic_SCF_MPI`
+(`run_scf.py`, `-DRUN_REG_TESTS=ON`).
 
 ```sh
-cmake -S . -B build -DRUN_NONMAGNETIC_TESTS=ON
-cmake --build build -j
-ctest --test-dir build -R Nonmagnetic --output-on-failure
-
-cmake -S . -B build_mpi -DENABLE_MPI=ON -DRUN_NONMAGNETIC_TESTS=ON
-cmake --build build_mpi -j
-ctest --test-dir build_mpi -R Nonmagnetic_SCF_MPI --output-on-failure
+ctest --test-dir build -L force_nonmagnetic --output-on-failure
 ```
 
-`projection.f90` checks spin sums of all QL/PL entries and a radial density,
+`test_nonmagnetic_projection.f90` checks spin sums of all QL/PL entries and a radial density,
 parameter averages, the actual `build_pot` coefficients, field removal, and an
 untouched magnetic atom. `run_scf.py` reuses the existing Fe/Co inputs to create a
 small B2 bulk calculation. It runs four SCF steps with omitted flags, all-false

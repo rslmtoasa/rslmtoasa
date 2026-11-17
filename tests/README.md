@@ -1,0 +1,83 @@
+# Tests
+
+Every registered test carries exactly one **tier** label. Select a tier with `ctest -L '^<tier>$'`.
+
+| Tier | Contents | Budget (`-j4`) | Runs |
+|---|---|---|---|
+| `quick` | unit oracles, guards, short decks; each test <= 10 s | whole tier <= 2 min | build + every push, pull request, and before each commit |
+| `standard` | backend regression, SCF/post-processing examples, GBT and spin-response runs, stored-reference rows | whole tier <= 20 min | nightly (`.github/workflows/tests.yml`) |
+| `validation` | long validation studies and three-route comparisons | none | manually (`workflow_dispatch`) |
+
+Other labels (`unit`, `functional`, `lda_u`, `gbt`, `xc`, `scf`, ...) describe the evidence and may be combined with a tier,
+for example `ctest -L 'lda_u'` or `ctest -L '^standard$' -LE gbt`.
+
+## Layout
+
+| Path | Content |
+|---|---|
+| `register_tests.cmake` | all registrations and the tier helper `rslmto_add_test` |
+| `unit/` | Fortran unit tests; consolidated tests are one executable with sub-cases (see below) |
+| `scf/`, `postproc/`, `regression/` | manifest-driven suites: `cases.json` (one entry per case), `cases/` (decks), `references/` |
+| `gbt/`, `spin_response/`, `ldau/`, `constraints/`, `noncollinear/` | feature tests with their decks and oracles |
+| `validation/` | long validation scripts (tier `validation`); records are in `docs/validation/` |
+| `test_inventory.csv` | one row per registered test: tier, labels, runtime, family, every file or directory it reads |
+| `test_triage.csv` | record of the slimming: what each earlier test became (kept, retired, consolidated into) |
+| `check_test_data.py` | quick test: every path in `test_inventory.csv` exists |
+| `check_keyword_docs.py` | quick test: every namelist key in `source/` has an entry in `docs/source/keywords/*.rst` |
+| `KNOWN_ISSUES.md` | open items only |
+
+## Adding a test
+
+Register it with `rslmto_add_test` (never `add_test` directly). A missing or unknown `TIER` stops the configure step.
+
+```cmake
+rslmto_add_test(NAME UnitMyKernel TIER quick LABELS unit mykernel
+  COMMAND $<TARGET_FILE:UnitMyKernel> "${TestDIR}/mydir/oracle.txt")
+```
+
+The helper sets the tier label and a default timeout (`quick` 30 s, `standard` 600 s, `validation` none; `TIMEOUT` overrides).
+For a Fortran unit test use `add_fortran_unit_test(<name> <tier> SOURCES ... [ARGS ...] [LABELS ...])`. For a manifest case add
+`"tier": "quick|standard|validation"` to its entry in `cases.json`; a case without a tier stops the configure step.
+
+Tier follows the measured runtime: a test that guards core behaviour and runs in <= 10 s is `quick`; otherwise `standard`;
+long studies are `validation`. Add the files the test reads to `test_inventory.csv` (`tests/make_inventory.py`) so that
+`check_test_data.py` covers them.
+
+**Consolidated tests.** Related unit checks are one executable with sub-cases (`unit/subcase_runner.f90`): each sub-case runs in
+its own process, the test prints `PASS`/`FAIL <case>`, and it fails if any sub-case fails. Run one sub-case with
+`bin/<exe> <case> [args]`. Fatal-path sub-cases pass only if the child exits non-zero without `UNEXPECTED` in its output.
+
+Every new test states the bug it would catch (docstring or header comment) and has been shown to fail with that bug injected.
+
+## Reference policy
+
+- References are scalars (or short arrays) compared by value with a stated tolerance; never whole-file or byte comparisons,
+  except where a test states that bit identity is the contract.
+- Expected values come from outside the code under test: committed references, closed forms written independently in the test,
+  or the developer-owned oracle directories (`tests/spin_response/oracles/` generators; `tests/gbt/oracles/`).
+- References are regenerated only with a recorded reason: `tests/generate_references.py` and `tests/ldau/reference_rows.py
+  --update "reason"` store the reason, binary hash and date. A reference is never rewritten to make a check pass.
+- Native-platform reference variants (`ref.<platform>.json`) hold last-digit differences of BLAS and compiler builds, not different physics.
+- The spin-response reference `.nml` files are not committed: `tests/spin_response/with_oracles.py` regenerates them from the
+  generators in `tests/spin_response/oracles/` at test time (about 3 s).
+
+## Kubo transport tests
+
+- `TransportOperatorSource` (quick): the octupole and quadrupole operator suites parse the sources.
+- `TransportRegression` (standard): `test_hoh_transport.py` and `test_response_units.py`; they build Debug dense-reference drivers (`transport_operator_test`, `response_units_test`) in a temporary tree (about 80 s).
+- `TransportBackend` (standard): `transport_backend='fast_sp'` against the loops (`legacy`) on periodic fcc Pt; it runs the executable of this build (`RSLMTO_EXE`).
+- `Example_exchange_conductivity_fccPt_periodic`, `_periodic_hoh`, `_periodic_hoh_fast_sp` (standard): the reference rows (`cond_total.out`, `response_total.out`) were generated by `main` (2fccbffc) on the same decks, with `strux_backend`, `cheb_backend` and `transport_backend` removed from `input.nml` before the run; `fast_sp` is checked with looser tolerances.
+
+## No generated files
+
+Run outputs are not committed: no `fort.*`, `map`, `clust`, `mad.mat`, `*_out.nml`, `*_scf.nml`, `*.out`, `*.log`, plots or captured
+runs, under `tests/` or `example/` (see `example/.gitignore`). Examples hold inputs only (input deck, lattice, seed potentials).
+Raw evidence of closed campaigns stays at the archive tags `archive/{fable_v4b,fable_v4b_u,fable_v4b_gbt,main}-2026-11-05`.
+
+## Build notes
+
+- Configure with `-DRUN_UNIT_TESTS=ON -DRUN_EXAMPLE_TESTS=ON -DRUN_REG_TESTS=ON` (and `-DENABLE_LIBXC=ON`).
+- CI builds with `-DENABLE_MARCH_NATIVE=OFF`, and the committed references (including `tests/ldau/references/`) are bound to that configuration; a `-march=native` build on FMA hardware can exceed the 1e-10 tolerance of the LDA+U rows (`KNOWN_ISSUES.md`). With `-march=native` on a CPU with FMA, the bitwise sub-case of
+  `UnitLdaULocalMoments` (`spinor_frame_kernel`) can miss by 2e-16 (see `KNOWN_ISSUES.md`).
+- The MKL regression cases skip (exit 77) unless `-DENABLE_MKL_KERNELS=ON`.
+- GPU matrix runners: `run_gpu_matrix.sh`, `regression/run_gpu_matrix.py` (not registered with ctest).

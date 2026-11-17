@@ -1,4 +1,4 @@
-!------------------------------------------------------------------------------
+ !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
 !
@@ -21,6 +21,7 @@
 
 module hamiltonian_mod
 
+   use mpi_mod, only: rank
    use control_mod
    use symbolic_atom_mod
    use element_mod
@@ -32,12 +33,23 @@ module hamiltonian_mod
    use string_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
+   use spectrum_bounds_mod, only: compute_spectrum_bounds, bounds, normalize_bounds_algorithm, select_bounds_interval, apply_bounds_scaling
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off, lmax_basis
+   use magnetic_representation_mod, only: magnetic_representation_len
    implicit none
 
    private
+
+   integer, parameter, public :: rd1_vin_ok = 0
+   integer, parameter, public :: rd1_vin_not_recursion_site = 1
+   integer, parameter, public :: rd1_vin_duplicate = 2
+   integer, parameter, public :: rd1_vin_invalid_map = 3
+   integer, parameter, public :: rd1_vin_wrong_type = 4
+   integer, parameter, public :: rd1_vin_missing_or_stale = 5
+   integer, parameter, public :: rd1_vin_ineligible = 6
    public :: select_spin_operator, select_orbital_operator, select_quadrupole_operator, select_octupole_operator
 
    !> Module´s main procedure
@@ -54,55 +66,150 @@ module hamiltonian_mod
       !> Torque operator T=[o, Hso]
       complex(rp), dimension(:, :, :, :), allocatable :: tmat
       !> Bulk Hamiltonian
-      complex(rp), dimension(:, :, :, :), allocatable :: ee, eeo, eeoee
+      ! ee is a directed bond; eeo=ee_ij*obarm_j and eeoee are composites.
+      ! eeoee is a same-bond diagnostic, not the global h-o-h contraction.
+      complex(rp), dimension(:, :, :, :), allocatable :: ee, eeo, eeoee, eecc
       !> Local Hamiltonian
-      complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo
+      complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo, hallcc
       !> Hamiltonian built in chbar_nc (description to be improved)
       complex(rp), dimension(:, :, :, :), allocatable :: hmag
       !> Hamiltonian built in ham0m_nc (description to be improved
       complex(rp), dimension(:, :, :), allocatable :: hhmag
       !> Overlap Hamiltonian
+      ! Onsite rotating-frame factor; never carries a translational GBT phase.
       complex(rp), dimension(:, :, :), allocatable :: obarm
       !> Gravity center Hamiltonian
+      ! Onsite rotating-frame center; never carries a translational GBT phase.
       complex(rp), dimension(:, :, :), allocatable :: enim
       !> Logical variable to include hoh term
       logical :: hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
+      !> Magnetic representation, independent of the real/reciprocal solver.
+      character(len=magnetic_representation_len) :: magnetic_representation
+      !> Monotonic identity of the completed real-space operator. Every
+      !> build_bulkham entry advances it, covering q, cone/reference frames,
+      !> and all potential parameters consumed by that rebuild.
+      integer :: operator_generation
+      !> Site-indexed moments used only by explicit_texture.
+      real(rp), dimension(:, :), allocatable :: texture_moments
       !> Add orbital polarization to Hamiltonian
       logical :: orb_pol
+      !> Optional two-centre combined correction
+      logical :: ccor_2c
+      !> Spectral linearization energy for two-centre CCOR (Ry)
+      real(rp) :: ccor_elin
+      !> VMT strategy for two-centre CCOR
+      character(len=16) :: ccor_vmt_mode
+      !> Print CCOR diagnostics
+      logical :: ccor_debug
+      !> Promote CCOR warnings to fatal errors where supported
+      logical :: ccor_strict
       !> Bulk Hamiltonian (backup for rotation)
-      complex(rp), dimension(:, :, :, :), allocatable :: ee_glob, eeo_glob
+      complex(rp), dimension(:, :, :, :), allocatable :: ee_glob, eeo_glob, eecc_glob
       !> Local Hamiltonian (backup for rotation)
-      complex(rp), dimension(:, :, :, :), allocatable :: hall_glob, hallo_glob
+      complex(rp), dimension(:, :, :, :), allocatable :: hall_glob, hallo_glob, hallcc_glob
     !!> Spin-orbit coupling Hamiltonian (backup for rotation)
       !complex(rp), dimension(:, :, :), allocatable :: lsham
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
-      !> Kubo polarization components and velocity directions
+      !> Velocity operators
+      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, vo_a, vo_b
+      !> Spin/orbital/multipole polarization of the output (pol_alpha) and input (pol_beta) transport operators
       character(len=10) :: pol_alpha, pol_beta
-      real(rp), dimension(3) :: v_alpha, v_beta
+      real(rp), dimension(3) :: v_alpha, v_beta, q_ss
+      real(rp) :: theta_ss
+      real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
+      !> k-space GBT constraint controller state: chi(2,2,site), field used in the last solve (2,site), last two residuals
+      real(rp), dimension(:, :, :), allocatable :: gbt_chi
+      real(rp), dimension(:, :), allocatable :: gbt_bfield
+      real(rp) :: gbt_residual(2) = huge(1.0_rp)
+      !> reference potential%mom of each type, captured before the first constrained k-space GBT assembly
+      real(rp), dimension(:, :), allocatable :: gbt_ref_mom
       real(rp), dimension(:), allocatable :: velocity_scale
-      !> Sparse Real Space Hamiltonian
+      character(len=16) :: hubbard_u_potential_form
+      logical :: hubbard_experimental = .false.
+      character(len=16) :: hubbard_log_level = 'summary'
+      !> Extract the full spinor d-shell P and M1 at nsp>=2 (diagnostic; not used by the Hamiltonian).
+      logical :: hubbard_spinor_dm_diagnostic = .false.
+      !> Experimental spinor fixed U at nsp=2 (bulk RS and KS, spectral radial moments).
+      logical :: hubbard_soc_experimental = .false.
+      !> Route of the d-shell radial moments (c, q2) that the radial step takes from the Green function when fixed U is on.
+      !>   'local': moments of the LDA part only, with V_U's own contribution removed (c - t/q0 with t = Tr(V P),
+      !>      q2 corrected), so the sphere sees the occupation change but not V_U's energy shift; the Hubbard
+      !>      energy of P_out is routed into the total energy (first order). See
+      !>      docs/validation/fixed_ldau/LOCAL_MOMENTS.md for the derivation and the tests.
+      !>   'spectral': moments of the Green function of the full H = H_LDA + V_U. Not energy-routed.
+      !>   'auto' (default): 'local' when a nonzero fixed U/J is given and local is implemented for the input,
+      !>      otherwise 'spectral' (without U it stays 'auto' here and self resolves it, a no-op).
+      character(len=16) :: hubbard_radial_moments = 'auto'
+      !> How 'auto' was resolved with a nonzero fixed U/J: 'local', or the reason local is not implemented (then 'spectral').
+      character(len=256) :: hubbard_radial_auto_reason = ''
+      !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
+      !> On-site potential correction for LDA+U (+J) in spin-orbital basis
+      complex(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
+      !> Enable +U correction when any U/J is provided on symbolic atoms
+      logical :: hubbard_u_general_check = .false.
+      !> Optional impurity-only Hubbard inputs (eV in input.nml, stored as Ry here)
+      real(rp), dimension(:, :), allocatable :: hubbard_u_impurity, hubbard_j_impurity
+      logical :: hubbard_u_impurity_check = .false.
+      !> Optional self-consistent Hubbard-U mask (itype,l) with l=1..4 => s,p,d,f.
+      !> 0 = disabled, 1 = enable self-consistent U update for this channel.
+      integer, dimension(:, :), allocatable :: hubbard_u_sc
+      logical :: hubbard_u_sc_check = .false.
+      !> Optional intersite Hubbard-V input and corresponding matrix correction
+      real(rp), dimension(:, :, :, :), allocatable :: hubbard_v, hubbard_v_pot
+      logical :: hubbard_v_check = .false.
+      !> Exact additive local Hubbard d-block captured at hall insertion for RD1.
+      complex(rp), dimension(:, :, :, :), allocatable :: rd1_vin_d
+      logical, dimension(:), allocatable :: rd1_vin_valid
+      integer, dimension(:), allocatable :: rd1_vin_cluster_site, rd1_vin_atom_type, rd1_vin_iteration
+      integer :: rd1_capture_iteration = 0
+      logical :: rd1_capture_enabled = .false.
+      logical :: rd1_capture_required = .false.
+      !> Spectrum bounds for Chebyshev scaling
+      type(bounds) :: bounds
+      !> Hamiltonian export format: 'none', 'rs2pao', 'python'
+      character(len=16) :: export
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
+      procedure :: build_gbt_bulkham
       procedure :: build_locham
+      procedure :: build_ccor_bulk
+      procedure :: build_ccor_local
+      procedure :: validate_ccor_inputs
+      procedure :: build_ccor_coefficients
+      procedure :: normalize_ccor_sdot
+      procedure :: ccor_vmt_scalar
       procedure :: build_obarm
       procedure :: build_enim
+      procedure :: add_constraining_field_spin_block
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
-      procedure :: block_to_sparse
+      procedure :: build_realspace_velocity_operators
       procedure :: torque_operator_collinear
       procedure :: rs2pao
+      procedure :: export_rs_tb_all
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
+      procedure :: prepare_explicit_texture_moments
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
+      procedure :: calculate_hubbard_u_potential_general
+      procedure :: evaluate_hubbard_energy
+      procedure :: calculate_hubbard_v_potential
+      procedure :: fixed_u_local_scope
+      procedure :: rd1_local_impurity_eligible
+      procedure :: begin_rd1_vin_capture
+      procedure :: get_rd1_recursion_site_type
+      procedure :: capture_rd1_vin_insertion
+      procedure :: get_rd1_vin_for_recursion
+      procedure :: compute_hamiltonian_bounds
       final     :: destructor
    end type hamiltonian
 
@@ -110,1337 +217,529 @@ module hamiltonian_mod
       procedure :: constructor
    end interface
 
-contains
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Constructor
-   !
-   !> @param[in] charge_obj Variable that holds charge_mod properties
-   !> @return type(hamiltonian)
-   !---------------------------------------------------------------------------
-   function constructor(charge_obj) result(obj)
+   interface
+   !> @brief Construct a Hamiltonian object from an initialized charge object.
+   !> @details Wires the Hamiltonian to charge, lattice, and control state, resets
+   !>          all owned arrays/flags, then reads the &hamiltonian namelist. This
+   !>          object supplies real-space hopping blocks to recursion and k-space
+   !>          Fourier paths.
+   !> @param[in] charge_obj Charge object containing lattice and potential state.
+   !> @return Initialized Hamiltonian object.
+   module function constructor(charge_obj) result(obj)
       type(hamiltonian) :: obj
       type(charge), target, intent(in) :: charge_obj
 
-      obj%charge => charge_obj
-      obj%lattice => charge_obj%lattice
-      obj%control => charge_obj%lattice%control
-
-      call obj%restore_to_default()
-      call obj%build_from_file()
    end function constructor
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Destructor
-   !---------------------------------------------------------------------------
-   subroutine destructor(this)
+   !> @brief Finalize a Hamiltonian object.
+   !> @details Releases spin-orbit, hopping, overlap, velocity, Hubbard, CCOR,
+   !>          export, and cache arrays owned by the object.
+   !> @param[inout] this Hamiltonian object being finalized.
+   module subroutine destructor(this)
       type(hamiltonian) :: this
-#ifdef USE_SAFE_ALLOC
-      if (allocated(this%lsham)) call g_safe_alloc%deallocate('hamiltonian.lsham', this%lsham)
-      if (allocated(this%tmat)) call g_safe_alloc%deallocate('hamiltonian.tmat', this%tmat)
-      if (allocated(this%ee)) call g_safe_alloc%deallocate('hamiltonian.ee', this%ee)
-      if (allocated(this%hmag)) call g_safe_alloc%deallocate('hamiltonian.hmag', this%hmag)
-      if (allocated(this%hhmag)) call g_safe_alloc%deallocate('hamiltonian.hhmag', this%hhmag)
-      if (allocated(this%hall)) call g_safe_alloc%deallocate('hamiltonian.hall', this%hall)
-      if (allocated(this%eeo)) call g_safe_alloc%deallocate('hamiltonian.eeo', this%eeo)
-      if (allocated(this%eeoee)) call g_safe_alloc%deallocate('hamiltonian.eeoee', this%eeoee)
-      if (allocated(this%hallo)) call g_safe_alloc%deallocate('hamiltonian.hallo', this%hallo)
-      if (allocated(this%obarm)) call g_safe_alloc%deallocate('hamiltonian.obarm', this%obarm)
-      if (allocated(this%enim)) call g_safe_alloc%deallocate('hamiltonian.enim', this%enim)
-      if (allocated(this%ee_glob)) call g_safe_alloc%deallocate('hamiltonian.ee_glob', this%ee_glob)
-      if (allocated(this%eeo_glob)) call g_safe_alloc%deallocate('hamiltonian.eeo_glob', this%eeo_glob)
-      if (allocated(this%enim_glob)) call g_safe_alloc%deallocate('hamiltonian.enim_glob', this%enim_glob)
-      if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
-      if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
-#else
-      if (allocated(this%lsham)) deallocate (this%lsham)
-      if (allocated(this%tmat)) deallocate (this%tmat)
-      if (allocated(this%ee)) deallocate (this%ee)
-      if (allocated(this%eeo)) deallocate (this%eeo)
-      if (allocated(this%eeoee)) deallocate (this%eeoee)
-      if (allocated(this%hmag)) deallocate (this%hmag)
-      if (allocated(this%hhmag)) deallocate (this%hhmag)
-      if (allocated(this%hall)) deallocate (this%hall)
-      if (allocated(this%hallo)) deallocate (this%hallo)
-      if (allocated(this%obarm)) deallocate (this%obarm)
-      if (allocated(this%enim)) deallocate (this%enim)
-      if (allocated(this%ee_glob)) deallocate (this%ee_glob)
-      if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
-      if (allocated(this%enim_glob)) deallocate (this%enim_glob)
-      if (allocated(this%h_sparse)) deallocate(this%h_sparse)
-      if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
-#endif
    end subroutine destructor
 
-   ! Member functions
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Read parameters from input file
-   !---------------------------------------------------------------------------
-   subroutine build_from_file(this)
+   !> @brief Read the &hamiltonian namelist and install Hamiltonian options.
+   !> @details Parses HOH, local-axis rotation, CCOR, velocity directions, spectral
+   !>          bounds, export mode, and Hubbard U/J/V inputs. Hubbard inputs are
+   !>          accepted in eV and converted to internal Ry units.
+   !> @param[inout] this Hamiltonian object whose control%fname selects the input file.
+   !> @note This is a true input boundary and may raise fatal diagnostics for invalid options.
+   module subroutine build_from_file(this)
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
-
-      include 'include_codes/namelists/hamiltonian.f90'
-
-      hoh = this%hoh
-      local_axis = this%local_axis
-      orb_pol = this%orb_pol
-      v_alpha(:) = this%v_alpha(:)
-      v_beta(:) = this%v_beta(:)
-      pol_alpha = this%pol_alpha
-      pol_beta  = this%pol_beta
-      call move_alloc(this%velocity_scale, velocity_scale)
-
-      ! Reading
-      open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
-      if (iostatus /= 0) then
-         call g_logger%fatal('file '//trim(this%control%fname)//' not found', __FILE__, __LINE__)
-      end if
-
-      read (funit, nml=hamiltonian, iostat=iostatus)
-      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%fatal('Invalid &hamiltonian namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
-      end if
-      close (funit)
-
-      this%hoh = hoh
-      this%local_axis = local_axis
-      this%orb_pol = orb_pol
-      this%v_alpha(:) = v_alpha(:)
-      this%v_beta(:) = v_beta(:)
-      this%pol_alpha = pol_alpha
-      this%pol_beta  = pol_beta
-      call move_alloc(velocity_scale, this%velocity_scale)
+      integer :: iostatus, funit, i, j, l, li, lj, n_l_in
+      integer :: nimp_in
+      integer :: na
+      integer :: ntype_nml, nrec_nml
+      logical :: legacy_uj_present
+      logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
+      character(len=1) :: orbch
+      real(rp), parameter :: hubbard_sentinel = -9.87654321e30_rp
+      integer, parameter :: hubbard_sc_sentinel = -999
 
    end subroutine build_from_file
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Reset all members to default
-   !---------------------------------------------------------------------------
-   subroutine restore_to_default(this)
+   !> @brief Reset Hamiltonian flags, arrays, and cached bounds to defaults.
+   !> @details Restores namelist-controlled options to their baseline values and
+   !>          clears allocatable storage so a constructor can rebuild the object
+   !>          for the current lattice/control state.
+   !> @param[inout] this Hamiltonian object to reset.
+   module subroutine restore_to_default(this)
       class(hamiltonian) :: this
 
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.tmat', this%tmat, (/18, 18, 3, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hhmag', this%hhmag, (/9, 9, 4/))
-      call g_safe_alloc%allocate('hamiltonian.hmag', this%hmag, (/9, 9, this%charge%lattice%kk, 4/))
-      call g_safe_alloc%allocate('hamiltonian.ee', this%ee, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hall', this%hall, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      !if (hoh) then
-      call g_safe_alloc%allocate('hamiltonian.eeo', this%eeo, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.eeoee', this%eeoee, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.obarm', this%obarm, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.enim', this%enim, (/18, 18, this%charge%lattice%ntype/))
-      !end if
-      !if (local_axis)  then
-      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      !if (hoh) then
-      call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
-      !end if
-      !end if
-#else
-      allocate (this%lsham(18, 18, this%charge%lattice%ntype))
-      allocate (this%tmat(18, 18, 3, this%charge%lattice%ntype))
-      allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, this%charge%lattice%kk, 4))
-      allocate (this%ee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hall(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      !if (this%hoh) then
-      allocate (this%eeo(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%eeoee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hallo(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      allocate (this%obarm(18, 18, this%charge%lattice%ntype))
-      allocate (this%enim(18, 18, this%charge%lattice%ntype))
-      !end if
-      !if (this%local_axis) then
-      allocate (this%ee_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hall_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      !if (this%hoh) then
-      allocate (this%eeo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
-      ! Velocity operators
-      allocate (this%velocity_scale(this%charge%lattice%ntype))
-      !end if
-      !end if
-#endif
-
-      this%lsham(:, :, :) = 0.0d0
-      this%tmat(:, :, :, :) = 0.0d0
-      this%hhmag(:, :, :) = 0.0d0
-      this%hmag(:, :, :, :) = 0.0d0
-      this%hall(:, :, :, :) = 0.0d0
-      this%ee(:, :, :, :) = 0.0d0
-      !if (this%hoh) then
-      this%hallo(:, :, :, :) = 0.0d0
-      this%eeo(:, :, :, :) = 0.0d0
-      this%eeoee(:, :, :, :) = 0.0d0
-      this%obarm(:, :, :) = 0.0d0
-      this%enim(:, :, :) = 0.0d0
-      !end if
-      !if (this%local_axis) then
-      this%hall_glob(:, :, :, :) = 0.0d0
-      this%ee_glob(:, :, :, :) = 0.0d0
-      !  if (this%hoh) then
-      this%hallo_glob(:, :, :, :) = 0.0d0
-      this%eeo_glob(:, :, :, :) = 0.0d0
-      this%enim_glob(:, :, :) = 0.0d0
-      !  end if
-      !end if
-      this%velocity_scale(:) = 1.0d0
-      this%hoh = .false.
-      this%local_axis = .false.
-      this%orb_pol = .false.
-      this%v_alpha(:) = [1, 0, 0]
-      this%v_beta(:) = [1, 0, 0] 
-      this%pol_alpha = 'z'
-      this%pol_beta  = 'z'
    end subroutine restore_to_default
 
-   subroutine block_to_sparse(this)
-       !*************************************************************************
-       !> @brief Constructs the sparse Hamiltonian matrix for a real-space cluster.
-       !>
-       !> This subroutine loops through all cluster atoms and their neighbors to
-       !> assemble the sparse Hamiltonian matrix in a block-wise manner. The matrix
-       !> size is determined by the number of atoms in the cluster and their spd basis.
-       !>
-       !> @param[in] this       Hamiltonian type derived
-       !> @param[out] H_sparse  Sparse matrix structure to store the Hamiltonian.
-       !*************************************************************************
-       class(hamiltonian), intent(inout) :: this
-   
-       ! Local variables
-       integer :: kk, m, nr, i, j, i_start, j_start
-       integer :: neighbor  ! Neighbor atom index
-       real(rp), dimension(3) :: rij  ! Displacement vector (unused for now but available)
-  
-       if (allocated(this%h_sparse)) deallocate(this%h_sparse) 
-       allocate(this%h_sparse(this%lattice%kk*18,this%lattice%kk*18))
-
-       ! Loop over cluster atoms
-       do kk = 1, this%lattice%kk  ! Loop over all atoms in the cluster
-           ! Number of neighbors for the kk-th atom
-           nr = this%charge%lattice%nn(kk, 1)
-           ! Loop over neighbors (including onsite, m = 1)
-           do m = 1, nr
-               ! Compute block indices in the global matrix
-               i_start = 18 * (kk - 1) + 1
-               if (m == 1) then
-                   j_start = i_start  ! Onsite term: diagonal block
-               else
-                   neighbor = this%charge%lattice%nn(kk, m)  ! Neighbor atom index
-                   j_start = 18 * (neighbor - 1) + 1
-               end if
-               ! Add the block to the sparse matrix
-               if (neighbor .ne. 0) then
-                  this%h_sparse(i_start:i_start+17, j_start:j_start+17) = 0.0d0
-                  do i = 1, 18
-                      do j = 1, 18
-                         this%h_sparse(i_start + i - 1, j_start + j - 1) = this%h_sparse(i_start + i - 1, j_start + j - 1) &
-                                                                           + this%ee(i, j, m, 1)
-                      end do
-                  end do
-               end if
-           end do
-       end do
-       ! Placeholder: Incorporate atom type and neighbor type logic in future if required.
-   end subroutine block_to_sparse
-
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Select spin operator S_x, S_y, or S_z from a polarization label.
-   !---------------------------------------------------------------------------
-   subroutine select_spin_operator(pol, S_op)
-      character(len=*), intent(in) :: pol
-      complex(rp), dimension(18, 18), intent(out) :: S_op
-
-      S_op(:, :) = (0.0_rp, 0.0_rp)
-
-      select case(trim(pol))
-      case('x')
-         S_op(:, :) = S_x(:, :)
-      case('y')
-         S_op(:, :) = S_y(:, :)
-      case('z')
-         S_op(:, :) = S_z(:, :)
-      case default
-         call g_logger%fatal('Invalid spin polarization: '//trim(pol), __FILE__, __LINE__)
-      end select
-
-   end subroutine select_spin_operator
-
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Select orbital operator L_x, L_y, or L_z from a polarization label.
-   !> The math_mod matrices are transformed from Cartesian to spherical basis.
-   !---------------------------------------------------------------------------
-   subroutine select_orbital_operator(pol, L_op)
-      character(len=*), intent(in) :: pol
-      complex(rp), dimension(18, 18), intent(out) :: L_op
-
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-
-      mLx(:, :) = L_x(:, :)
-      mLy(:, :) = L_y(:, :)
-      mLz(:, :) = L_z(:, :)
-
-      call hcpx(mLx, 'cart2sph')
-      call hcpx(mLy, 'cart2sph')
-      call hcpx(mLz, 'cart2sph')
-
-      L_op(:, :) = (0.0_rp, 0.0_rp)
-
-      select case(trim(pol))
-      case('x')
-         L_op(1:9, 1:9)     = mLx(:, :)
-         L_op(10:18,10:18)  = mLx(:, :)
-      case('y')
-         L_op(1:9, 1:9)     = mLy(:, :)
-         L_op(10:18,10:18)  = mLy(:, :)
-      case('z')
-         L_op(1:9, 1:9)     = mLz(:, :)
-         L_op(10:18,10:18)  = mLz(:, :)
-      case default
-         call g_logger%fatal('Invalid orbital polarization: '//trim(pol), __FILE__, __LINE__)
-      end select
-
-   end subroutine select_orbital_operator
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Select orbital quadrupole / OAP operator from a component label.
-   !>
-   !> Definitions:
-   !>   Qxx = Lx^2 - L^2/3
-   !>   Qyy = Ly^2 - L^2/3
-   !>   Qzz = Lz^2 - L^2/3
-   !>   Qxy = 1/2 {Lx,Ly}
-   !>   Qyz = 1/2 {Ly,Lz}
-   !>   Qzx = 1/2 {Lz,Lx}
-   !>   Qx2y2  = (Qxx - Qyy)/2
-   !>   Q3z2r2 = (2 Qzz - Qxx - Qyy)/2
-   !>
-   !> L^2 = Lx^2 + Ly^2 + Lz^2. Matrices use hbar = 1; the
-   !> physical quadrupoles are angular-momentum bilinears divided by hbar.
-   !> The diagonal Cartesian components now form a traceless tensor.
-   !> Both accumulation and current builders use this selector.
-   !>
-   !> The math_mod L matrices are transformed from Cartesian to spherical basis
-   !> before forming products, exactly as done for orbital accumulation/current.
-   !---------------------------------------------------------------------------
-   subroutine select_quadrupole_operator(pol, Q_op)
-      character(len=*), intent(in) :: pol
-      complex(rp), dimension(18, 18), intent(out) :: Q_op
-
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-      complex(rp), dimension(9, 9) :: Q9
-      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2, L2
-
-      mLx(:, :) = L_x(:, :)
-      mLy(:, :) = L_y(:, :)
-      mLz(:, :) = L_z(:, :)
-
-      call hcpx(mLx, 'cart2sph')
-      call hcpx(mLy, 'cart2sph')
-      call hcpx(mLz, 'cart2sph')
-
-      Lx2 = matmul(mLx, mLx)
-      Ly2 = matmul(mLy, mLy)
-      Lz2 = matmul(mLz, mLz)
-      L2 = Lx2 + Ly2 + Lz2
-
-      Q9(:, :) = (0.0_rp, 0.0_rp)
-
-      select case(trim(pol))
-
-      case('Qxx', 'qxx', 'xx')
-         Q9 = Lx2 - L2 / 3.0_rp
-
-      case('Qyy', 'qyy', 'yy')
-         Q9 = Ly2 - L2 / 3.0_rp
-
-      case('Qzz', 'qzz', 'zz')
-         Q9 = Lz2 - L2 / 3.0_rp
-
-      case('Qxy', 'qxy', 'xy')
-         Q9 = 0.5_rp * (matmul(mLx, mLy) + matmul(mLy, mLx))
-
-      case('Qyz', 'qyz', 'yz')
-         Q9 = 0.5_rp * (matmul(mLy, mLz) + matmul(mLz, mLy))
-
-      case('Qzx', 'qzx', 'zx', 'Qxz', 'qxz', 'xz')
-         Q9 = 0.5_rp * (matmul(mLz, mLx) + matmul(mLx, mLz))
-
-      case('Qx2y2', 'qx2y2', 'x2y2')
-         Q9 = 0.5_rp * (Lx2 - Ly2)
-
-      case('Q3z2r2', 'q3z2r2', '3z2r2')
-         Q9 = 0.5_rp * (2.0_rp * Lz2 - Lx2 - Ly2)
-
-      case default
-         call g_logger%fatal('Invalid quadrupole component: '//trim(pol), __FILE__, __LINE__)
-
-      end select
-
-      ! Clean tiny numerical anti-Hermitian noise.
-      Q9 = 0.5_rp * (Q9 + transpose(conjg(Q9)))
-
-      Q_op(:, :) = (0.0_rp, 0.0_rp)
-
-      ! spin-up block
-      Q_op(1:9, 1:9) = Q9(:, :)
-
-      ! spin-down block
-      Q_op(10:18, 10:18) = Q9(:, :)
-
-      write(*,*) 'Selected Q component = ', trim(pol), ' norm = ', sqrt(real(sum(conjg(Q_op)*Q_op), rp))
-      write(*,*) 'Hermiticity check Q = ', maxval(abs(Q_op - transpose(conjg(Q_op))))
-
-   end subroutine select_quadrupole_operator
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Select a local orbital octupole, in hbar = 1 units.
-   !> Oabb (a /= b) = {La,Lb^2}/2 - {La,L^2}/10 - La/10.
-   !> These seven pure rank-three components include fully symmetrized Oxyz.
-   !> Oa5b2r2 is an alias of Oabb, with the SAME normalization (no factor 5).
-   !> Explicit Ma3b2r2 labels retain the old mixed dipole/octupole observable.
-   !> Old Oa3b2r2 labels are rejected to prevent silent reinterpretation.
-   !> Physical operators in angular-momentum units are these matrices times hbar.
-   !---------------------------------------------------------------------------
-   subroutine select_octupole_operator(pol, O_op)
-      character(len=*), intent(in) :: pol
-      complex(rp), dimension(18, 18), intent(out) :: O_op
-
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2, L2, O9
-
-      mLx(:, :) = L_x(:, :)
-      mLy(:, :) = L_y(:, :)
-      mLz(:, :) = L_z(:, :)
-
-      call hcpx(mLx, 'cart2sph')
-      call hcpx(mLy, 'cart2sph')
-      call hcpx(mLz, 'cart2sph')
-
-      Lx2 = matmul(mLx, mLx)
-      Ly2 = matmul(mLy, mLy)
-      Lz2 = matmul(mLz, mLz)
-      L2  = Lx2 + Ly2 + Lz2
-
-      O9(:, :) = (0.0_rp, 0.0_rp)
-
-      select case(trim(pol))
-
-      case('Oxyz', 'oxyz', 'xyz')
-         O9 = ( &
-              matmul(matmul(mLx, mLy), mLz) &
-            + matmul(matmul(mLx, mLz), mLy) &
-            + matmul(matmul(mLy, mLx), mLz) &
-            + matmul(matmul(mLy, mLz), mLx) &
-            + matmul(matmul(mLz, mLx), mLy) &
-            + matmul(matmul(mLz, mLy), mLx) ) / 6.0_rp
-
-      case('Oxyy', 'oxyy', 'xyy', 'Ox5y2r2', 'ox5y2r2')
-         O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
-            - (matmul(mLx, L2) + matmul(L2, mLx)) / 10.0_rp - mLx / 10.0_rp
-
-      case('Mx3y2r2', 'mx3y2r2')
-         O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
-            - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
-
-      case('Oyzz', 'oyzz', 'yzz', 'Oy5z2r2', 'oy5z2r2')
-         O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
-            - (matmul(mLy, L2) + matmul(L2, mLy)) / 10.0_rp - mLy / 10.0_rp
-
-      case('My3z2r2', 'my3z2r2')
-         O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
-            - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
-
-      case('Ozxx', 'ozxx', 'zxx', 'Oz5x2r2', 'oz5x2r2')
-         O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
-            - (matmul(mLz, L2) + matmul(L2, mLz)) / 10.0_rp - mLz / 10.0_rp
-
-      case('Mz3x2r2', 'mz3x2r2')
-         O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
-            - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
-
-      case('Oxzz', 'oxzz', 'xzz', 'Ox5z2r2', 'ox5z2r2')
-         O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
-            - (matmul(mLx, L2) + matmul(L2, mLx)) / 10.0_rp - mLx / 10.0_rp
-
-      case('Mx3z2r2', 'mx3z2r2')
-         O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
-            - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
-
-      case('Oyxx', 'oyxx', 'yxx', 'Oy5x2r2', 'oy5x2r2')
-         O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
-            - (matmul(mLy, L2) + matmul(L2, mLy)) / 10.0_rp - mLy / 10.0_rp
-
-      case('My3x2r2', 'my3x2r2')
-         O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
-            - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
-
-      case('Ozyy', 'ozyy', 'zyy', 'Oz5y2r2', 'oz5y2r2')
-         O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
-            - (matmul(mLz, L2) + matmul(L2, mLz)) / 10.0_rp - mLz / 10.0_rp
-
-      case('Mz3y2r2', 'mz3y2r2')
-         O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
-            - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
-
-      case('Ox3y2r2', 'ox3y2r2')
-         call g_logger%fatal('Ambiguous legacy component: use Oxyy for pure rank three or Mx3y2r2 for the old mixed operator', &
-                             __FILE__, __LINE__)
-
-      case('Oy3z2r2', 'oy3z2r2')
-         call g_logger%fatal('Ambiguous legacy component: use Oyzz for pure rank three or My3z2r2 for the old mixed operator', &
-                             __FILE__, __LINE__)
-
-      case('Oz3x2r2', 'oz3x2r2')
-         call g_logger%fatal('Ambiguous legacy component: use Ozxx for pure rank three or Mz3x2r2 for the old mixed operator', &
-                             __FILE__, __LINE__)
-
-      case('Ox3z2r2', 'ox3z2r2')
-         call g_logger%fatal('Ambiguous legacy component: use Oxzz for pure rank three or Mx3z2r2 for the old mixed operator', &
-                             __FILE__, __LINE__)
-
-      case('Oy3x2r2', 'oy3x2r2')
-         call g_logger%fatal('Ambiguous legacy component: use Oyxx for pure rank three or My3x2r2 for the old mixed operator', &
-                             __FILE__, __LINE__)
-
-      case('Oz3y2r2', 'oz3y2r2')
-         call g_logger%fatal('Ambiguous legacy component: use Ozyy for pure rank three or Mz3y2r2 for the old mixed operator', &
-                             __FILE__, __LINE__)
-
-      case default
-         call g_logger%fatal('Invalid octupole component: '//trim(pol), __FILE__, __LINE__)
-
-      end select
-
-      O9 = 0.5_rp * (O9 + transpose(conjg(O9)))
-
-      O_op(:, :) = (0.0_rp, 0.0_rp)
-      O_op(1:9, 1:9) = O9(:, :)
-      O_op(10:18, 10:18) = O9(:, :)
-
-   end subroutine select_octupole_operator
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Build the spin-orbit coupling Hamiltonian according to
-   !> Wu/Freeman, Phys. Rev. B 54, 61 (1996).
-   !>
-   !> The SOC parameters xi_p and xi_d are combined using a signed
-   !> geometric mean, allowing negative SOC values to be specified
-   !> in the potential files.
-   !---------------------------------------------------------------------------
-   subroutine build_lsham(this)
-   
+   !> @brief Build charge velocity operators in real-space hopping layout.
+   !> @details Projects bond displacement vectors onto v_alpha/v_beta directions
+   !>          and weights hopping blocks to form v_a/v_b for Kubo conductivity.
+   !> @param[inout] this Hamiltonian object; fills v_a, v_b, vo_a, and vo_b.
+   !> @note Honors velocity_scale and the HOH companion-operator layout.
+   module subroutine build_realspace_velocity_operators(this)
+      ! Arguments
       class(hamiltonian), intent(inout) :: this
    
       ! Local variables
+      integer :: ia, ntype, nr, m, i, j, velotype, ja, ji    ! Atom and neighbor indices
+      integer :: atom_neighbor                               ! Neighbor atom index
+      real(rp) :: veloscale
+      real(rp), dimension(3) :: rij                          ! Displacement vector (x, y, z components)
+      real(rp), dimension(3) :: dir_a, dir_b                 ! Velocity operator directions
+      real(rp) :: norm_a, norm_b, dot_a, dot_b
+      ! Initialize velocity operators to zero
+   end subroutine build_realspace_velocity_operators
+
+   !> @brief Build onsite spin-orbit coupling Hamiltonian blocks.
+   !> @details Converts angular-momentum operators to the LMTO basis and combines
+   !>          them with per-type SOC strengths to populate lsham for real-space
+   !>          and reciprocal Hamiltonian construction.
+   !> @param[inout] this Hamiltonian object; fills lsham(:,:,itype).
+   module subroutine build_lsham(this)
+      class(hamiltonian), intent(inout) :: this
+      ! Local variables
       integer :: i, j, k
-   
       complex(rp) :: prefac, sg
-   
       real(rp) :: soc_p, soc_d
-      real(rp) :: xi_p1, xi_p2
-      real(rp) :: xi_d1, xi_d2
-   
       complex(rp), dimension(2) :: rac
-      complex(rp), dimension(9, 9) :: Lx, Ly, Lz
-   
+      complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       real(rp) :: lz_loc
-   
-      !-----------------------------------------------------------------------
-      ! Getting the angular momentum operators from math_mod.
-      ! They are initially given in Cartesian coordinates.
-      !-----------------------------------------------------------------------
-      Lx(:, :) = L_x(:, :)
-      Ly(:, :) = L_y(:, :)
-      Lz(:, :) = L_z(:, :)
-   
-      !-----------------------------------------------------------------------
-      ! Transform them into the spherical-harmonics basis.
-      !-----------------------------------------------------------------------
-      call hcpx(Lx, 'cart2sph')
-      call hcpx(Ly, 'cart2sph')
-      call hcpx(Lz, 'cart2sph')
-   
-      !-----------------------------------------------------------------------
-      ! Initialize the L.S Hamiltonian.
-      !-----------------------------------------------------------------------
-      this%lsham(:, :, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
-   
-      !-----------------------------------------------------------------------
-      ! Loop over atomic types.
-      !-----------------------------------------------------------------------
-      do k = 1, this%charge%lattice%ntype
-   
-         sg = cmplx(0.5_rp, 0.0_rp, kind=rp)
-   
-         !--------------------------------------------------------------------
-         ! Read SOC parameters from the potential.
-         !--------------------------------------------------------------------
-         xi_p1 = this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)
-         xi_p2 = this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2)
-   
-         xi_d1 = this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)
-         xi_d2 = this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2)
-   
-         !--------------------------------------------------------------------
-         ! The two SOC parameters belonging to the same orbital channel
-         ! must have the same sign.
-         !--------------------------------------------------------------------
-         if (xi_p1 * xi_p2 < 0.0_rp) then
-            error stop &
-               'build_lsham: xi_p(1) and xi_p(2) must have the same sign'
-         end if
-   
-         if (xi_d1 * xi_d2 < 0.0_rp) then
-            error stop &
-               'build_lsham: xi_d(1) and xi_d(2) must have the same sign'
-         end if
-   
-         !--------------------------------------------------------------------
-         ! Signed geometric mean.
-         !
-         ! (+a,+b) --> +sqrt(a*b)
-         ! (-a,-b) --> -sqrt(a*b)
-         !
-         ! This preserves the sign supplied in the potential file.
-         !--------------------------------------------------------------------
-         soc_p = sign(sqrt(abs(xi_p1 * xi_p2)), xi_p1)
-         soc_d = sign(sqrt(abs(xi_d1 * xi_d2)), xi_d1)
-   
-         !--------------------------------------------------------------------
-         ! WARNING:
-         !
-         ! The orbital-polarization part below is intentionally left
-         ! unchanged from the original implementation.
-         !
-         ! If xi_d(1) is negative, expressions such as
-         !
-         !   sqrt(xi_d(1) * rac)
-         !   sqrt(xi_d(1) * lmom(3))
-         !
-         ! may have negative real arguments and may therefore produce NaNs.
-         !
-         ! The negative-SOC modification above is therefore safe by itself,
-         ! but calculations with orb_pol = .true. require separate analysis
-         ! of the orbital-polarization terms.
-         !--------------------------------------------------------------------
-         if (this%orb_pol .and. xi_d1 < 0.0_rp) then
-            write(*, '(a)') &
-               'WARNING(build_lsham): negative xi_d with orb_pol=.true.;'
-            write(*, '(a)') &
-               'rac/lz_loc square roots are unchanged and may produce NaNs.'
-         end if
-   
-         !--------------------------------------------------------------------
-         ! Check if orbital polarization is enabled.
-         !
-         ! NOTE: This block is unchanged from the original implementation.
-         !--------------------------------------------------------------------
-         if (this%orb_pol) then
-   
-            rac = sqrt( &
-               this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1) * &
-               this%charge%lattice%symbolic_atoms(k)%potential%rac )
-   
-            lz_loc = sqrt( &
-               this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1) * &
-               this%charge%lattice%symbolic_atoms(k)%potential%lmom(3) )
-   
-         else
-   
-            rac = 0.0_rp
-            lz_loc = 0.0_rp
-   
-         end if
-   
-         !--------------------------------------------------------------------
-         ! Construct the L.S Hamiltonian.
-         !--------------------------------------------------------------------
-         do i = 1, 9
-            do j = 1, 9
-   
-               ! Reset prefactor for every matrix element.
-               prefac = cmplx(0.0_rp, 0.0_rp, kind=rp)
-   
-               ! p-orbital block
-               if (i >= 2 .and. i <= 4 .and. &
-                   j >= 2 .and. j <= 4) then
-   
-                  prefac = sg * soc_p
-   
-               end if
-   
-               ! d-orbital block
-               if (i >= 5 .and. i <= 9 .and. &
-                   j >= 5 .and. j <= 9) then
-   
-                  prefac = sg * soc_d
-   
-               end if
-   
-               ! H11
-               this%lsham(j, i, k) = &
-                  this%lsham(j, i, k) + &
-                  prefac * Lz(j, i) + &
-                  Lz(j, i) * rac(1) * lz_loc
-   
-               ! H12
-               this%lsham(j, i + 9, k) = &
-                  this%lsham(j, i + 9, k) + &
-                  prefac * (Lx(j, i) - i_unit * Ly(j, i))
-   
-               ! H21
-               this%lsham(j + 9, i, k) = &
-                  this%lsham(j + 9, i, k) + &
-                  prefac * (Lx(j, i) + i_unit * Ly(j, i))
-   
-               ! H22
-               this%lsham(j + 9, i + 9, k) = &
-                  this%lsham(j + 9, i + 9, k) - &
-                  prefac * Lz(j, i) - &
-                  Lz(j, i) * rac(2) * lz_loc
-   
-            end do
-         end do
-   
-      end do
-   
+      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
    end subroutine build_lsham
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Build the torque operator for the collinear case (SQA in z)
-   !> based on the definition of PRM 2, 013801 (2018).
-   !> Implemented by Ivan Miranda on 07/11/2023.
-   !---------------------------------------------------------------------------
-   subroutine torque_operator_collinear(this)
+   !> @brief Build the collinear spin-orbit torque operator.
+   !> @details Evaluates the commutator-style torque operator T=[o,H_so] in the
+   !>          spin-orbital basis for workflows that need magnetic torques.
+   !> @param[inout] this Hamiltonian object; fills tmat.
+   module subroutine torque_operator_collinear(this)
       !
       class(hamiltonian), intent(inout) :: this
       !
       ! Local variables
       integer :: i, j, k
       complex(rp) :: prefac, sg, soc_p, soc_d
-      complex(rp), dimension(9, 9) :: Lx, Ly, Lz
+      complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-      Lx(:, :) = L_x(:, :)
-      Ly(:, :) = L_y(:, :)
-      Lz(:, :) = L_z(:, :)
-
-      ! Transforming them into the spherical harmonics coordinates
-      call hcpx(Lx, 'cart2sph')
-      call hcpx(Ly, 'cart2sph')
-      call hcpx(Lz, 'cart2sph')
-
-      ! Now write the torque operator matrix
-      this%tmat(:, :, :, :) = cmplx(0.0_rp, 0.0_rp)
-      do k = 1, this%charge%lattice%ntype
-         sg = cmplx(0.5_rp, 0.0_rp)
-         soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
-         soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
-         prefac = 0.0_rp
-         do i = 1, 9
-            do j = 1, 9
-               if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
-               if (i >= 5 .and. i <= 9 .and. j >= 5 .and. j <= 9) prefac = sg*soc_d
-               ! build Tx
-               this%tmat(j, i, 1, k) = this%tmat(j, i, 1, k) + prefac*i_unit*Ly(j, i)*2.0_rp ! Tx_11
-               this%tmat(j, i + 9, 1, k) = this%tmat(j, i + 9, 1, k) - prefac*Lz(j, i)*2.0_rp*cone ! Tx_12
-               this%tmat(j + 9, i, 1, k) = this%tmat(j + 9, i, 1, k) + prefac*Lz(j, i)*2.0_rp*cone ! Tx_21
-               this%tmat(j + 9, i + 9, 1, k) = this%tmat(j + 9, i + 9, 1, k) - prefac*i_unit*Ly(j, i)*2.0_rp ! Tx_22
-               ! build Ty
-               this%tmat(j, i, 2, k) = this%tmat(j, i, 2, k) - prefac*i_unit*Lx(j, i)*2.0_rp ! Ty_11
-               this%tmat(j, i + 9, 2, k) = this%tmat(j, i + 9, 2, k) + prefac*i_unit*Lz(j, i)*2.0_rp ! Ty_12
-               this%tmat(j + 9, i, 2, k) = this%tmat(j + 9, i, 2, k) + prefac*i_unit*Lz(j, i)*2.0_rp ! Ty_21
-               this%tmat(j + 9, i + 9, 2, k) = this%tmat(j + 9, i + 9, 2, k) + prefac*i_unit*Lx(j, i)*2.0_rp ! Ty_22
-               ! build Tz
-               this%tmat(j, i + 9, 3, k) = this%tmat(j, i + 9, 3, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i))*2.0_rp*cone ! Tz_12
-               this%tmat(j + 9, i, 3, k) = this%tmat(j + 9, i, 3, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i))*2.0_rp*cmone ! Tz_21
-            end do
-         end do
-      end do
-
    end subroutine torque_operator_collinear
 
-   subroutine build_obarm(this)
+   !> @brief Add the site's constraining field (mag_cfield, local spin frame) to an onsite spinor block.
+   module subroutine add_constraining_field_spin_block(this, atom_type, block)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: atom_type
+      complex(rp), intent(inout) :: block(nb, nb)
+   end subroutine add_constraining_field_spin_block
+
+   !> @brief Build overlap-bar matrices for the orthogonal representation.
+   !> @details Converts potential/overlap information from symbolic atoms into
+   !>          onsite obarm blocks used by HOH and representation transforms.
+   !> @param[inout] this Hamiltonian object; fills obarm(:,:,itype).
+   module subroutine build_obarm(this)
       implicit none
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      complex(rp), dimension(9, 9) :: obm0, obm1
+      complex(rp), dimension(norb, norb) :: obm0, obm1
       complex(rp), dimension(3) :: mom
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
 
-      this%obarm = 0.d00
-
-      do ntype = 1, this%lattice%ntype
-         obm0 = cmplx(0.0d0); obm1 = cmplx(0.0d0)
-         do m = 1, 9
-            obm0(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx0(m)
-            obm1(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx1(m)
-         end do
-         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
-         do m = 1, 9
-            do l = 1, 9
-               this%obarm(m, l, ntype) = obm0(m, l) + obm1(m, l)*mom(3)
-               this%obarm(m + 9, l + 9, ntype) = obm0(m, l) - obm1(m, l)*mom(3)
-               this%obarm(l, m + 9, ntype) = obm1(m, l)*mom(1) - i_unit*obm1(m, l)*mom(2)
-               this%obarm(l + 9, m, ntype) = obm1(m, l)*mom(1) + i_unit*obm1(m, l)*mom(2)
-            end do
-         end do
-         call hcpx(this%obarm(1:9, 1:9, ntype), 'cart2sph')
-         call hcpx(this%obarm(10:18, 10:18, ntype), 'cart2sph')
-         call hcpx(this%obarm(1:9, 10:18, ntype), 'cart2sph')
-         call hcpx(this%obarm(10:18, 1:9, ntype), 'cart2sph')
-      end do
    end subroutine build_obarm
 
-   subroutine build_enim(this)
+   !> @brief Build onsite e_nu center matrices.
+   !> @details Assembles spin-resolved gravity-center/e_nu blocks from symbolic
+   !>          atom potentials for the orthogonalized Hamiltonian correction.
+   !> @param[inout] this Hamiltonian object; fills enim(:,:,itype).
+   module subroutine build_enim(this)
       implicit none
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      complex(rp), dimension(9, 9) :: em0, em1
-      complex(rp), dimension(9) :: ex0, ex1
+      complex(rp), dimension(norb, norb) :: em0, em1
+      complex(rp), dimension(norb) :: ex0, ex1
       complex(rp), dimension(3) :: mom
       complex(rp) :: eu, ed
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
 
-      this%enim = 0.0d0
-
-      do ntype = 1, this%lattice%ntype
-         em0 = cmplx(0.0d0); em1 = cmplx(0.0d0)
-         do m = 1, 9
-            eu = this%lattice%symbolic_atoms(ntype)%potential%cx(m, 1) - this%lattice%symbolic_atoms(ntype)%potential%cex(m, 1)
-            ed = this%lattice%symbolic_atoms(ntype)%potential%cx(m, 2) - this%lattice%symbolic_atoms(ntype)%potential%cex(m, 2)
-            ex0(m) = 0.5*(eu + ed)
-            ex1(m) = 0.5*(eu - ed)
-            em0(m, m) = ex0(m)
-            em1(m, m) = ex1(m)
-         end do
-         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
-         do m = 1, 9
-            do l = 1, 9
-               this%enim(m, l, ntype) = em0(m, l) + em1(m, l)*mom(3)
-               this%enim(m + 9, l + 9, ntype) = em0(m, l) - em1(m, l)*mom(3)
-               this%enim(l, m + 9, ntype) = em1(m, l)*mom(1) - i_unit*em1(m, l)*mom(2)
-               this%enim(l + 9, m, ntype) = em1(m, l)*mom(1) + i_unit*em1(m, l)*mom(2)
-            end do
-         end do
-         call hcpx(this%enim(1:9, 1:9, ntype), 'cart2sph')
-         call hcpx(this%enim(10:18, 10:18, ntype), 'cart2sph')
-         call hcpx(this%enim(1:9, 10:18, ntype), 'cart2sph')
-         call hcpx(this%enim(10:18, 1:9, ntype), 'cart2sph')
-
-         if (this%local_axis) then
-            this%enim_glob = this%enim
-         end if
-      end do
    end subroutine build_enim
 
-   subroutine build_bulkham(this)
+   !> @brief Build bulk real-space Hamiltonian hopping blocks.
+   !> @details Assembles ee, eeo, and related per-type neighbor blocks from the
+   !>          lattice structure constants and symbolic-atom potentials. Real-space
+   !>          recursion and reciprocal Fourier transforms consume these blocks.
+   !> @param[inout] this Hamiltonian object; fills bulk hopping arrays.
+   !> @note Also prepares optional Hubbard/CCOR contributions when enabled.
+   module subroutine build_bulkham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
 
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
-         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
-         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-         !write(123, *)´bulkham´
-         call this%chbar_nc(ia, nr, ino, ntype)
-         do m = 1, nr
-            do i = 1, 9
-               do j = 1, 9
-                  this%ee(j, i, m, ntype) = this%hmag(j, i, m, 4) + this%hmag(j, i, m, 3)        ! H0+Hz
-                  this%ee(j + 9, i + 9, m, ntype) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3)        ! H0-Hz
-                  this%ee(j, i + 9, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
-                  this%ee(j + 9, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
-               end do ! end of orbital j loop
-            end do ! end of orbital i loop
-            write(131,*) 'm=', m
-            write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
-            write(132,*) 'm=', m
-            write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
-         end do ! end of neighbour number
-         if (this%hoh) then
-            call this%build_obarm()
-            call this%build_enim()
-            do m = 1, nr
-               ji = 0
-               if (m > 1) then
-                  ja = this%charge%lattice%nn(ia, m)
-                  if (ja .ne. 0) then
-                     ji = this%charge%lattice%iz(ja)
-                  end if
-               else
-                  ji = this%charge%lattice%iz(ia)
-               end if
-               ! Check if neighbour ´m´ exists for atom ´ntype´, otherwise fill HoH Hamiltonian with zeros.
-               if (ji > 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%ee(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%eeo(:, :, m, ntype), 18)
-                  call zgemm('n', 'c', 18, 18, 18, cone, this%eeo(:, :, m, ntype), 18, this%ee(:, :, m, ntype), 18, czero, this%eeoee(:, :, m, ntype), 18)
-               else
-                  this%eeo(:, :, m, ntype) = 0.0d0
-               end if
-               !write(*,*) ´m=´, m
-               !write(*,´(18f10.6)´) real(this%eeo(:,:,m,ntype))
-               !write(*,*) ´ee´, m
-               !write(*,´(18f10.6)´) real(this%ee(:,:,m,ntype))
-            end do
-         end if
-      end do ! end of atom type number
-      if (this%local_axis) then
-         this%ee_glob = this%ee
-         if (this%hoh) this%eeo_glob = this%eeo
-      end if
-      close (128)
    end subroutine build_bulkham
 
-   subroutine build_locham(this)
+   module subroutine build_gbt_bulkham(this)
+      class(hamiltonian), intent(inout) :: this
+   end subroutine build_gbt_bulkham
+
+   !> @brief Build local-cluster Hamiltonian hopping blocks.
+   !> @details Assembles hall/hallo blocks for impurity or surface local regions
+   !>          where atom-specific local geometry replaces bulk type blocks.
+   !> @param[inout] this Hamiltonian object; fills local hopping arrays.
+   module subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
-      call g_timer%start('build local hamiltonian')
-    !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
-      do nlim = 1, this%charge%lattice%nmax
-         nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
-         ino = this%charge%lattice%num(nlim)
-         call this%chbar_nc(nlim, nr, ino, nlim)
-         do m = 1, nr
-            do i = 1, 9
-               do j = 1, 9
-                  this%hall(j, i, m, nlim) = this%hmag(j, i, m, 4) + this%hmag(j, i, m, 3) ! H0+Hz
-                  this%hall(j + 9, i + 9, m, nlim) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3) ! H0-Hz
-                  this%hall(j, i + 9, m, nlim) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
-                  this%hall(j + 9, i, m, nlim) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
-               end do
-            end do
-         end do
-         if (this%hoh) then
-            call this%build_obarm()
-            call this%build_enim()
-            do m = 1, nr
-               ji = 0
-               if (m > 1) then
-                  ja = this%charge%lattice%nn(nlim, m)
-                  if (ja .ne. 0) then
-                     ji = this%charge%lattice%iz(ja)
-                  end if
-               else
-                  ji = this%charge%lattice%iz(nlim)
-               end if
-               ! Check if neighbour ´m´ exists for atom ´nlim´, otherwise fill HoH Hamiltonian with zeros.
-               if (ji > 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hall(1, 1, m, nlim), 18, this%obarm(1, 1, ji), 18, czero, this%hallo(1, 1, m, nlim), 18)
-               else
-                  this%hallo(:, :, m, nlim) = 0.0d0
-               end if
-            end do
-         end if
-      end do
-    !!$omp end parallel do
-      if (this%local_axis) then
-         this%hall_glob = this%hall
-         if (this%hoh) this%hallo_glob = this%hallo
-      end if
-      call g_timer%stop('build local hamiltonian')
    end subroutine build_locham
 
-subroutine rs2pao(this)
-   implicit none
-   class(hamiltonian), intent(inout) :: this
+   module function fixed_u_local_scope(this, allow_hoh, allow_noncollinear) result(in_scope)
+      class(hamiltonian), intent(in) :: this
+      logical, intent(in), optional :: allow_hoh, allow_noncollinear
+      logical :: in_scope
+   end function fixed_u_local_scope
 
-   integer :: n_atoms, max_orbital
-   integer :: ntype, ia, nr_i, jlab, ja, jtype, nr_j, klab, ka, ktype
-   integer :: qlab_jk
-   integer :: i, j, p, ipao, jpao
-   integer :: max_pairs, npairs
-   integer :: iostatus
+   module function rd1_local_impurity_eligible(this) result(eligible)
+      class(hamiltonian), intent(in) :: this
+      logical :: eligible
+   end function rd1_local_impurity_eligible
 
-   integer, allocatable :: pair_type(:)
-   integer, allocatable :: pair_idx(:, :)
-   complex(rp), allocatable :: pair_h(:, :, :)
+   module subroutine begin_rd1_vin_capture(this, iteration, enable_rs_capture)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: iteration
+      logical, intent(in), optional :: enable_rs_capture
+   end subroutine begin_rd1_vin_capture
 
-   real(rp), dimension(3) :: rjk
-   complex(rp), dimension(18,18) :: hij
-   complex(rp), dimension(18,18) :: hjk
-   complex(rp), dimension(18,18) :: himom
-   complex(rp), dimension(18,18) :: pathblk
-   complex(rp), dimension(18,18) :: dum
+   module subroutine get_rd1_recursion_site_type(this, recursion_index, cluster_site, atom_type, status)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: recursion_index
+      integer, intent(out) :: cluster_site, atom_type, status
+   end subroutine get_rd1_recursion_site_type
 
-   n_atoms     = this%charge%lattice%ntype
-   max_orbital = 9
+   module subroutine capture_rd1_vin_insertion(this, nlim, u_type, exact_operand, status)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: nlim, u_type
+      complex(rp), intent(in) :: exact_operand(:, :)
+      integer, intent(out) :: status
+   end subroutine capture_rd1_vin_insertion
 
-   if (this%hoh) then
-      call this%build_obarm()
-      call this%build_enim()
-   end if
+   module subroutine get_rd1_vin_for_recursion(this, recursion_index, iteration, vin_d, status)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: recursion_index, iteration
+      complex(rp), intent(out) :: vin_d(5, 5, 2)
+      integer, intent(out) :: status
+   end subroutine get_rd1_vin_for_recursion
 
-   open(unit=92, file='rs2paoham.dat', action='write', status='replace', iostat=iostatus)
-   if (iostatus /= 0) then
-      write(*,*) 'rs2pao: could not open rs2paoham.dat'
-      return
-   end if
+   !> @brief Add two-centre combined-correction blocks to the bulk Hamiltonian.
+   !> @details Builds CCOR contributions for each bulk atom type and neighbor
+   !>          shell, using scalar or noncollinear pair-block helpers as required
+   !>          by the magnetic state.
+   !> @param[inout] this Hamiltonian object; fills eecc.
+   !> @note validate_ccor_inputs must accept the current CCOR mode before use.
+   module subroutine build_ccor_bulk(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: ntype, ia, ino, nr, m, jj, it, jt
+      complex(rp), dimension(nb, nb) :: hcc
 
-   do ntype = 1, this%charge%lattice%ntype
+   end subroutine build_ccor_bulk
 
-      ia   = this%charge%lattice%atlist(ntype)
-      nr_i = this%charge%lattice%nn(ia, 1)
+   !> @brief Add two-centre combined-correction blocks to local Hamiltonian regions.
+   !> @details Builds CCOR contributions for local/surface/impurity neighbor
+   !>          blocks in the same layout as hall, preserving local atom indexing.
+   !> @param[inout] this Hamiltonian object; fills hallcc.
+   module subroutine build_ccor_local(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nlim, ino, nr, m, jj, it, jt
+      complex(rp), dimension(nb, nb) :: hcc
 
-      ! Safe upper bound:
-      ! original bare pairs + all double-loop i->j->k path destinations
-      max_pairs = max(1, nr_i)
-      if (this%hoh) then
-         do jlab = 1, nr_i
-            call get_atom_from_ee_label(ia, jlab, ja)
-            if (ja /= 0) then
-               max_pairs = max_pairs + max(1, this%charge%lattice%nn(ja, 1))
-            end if
-         end do
-      end if
+   end subroutine build_ccor_local
 
-      allocate(pair_type(max_pairs))
-      allocate(pair_idx(3, max_pairs))
-      allocate(pair_h(18,18,max_pairs))
+   !> @brief Validate the current CCOR namelist and lattice state.
+   !> @details Checks that two-centre combined-correction parameters are meaningful
+   !>          for the active calculation and emits warnings or fatal diagnostics
+   !>          according to ccor_strict.
+   !> @param[in] this Hamiltonian object with CCOR flags and lattice state.
+   module subroutine validate_ccor_inputs(this)
+      class(hamiltonian), intent(in) :: this
 
-      pair_type(:)    = 0
-      pair_idx(:, :)  = 0
-      pair_h(:, :, :) = czero
-      npairs          = 0
+   end subroutine validate_ccor_inputs
 
-      ! ============================================================
-      ! 1) Bare h-part: accumulate h_ik from the original one-hop set
-      ! ============================================================
-      do jlab = 1, nr_i
-         call get_atom_from_ee_label(ia, jlab, ja)
-         if (ja == 0) cycle
+   !> Build a GBT CCOR block by linking primitive directed S and Sdot first.
+   module subroutine build_ccor_pair_block_gbt(this, ia, ja, it, jt, m, link, &
+                                                sign_i, sign_j, s_block, sdot_block, hcc)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt, m
+      complex(rp), dimension(2, 2), intent(in) :: link
+      real(rp), intent(in) :: sign_i, sign_j
+      complex(rp), dimension(norb, norb), intent(in) :: s_block, sdot_block
+      complex(rp), dimension(nb, nb), intent(out) :: hcc
 
-         hij(:, :) = this%ee(:, :, jlab, ntype)
+   end subroutine build_ccor_pair_block_gbt
 
-         call accumulate_block_by_actual_pair(ia, ja, hij, &
-                                              pair_type, pair_idx, pair_h, npairs)
-      end do
+   !> @brief Build one noncollinear CCOR pair block.
+   !> @details Computes spin-dependent two-centre combined-correction terms using
+   !>          local moments, D components, and VMT coefficients for the atom pair.
+   !> @param[in] this Hamiltonian object containing potentials and magnetic state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] ino Bravais/type index used by the target Hamiltonian layout.
+   !> @param[in] m Neighbor-shell index.
+   !> @param[out] hcc CCOR block in spin-orbital basis.
+   module subroutine build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt, ino, m
+      complex(rp), dimension(nb, nb), intent(out) :: hcc
 
-      ! ============================================================
-      ! 2) HoH part: for every path i -> j -> k, add
-      !              - h_ij * obar_j * h_jk
-      ! ============================================================
-      if (this%hoh) then
-         do jlab = 1, nr_i
+      complex(rp), dimension(norb, norb) :: s_block, sdot_block
+      complex(rp), dimension(norb, norb, 4) :: dcomp, ddotcomp, kcomp
+      real(rp), dimension(norb, 0:2) :: ccd_i, ccd_j
+      real(rp), dimension(3) :: mom_i
+      real(rp) :: lambda
+      integer :: ilm, jlm, idir
 
-            call get_atom_from_ee_label(ia, jlab, ja)
-            if (ja == 0) cycle
+   end subroutine build_ccor_pair_block_noncollinear
 
-            jtype = this%charge%lattice%iz(ja)
-            if (jtype <= 0) cycle
+      !> @brief Build the surface-mode noncollinear CCOR pair block.
+      !> @details Combines endpoint and pair VMT terms with D and D-dot components
+      !>          for surfaces or local regions where global bulk assumptions do
+      !>          not apply.
+      !> @param[in] this Hamiltonian object containing CCOR mode and moments.
+      !> @param[in] ia Site index of the source atom.
+      !> @param[in] ja Site index of the neighbor atom.
+      !> @param[in] it Atom type of ia.
+      !> @param[in] jt Atom type of ja.
+      !> @param[in] m Neighbor-shell index.
+      !> @param[in] dcomp Spin decomposed D matrix components.
+      !> @param[in] ddotcomp Spin decomposed D-dot matrix components.
+      !> @param[in] ccd_i Combined-correction coefficients for type it.
+      !> @param[in] ccd_j Combined-correction coefficients for type jt.
+      !> @param[out] hcc CCOR block in spin-orbital basis.
+      module subroutine build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
+         class(hamiltonian), intent(in) :: this
+         integer, intent(in) :: ia, ja, it, jt, m
+         complex(rp), dimension(norb, norb, 4), intent(in) :: dcomp, ddotcomp
+         real(rp), dimension(norb, 0:2), intent(in) :: ccd_i, ccd_j
+         complex(rp), dimension(nb, nb), intent(out) :: hcc
 
-            hij(:, :) = this%ee(:, :, jlab, ntype)
+         complex(rp), dimension(norb, norb, 4) :: hcomp
+         complex(rp), dimension(4) :: lambda_i, lambda_j, dloc, ddotloc, term_l, term_r, onsite
+         real(rp), dimension(2) :: lambda_pair
+         real(rp), dimension(3) :: mom_i, mom_j
+         integer :: ilm, jlm, idir
 
-            ! himom = h_ij * obar_j
-            call zgemm('n', 'n', 18, 18, 18, cone, hij, 18, &
-                       this%obarm(:, :, jtype), 18, czero, himom, 18)
+   end subroutine build_ccor_pair_surface_block
 
-            nr_j = this%charge%lattice%nn(ja, 1)
+   !> @brief Decompose a structure-constant block into CCOR D components.
+   !> @details Projects the orbital structure block onto scalar and spin-vector
+   !>          components used by noncollinear CCOR pair-block construction.
+   !> @param[in] this Hamiltonian object containing moments and spin-spiral state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] s_block Structure-constant block in orbital basis.
+   !> @param[out] dcomp Decomposed D components.
+   module subroutine build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt
+      complex(rp), dimension(norb, norb), intent(in) :: s_block
+      complex(rp), dimension(norb, norb, 4), intent(out) :: dcomp
 
-            do klab = 1, nr_j
+      real(rp), dimension(3) :: mom_i, mom_j
+      complex(rp), dimension(3) :: cross
+      complex(rp) :: dotp
+      integer :: ilm, jlm, idir
 
-               call get_atom_from_ee_label(ja, klab, ka)
-               if (ka == 0) cycle
+   end subroutine build_ccor_d_components
 
-               ktype = this%charge%lattice%iz(ka)
-               if (ktype <= 0) cycle
+   !> @brief Compute orbital-resolved CCOR coefficients for one atom type.
+   !> @details Evaluates the energy-linearized combined-correction coefficients
+   !>          from potential parameters for the specified site/type.
+   !> @param[in] this Hamiltonian object containing symbolic-atom potentials.
+   !> @param[in] ia Site index used for local moment/context.
+   !> @param[in] itype Atom type whose coefficients are requested.
+   !> @param[out] ccd Coefficients indexed by orbital and angular channel.
+   module subroutine build_ccor_coefficients(this, ia, itype, ccd)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, itype
+      real(rp), dimension(norb, 0:2), intent(out) :: ccd
 
-               ! Actual vector of the second hop j -> k
-               rjk(:) = this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ka)
+      integer :: ilm, l, alpha_idx
+      real(rp) :: sw, dl, a, adot, l2p3, l2p1, l2m1, t1, t2, t3, avw
 
-               ! Find which representative ee(:, :, label, jtype)
-               ! corresponds to the actual vector r_jk
-               call find_ee_label_from_vector(jtype, rjk, qlab_jk)
-               if (qlab_jk <= 0) cycle
+   end subroutine build_ccor_coefficients
 
-               hjk(:, :) = this%ee(:, :, qlab_jk, jtype)
+   !> @brief Normalize a CCOR spin-dot product.
+   !> @details Applies the selected CCOR normalization convention to a raw
+   !>          spin-product scalar before it enters pair-block construction.
+   !> @param[in] this Hamiltonian object with CCOR normalization settings.
+   !> @param[in] sdot_raw Raw complex spin-dot value.
+   !> @return Normalized spin-dot value.
+   module function normalize_ccor_sdot(this, sdot_raw) result(sdot_cc)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), intent(in) :: sdot_raw
+      complex(rp) :: sdot_cc
+      real(rp) :: avw
 
-               ! pathblk = - (h_ij * obar_j) * h_jk
-               call zgemm('n', 'n', 18, 18, 18, -cone, himom, 18, &
-                          hjk, 18, czero, pathblk, 18)
+   end function normalize_ccor_sdot
 
-               ! Accumulate into the FINAL effective pair (i,k),
-               ! whose key is built from the ACTUAL rik = r_i - r_k
-               call accumulate_block_by_actual_pair(ia, ka, pathblk, &
-                                                    pair_type, pair_idx, pair_h, npairs)
-            end do
-         end do
-      end if
+      !> @brief Return the scalar VMT value for CCOR.
+      !> @details Selects the configured scalar VMT strategy and reduces any
+      !>          spin-resolved surface estimate to the scalar value needed by
+      !>          scalar CCOR blocks.
+      !> @param[in] this Hamiltonian object with ccor_vmt_mode.
+      !> @return Scalar VMT value in internal units.
+      module function ccor_vmt_scalar(this) result(vmt)
+         class(hamiltonian), intent(in) :: this
+         real(rp) :: vmt
+         real(rp), dimension(2) :: vmt_spin
 
-      ! ============================================================
-      ! 3) Add onsite-only one-site terms at the very end
-      ! ============================================================
-      call accumulate_block_by_actual_pair(ia, ia, this%lsham(:, :, ntype), &
-                                           pair_type, pair_idx, pair_h, npairs)
+   end function ccor_vmt_scalar
 
-      if (this%hoh) then
-         call accumulate_block_by_actual_pair(ia, ia, this%enim(:, :, ntype), &
-                                              pair_type, pair_idx, pair_h, npairs)
-      end if
+      !> @brief Compute a global spin-resolved surface VMT estimate.
+      !> @details Averages endpoint surface VMT values over symbolic atom types and
+      !>          multiplicities to provide one spin-resolved correction scale.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @return Spin-resolved VMT pair.
+      module function ccor_vmt_global_surface(this) result(vmt_spin)
+         class(hamiltonian), intent(in) :: this
+         real(rp), dimension(2) :: vmt_spin
+         real(rp), dimension(2) :: endpoint
+         real(rp) :: weight, weight_sum
+         integer :: itype, nsite, multiplicity
 
-      ! ============================================================
-      ! 4) Convert and print all final effective blocks
-      ! ============================================================
-      do p = 1, npairs
-         dum(:, :) = pair_h(:, :, p)
+   end function ccor_vmt_global_surface
 
-         call hcpx(dum(1:9,   1:9   ), 'sph2cart')
-         call hcpx(dum(1:9,   10:18 ), 'sph2cart')
-         call hcpx(dum(10:18, 1:9   ), 'sph2cart')
-         call hcpx(dum(10:18, 10:18 ), 'sph2cart')
+      !> @brief Compute a pair-specific spin-resolved surface VMT estimate.
+      !> @details Blends endpoint VMT values for two atom types with pair weights
+      !>          for pair_surface CCOR mode.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @param[in] itype First atom type.
+      !> @param[in] jtype Second atom type.
+      !> @return Spin-resolved VMT pair.
+      module function ccor_vmt_pair_surface(this, itype, jtype) result(vmt_spin)
+         class(hamiltonian), intent(in) :: this
+         integer, intent(in) :: itype, jtype
+         real(rp), dimension(2) :: vmt_spin, vi, vj
+         real(rp) :: wi, wj
 
-         do i = 1, 18
-            do j = 1, 18
-               ipao = 0
-               jpao = 0
-               call site2orb(i, ia,           ipao, n_atoms, max_orbital)
-               call site2orb(j, pair_type(p), jpao, n_atoms, max_orbital)
-               write(92, '(3I4,2I7,2F22.14)') pair_idx(:, p), ipao, jpao, &
-                    real(dum(i, j)) * ry2ev, aimag(dum(i, j)) * ry2ev
-            end do
-         end do
-      end do
+   end function ccor_vmt_pair_surface
 
-      deallocate(pair_type)
-      deallocate(pair_idx)
-      deallocate(pair_h)
+      !> @brief Compute an endpoint spin-resolved surface VMT estimate.
+      !> @details Extracts the local surface VMT proxy for one symbolic atom type
+      !>          from the available potential data.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @param[in] itype Atom type whose endpoint value is requested.
+      !> @return Spin-resolved VMT pair.
+      module function ccor_vmt_endpoint_surface(this, itype) result(vmt_spin)
+         class(hamiltonian), intent(in) :: this
+         integer, intent(in) :: itype
+         real(rp), dimension(2) :: vmt_spin
+         real(rp) :: avg, diff
 
-   end do
+   end function ccor_vmt_endpoint_surface
 
-   close(92)
+      !> @brief Compute a scalar CCOR VMT estimate from Madelung potentials.
+      !> @details Averages available vmad-like potential information over atom
+      !>          types for the vmad_scalar CCOR mode.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @return Scalar VMT value in internal units.
+      module function ccor_vmt_scalar_from_vmad(this) result(vmt)
+         class(hamiltonian), intent(in) :: this
+         real(rp) :: vmt
+         real(rp) :: weight, weight_sum
+         integer :: itype
 
-contains
+   end function ccor_vmt_scalar_from_vmad
 
-   subroutine get_atom_from_ee_label(center_atom, ee_label, atom_out)
+      !> @brief Expand spin-resolved lambda values into Pauli components.
+      !> @details Converts the up/down lambda pair and local moment direction into
+      !>          scalar/vector components used by noncollinear CCOR algebra.
+      !> @param[in] lambda_pair Spin-resolved lambda values.
+      !> @param[in] mom Local magnetic moment direction.
+      !> @param[out] lambda_comp Scalar and vector lambda components.
+      module subroutine ccor_lambda_components(lambda_pair, mom, lambda_comp)
+         real(rp), dimension(2), intent(in) :: lambda_pair
+         real(rp), dimension(3), intent(in) :: mom
+         complex(rp), dimension(4), intent(out) :: lambda_comp
+         real(rp) :: lambda0, lambda1
+
+   end subroutine ccor_lambda_components
+
+      !> @brief Multiply two scalar/vector spin-component tuples.
+      !> @details Applies Pauli-matrix product algebra to compact four-component
+      !>          spin decompositions used by noncollinear CCOR construction.
+      !> @param[in] a Left scalar/vector spin tuple.
+      !> @param[in] b Right scalar/vector spin tuple.
+      !> @param[out] c Product tuple.
+      module subroutine ccor_spin_product(a, b, c)
+         complex(rp), dimension(4), intent(in) :: a, b
+         complex(rp), dimension(4), intent(out) :: c
+
+   end subroutine ccor_spin_product
+
+      !> Select q-agnostic endpoint moments for ordinary NC/texture CCOR.
+      module subroutine ccor_select_endpoint_moments(this, ia, ja, it, jt, mom_i, mom_j)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt
+      real(rp), dimension(3), intent(out) :: mom_i, mom_j
+
+   end subroutine ccor_select_endpoint_moments
+
+   !> @brief Return angular momentum l from a packed orbital index.
+   !> @details Maps the LMTO orbital index ilm to its shell quantum number for
+   !>          coefficient lookup and export helpers.
+   !> @param[in] ilm Packed orbital index.
+   !> @return Angular momentum shell l.
+   module integer pure function orbital_l_from_index(ilm) result(l)
+      integer, intent(in) :: ilm
+      integer :: lp1
+
+   end function orbital_l_from_index
+
+   !> @brief Emit diagnostics for generated CCOR blocks.
+   !> @details Summarizes CCOR coefficient and block magnitudes for debugging the
+   !>          two-centre correction without changing Hamiltonian data.
+   !> @param[in] this Hamiltonian object containing CCOR settings.
+   !> @param[in] hcc CCOR block array to summarize.
+   !> @param[in] label Human-readable label for the diagnostic message.
+   module subroutine log_ccor_debug(this, hcc, label)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), dimension(:, :, :, :), intent(in) :: hcc
+      character(len=*), intent(in) :: label
+      real(rp), dimension(norb, 0:2) :: ccd
+         real(rp) :: vmt, lambda, rms_ccd2, max_ccd2, avw
+         real(rp), dimension(2) :: vmt_spin
+      integer :: itype, count_ccd
+      character(len=256) :: msg
+
+   end subroutine log_ccor_debug
+
+   !> @brief Export the real-space Hamiltonian in legacy PAOFLOW layout.
+   !> @details Writes hopping records with lattice-cell indices and global orbital
+   !>          numbers so external PAOFLOW-style tooling can consume the RS-LMTO
+   !>          real-space Hamiltonian.
+   !> @param[inout] this Hamiltonian object containing built hopping blocks.
+   !> @note This is the legacy export entry point; export_rs_tb_all is the newer dispatcher.
+   module subroutine rs2pao(this)
       implicit none
-      integer, intent(in)  :: center_atom, ee_label
-      integer, intent(out) :: atom_out
+      class(hamiltonian), intent(inout) :: this
+      ! Local variables
+      real(rp), dimension(3) :: rij, rijtest
+      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
+      integer :: jj, jt, max_orbital, n_atoms
+      integer :: ntype, iostat1, iostat2, iostatus
+      real(rp), dimension(3) :: vet, vetpao, idx
+      real(rp), dimension(3, 3) :: a_inv
+      complex(rp), dimension(nb, nb) :: dum
+   end subroutine rs2pao
 
-      ! Same convention as your original rs2pao:
-      !   ee(:,:,1, type_of_center) = onsite block of THIS ACTUAL center atom
-      !   ee(:,:,label>1, ...)      = neighbor block associated with nn(center_atom, label)
-      if (ee_label == 1) then
-         atom_out = center_atom
-      else
-         atom_out = this%charge%lattice%nn(center_atom, ee_label)
-      end if
-   end subroutine get_atom_from_ee_label
-
-
-   subroutine build_idx_from_actual_pair(icenter, kactual, ktype_out, idx_out)
-      implicit none
-      integer, intent(in)  :: icenter, kactual
-      integer, intent(out) :: ktype_out
-      integer, intent(out) :: idx_out(3)
-
-      real(rp), parameter :: tol = 1.0d-3
-      real(rp), dimension(3) :: rik, rijtest
-      integer :: repk_atom
-      integer :: idxi, idxj, idxk
-
-      ! IMPORTANT:
-      ! rik is built from ACTUAL atom numbers in the cluster
-      ! ktype is only used afterwards to select the representative atom
-      ktype_out = this%charge%lattice%iz(kactual)
-      idx_out(:) = 0
-
-      repk_atom = this%charge%lattice%atlist(ktype_out)
-
-      rik(:) = this%charge%lattice%cr(:, icenter) - this%charge%lattice%cr(:, kactual)
-
-      do idxi = -10, 10
-         do idxj = -10, 10
-            do idxk = -10, 10
-               rijtest(:) = this%charge%lattice%cr(:, icenter) - &
-                            ( this%charge%lattice%cr(:, repk_atom) &
-                            + idxi * this%charge%lattice%a(:, 1) &
-                            + idxj * this%charge%lattice%a(:, 2) &
-                            + idxk * this%charge%lattice%a(:, 3) )
-
-               if (norm2(rik(:) - rijtest(:)) < tol) then
-                  idx_out(:) = (/ idxi, idxj, idxk /)
-                  return
-               end if
-            end do
-         end do
-      end do
-
-      write(*,'(a,2i8)') 'rs2pao warning: idx not found for actual pair ', icenter, kactual
-   end subroutine build_idx_from_actual_pair
-
-
-   subroutine find_ee_label_from_vector(center_type, r_target, label_out)
-      implicit none
-      integer, intent(in)  :: center_type
-      real(rp), intent(in) :: r_target(3)
-      integer, intent(out) :: label_out
-
-      real(rp), parameter :: tol = 1.0d-3
-      integer :: center_rep, nrrep, qlab, qatom
-      real(rp), dimension(3) :: rrep
-
-      label_out  = 0
-      center_rep = this%charge%lattice%atlist(center_type)
-      nrrep      = this%charge%lattice%nn(center_rep, 1)
-
-      do qlab = 1, nrrep
-         call get_atom_from_ee_label(center_rep, qlab, qatom)
-         if (qatom == 0) cycle
-
-         ! Vector represented by ee(:, :, qlab, center_type)
-         rrep(:) = this%charge%lattice%cr(:, center_rep) - this%charge%lattice%cr(:, qatom)
-
-         if (norm2(rrep(:) - r_target(:)) < tol) then
-            label_out = qlab
-            return
-         end if
-      end do
-
-      write(*,'(a,i8,3f12.6)') 'rs2pao warning: label not found for center_type / r_target = ', &
-                               center_type, r_target(1), r_target(2), r_target(3)
-   end subroutine find_ee_label_from_vector
-
-
-   subroutine accumulate_block_by_actual_pair(icenter, kactual, block_in, &
-                                              pair_type_arr, pair_idx_arr, pair_h_arr, npairs_inout)
-      implicit none
-      integer, intent(in) :: icenter, kactual
-      complex(rp), intent(in) :: block_in(18,18)
-      integer, intent(inout) :: pair_type_arr(:)
-      integer, intent(inout) :: pair_idx_arr(:, :)
-      complex(rp), intent(inout) :: pair_h_arr(:, :, :)
-      integer, intent(inout) :: npairs_inout
-
-      integer :: ktype_loc, idx_loc(3)
-      integer :: q, nmax
-
-      call build_idx_from_actual_pair(icenter, kactual, ktype_loc, idx_loc)
-
-      do q = 1, npairs_inout
-         if (pair_type_arr(q) == ktype_loc) then
-            if (all(pair_idx_arr(:, q) == idx_loc(:))) then
-               pair_h_arr(:, :, q) = pair_h_arr(:, :, q) + block_in(:, :)
-               return
-            end if
-         end if
-      end do
-
-      nmax = size(pair_type_arr)
-      if (npairs_inout >= nmax) then
-         write(*,*) 'rs2pao error: pair buffer too small.'
-         stop
-      end if
-
-      npairs_inout = npairs_inout + 1
-      pair_type_arr(npairs_inout)   = ktype_loc
-      pair_idx_arr(:, npairs_inout) = idx_loc(:)
-      pair_h_arr(:, :, npairs_inout)= block_in(:, :)
-   end subroutine accumulate_block_by_actual_pair
-
-end subroutine rs2pao
-
-!   subroutine rs2pao(this)
-!      implicit none
-!      class(hamiltonian), intent(inout) :: this
-!      ! Local variables
-!      real(rp), dimension(3) :: rij, rijtest
-!      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
-!      integer :: jj, jt, max_orbital, n_atoms
-!      integer :: ntype, iostat1, iostat2, iostatus
-!      real(rp), dimension(3) :: vet, vetpao, idx
-!      real(rp), dimension(3, 3) :: a_inv
-!      complex(rp), dimension(18, 18) :: dum
-!      n_atoms = this%charge%lattice%ntype
-!      max_orbital = 9 
-!
-!      open (unit=92, file='rs2paoham.dat', action='write', iostat=iostatus, status='replace')
-!      do ntype = 1, this%charge%lattice%ntype
-!         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
-!         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
-!         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-!         do k = 1, nr
-!            jj = this%charge%lattice%nn(ia, k)
-!            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
-!            if (k == 1) then
-!               jj = ia
-!            end if
-!            if (jj /= 0) then
-!               rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
-!
-!               rijtest(:) = 0.0d0
-!               do idxi = -5, 5
-!                  do idxj = -5, 5
-!                     do idxk = -5, 5
-!                        rijtest(:) = this%charge%lattice%cr(:, ia) - (this%charge%lattice%cr(:, this%charge%lattice%iz(jj)) &
-!                                                                      + idxi*this%charge%lattice%a(:, 1) + idxj*this%charge%lattice%a(:, 2) + idxk*this%charge%lattice%a(:, 3))
-!                        if (norm2(rij(:) - rijtest(:)) < 1.0d-3) then
-!                           idx(:) = [idxi, idxj, idxk]
-!                        end if
-!                     end do
-!                  end do
-!               end do
-!
-!               if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
-!
-!               call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
-!               call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
-!               call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
-!               call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
-!               do i = 1, 18
-!                  do j = 1, 18
-!                     ipao = 0; jpao = 0
-!                     call site2orb(i, ia, ipao, n_atoms, max_orbital)
-!                     call site2orb(j, this%charge%lattice%iz(jj), jpao, n_atoms, max_orbital)
-!                     write (92, '(3I4,2I7,2F22.14)') int(idx(:)), ipao, jpao, real(this%ee(i, j, k, ntype))*ry2ev, aimag(this%ee(i, j, k, ntype))*ry2ev
-!                  end do
-!               end do
-!            end if
-!         end do
-!      end do
-!      close (92)
-!   end subroutine rs2pao
-
-   subroutine build_from_paoflow_opt(this)
+   !> @brief Import a PAOFLOW-format real-space Hamiltonian from paoham.dat.
+   !> @details Reads legacy seven-column hopping records and fills the bulk
+   !>          Hamiltonian blocks for PAOFLOW-to-real-space post-processing routes.
+   !> @param[inout] this Hamiltonian object; replaces bulk hopping arrays from file data.
+   !> @note PAOFLOW import is used by paoflow2rs, exchange_p2rs, and conductivity_p2rs.
+   module subroutine build_from_paoflow_opt(this)
       implicit none
       type hamData
          integer :: idxi, idxj, idxk
@@ -1448,82 +747,13 @@ end subroutine rs2pao
          real :: dumre, dumcmplx
       end type hamData
       class(hamiltonian), intent(inout) :: this
-      ! Local variables
-      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia, iia, jja
-      integer :: jj, jt, orbl, orbm, idxi, idxj, idxk
-      integer :: ntype, iostat1, iostat2, iostatus, n_atoms, max_orbital, numLines
-      real(rp), dimension(3) :: vet, vetpao
-      real(rp) :: dumre, dumcmplx
-      integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idxup, idxdw, idx
-      type(hamData) :: ham
-      type(hamData), allocatable :: hamArray(:)
-
-      n_atoms = this%charge%lattice%ntype
-      max_orbital = 9 
-      numLines = countLines('paoham.dat')
-      allocate (hamArray(numLines))
-
-      ! Reading Hamiltonian data once
-      open (unit=92, file='paoham.dat', action='read', iostat=iostatus, status='old')
-      if (iostatus /= 0) then
-         call g_logger%fatal('file containing the paoflow Hamiltonian not found', __FILE__, __LINE__)
-      end if
-      do i = 1, numLines
-         read (92, *, iostat=iostat1) hamArray(i)%idxi, hamArray(i)%idxj, hamArray(i)%idxk, &
-            hamArray(i)%orbl, hamArray(i)%orbm, hamArray(i)%dumre, hamArray(i)%dumcmplx
-      end do
-      close (92)
-      idx = 0
-      write (*, *) 'PAOFLOW Hamiltonian has been read'
-      call g_timer%start('Hamiltonian allocation')
-      !$omp parallel do private(ntype, ia, ino, nr, jj, k, l, ham, vet, vetpao, i, j, iia, jja, idx) shared(this, numLines, hamArray, n_atoms, max_orbital)
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype)
-         ino = this%charge%lattice%num(ia)
-         nr = this%charge%lattice%nn(ia, 1)
-         write (*, *) ia, nr, n_atoms, max_orbital
-         do k = 1, nr
-            jj = this%charge%lattice%nn(ia, k)
-            if (k == 1) then
-               jj = ia
-            end if
-            if (jj /= 0) then
-               vet(:) = (this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj))!*this%charge%lattice%alat
-               do l = 1, numLines
-                  ham = hamArray(l)
-                  call orb2site(ham%orbl, i, iia, n_atoms, max_orbital)
-                  call orb2site(ham%orbm, j, jja, n_atoms, max_orbital)
-                  if (iia == ia) then
-                     vetpao(:) = this%charge%lattice%cr(:, iia) - (this%charge%lattice%cr(:, jja) &
-                                                                   + ham%idxi*this%charge%lattice%a(:, 1) + ham%idxj*this%charge%lattice%a(:, 2) + ham%idxk*this%charge%lattice%a(:, 3))!*this%charge%lattice%alat
-                     if (norm2(vet(:) - vetpao(:)) < 1.0d-3) then
-                        idx(k, :) = [ham%idxi, ham%idxj, ham%idxk]
-                        this%ee(i, j, k, ntype) = cmplx(ham%dumre, ham%dumcmplx)/13.605703976
-                        ! if(ntype==1.or.ntype==2)then
-                        !   if(i==j.and.k==1.and.i>=5.and.i<=9)then
-                        !     this%ee(i, j, k, ntype) = cmplx(ham%dumre-1.113 , ham%dumcmplx)/13.605703976
-                        !   else if(i==j.and.k==1.and.i>=14.and.i<=18)then
-                        !     this%ee(i, j, k, ntype) = cmplx(ham%dumre+1.113 , ham%dumcmplx)/13.605703976
-                        !   end if
-                        ! end if
-                     end if
-                  end if
-               end do
-            end if
-            write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
-            write (129, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
-            write (128, '(18f10.6)') real(this%EE(1:18, 1:18, k, ntype))*13.605703976
-            write (129, '(18f10.6)') aimag(this%EE(1:18, 1:18, k, ntype))*13.605703976
-            write (128, *) sum(real(this%ee(:, :, k, ntype)))
-            write (129, *) sum(real(this%ee(:, :, k, ntype)))
-         end do
-      end do
-      !$omp end parallel do
-      deallocate (hamArray)
-      call g_timer%stop('Hamiltonian allocation')
    end subroutine build_from_paoflow_opt
 
-   subroutine build_from_paoflow(this)
+   !> @brief Import a PAOFLOW-format real-space Hamiltonian with the legacy reader.
+   !> @details Maps PAOFLOW orbital/cell records back onto RS-LMTO neighbor blocks.
+   !>          Kept for compatibility with older import paths.
+   !> @param[inout] this Hamiltonian object; fills bulk hopping arrays from file data.
+   module subroutine build_from_paoflow(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia, iia, jja
@@ -1533,191 +763,48 @@ end subroutine rs2pao
       integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idxup, idxdw, idx
       real(rp) :: dumre, dumcmplx
 
-      n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
-      open (unit=90, file='paoup.dat', action='read', iostat=iostatus, status='old')
-      open (unit=91, file='paodw.dat', action='read', iostat=iostatus, status='old')
-      open (unit=92, file='paoham.dat', action='read', iostat=iostatus, status='old')
-
-      if (iostatus /= 0) then
-         call g_logger%fatal('file containing the paoflow Hamiltonian not found', __FILE__, __LINE__)
-      end if
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
-         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
-         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-         write (*, *) ia, nr, n_atoms, max_orbital
-         do k = 1, nr
-            jj = this%charge%lattice%nn(ia, k)
-            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
-            if (k == 1) then
-               jj = ia
-            end if
-            if (jj /= 0) then
-               !cri_cart(:) = this%charge%lattice%cr(:, ia)
-               !crj_cart(:) = this%charge%lattice%cr(:, jj)
-
-               !cri_dir(:) = cartesian_to_direct(this%charge%lattice%a,cri_cart)
-               !crj_dir(:) = cartesian_to_direct(this%charge%lattice%a,crj_cart)
-
-               !vet(:) = cri_dir(:) - crj_dir(:)
-               vet(:) = (this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj))!*this%charge%lattice%alat
-               do
-                  read (92, *, iostat=iostat1) idxi, idxj, idxk, orbl, orbm, dumre, dumcmplx
-                  if (iostat1 /= 0) then
-                     exit
-                  end if
-                  if (orbl <= n_atoms*max_orbital) then
-                     i = modulo(orbl - 1, max_orbital) + 1
-                     iia = int((orbl - 1)/max_orbital) + 1
-                  else
-                     i = modulo(orbl - 1, max_orbital) + 10
-                     iia = int((orbl - 1 - n_atoms*max_orbital)/max_orbital) + 1
-                  end if
-
-                  if (orbm <= n_atoms*max_orbital) then
-                     j = modulo(orbm - 1, max_orbital) + 1
-                     jja = int((orbm - 1)/max_orbital) + 1
-                  else
-                     j = modulo(orbm - 1, max_orbital) + 10
-                     jja = int((orbm - 1 - n_atoms*max_orbital)/max_orbital) + 1
-                  end if
-
-                  !cri_cart(:) = this%charge%lattice%cr(:, iia)
-                  !crj_cart(:) = this%charge%lattice%cr(:, jja)
-
-                  !cri_dir(:) = cartesian_to_direct(this%charge%lattice%a,cri_cart)
-                  !crj_dir(:) = cartesian_to_direct(this%charge%lattice%a,crj_cart)
-                  if (iia == ia) then
-                     !vetpao(:) = cri_dir(:) - (crj_dir(:) + [idxi,idxj,idxk])
-
-                     vetpao(:) = this%charge%lattice%cr(:, iia) - (this%charge%lattice%cr(:, jja) &
-                                                                   + idxi*this%charge%lattice%a(:, 1) + idxj*this%charge%lattice%a(:, 2) + idxk*this%charge%lattice%a(:, 3))!*this%charge%lattice%alat
-                     if (norm2(vet(:) - vetpao(:)) < 1.0d-3) then
-                        idx(k, :) = [idxi, idxj, idxk]
-                        this%ee(i, j, k, ntype) = cmplx(dumre, dumcmplx)/13.605703976
-                     end if
-                  end if
-               end do
-!          do
-!            read(91,*,iostat=iostat2) idxi, idxj, idxk, orbl, orbm, dumre, dumcmplx
-!            if (iostat2 /= 0) then
-!              exit
-!            end if
-!            iia = orb_to_site(orbl,9)
-!            jja = orb_to_site(orbm,9)
-!
-!            cri_cart(:) = this%charge%lattice%cr(:, iia)
-!            crj_cart(:) = this%charge%lattice%cr(:, jja)
-!
-!            cri_dir(:) = cartesian_to_direct(this%charge%lattice%a,cri_cart)
-!            crj_dir(:) = cartesian_to_direct(this%charge%lattice%a,crj_cart)
-!            if(iia==ia)then
-!              vetpao(:) = cri_dir(:) - (crj_dir(:) + [idxi,idxj,idxk])
-!
-!!              vetpao(:) = this%charge%lattice%cr(:,iia) - this%charge%lattice%cr(:,jja) &
-!!                         + (idxi*this%charge%lattice%a(:,1) + idxj*this%charge%lattice%a(:,2) + idxk*this%charge%lattice%a(:,3))!*this%charge%lattice%alat
-!              if(norm2(vet(:)-vetpao(:))<1.0d-3)then
-!                idxdw(k,:) = [idxi,idxj,idxk]
-!                this%ee(orbl+9-(iia-1)*9, orbm+9-(jja-1)*9,k,ntype) = cmplx(dumre,dumcmplx)/13.605703976
-!              end if
-!            end if
-!          end do
-            end if
-            write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
-            write (128, '(18f10.6)') real(this%EE(1:18, 1:18, k, ntype))!*13.605703976
-            write (128, *) sum(real(this%ee(:, :, k, ntype)))
-            !write(129,*)´m=´,k, ´Atom=´, jj, ´Coordinates=´, this%charge%lattice%cr(:, jj), ´Ntype=´,ntype, ´Index=´, idx(k,:)
-            !write(129,´(9f10.6)´) real(this%EE(10:18,1:9,k,ntype))*13.605703976
-            !write(129,*) sum(real(this%ee(:,:,k,ntype)))
-            rewind (90)
-            rewind (91)
-            rewind (92)
-         end do
-      end do
    end subroutine build_from_paoflow
 
-   subroutine ham0m_nc(this, it, jt, vet, hhh)
+   !> @brief Build a noncollinear spin-orbital hopping block from orbital data.
+   !> @details Lifts an orbital hopping/structure block hhh into the spin-orbital
+   !>          basis using the local moments of atom sites ia and ja, including
+   !>          spin-spiral phase handling where enabled.
+   !> @param[inout] this Hamiltonian object containing magnetic moment state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] vet Bond vector between the sites.
+   !> @param[in] hhh Orbital hopping/structure block.
+   module subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh)
       class(hamiltonian), intent(inout) :: this
       ! Input
+      integer, intent(in) :: ia, ja ! Atom sites i and j
       integer, intent(in) :: it, jt ! Type of atom i and j
       real(rp), dimension(3), intent(in) :: vet
-      real(rp), dimension(9, 9), intent(in) :: hhh
+      real(rp), dimension(norb, norb), intent(in) :: hhh
       ! Local Variables
       integer :: i, j, ilm, jlm, m
+      real(rp), dimension(3) :: mom_ia, mom_ja
+      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
-      complex(rp), dimension(9, 9) :: hhhc
+      complex(rp), dimension(norb, norb) :: hhhc
       complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
       complex(rp) :: dot
       real(rp) :: vv
 
-      this%hhmag(:, :, :) = 0.0d0
-
-      vv = norm2(vet)
-
-      ! Real to complex
-      dot = cmplx(dot_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
-      do i = 1, this%charge%lattice%ntype
-         do j = 1, 3
-            momc(i, j) = cmplx(this%charge%lattice%symbolic_atoms(i)%potential%mom(j), kind=kind(0.0d0))
-         end do
-      end do
-      cross = cmplx(cross_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
-      hhhc(:, :) = cmplx(hhh(:, :), kind=kind(0.0d0))
-
-      do ilm = 1, 9
-         do jlm = 1, 9
-            this%hhmag(ilm, jlm, 4) = &
-               this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm) + &
-               this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*dot
-         end do
-      end do
-
-!    do ilm=1, 9
-!      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
-!    end do
-
-      if (vv <= 0.01d0) then
-         do ilm = 1, 9
-            if (this%hoh) then
-               this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cex0(ilm)
-            else
-               this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cx0(ilm)
-            end if
-         end do
-      end if
-
-      do m = 1, 3
-         do jlm = 1, 9
-            do ilm = 1, 9
-               this%hhmag(ilm, jlm, m) = &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc(it, m) + &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc(jt, m) + &
-                  i_unit*this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cross(m)
-            end do
-         end do
-      end do
-
-      if (vv > 0.01d0) return
-      do m = 1, 3
-         do ilm = 1, 9
-            if (this%hoh) then
-               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc(it, m)
-            else
-               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc(it, m)
-            end if
-         end do
-      end do
-
-      !do m=1, 3
-      !  write(123, *)´m=´, m
-      !  do ilm=1, 9
-      !    write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
-      !  end do
-      !end do
    end subroutine ham0m_nc
 
-   subroutine chbar_nc(this, ia, nr, ino, ntype)
+   !> @brief Build noncollinear local hopping data for one cluster atom.
+   !> @details Walks the neighbor list around atom ia, obtains orbital hopping
+   !>          blocks, converts them with ham0m_nc, and stores the resulting local
+   !>          Hamiltonian/field data.
+   !> @param[inout] this Hamiltonian object; updates local noncollinear arrays.
+   !> @param[in] ia Cluster atom index.
+   !> @param[in] nr Number of neighbors considered.
+   !> @param[in] ino Bravais/type index for ia.
+   !> @param[in] ntype Atom type index.
+   module subroutine chbar_nc(this, ia, nr, ino, ntype)
       class(hamiltonian), intent(inout) :: this
       ! Input
       integer, intent(in) :: ia ! Atom number in clust
@@ -1728,65 +815,29 @@ end subroutine rs2pao
       real(rp) :: r2
       real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
       real(rp), dimension(3) :: vet
-      real(rp), dimension(9, 9) :: hhh
-      integer :: i, j, k, l, m, n, it, jt, jj, dummy
+      real(rp), dimension(norb, norb) :: hhh
+      integer :: i, j, k, l, m, n, it, jt, jj, nn_max_loc
       integer :: ni, mdir
       integer :: kk ! Clust size number
+      real(rp), dimension(:, :), allocatable :: ham_vec
 
-      this%hmag(:, :, :, :) = 0.0d0
-
-      r2 = this%charge%lattice%r2
-      cralat(:, :) = this%charge%lattice%cr(:, :)*this%charge%lattice%alat
-      kk = this%charge%lattice%kk
-
-      call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, dummy)
-
-      !do m=1, nr
-      !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
-      !end do
-      it = this%charge%lattice%iz(ia)
-      do m = 1, nr
-         jj = this%charge%lattice%nn(ia, m)
-         !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
-         if (m == 1) then
-            jj = ia
-         end if
-         if (jj /= 0) then
-            jt = this%charge%lattice%iz(jj)
-            if (this%lattice%pbc) then
-               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,jj,vet)
-            else
-               vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-            end if
-            !write(123, ´(3f10.6)´) vet(:)
-            !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
-            !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
-            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ntype)
-            if (ni == 0) then
-               this%charge%lattice%nn(ia, m) = 0
-            end if
-            call this%ham0m_nc(it, jt, vet, hhh)
-            do mdir = 1, 4
-               call hcpx(this%hhmag(:, :, mdir), 'cart2sph')
-               this%hmag(:, :, m, mdir) = this%hhmag(:, :, mdir)
-            end do
-         end if
-      end do
-      !do m=1, nr
-      !  write(123, *)´m=´, m
-      !  do mdir=1, 4
-      !    write(123, *)´mdir=´, mdir
-      !    do i=1, 9
-      !      write(123, ´(9f10.4)´)(real(this%hmag(i, j, m, mdir)), j=1, 9)
-      !    end do
-      !  end do
-      !end do
    end subroutine chbar_nc
 
-   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ntype)
+   !> @brief Find the orbital hopping block matching a neighbor vector.
+   !> @details Searches the precomputed neighbor/hopping table for the vector vet
+   !>          and returns the matching orbital block and neighbor index.
+   !> @param[inout] this Hamiltonian object containing lattice tolerances.
+   !> @param[in] vet Candidate neighbor vector.
+   !> @param[in] nr Number of neighbors in the search list.
+   !> @param[inout] hhh Orbital hopping block output.
+   !> @param[in] m Neighbor counter being resolved.
+   !> @param[in] ia Cluster atom index.
+   !> @param[in] jn Neighbor-list index.
+   !> @param[out] ni Matched neighbor index.
+   !> @param[in] ham_vec Precomputed neighbor vectors.
+   module subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ham_vec)
       class(hamiltonian), intent(inout) :: this
       ! Input
-      integer, intent(in) :: ntype ! Atom type
       integer, intent(in) :: m ! Number of the given neighbour
       integer, intent(in) :: ia ! Atom number in clust
       integer, intent(in) :: jn ! ?
@@ -1794,67 +845,54 @@ end subroutine rs2pao
       real(rp), dimension(3), intent(in) :: vet
       ! Output
       integer, intent(out) :: ni
-      real(rp), dimension(9, 9), intent(inout) :: hhh
+      real(rp), dimension(norb, norb), intent(inout) :: hhh
+      real(rp), dimension(3, this%lattice%nn_max), intent(in) :: ham_vec
       ! Local variables
       real(rp) :: a1, a2, a3, aaa, eps
       integer :: i, ilm, jlm
 
-      eps = 0.0001d0
-      ni = 1
-      a1 = 0.0d0
-      a2 = 0.0d0
-      a3 = 0.0d0
-      aaa = 0.0d0
-      do i = 1, nr
-         !write(123, ´(a, i4, 3f10.4)´)´i´, i, this%charge%lattice%sbarvec(:, i)
-         a1 = (vet(1) - this%charge%lattice%sbarvec(1, i))
-         a2 = (vet(2) - this%charge%lattice%sbarvec(2, i))
-         a3 = (vet(3) - this%charge%lattice%sbarvec(3, i))
-         aaa = a1**2 + a2**2 + a3**2
-         if (aaa < eps) goto 1000
-      end do
-      write (*, '(1x, a, i4, a, i4, a, 3f10.6)') ' Error in hamiltonian%hmfind: Neighbour vector not found for atom', ia, &
-         ' neighbour', jn, 'vector', vet(:)
-
-      ni = 0
-1000  continue
-      do ilm = 1, 9
-         do jlm = 1, 9
-            hhh(ilm, jlm) = real(this%charge%lattice%sbar(jlm, ilm, m, this%charge%lattice%num(ia)))
-         end do
-      end do
-
-      !do ilm = 1, 9
-      !    write(123, ´(9f10.6)´)(hhh(ilm, jlm), jlm=1, 9)
-      !end do
    end subroutine hmfind
 
-   subroutine orb2site(orb, i_out, ia_out, n_atoms, max_orbital)
+   module subroutine prepare_explicit_texture_moments(this)
+      class(hamiltonian), intent(inout) :: this
+   end subroutine prepare_explicit_texture_moments
+
+   !> @brief Convert a global orbital index to site and local-orbital indices.
+   !> @details Used by PAOFLOW import/export helpers to translate flat orbital
+   !>          numbering into RS-LMTO site-major layout.
+   !> @param[in] orb Global orbital index.
+   !> @param[out] i_out Site index.
+   !> @param[out] ia_out Local orbital index on the site.
+   !> @param[in] n_atoms Number of atoms in the exported/imported cell.
+   !> @param[in] max_orbital Number of orbitals per atom in the flat layout.
+   module subroutine orb2site(orb, i_out, ia_out, n_atoms, max_orbital)
       integer, intent(in) :: orb, n_atoms, max_orbital
       integer, intent(out) :: i_out, ia_out
 
-      if (orb <= n_atoms*max_orbital) then
-         i_out = modulo(orb - 1, max_orbital) + 1
-         ia_out = int((orb - 1)/max_orbital) + 1
-      else
-         i_out = modulo(orb - 1, max_orbital) + max_orbital + 1
-         ia_out = int((orb - 1 - n_atoms*max_orbital)/max_orbital) + 1
-      end if
    end subroutine orb2site
 
-   subroutine site2orb(i_in, ia_in, orb_out, n_atoms, max_orbital)
+   !> @brief Convert site and local-orbital indices to a global orbital index.
+   !> @details Used by PAOFLOW import/export helpers to write flat orbital
+   !>          numbering from RS-LMTO site-major data.
+   !> @param[in] i_in Site index.
+   !> @param[in] ia_in Local orbital index on the site.
+   !> @param[out] orb_out Global orbital index.
+   !> @param[in] n_atoms Number of atoms in the exported/imported cell.
+   !> @param[in] max_orbital Number of orbitals per atom in the flat layout.
+   module subroutine site2orb(i_in, ia_in, orb_out, n_atoms, max_orbital)
       integer, intent(in) :: i_in, ia_in, n_atoms, max_orbital
       integer, intent(out) :: orb_out
 
-      if (i_in <= max_orbital) then
-         orb_out = (ia_in - 1)*max_orbital + i_in
-      else
-         orb_out = (ia_in - 1)*max_orbital + i_in + (n_atoms - 1)*max_orbital
-      end if
    end subroutine site2orb
 
-   ! Rotate Hamiltonian to local axis
-   subroutine rotate_to_local_axis(this, m_loc)
+   !> @brief Rotate Hamiltonian blocks into a local magnetic axis.
+   !> @details Saves global hopping/SOC data and rotates spin blocks so a local
+   !>          moment direction can be treated as the quantization axis in legacy
+   !>          recursion paths.
+   !> @param[inout] this Hamiltonian object; updates rotated block arrays.
+   !> @param[in] m_loc Local magnetic moment direction.
+   !> @note Call rotate_from_local_axis to restore the global representation.
+   module subroutine rotate_to_local_axis(this, m_loc)
       use math_mod, only: rotmag_loc
       class(hamiltonian), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: m_loc
@@ -1862,24 +900,14 @@ end subroutine rs2pao
       ! Local variables
       integer :: sdim
       ! Rotate Hamiltonian to local axis if wanted
-      if (this%local_axis) then
-         sdim = product(shape(this%hall))/18/18
-         call rotmag_loc(this%hall, this%hall_glob, sdim, m_loc)
-         sdim = product(shape(this%ee))/18/18
-         call rotmag_loc(this%ee, this%ee_glob, sdim, m_loc)
-         if (this%hoh) then
-            sdim = product(shape(this%eeo))/18/18
-            call rotmag_loc(this%eeo, this%eeo_glob, sdim, m_loc)
-            sdim = product(shape(this%hallo))/18/18
-            call rotmag_loc(this%hallo, this%hallo_glob, sdim, m_loc)
-            sdim = product(shape(this%enim))/18/18
-            call rotmag_loc(this%enim, this%enim_glob, sdim, m_loc)
-         end if
-      end if
    end subroutine rotate_to_local_axis
 
-   ! Rotate Hamiltonian back from local axis
-   subroutine rotate_from_local_axis(this, m_loc)
+   !> @brief Restore Hamiltonian blocks from a local-axis rotation.
+   !> @details Rotates local-axis Hamiltonian data back to the global spin frame
+   !>          after an atom-specific recursion calculation.
+   !> @param[inout] this Hamiltonian object; restores global block arrays.
+   !> @param[in] m_loc Local magnetic moment direction used for the rotation.
+   module subroutine rotate_from_local_axis(this, m_loc)
       use math_mod, only: rotmag_loc
       class(hamiltonian), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: m_loc
@@ -1887,15 +915,236 @@ end subroutine rs2pao
       ! Local variables
       integer :: sdim
       ! Rotate Hamiltonian to local axis if wanted
-      if (this%local_axis) then
-         this%hall = this%hall_glob
-         this%ee = this%ee_glob
-         if (this%hoh) then
-            this%eeo = this%eeo_glob
-            this%hallo = this%hallo_glob
-            this%enim = this%enim_glob
-         end if
-      end if
    end subroutine rotate_from_local_axis
+
+   !> @brief Compute onsite Hubbard-U/J potential corrections.
+   !> @details Builds the spin-orbital onsite correction from symbolic-atom
+   !>          Hubbard inputs, including Liechtenstein and ACBN0-style forms and
+   !>          optional self-consistent U channels.
+   !> @param[inout] this Hamiltonian object; fills hubbard_u_pot on the legacy path.
+   !> @param[in] density_override Optional explicit `(type,l,spin,m,m')` density.
+   !> @param[out] potential_out Optional explicit `(basis,basis,type)` potential.
+   !> @note Supplying both optional snapshots evaluates V(P) without changing live
+   !>       density/potential state or adding Hamiltonian terms.
+   module subroutine calculate_hubbard_u_potential_general(this, density_override, potential_out)
+      class(hamiltonian), intent(inout) :: this
+      complex(rp), intent(in), optional :: density_override(:, :, :, :, :)
+      complex(rp), intent(out), optional :: potential_out(:, :, :)
+
+      integer :: na, l, ispin, i, j, m1, m2, m3, m4, l_index, m_max
+      integer :: m1_val, m2_val, m3_val, m4_val
+      real(rp) :: f0, f2, f4, f6
+      real(rp) :: ubar, jbar, ueff, d1, d2, eps_den, tr_n1mn
+      real(rp) :: num_u, num_j, sum_occ_opposite, sum_occ_same_excl
+      real(rp) :: common_pref, sum_u_aux, sum_j_aux, dUdn, dJdn, dUeff_dn
+      real(rp) :: vdiag_up_avg, vdiag_dn_avg, vdiag_split
+      real(rp), dimension(2, 7) :: occ_m
+      real(rp), dimension(2, 7, 7) :: pbar
+      logical :: use_acbn0
+      real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
+      real(rp), dimension(this%lattice%ntype, 4, 4) :: f
+      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
+      real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin
+      real(rp), dimension(this%lattice%ntype, 4) :: n_tot
+      type :: int_array
+         integer, allocatable :: val(:)
+      end type int_array
+   end subroutine calculate_hubbard_u_potential_general
+
+   !> Evaluate the fixed Liechtenstein functional and its one-body trace from
+   !> explicit density and potential snapshots. Density and potential use the
+   !> standard spherical projector convention P_ab=psi_a psi_b^*.
+   module subroutine evaluate_hubbard_energy(this, density, potential, e_int, e_dc, e_hub, tr_vp)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), intent(in) :: density(:, :, :, :, :), potential(:, :, :, :, :)
+      real(rp), intent(out) :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
+   end subroutine evaluate_hubbard_energy
+
+   !> @brief Compute intersite Hubbard-V potential corrections.
+   !> @details Builds pair-dependent correction blocks from hubbard_v inputs and
+   !>          approximate local occupations for later inclusion in real-space
+   !>          hopping construction.
+   !> @param[inout] this Hamiltonian object; fills hubbard_v_pot.
+   module subroutine calculate_hubbard_v_potential(this)
+      class(hamiltonian), intent(inout) :: this
+
+      integer :: itype, ia, nr, m, ja, jt, ispin, li, lj, ii, i0, i1, jdim
+      real(rp) :: rmin, rcur, tol, occ_up, occ_dn, nn_shell_tol
+      real(rp), dimension(3) :: dr
+      real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin
+      logical, save :: warned_proxy_once = .false.
+
+   end subroutine calculate_hubbard_v_potential
+
+   !> @brief Estimate spectral bounds for Chebyshev scaling.
+   !> @details Computes or selects Hamiltonian energy bounds according to the
+   !>          configured bounds algorithm and scaling factor. Chebyshev recursion
+   !>          uses these bounds to map H into [-1,1].
+   !> @param[inout] this Hamiltonian object; updates this%bounds.
+   !> @param[in] verbose Optional flag enabling diagnostic logging.
+   module subroutine compute_hamiltonian_bounds(this, verbose)
+      class(hamiltonian), intent(inout) :: this
+      logical, intent(in), optional :: verbose
+
+      integer :: ntype, ia, nr, i, j, m, n_orb, n_sites
+      integer :: isite, jsite, i_start, i_end, j_start, j_end, ineigh, ntype_i, ia_loc, ja
+      real(rp) :: g_min, g_max, center, radius
+      real(rp) :: hgamma_min, hgamma_max
+      logical :: verb, have_gamma
+      character(len=16) :: algo
+      character(len=256) :: msg
+      type(bounds) :: gamma_bounds
+      complex(rp), allocatable :: h_gamma(:, :)
+
+   end subroutine compute_hamiltonian_bounds
+
+   !> @brief Export real-space tight-binding data in all selected formats.
+   !> @details Dispatcher for metadata and hopping-record writers used by the
+   !>          hamiltonian export namelist option. Supports PAOFLOW legacy and
+   !>          Python-friendly real-space records.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] basename Optional output basename.
+   !> @param[in] tol Optional threshold for skipping tiny records.
+   !> @param[in] include_lsham Optional flag to include onsite SOC blocks.
+   !> @param[in] transform_sph2cart Optional flag to transform orbital basis.
+   module subroutine export_rs_tb_all(this, basename, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in), optional :: basename
+      real(rp), intent(in), optional :: tol
+      logical, intent(in), optional :: include_lsham, transform_sph2cart
+   
+      character(len=512) :: base
+      real(rp) :: eps
+      logical :: add_lsham, do_sph2cart
+   
+   end subroutine export_rs_tb_all
+
+   !> @brief Write metadata for real-space tight-binding exports.
+   !> @details Records atom/orbital layout information needed to interpret the
+   !>          exported hopping records.
+   !> @param[in] this Hamiltonian object containing lattice and basis metadata.
+   !> @param[in] filename Metadata output path.
+   module subroutine export_rs_tb_metadata(this, filename)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: filename
+   
+      integer :: u, i, ios, n_atoms, max_orbital
+   
+   end subroutine export_rs_tb_metadata
+
+   !> @brief Write PAOFLOW legacy-format hopping records.
+   !> @details Emits the seven-column record layout read by build_from_paoflow_opt:
+   !>          cell index, global orbital indices, and complex hopping value.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] filename Output path.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
+   module subroutine export_rs_paoflow_legacy(this, filename, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: filename
+      real(rp), intent(in) :: tol
+      logical, intent(in) :: include_lsham, transform_sph2cart
+   
+      integer :: u, ios
+   
+   end subroutine export_rs_paoflow_legacy
+
+   !> @brief Write Python-friendly real-space hopping records.
+   !> @details Emits hopping records plus metadata conventions intended for direct
+   !>          parsing by scripts and post-processing tools.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] filename Output path.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
+   module subroutine export_rs_tb_hoppings(this, filename, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: filename
+      real(rp), intent(in) :: tol
+      logical, intent(in) :: include_lsham, transform_sph2cart
+   
+      integer :: u, ios
+   
+   end subroutine export_rs_tb_hoppings
+
+   !> @brief Write real-space hopping records to an open unit.
+   !> @details Shared implementation for legacy PAOFLOW and Python export modes,
+   !>          walking local/bulk neighbor blocks and optionally transforming basis
+   !>          or adding onsite spin-orbit terms.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] u Open output unit.
+   !> @param[in] mode Record format selector.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
+   module subroutine write_rs_tb_records(this, u, mode, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: u
+      character(len=*), intent(in) :: mode
+      real(rp), intent(in) :: tol
+      logical, intent(in) :: include_lsham, transform_sph2cart
+   
+      integer :: ntype, ia, nr, k, jj, jbasis
+      integer :: i, j, ipao, jpao, n_atoms, max_orbital
+      integer :: idx(3)
+      logical :: found
+      complex(rp) :: hblock(nb, nb)
+   
+   end subroutine write_rs_tb_records
+
+   !> @brief Resolve a neighbor into integer lattice-cell indices.
+   !> @details Matches a real-space neighbor displacement against lattice
+   !>          translations so exported hopping records can carry PAOFLOW-style
+   !>          integer cell offsets.
+   !> @param[in] this Hamiltonian object containing lattice vectors and coordinates.
+   !> @param[in] ia Source atom index.
+   !> @param[in] jj Neighbor-list entry.
+   !> @param[out] idx Integer lattice-cell offset.
+   !> @param[out] found True when a matching offset was found within tolerance.
+   !> @param[in] tol Matching tolerance.
+   module subroutine rs_neighbor_lattice_index(this, ia, jj, idx, found, tol)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, jj
+      integer, intent(out) :: idx(3)
+      logical, intent(out) :: found
+      real(rp), intent(in) :: tol
+   
+      integer :: idxi, idxj, idxk, jbasis
+      real(rp) :: rij(3), rijtest(3), err, best_err
+   
+   end subroutine rs_neighbor_lattice_index
+
+
+   !> @brief Select the spin operator S_x, S_y or S_z from a polarization label.
+   module subroutine select_spin_operator(pol, S_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: S_op
+   end subroutine select_spin_operator
+
+   !> @brief Select the orbital operator L_x, L_y or L_z from a polarization label.
+   module subroutine select_orbital_operator(pol, L_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: L_op
+   end subroutine select_orbital_operator
+
+   !> @brief Select an orbital quadrupole / OAP operator from a component label.
+   module subroutine select_quadrupole_operator(pol, Q_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: Q_op
+   end subroutine select_quadrupole_operator
+
+   !> @brief Select a pure rank-three orbital octupole from a component label.
+   module subroutine select_octupole_operator(pol, O_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: O_op
+   end subroutine select_octupole_operator
+   end interface
 
 end module hamiltonian_mod

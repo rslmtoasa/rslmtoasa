@@ -24,6 +24,9 @@ module control_mod
    use string_mod, only: sl, fmt
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
+   use basis_mod, only: basis_init, norb
+   use math_mod, only: init_math_operators
+   use spin_density_mod, only: sd_constrained_spiral, sd_relaxed_reference
    implicit none
 
    private
@@ -49,7 +52,12 @@ module control_mod
       integer :: npold
       !> Number of random vectors to be used in the stochastic evaluation of traces for the Chebyshev momennts
       integer :: random_vec_num
-      !> Set calculation collinearity and relativistic type
+      !> Set calculation collinearity and relativistic type.
+      !>
+      !> This is a global electronic-structure mode, not the number of
+      !> spin-density channels passed to an XC kernel.  In particular,
+      !> `nsp=1` can still carry two local collinear spin densities in the
+      !> atomic/XC path.
       !>
       !> Set calculation collinearity and relativistic type
       !>
@@ -60,6 +68,19 @@ module control_mod
       !> - \ref nsp \f$= 3\f$: Non-collinear scalar relativistic
       !> - \ref nsp \f$= 4\f$: Non-collinear fully relativistic (l.s)-only no OP
       integer :: nsp
+
+      !> Maximum angular momentum quantum number for the orbital basis.
+      !>
+      !> Determines the block size used throughout the code:
+      !>   norb = (lmax+1)**2   (orbitals per spin channel)
+      !>   nb   = 2*norb        (full spinor block)
+      !>
+      !> Values:
+      !>
+      !> - \ref lmax \f$= 1\f$: sp  basis (norb= 4, nb= 8)
+      !> - \ref lmax \f$= 2\f$: spd basis (norb= 9, nb=18)  [default]
+      !> - \ref lmax \f$= 3\f$: spdf basis (norb=16, nb=32)
+      integer :: lmax
 
       !> Type of LDOS s, p, d output
       !>
@@ -126,6 +147,7 @@ module control_mod
       !> - \ref calctype \f$= B\f$: bulk
       !> - \ref calctype \f$= I\f$: impurity
       !> - \ref calctype \f$= S\f$: surface
+      !> - \ref calctype \f$= L\f$: layered (two-sided interface/lead geometry, B7.5)
       character :: calctype
 
       !> Calculate hyperfine field
@@ -155,6 +177,31 @@ module control_mod
       !>
       !> Allowed values: ´block´, ´chebyshev´
       character(len=9) :: recur
+      logical :: cpp_plugin
+      logical :: gpu_plugin
+      !> Enable l=1 dipole surface electrostatics (B6). Default .false. -> the
+      !> Madelung problem stays monopole-only and results are bit-identical.
+      logical :: dipole_electrostatics
+      !> Linear mixing factor for the B6 dipole moment across SCF steps. The
+      !> dipole feeds back into the potential, so it needs damping; default 0.1.
+      real(rp) :: dipole_mix
+      character(len=16) :: gpu_backend
+      !> CUDA stochastic Chebyshev arithmetic precision: 'fp32' or 'fp64'.
+      !> The Fortran transport arrays and reconstructed output remain FP64.
+      character(len=16) :: gpu_precision
+      !> Retain the full CUDA stochastic moment download for diagnostics. The
+      !> optimized transport route keeps only packed diagonal moments on device.
+      logical :: gpu_moment_download
+      !> Number of independent random-vector transport traces processed by one
+      !> CUDA request. 1 preserves scalar behavior; larger values enable the
+      !> KPM-G2 block path. This control is ignored for per_type transport.
+      integer :: gpu_stochastic_block
+      character(len=16) :: cheb_backend
+      !> Chebyshev engine for the transport moments: 'legacy' (matrix-free loops), 'fast_sp' or 'gpu'.
+      character(len=16) :: transport_backend
+      !> CPU transport reconstruction precision. The default preserves the
+      !> historical FP32-moment/FP64-reconstruction mixed route.
+      character(len=16) :: cpu_reconstruction_precision
 
       !> Number of recursion levels for the conductivity tensor calculation
       !>
@@ -163,11 +210,9 @@ module control_mod
       !> Default: 200
       integer :: cond_ll
 
-      !> Type of conductivity to be calculated
+      !> Linear-response input (linear_in) and output (linear_out) operators
       !>
-      !> Type of conductivity to be calculated
-      !>
-      !> Allowed values: 'charge', 'spin' and 'orbital'. Default: 'charge'
+      !> Allowed values: 'charge', 'spin' and 'orbital' (plus accumulation and torque variants for linear_out). Default: 'charge'
       character(len=30) :: linear_in, linear_out
 
       !> Calculation type of the conductivity tensor
@@ -176,6 +221,36 @@ module control_mod
       !> 
       !> Allowed values: 'random_vec', 'per_type'
       character(len=13) :: cond_calctype
+
+      !> SCF density policy for the shared rotating-frame density contract
+      !> (GBT blueprint WP7). Governs which variables the SCF may mix and what
+      !> the radial projection axis means:
+      !>
+      !>   'constrained_spiral' -- reference directions fixed; charge and the
+      !>     longitudinal moment magnitude are mixed; the transverse density is
+      !>     reported as a constraint residual/torque.
+      !>   'relaxed_reference'  -- the full rotating-frame Cartesian moment is
+      !>     mixed and the per-sublattice reference axis follows it, keeping the
+      !>     single-q ansatz.
+      !>
+      !> Default: 'constrained_spiral'.
+      character(len=30) :: density_policy
+      !> Emit one machine-readable per-site record for every SCF iteration.
+      !> The trace is intended for the WP12 frame/closure audit and is off by
+      !> default because it performs additional file I/O.
+      logical :: gbt_scf_diagnostics
+      !> If true, load the named elemental starting files even when a local
+      !> <element>_out.nml restart is present.  The default preserves the
+      !> historical restart preference.
+      logical :: fresh_start
+      !> Extend the Chebyshev moments by linear prediction before reconstruction.
+      logical :: cheb_lp
+      !> Extension factor of the linear prediction: N_ext = cheb_lp_factor*(2*lld+2).
+      integer :: cheb_lp_factor
+      !> Damping kernel of the Chebyshev reconstruction: 'jackson' (default), 'lorentz' or 'none'.
+      character(len=16) :: cheb_kernel
+      !> Lorentz kernel parameter lambda: g_n = sinh(lambda*(1-n/N))/sinh(lambda).
+      real(rp) :: cheb_kernel_lambda
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -188,11 +263,24 @@ module control_mod
       !real(rp), dimension(:, :), allocatable :: mom ! common_cnc
       integer :: nmdir
       character(len=sl) :: fname
+      ! Constraints configuration (filled from namelist)
+      logical :: constraints_enable
+      integer :: constraints_i_cons
+      integer :: constraints_code_prefac
+      !> Emit the detailed constraint trace and constraint_diagnostics.dat.
+      logical :: constraints_diagnostics
+      !> RMS angular tolerance used by the SCF convergence gate.
+      real(rp) :: constraints_tolerance
+      real(rp), dimension(:, :), allocatable :: constraints_mom_ref
+      real(rp), dimension(:, :), allocatable :: constraints_bfield
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: print_state
       procedure :: print_state_formatted
+      procedure :: is_noncollinear
+      procedure :: has_soc
+      procedure :: uses_spinor_representation
       procedure, private :: check_all
       final :: destructor
    end type control
@@ -202,6 +290,24 @@ module control_mod
    end interface control
 
 contains
+
+   !> True for the two global non-collinear calculation modes.
+   pure logical function is_noncollinear(this)
+      class(control), intent(in) :: this
+      is_noncollinear = this%nsp == 3 .or. this%nsp == 4
+   end function is_noncollinear
+
+   !> True when the global mode includes spin-orbit coupling.
+   pure logical function has_soc(this)
+      class(control), intent(in) :: this
+      has_soc = this%nsp == 2 .or. this%nsp == 4
+   end function has_soc
+
+   !> True when the global Hamiltonian uses the spinor representation.
+   pure logical function uses_spinor_representation(this)
+      class(control), intent(in) :: this
+      uses_spinor_representation = this%nsp >= 2 .and. this%nsp <= 4
+   end function uses_spinor_representation
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -243,9 +349,12 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
+      integer :: iostatus2, funit2
       character(len=sl) :: fname_
+      character(len=256) :: iomsg_
 
       include 'include_codes/namelists/control.f90'
+      include 'include_codes/namelists/constraints.f90'
 
       if (present(fname)) then
          fname_ = fname
@@ -258,8 +367,11 @@ contains
       nlim = this%nlim
       npold = this%npold
       nsp = this%nsp
+      lmax = this%lmax
       calctype = this%calctype
       hyperfine = this%hyperfine
+      dipole_electrostatics = this%dipole_electrostatics
+      dipole_mix = this%dipole_mix
       sym_term = this%sym_term
       llsp = this%llsp
       lld = this%lld
@@ -280,15 +392,39 @@ contains
       ruban = this%ruban
       do_comom = this%do_comom
       recur = this%recur
+      cpp_plugin = this%cpp_plugin
+      gpu_plugin = this%gpu_plugin
+      gpu_backend = this%gpu_backend
+      gpu_precision = this%gpu_precision
+      gpu_moment_download = this%gpu_moment_download
+      gpu_stochastic_block = this%gpu_stochastic_block
+      cheb_backend = this%cheb_backend
+      transport_backend = this%transport_backend
+      cpu_reconstruction_precision = this%cpu_reconstruction_precision
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
       linear_in = this%linear_in
       linear_out = this%linear_out
       cond_calctype = this%cond_calctype
+      density_policy = this%density_policy
+      gbt_scf_diagnostics = this%gbt_scf_diagnostics
+      fresh_start = this%fresh_start
+      cheb_lp = this%cheb_lp
+      cheb_lp_factor = this%cheb_lp_factor
+      cheb_kernel = this%cheb_kernel
+      cheb_kernel_lambda = this%cheb_kernel_lambda
+      ! Save previous constraints values
+      constraints_enable = this%constraints_enable
+      constraints_i_cons = this%constraints_i_cons
+      constraints_code_prefac = this%constraints_code_prefac
+      constraints_diagnostics = this%constraints_diagnostics
+      constraints_tolerance = this%constraints_tolerance
+      constraints_mom_ref = huge(1.0_rp)
+      constraints_bfield = huge(1.0_rp)
 
-      open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
+      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
-         call g_logger%fatal('file '//fmt('A', fname)//' not found', __FILE__, __LINE__)
+         call g_logger%fatal('file '//fmt('A', fname_)//' not found', __FILE__, __LINE__)
       end if
 
       read (funit, nml=control, iostat=iostatus)
@@ -298,6 +434,7 @@ contains
       close (funit)
 
       ! Setting user values
+      this%lmax = lmax
       this%npold = npold
       this%llsp = llsp
       this%lld = lld
@@ -317,19 +454,56 @@ contains
       this%concb = concb
       this%ruban = ruban
       this%do_comom = do_comom
-      this%recur = recur
+      this%recur = recur(:len(this%recur))
+      this%cpp_plugin = cpp_plugin
+      this%gpu_plugin = gpu_plugin
+      this%gpu_backend = gpu_backend(:len(this%gpu_backend))
+      this%gpu_precision = gpu_precision(:len(this%gpu_precision))
+      this%gpu_moment_download = gpu_moment_download
+      this%gpu_stochastic_block = gpu_stochastic_block
+      this%cheb_backend = cheb_backend(:len(this%cheb_backend))
+      this%transport_backend = transport_backend(:len(this%transport_backend))
+      this%cpu_reconstruction_precision = cpu_reconstruction_precision(:len(this%cpu_reconstruction_precision))
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
-      this%linear_in = linear_in
-      this%linear_out = linear_out
-      this%cond_calctype = cond_calctype
+      this%linear_in = linear_in(:len(this%linear_in))
+      this%linear_out = linear_out(:len(this%linear_out))
+      this%cond_calctype = cond_calctype(:len(this%cond_calctype))
+      this%density_policy = trim(adjustl(density_policy))
+      this%gbt_scf_diagnostics = gbt_scf_diagnostics
+      this%fresh_start = fresh_start
+      this%cheb_lp = cheb_lp
+      this%cheb_lp_factor = cheb_lp_factor
+      this%cheb_kernel = cheb_kernel(:len(this%cheb_kernel))
+      this%cheb_kernel_lambda = cheb_kernel_lambda
+
+      ! Read optional constraints namelist and move values into the control object
+      open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
+      if (iostatus2 == 0) then
+         read (funit2, nml=constraints, iostat=iostatus2, iomsg=iomsg_)
+         if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
+            call g_logger%fatal('Error while reading constraints namelist: iostat = '//fmt('I0', iostatus2)// &
+                                ', iomsg = '//trim(iomsg_), __FILE__, __LINE__)
+         else
+            this%constraints_enable = constraints_enable
+            this%constraints_i_cons = constraints_i_cons
+            this%constraints_code_prefac = constraints_code_prefac
+            this%constraints_diagnostics = constraints_diagnostics
+            this%constraints_tolerance = constraints_tolerance
+            call copy_set_columns(constraints_mom_ref, this%constraints_mom_ref)
+            call copy_set_columns(constraints_bfield, this%constraints_bfield)
+         end if
+         close (funit2)
+      end if
 
       ! end default
 
       ! Mandatory statements
       this%hyperfine = hyperfine
+      this%dipole_electrostatics = dipole_electrostatics
+      this%dipole_mix = dipole_mix
       this%sym_term = sym_term
-      this%calctype = calctype
+      this%calctype = calctype(:len(this%calctype))
       this%nsp = nsp
       this%nlim = nlim
       if (this%nsp <= 2) then
@@ -339,9 +513,44 @@ contains
       end if
       ! end reading the control file
 
+      ! Initialise basis dimensions (norb, nb, spin_off) from lmax
+      call basis_init(this%lmax)
+      ! Initialise spin and orbital angular momentum operator matrices
+      call init_math_operators()
+
       ! check input
       call this%check_all()
    end subroutine build_from_file
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Copy the columns of a (3, n) namelist buffer that were set (not left at
+   !> huge) into dst, shaped (3, last set column). Unset entries become zero.
+   !> When nothing was set, dst keeps its value, or becomes a (1, 1) zero
+   !> array, which the self constructor reads as "not provided".
+   !---------------------------------------------------------------------------
+   subroutine copy_set_columns(buffer, dst)
+      real(rp), dimension(:, :), intent(in) :: buffer
+      real(rp), dimension(:, :), allocatable, intent(inout) :: dst
+
+      integer :: i, ncols
+
+      ncols = 0
+      do i = 1, size(buffer, 2)
+         if (any(buffer(:, i) /= huge(1.0_rp))) ncols = i
+      end do
+      if (ncols == 0) then
+         if (.not. allocated(dst)) then
+            allocate (dst(1, 1))
+            dst = 0.0_rp
+         end if
+         return
+      end if
+      if (allocated(dst)) deallocate (dst)
+      allocate (dst(3, ncols))
+      dst = merge(0.0_rp, buffer(:, :ncols), buffer(:, :ncols) == huge(1.0_rp))
+   end subroutine copy_set_columns
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -353,7 +562,8 @@ contains
       class(control), intent(out) :: this
 
       this%calctype = ''
-      this%npold = 9
+      this%lmax = 2
+      this%npold = norb
       this%llsp = 16
       this%lld = 16
       this%idos = 0
@@ -373,6 +583,17 @@ contains
       this%ruban = 0.0d0
       this%do_comom = .false.
       this%recur = 'block'
+      this%cpp_plugin = .false.
+      this%gpu_plugin = .false.
+      this%dipole_electrostatics = .false.
+      this%dipole_mix = 0.5d0
+      this%gpu_backend = 'csr'
+      this%gpu_precision = 'fp32'
+      this%gpu_moment_download = .false.
+      this%gpu_stochastic_block = 1
+      this%cheb_backend = 'fast_dp'
+      this%transport_backend = 'legacy'
+      this%cpu_reconstruction_precision = 'fp64'
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
@@ -381,6 +602,19 @@ contains
       this%linear_in = 'charge'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
+      this%density_policy = 'relaxed_reference'
+      this%gbt_scf_diagnostics = .false.
+      this%fresh_start = .false.
+      this%cheb_lp = .false.
+      this%cheb_lp_factor = 2
+      this%cheb_kernel = 'jackson'
+      this%cheb_kernel_lambda = 3.0_rp
+      ! default constraints settings
+      this%constraints_enable = .false.
+      this%constraints_i_cons = 0
+      this%constraints_code_prefac = 1
+      this%constraints_diagnostics = .false.
+      this%constraints_tolerance = 1.0e-6_rp
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -415,7 +649,16 @@ contains
       svac = this%svac
       calctype = this%calctype
       hyperfine = this%hyperfine
+      dipole_electrostatics = this%dipole_electrostatics
+      dipole_mix = this%dipole_mix
       sym_term = this%sym_term
+      density_policy = this%density_policy
+      gbt_scf_diagnostics = this%gbt_scf_diagnostics
+      fresh_start = this%fresh_start
+      cheb_lp = this%cheb_lp
+      cheb_lp_factor = this%cheb_lp_factor
+      cheb_kernel = this%cheb_kernel
+      cheb_kernel_lambda = this%cheb_kernel_lambda
       txc = this%txc
       blockrec = this%blockrec
       partype = this%partype
@@ -426,13 +669,22 @@ contains
       concb = this%concb
       ruban = this%ruban
       do_comom = this%do_comom
+      cpp_plugin = this%cpp_plugin
+      gpu_plugin = this%gpu_plugin
+      gpu_backend = this%gpu_backend
+      gpu_precision = this%gpu_precision
+      gpu_moment_download = this%gpu_moment_download
+      gpu_stochastic_block = this%gpu_stochastic_block
+      cheb_backend = this%cheb_backend
+      transport_backend = this%transport_backend
+      cpu_reconstruction_precision = this%cpu_reconstruction_precision
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
       else if (present(unit)) then
          write (unit, nml=control)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=control)
          close (newunit)
       else
@@ -482,9 +734,27 @@ contains
       call nml%add('conca', this%conca)
       call nml%add('concb', this%concb)
       call nml%add('hyperfine', this%hyperfine)
+      call nml%add('dipole_electrostatics', this%dipole_electrostatics)
+      call nml%add('dipole_mix', this%dipole_mix)
       call nml%add('sym_term', this%sym_term)
+      call nml%add('cpp_plugin', this%cpp_plugin)
+      call nml%add('gpu_plugin', this%gpu_plugin)
+      call nml%add('gpu_backend', this%gpu_backend)
+      call nml%add('gpu_precision', this%gpu_precision)
+      call nml%add('gpu_moment_download', this%gpu_moment_download)
+      call nml%add('gpu_stochastic_block', this%gpu_stochastic_block)
+      call nml%add('cheb_backend', this%cheb_backend)
+      call nml%add('transport_backend', this%transport_backend)
+      call nml%add('cpu_reconstruction_precision', this%cpu_reconstruction_precision)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
+      call nml%add('density_policy', this%density_policy)
+      call nml%add('gbt_scf_diagnostics', this%gbt_scf_diagnostics)
+      call nml%add('fresh_start', this%fresh_start)
+      call nml%add('cheb_lp', this%cheb_lp)
+      call nml%add('cheb_lp_factor', this%cheb_lp_factor)
+      call nml%add('cheb_kernel', this%cheb_kernel)
+      call nml%add('cheb_kernel_lambda', this%cheb_kernel_lambda)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -510,15 +780,76 @@ contains
       class(control) :: this
       if (this%calctype /= 'B' &
           .and. this%calctype /= 'S' &
-          .and. this%calctype /= 'I') then
-         call g_logger%fatal('lattice%calctype must be one of: ''B'', ''S'', ''I''")', __FILE__, __LINE__)
+          .and. this%calctype /= 'I' &
+          .and. this%calctype /= 'L') then
+         call g_logger%fatal('lattice%calctype must be one of: ''B'', ''S'', ''I'', ''L''")', __FILE__, __LINE__)
       end if
       if (this%recur /= 'lanczos' &
           .and. this%recur /= 'chebyshev' &
           .and. this%recur /= 'block') then
          call g_logger%fatal('lattice%recur must be one of: ''lanczos'', ''chebyshev'' or ''block''")', __FILE__, __LINE__)
       end if
+      if (this%gpu_backend /= 'csr' &
+          .and. this%gpu_backend /= 'bsr' &
+          .and. this%gpu_backend /= 'fft' &
+          .and. this%gpu_backend /= 'conv') then
+         call g_logger%fatal('control%gpu_backend must be one of: ''csr'', ''bsr'', ''fft'' or ''conv''.', __FILE__, __LINE__)
+      end if
+      if (this%gpu_precision /= 'fp32' .and. this%gpu_precision /= 'fp64') then
+         call g_logger%fatal('control%gpu_precision must be ''fp32'' or ''fp64''.', __FILE__, __LINE__)
+      end if
+      if (this%gpu_stochastic_block < 1) then
+         call g_logger%fatal('control%gpu_stochastic_block must be >= 1.', __FILE__, __LINE__)
+      end if
+      if (this%cpu_reconstruction_precision /= 'fp32' .and. &
+          this%cpu_reconstruction_precision /= 'fp64') then
+         call g_logger%fatal('control%cpu_reconstruction_precision must be ''fp32'' or ''fp64''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_backend /= 'fast' &
+          .and. this%cheb_backend /= 'fast_dp' &
+          .and. this%cheb_backend /= 'batched' &
+          .and. this%cheb_backend /= 'mkl_batch' &
+          .and. this%cheb_backend /= 'mkl_sparse' &
+          .and. this%cheb_backend /= 'legacy') then
+         call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''fast_dp'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_lp .and. this%recur /= 'chebyshev') then
+         call g_logger%fatal('control%cheb_lp requires recur = ''chebyshev''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_lp_factor < 2) then
+         call g_logger%fatal('control%cheb_lp_factor must be >= 2.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel /= 'jackson' .and. this%cheb_kernel /= 'lorentz' .and. this%cheb_kernel /= 'none') then
+         call g_logger%fatal('control%cheb_kernel must be one of: ''jackson'', ''lorentz'' or ''none''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel /= 'jackson' .and. this%recur /= 'chebyshev') then
+         call g_logger%fatal('control%cheb_kernel /= ''jackson'' requires recur = ''chebyshev''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel == 'none' .and. .not. this%cheb_lp) then
+         call g_logger%fatal('control%cheb_kernel = ''none'' requires cheb_lp = .true. (a hard cutoff of computed moments rings).', __FILE__, __LINE__)
+      end if
+      if (this%cheb_kernel == 'lorentz' .and. this%cheb_kernel_lambda <= 0.0_rp) then
+         call g_logger%fatal('control%cheb_kernel_lambda must be > 0 for the Lorentz kernel.', __FILE__, __LINE__)
+      end if
+      if (this%transport_backend /= 'legacy' &
+          .and. this%transport_backend /= 'fast_sp' &
+          .and. this%transport_backend /= 'gpu') then
+         call g_logger%fatal('control%transport_backend must be one of: ''legacy'', ''fast_sp'' or ''gpu''.', __FILE__, __LINE__)
+      end if
+      if (this%density_policy /= sd_constrained_spiral &
+          .and. this%density_policy /= sd_relaxed_reference) then
+         call g_logger%fatal('control%density_policy must be one of: '''//trim(sd_constrained_spiral)// &
+                             ''' or '''//trim(sd_relaxed_reference)//'''.', __FILE__, __LINE__)
+      end if
+      if (this%constraints_enable) then
+         if (this%constraints_i_cons < 2 .or. this%constraints_i_cons > 5) then
+            call g_logger%fatal('control%constraints_i_cons must be 2, 3, 4, or 5 when constraints are enabled.', &
+                                __FILE__, __LINE__)
+         end if
+         if (this%constraints_tolerance <= 0.0_rp) then
+            call g_logger%fatal('control%constraints_tolerance must be positive.', __FILE__, __LINE__)
+         end if
+      end if
    end subroutine check_all
 
 end module control_mod
-

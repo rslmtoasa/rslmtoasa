@@ -1,9 +1,28 @@
-integer :: lld, llsp, nlim, npold, nsp, idos, mext, txc, partype, terminator, random_vec_num, cond_ll
-real(rp) :: conca, concb, ruban
+integer :: lld, llsp, nlim, npold, nsp, idos, mext, txc, partype, terminator, random_vec_num, cond_ll, gpu_stochastic_block
+integer :: lmax
+real(rp) :: conca, concb, ruban, dipole_mix
 logical :: lrot, incorb, do_asd, svac, blockrec, do_cochg, asd_jij, do_comom, hyperfine, sym_term
-character(len=sl) :: calctype, recur, cond_calctype, linear_in, linear_out
+logical :: cpp_plugin
+logical :: gpu_plugin
+logical :: dipole_electrostatics
+character(len=sl) :: calctype, recur, cond_calctype, gpu_backend, gpu_precision, cheb_backend, transport_backend
+character(len=sl) :: cpu_reconstruction_precision
+character(len=sl) :: cheb_kernel
+real(rp) :: cheb_kernel_lambda
+logical :: gpu_moment_download
+character(len=sl) :: linear_in, linear_out
+character(len=sl) :: density_policy
+logical :: gbt_scf_diagnostics
+logical :: cheb_lp
+integer :: cheb_lp_factor
+logical :: fresh_start !< Ignore local <element>_out.nml files when loading atomic data.
+! Constraints are provided in a separate namelist file `constraints.f90`
 
 namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    idos, lrot, incorb, do_asd, mext, &
    svac, calctype, txc, blockrec, partype, do_cochg, asd_jij, terminator, conca, &
-   concb, ruban, do_comom, hyperfine, sym_term, random_vec_num, cond_ll, cond_calctype, linear_in, linear_out
+   concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, gpu_precision, gpu_moment_download, cheb_backend, transport_backend, &
+   gpu_stochastic_block, cpu_reconstruction_precision, &
+   random_vec_num, cond_ll, cond_calctype, linear_in, linear_out, lmax, &
+   dipole_electrostatics, dipole_mix, density_policy, gbt_scf_diagnostics, fresh_start, &
+   cheb_lp, cheb_lp_factor, cheb_kernel, cheb_kernel_lambda
