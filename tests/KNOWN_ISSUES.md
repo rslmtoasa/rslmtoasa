@@ -20,7 +20,7 @@ are not tracked here; see `docs/DECISIONS.md`.
   loop) that sum in the same order but contract differently. The check is not loosened.
 - **Measured 2026-11-17 (GitHub Actions `ubuntu-latest`, GNU Fortran 15.2.0, `-DENABLE_MARCH_NATIVE=OFF`, MPI ON):** the same check gives 8.9e-16 against 0,
   so the CI configuration does not give 0.0 on that runner and `Test on ubuntu-latest` fails on `UnitLdaULocalMoments` (all other checks of the sub-case pass,
-  worst 3.6e-15 against 1e-13). The 0.0 above was measured with gfortran 13. Not diagnosed. Owner decision needed: a tolerance of a few ulp, tier `validation`,
+  largest deviation 8.9e-15 in `(f) global covariance` against 1e-13). The 0.0 above was measured with gfortran 13. Not diagnosed. Owner decision needed: a tolerance of a few ulp, tier `validation`,
   or a pinned compiler.
 
 ### LDA+U stored-reference rows: tolerances were set on the developer platform — 2026-11-05
