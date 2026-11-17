@@ -12,16 +12,15 @@ are not tracked here; see `docs/DECISIONS.md`.
 
 ## Reference and tolerance questions
 
-### Bitwise sub-case of `UnitLdaULocalMoments` fails with `-march=native` on FMA hardware — 2026-11-05
-- **Verified:** sub-case `spinor_frame_kernel` (`test_hubbard_spinor_moments.f90`, check "(f) n = z vs the S4 z-block loop (bitwise)") gives
-  2.2e-16 against 0 on x86_64 Linux, gfortran 13, OpenBLAS, `-DENABLE_MARCH_NATIVE=ON`. It gives 0.0 with `-DENABLE_MARCH_NATIVE=OFF` (the CI
-  configuration, `.github/workflows/tests.yml`). The failure is the same on the unmodified `fable_v4c` (`9a87c09`) as test `UnitHubbardSpinorMoments`.
-- **Suspected, not diagnosed:** fused multiply-add contraction in two production routines (`correct_d_shell_moments_spinor` and the S4 z-block
-  loop) that sum in the same order but contract differently. The check is not loosened.
-- **Measured 2026-11-17 (GitHub Actions `ubuntu-latest`, GNU Fortran 15.2.0, `-DENABLE_MARCH_NATIVE=OFF`, MPI ON):** the same check gives 8.9e-16 against 0,
-  so the CI configuration does not give 0.0 on that runner and `Test on ubuntu-latest` fails on `UnitLdaULocalMoments` (all other checks of the sub-case pass,
-  largest deviation 8.9e-15 in `(f) global covariance` against 1e-13). The 0.0 above was measured with gfortran 13. Not diagnosed. Owner decision needed: a tolerance of a few ulp, tier `validation`,
-  or a pinned compiler.
+### The n = z spinor kernel and the S4 z-block loop differ by one rounding step on some builds — 2026-11-05
+- **Verified:** sub-case `spinor_frame_kernel` (`test_hubbard_spinor_moments.f90`, check "(f) n = z vs the S4 z-block loop") gave 2.2e-16 against a bitwise
+  tolerance of 0 on x86_64 Linux, gfortran 13, OpenBLAS, `-DENABLE_MARCH_NATIVE=ON`, and 0.0 with `-DENABLE_MARCH_NATIVE=OFF`. The result was the same on the
+  unmodified `fable_v4c` (`9a87c09`) as test `UnitHubbardSpinorMoments`.
+- **Verified (2026-11-17, GitHub Actions `ubuntu-latest`, GNU Fortran 15.2.0, `-DENABLE_MARCH_NATIVE=OFF`, MPI ON):** 8.9e-16 against 0; the largest deviation among the
+  other checks of the sub-case is 8.9e-15 (`(f) global covariance`) against 1e-13.
+- **Owner decision, 2026-11-17:** the tolerance of this check is 1e-14, the level of its sibling checks, and the label no longer says bitwise.
+- **Suspected, not diagnosed:** fused multiply-add contraction in `correct_d_shell_moments_spinor` and the S4 z-block loop. That does not fit the CI build, because
+  `-DENABLE_MARCH_NATIVE=OFF` generates generic x86-64 code without FMA instructions; BLAS kernels selected at run time are another candidate. Neither was tested.
 
 ### LDA+U stored-reference rows: tolerances were set on the developer platform — 2026-11-05
 - **Verified (x86_64 Linux, gfortran 13, OpenBLAS, 4 steps, single thread):** `imp_rs_soc0` (RS-host impurity, nsp=2 with SOC = 0 against nsp=1) differs by

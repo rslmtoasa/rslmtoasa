@@ -3,7 +3,7 @@
 ! (a) block-diagonal inputs reproduce the collinear kernel; (c) q2' >= 0 for states built from the exact
 ! eigenpairs of H0 + V (random Hermitian, with spin-off-diagonal V); R05: a sequence whose only change is
 ! in the spin-off-diagonal blocks of P and V is not declared converged; (f) the spin-frame axis n: n = z
-! against the S4 z-block loop (bitwise), n against the z kernel on spin-rotated inputs, global covariance,
+! against the S4 z-block loop (to rounding, 1e-14), n against the z kernel on spin-rotated inputs, global covariance,
 ! and a +n / -n site pair; (g) the d-shell orbital moment Tr(P L.n) against the closed form for a|m=2> + b|m=1>. The finite-H comparison with the
 ! direct definition of c' and q2' is in projector_spinor_frozen_h.f90. Every control must exceed its tolerance.
 subroutine test_hubbard_spinor_moments
@@ -332,7 +332,7 @@ contains
       real(rp) :: n(3), m(3), nw(3), worst_z, worst_rot, worst_cov, worst_ctrl, worst_afm, worst_afm_ctrl, alpha
       integer :: trial, status, st
 
-      ! n = z: bitwise against the S4 loop, on general (spin-mixed) inputs
+      ! n = z: against the S4 loop to rounding (1e-14), on general (spin-mixed) inputs
       worst_z = 0.0_rp
       do trial = 1, 10
          h = rand_hermitian(10, 1.5_rp)
@@ -342,7 +342,7 @@ contains
          call s4_z_kernel(p, m1, v, q0, c, q2, cpr, q2pr, tr)
          worst_z = max(worst_z, maxval(abs(cp - cpr)), maxval(abs(q2p - q2pr)), maxval(abs(t - tr)))
       end do
-      call check('(f) n = z vs the S4 z-block loop (bitwise)', worst_z, 0.0_rp)
+      call check('(f) n = z vs the S4 z-block loop (to rounding)', worst_z, 1.0e-14_rp)
 
       worst_rot = 0.0_rp
       worst_cov = 0.0_rp
