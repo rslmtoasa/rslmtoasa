@@ -306,6 +306,7 @@ if(RUN_UNIT_TESTS)
   target_compile_definitions(UnitStructureConstantsBackends PRIVATE
     TEST_STRUCTURE_CONSTANT_DATABASE="${CMAKE_SOURCE_DIR}/tests/scf/cases/bulk/bccFe")
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
+  add_fortran_unit_test(UnitStruxLmax3PairBlocks quick SOURCES ${TestDIR}/unit/test_strux_lmax3_pair_blocks.f90 LABELS strux)
   add_fortran_unit_test(UnitAbspinlibIntegrators quick SOURCES ${TestDIR}/validation/test_abspinlib_integrators.f90 LABELS spin_integrators)
   add_fortran_unit_test(UnitConstrainingField quick SOURCES ${TestDIR}/unit/test_constraining_field.f90 LABELS constraints)
 

@@ -36,8 +36,9 @@ subroutine build_common_tables(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, &
 
     call strux_pairs(nbas, nspec, alat, plat, pos, rmax, ips, lmxb, nttab, ntab_arr, iax)
     call mkiaxd(nttab, lmxb, ips, iax)
+    if (maxval(lmxb) > lmxcg_max - 1) call strux_fail('strux_lib: lmax > 3 exceeds the Gaunt table size')
     call scg(lmxcg_max, cg, indxcg, jcg)
-    call sylmnc(cy, lmxcg_max)
+    call sylmnc(cy, 2*maxval(lmxb))
 end subroutine build_common_tables
 
 subroutine allocate_sdot_array(ldot, nl2, nttab, sdot_out)
