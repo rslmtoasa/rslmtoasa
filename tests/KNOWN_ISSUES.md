@@ -540,10 +540,6 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Read (not run):** `source/symmetry.f90` `initialize_symmetry` copies `lattice_ref%cr(:,i)` (Cartesian, units of alat) into the fractional-position argument of `spglib%initialize`. This is correct only when the two coincide (single-atom cells, diamond Si on the fcc primitive cell); for other multi-atom cells the crystal group and the existing reduced mesh would be wrong. `setup_magnetic_symmetry` converts to fractional itself and does not use the stored positions.
 - **Not checked:** any multi-atom cell where they differ. **Proposal:** convert in `initialize_symmetry` (about 5 lines) and check the affected cases; developer decision.
 
-### Per-step `N(E_F=` log line gone on the reduced-mesh path; LdaUKspaceGbt and LdaULocalNsp4Workflows parse it — 2026-11-19
-- **Measured:** `ctest -L lda_u`: LdaUKspaceGbt (4 cases) and LdaULocalNsp4Workflows (ks_af_soc0, ks_af_soc0_hoh, eng_local) fail with "expected 3 steps, got 1" (E_F count). `N(E_F=` is printed only by `calculate_dos_tetrahedron`, which since the per-iteration full-mesh switch was removed runs once, in the final DOS. Fermi level and moments per step are unchanged: fm_second deck, new binary vs baseline binary, three steps, identical to the six printed decimals (also with `use_symmetry_reduction = .true.`).
-- **Not checked:** the tests' own E_F comparison (the `Fermi level on entry` lines carry the same numbers). **Proposal:** parse that line in the two scripts; developer decision (tests not edited).
-
 ### LdaURefKsBulkNsp2SocUTilted: max |delta| 6.71e-10 against tolerance 1e-10, also with the unchanged main binary — 2026-11-19
 - **Measured:** `reference_rows.py ks_soc_u2_x` gives 6.71e-10 with main and with this branch (the row sets `use_symmetry_reduction = .false.`); the stored reference is not from this platform. **Not checked:** a `ks_soc_u2_x.linux-x86_64.json` variant (not written).
 
