@@ -100,6 +100,10 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
 - **2026-11-16:** `Val04LdaUPhysics` is no longer registered and `val04_lda_u.py` is not in the tree; Val12 was not re-run.
 
+### The lmax=3 symmetry twins do not exercise symmetrize_site_dm — 2026-11-19
+- **Verified:** `Example_k_space_scf_tetra_bccFe_lmax3_nsp4_symon` (U = 0, `hubbard_spinor_dm_diagnostic`) still passes at 1e-8 with `symmetrize_site_dm` damaged locally (not committed): zeroing the f rows/columns of the orbital rotation, and zeroing the d rows/columns (`d(5:9,:)`, `d(:,5:9)`). The checked quantities (Fe_out.nml, totaldos, band_moments, log patterns) do not depend on the symmetrised site density matrix at U = 0.
+- **Not tested:** whether a U != 0 case, or a check on `ldm`/`ldm_spinor` or the HUBBARD_SPINOR_DM log line, would see it. The spinor-DM path symmetrises the d block only, so the f block is reached only through `calculate_ldm_from_eigenvectors`.
+
 ## Fixed-potential and frozen-magnon (GBT) findings
 
 ### Small-q GBT stiffness is mesh sensitive; multi-sublattice k-space not re-tested — 2026-08-16
