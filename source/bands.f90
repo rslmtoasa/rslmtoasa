@@ -2434,6 +2434,7 @@ contains
       real(rp) :: rq, dnu, pli, delta2 ! Local variables
       real(rp) :: old_pl
       real(rp), allocatable :: diag_comm(:, :, :, :)
+      real(rp), allocatable :: pl_comm(:, :, :)
 
       if (present(diag_out)) then
          if (size(diag_out, 1) /= this%lattice%nrec .or. size(diag_out, 2) < lmax_basis + 1 .or. &
@@ -2491,6 +2492,20 @@ contains
          diag_out = diag_comm
          deallocate(diag_comm)
       end if
+
+      ! Each rank updated only its own atoms: share PL so every rank sees all atoms.
+      allocate(pl_comm(this%lattice%nrec, lmax_basis + 1, 2))
+      pl_comm(:, :, :) = 0.0_rp
+      do ia = start_atom, end_atom
+         plusbulk = this%lattice%nbulk + ia
+         pl_comm(ia, :, :) = this%symbolic_atom(plusbulk)%potential%pl(0:lmax_basis, 1:2)
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, pl_comm, product(shape(pl_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         this%symbolic_atom(plusbulk)%potential%pl(0:lmax_basis, 1:2) = pl_comm(ia, :, :)
+      end do
+      deallocate(pl_comm)
 #endif
    end subroutine calculate_pl
 
