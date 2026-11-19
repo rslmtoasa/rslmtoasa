@@ -363,6 +363,8 @@ end subroutine project_dos_orbitals_gaussian
       real(rp), allocatable :: local_projected_dos(:, :, :, :)
       real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
+      ! Projection weights per k-point: (total, mx, my, mz; l; site; band; k)
+      real(rp), allocatable :: proj_cache(:, :, :, :, :)
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -432,13 +434,34 @@ end subroutine project_dos_orbitals_gaussian
       n_tet_ir = this%n_tetrahedra
       call get_mpi_range(rank, n_tet_ir, tet_start, tet_end, tet_count, region_tag='projected tetra')
 
+      ! Each k-point is a corner of many tetrahedra: compute its projection weights once.
+      nbands = size(this%eigenvalues, 1)
+      allocate(proj_cache(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
+      proj_cache = 0.0_rp
+      !$OMP PARALLEL DO DEFAULT(NONE) SHARED(this, proj_cache, site_orb_offset, lstart, lend, n_orb_per_spin, nbands) &
+      !$OMP PRIVATE(ik, i_band, isite, iorb, orbital_char) SCHEDULE(DYNAMIC)
+      do ik = 1, size(this%eigenvectors, 3)
+         do i_band = 1, nbands
+            do isite = 1, this%n_sites
+               do iorb = 1, 4
+                  if (lstart(iorb) > n_orb_per_spin) cycle
+                  call compute_spinor_block_projection(this, ik, i_band, site_orb_offset(isite), n_orb_per_spin, &
+                                                       lstart(iorb), lend(iorb), orbital_char, proj_cache(2, iorb, isite, i_band, ik), &
+                                                       proj_cache(3, iorb, isite, i_band, ik), proj_cache(4, iorb, isite, i_band, ik))
+                  proj_cache(1, iorb, isite, i_band, ik) = orbital_char
+               end do
+            end do
+         end do
+      end do
+      !$OMP END PARALLEL DO
+
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &
-      !$OMP SHARED(this, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
+      !$OMP SHARED(this, proj_cache, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
       !$OMP        tet_start, tet_end, de) &
       !$OMP PRIVATE(i_tet, i_band, i_corner, ik, e_corners, sorted_e, e1, e2, e3, e4, i_start, i_end, &
       !$OMP         i_energy, energy, dos_contrib, x, C, tet_weight, isite, site_orb_start, axis, iorb, &
-      !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_char, orbital_chars, &
+      !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_chars, &
       !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
       !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, degenerate_tetra)
       allocate(dos_line(this%n_energy_points))
@@ -529,10 +552,10 @@ end subroutine project_dos_orbitals_gaussian
                   if (lstart(iorb) <= n_orb_per_spin) then
                      do i_corner = 1, 4
                         ik = this%tetrahedra(i_corner, i_tet)
-                        call compute_spinor_block_projection(this, ik, i_band, site_orb_start, n_orb_per_spin, &
-                                                             lstart(iorb), lend(iorb), orbital_char, mx_chars(i_corner), &
-                                                             my_chars(i_corner), mz_chars(i_corner))
-                        orbital_chars(i_corner) = orbital_char
+                        orbital_chars(i_corner) = proj_cache(1, iorb, isite, i_band, ik)
+                        mx_chars(i_corner) = proj_cache(2, iorb, isite, i_band, ik)
+                        my_chars(i_corner) = proj_cache(3, iorb, isite, i_band, ik)
+                        mz_chars(i_corner) = proj_cache(4, iorb, isite, i_band, ik)
                      end do
                      orbital_char_avg = sum(orbital_chars) / 4.0_rp
                      mx_char_avg = sum(mx_chars) / 4.0_rp
@@ -591,6 +614,7 @@ end subroutine project_dos_orbitals_gaussian
       end if
 #endif
 
+      deallocate(proj_cache)
       deallocate(site_orb_offset)
       deallocate(site_axes)
 
