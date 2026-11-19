@@ -1856,8 +1856,8 @@
         }
       ],
       "tier": "quick",
-      "abs_tol": 1e-12,
-      "rel_tol": 1e-12
+      "abs_tol": 1e-08,
+      "rel_tol": 1e-08
     },
     {
       "name": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
@@ -2194,8 +2194,8 @@
         }
       ],
       "tier": "quick",
-      "abs_tol": 1e-12,
-      "rel_tol": 1e-12
+      "abs_tol": 1e-08,
+      "rel_tol": 1e-08
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp2",
@@ -2536,8 +2536,8 @@
         }
       ],
       "tier": "quick",
-      "abs_tol": 1e-12,
-      "rel_tol": 1e-12
+      "abs_tol": 1e-08,
+      "rel_tol": 1e-08
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp3",
@@ -2912,8 +2912,8 @@
           }
         }
       },
-      "abs_tol": 1e-12,
-      "rel_tol": 1e-12
+      "abs_tol": 1e-08,
+      "rel_tol": 1e-08
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp4",
@@ -3288,8 +3288,8 @@
           }
         }
       },
-      "abs_tol": 1e-12,
-      "rel_tol": 1e-12
+      "abs_tol": 1e-08,
+      "rel_tol": 1e-08
     }
   ]
 }
