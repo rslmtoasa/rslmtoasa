@@ -443,6 +443,8 @@ module reciprocal_mod
       real(rp) :: canonical_electron_count
       !> Projection-free occupied-eigenvalue band energy for the current spectrum.
       real(rp) :: canonical_band_energy
+      !> Per-site spin axes used by the DOS projections, stored by prepare_density_of_states.
+      real(rp), allocatable :: dos_site_axes(:, :)
       !> Global raw k-weight sum used by the canonical normalization contract.
       real(rp) :: canonical_weight_sum
       !> True only after the current eigensystem has been evaluated canonically.

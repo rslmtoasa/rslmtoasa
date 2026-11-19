@@ -54,6 +54,7 @@ contains
       logical, intent(in), optional :: auto_find_fermi
 
       real(rp) :: canonical_eband
+      integer :: isite
 
       call root_info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
 
@@ -113,6 +114,14 @@ contains
       ! EF, electron count, and the source-of-truth EBAND are properties of
       ! eigenvalues/weights/occupations, not of the chosen DOS output grid.
       canonical_eband = this%calculate_canonical_band_energy(this%auto_find_fermi)
+
+      ! Spin axes at the time these eigenvectors are produced; the DOS output
+      ! part may run after the potential moments have been updated.
+      if (allocated(this%dos_site_axes)) deallocate(this%dos_site_axes)
+      allocate(this%dos_site_axes(3, this%lattice%nrec))
+      do isite = 1, this%lattice%nrec
+         call get_site_spin_axis(this, isite, this%dos_site_axes(:, isite))
+      end do
    end subroutine prepare_density_of_states
 
    !> @brief Total and projected DOS, energy cross-checks and DOS file.

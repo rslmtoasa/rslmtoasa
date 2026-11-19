@@ -134,7 +134,7 @@ module subroutine project_dos_orbitals_gaussian(this)
                ! with the up channels followed by the down channels.
                site_orb_start = site_orb_offset(isite)
 
-               call get_site_spin_axis(this, isite, axis)
+               axis = this%dos_site_axes(:, isite)
                do iorb = 1, 4
                   orbital_char = 0.0_rp
                   mx_char = 0.0_rp
@@ -418,9 +418,7 @@ end subroutine project_dos_orbitals_gaussian
       do isite = 1, this%n_sites + 1
          site_orb_offset(isite) = (isite - 1) * n_orb_site
       end do
-      do isite = 1, this%n_sites
-         call get_site_spin_axis(this, isite, site_axes(:, isite))
-      end do
+      site_axes = this%dos_site_axes
 
       ! Setup tetrahedra if not already done
       if (.not. allocated(this%tetrahedra)) then
