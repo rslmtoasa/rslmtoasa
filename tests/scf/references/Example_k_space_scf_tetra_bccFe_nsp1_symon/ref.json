@@ -1,0 +1,100 @@
+{
+  "nml": {
+    "Fe_out.nml": {
+      "lmax": 2.0,
+      "etot": -2541.981882868813,
+      "ws_r": 2.6622,
+      "vmad": -9.170358068216896e-12,
+      "mom": {
+        "3": 1.0
+      },
+      "lmom": {
+        "3": 0.04170166576999944
+      }
+    }
+  },
+  "text": {
+    "totaldos.out": {
+      "120": {
+        "1": -0.77507,
+        "2": 0.0
+      },
+      "200": {
+        "1": 0.00732,
+        "2": 10.01722
+      },
+      "280": {
+        "1": 0.78972,
+        "2": 8.83793
+      }
+    },
+    "band_moments.dat": {
+      "11": {
+        "4": 0.333264,
+        "5": -0.461513,
+        "6": 0.144178
+      },
+      "12": {
+        "4": 0.35629,
+        "5": -0.436231,
+        "6": 0.131555
+      },
+      "13": {
+        "4": 0.368556,
+        "5": -0.305328,
+        "6": 0.123177
+      },
+      "14": {
+        "4": 0.44317,
+        "5": -0.246591,
+        "6": 0.121665
+      },
+      "15": {
+        "4": 4.362847,
+        "5": -0.232302,
+        "6": 0.101975
+      },
+      "16": {
+        "4": 2.135873,
+        "5": -0.209293,
+        "6": 0.073627
+      },
+      "17": {
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      },
+      "18": {
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      }
+    }
+  },
+  "log": {
+    "testrun.log": {
+      "fermi_level_it1": -0.0613162332,
+      "fermi_level_last": -0.0611110598,
+      "canonical_electron_count_it1": 8.0,
+      "canonical_electron_count_last": 8.0,
+      "canonical_band_energy_it1": -1.9979766,
+      "canonical_band_energy_last": -1.99156507,
+      "k_weight_sum_it1": 1.0,
+      "k_weight_sum_last": 1.0,
+      "dos_integral_it1": 18.1371,
+      "dos_integral_last": 17.960352,
+      "dos_occupied_count_it1": 8.06611,
+      "dos_occupied_count_last": 8.062849,
+      "site_spin_moment_it1": 2.128054,
+      "site_spin_moment_last": 2.129334,
+      "site_valence_it1": 8.0,
+      "site_valence_last": 8.0,
+      "site_charge_transfer_z_it1": 0.0,
+      "site_charge_transfer_z_last": -0.0
+    },
+    "report.out": {
+      "site_occupation": 8.0,
+      "site_charge_transfer": 0.0
+    }
+  }
+}

@@ -530,3 +530,8 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### Conductivity comments name the Jackson kernel; the code uses Lorentz (lambda = 6) — 2026-11-16
 - **Read:** `source/conductivity.f90` about lines 327-339 describe a Jackson kernel; line 391 (`jackson_kernel`) is commented out and line 392 calls `lorentz_kernel(..., 6.0d0)`.
 - **Proposal:** correct the comments (or restore Jackson if Lorentz was a debugging change); developer decision.
+
+### Diamond-Si tetrahedron k-space SCF: step 3 differs between serial and MPI (2 or 3 ranks) — 2026-11-19
+- **Measured:** deck of `Example_k_space_scf_tetra_diamondSi_sp_nsp1` (6x6x6, nstep = 3, `use_kspace`, tetrahedron). Fermi level per step: 1.456060e-3 and 1.606018e-1 Ry in both modes, then 8.05268e-3 (serial, and 1 MPI rank) vs 7.84449e-3 Ry (2 and 3 ranks, reproducible). Step-3 `etot` differs by about 2e-5 Ry; DOS rows by up to 1.5e-2. The bcc-Fe tetrahedron cases (nsp = 1, 2) match between serial and 2 ranks at the default tolerance.
+- **Not checked:** which routine differs (steps 1-2 outputs agree), and whether the large step-2 Fermi jump (0.16 Ry) amplifies a rounding-level difference. The case is registered serial only.
+- **Proposal:** compare per-step H(k)/density between 1 and 2 ranks to locate it; half a day.
