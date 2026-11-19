@@ -580,6 +580,7 @@ module reciprocal_mod
       procedure :: setup_magnetic_symmetry
       procedure :: symmetrize_spin_density
       procedure :: symmetrize_site_moments
+      procedure :: symmetrize_site_dm
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
@@ -1296,6 +1297,12 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(inout) :: v(:, :)
    end subroutine symmetrize_site_moments
 
+   !> @brief Average per-site density matrices over the symmetry group (no-op without a group).
+   module subroutine symmetrize_site_dm(this, rho)
+      class(reciprocal), intent(in) :: this
+      complex(rp), intent(inout) :: rho(:, :, :)
+   end subroutine symmetrize_site_dm
+
    !> @brief Calculate reciprocal-space density of states.
    !> @details Configures the energy grid and DOS method, ensures eigenvalues are
    !>          available, evaluates total/projected DOS, moments, and writes output.
@@ -1526,13 +1533,6 @@ end subroutine project_dos_orbitals_gaussian
       integer, intent(in) :: isite
       real(rp), intent(out) :: axis(3)
    end subroutine get_site_spin_axis
-
-   !> @brief Synchronize lattice local-density-matrix data across MPI ranks.
-   !> @param[inout] lattice_obj Lattice object whose ldm-like storage is synchronized.
-   module subroutine sync_lattice_ldm(lattice_obj)
-      use lattice_mod
-      type(lattice), intent(inout) :: lattice_obj
-   end subroutine sync_lattice_ldm
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
    !> @param[in] this Reciprocal object containing eigenvectors.

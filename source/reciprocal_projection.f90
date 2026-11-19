@@ -234,56 +234,17 @@ end subroutine project_dos_orbitals_gaussian
    end subroutine get_site_spin_axis
 
 #ifdef USE_MPI
-   !> @brief Synchronize lattice local-density-matrix data across MPI ranks.
-   !> @param[inout] lattice_obj Lattice object whose ldm-like storage is synchronized.
-   module subroutine sync_lattice_ldm(lattice_obj)
-      use lattice_mod
-      type(lattice), intent(inout) :: lattice_obj
-      real(rp), allocatable :: ldm_comm(:, :, :, :)
-      real(rp), allocatable :: ldm_comm_imag(:, :, :, :)
-      integer :: max_flat_ldm, local_flat
-      integer :: na_glob, plusbulk, lcount_ldm, l, ispin
+   !> Sum a complex rank-3 array over all MPI ranks.
+   subroutine sum_over_ranks(a)
+      complex(rp), intent(inout) :: a(:, :, :)
+      real(rp), allocatable :: re(:, :, :), im(:, :, :)
 
-      max_flat_ldm = (2*lmax_basis + 1)*(2*lmax_basis + 1)
-      allocate(ldm_comm(lattice_obj%nrec, lmax_basis + 1, 2, max_flat_ldm))
-      allocate(ldm_comm_imag(lattice_obj%nrec, lmax_basis + 1, 2, max_flat_ldm))
-      ldm_comm(:, :, :, :) = 0.0_rp
-      ldm_comm_imag(:, :, :, :) = 0.0_rp
-      do na_glob = 1, lattice_obj%nrec
-         plusbulk = lattice_obj%nbulk + na_glob
-         call lattice_obj%symbolic_atoms(plusbulk)%potential%flatten_ldm()
-         lcount_ldm = min(lattice_obj%symbolic_atoms(plusbulk)%potential%lmax, lmax_basis) + 1
-         do l = 1, lcount_ldm
-            local_flat = (2*l - 1)*(2*l - 1)
-            do ispin = 1, 2
-               ldm_comm(na_glob, l, ispin, 1:local_flat) = &
-                  lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat)
-               ldm_comm_imag(na_glob, l, ispin, 1:local_flat) = &
-                  lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten_imag(l, ispin, 1:local_flat)
-            end do
-         end do
-      end do
-      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm, product(shape(ldm_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm_imag, product(shape(ldm_comm_imag)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      do na_glob = 1, lattice_obj%nrec
-         plusbulk = lattice_obj%nbulk + na_glob
-         lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(:, :, :) = 0.0_rp
-         lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten_imag(:, :, :) = 0.0_rp
-         lcount_ldm = min(lattice_obj%symbolic_atoms(plusbulk)%potential%lmax, lmax_basis) + 1
-         do l = 1, lcount_ldm
-            local_flat = (2*l - 1)*(2*l - 1)
-            do ispin = 1, 2
-               lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat) = &
-                  ldm_comm(na_glob, l, ispin, 1:local_flat)
-               lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten_imag(l, ispin, 1:local_flat) = &
-                  ldm_comm_imag(na_glob, l, ispin, 1:local_flat)
-            end do
-         end do
-         call lattice_obj%symbolic_atoms(plusbulk)%potential%expand_ldm()
-      end do
-      deallocate(ldm_comm)
-      deallocate(ldm_comm_imag)
-   end subroutine sync_lattice_ldm
+      re = real(a, rp)
+      im = aimag(a)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, re, size(re), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, im, size(im), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      a = cmplx(re, im, rp)
+   end subroutine sum_over_ranks
 #endif
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
@@ -887,7 +848,7 @@ end subroutine calculate_band_moments
       real(rp) :: kweight, fermi_occ
       complex(rp), allocatable :: DM(:,:)
       complex(rp), allocatable :: DM_m1(:,:)
-      real(rp), allocatable :: m1_comm_real(:, :, :, :, :), m1_comm_imag(:, :, :, :, :)
+      complex(rp), allocatable :: rho(:, :, :), rho_m1(:, :, :)
       complex(rp) :: psi_a, psi_b
       integer :: nbands, nsites, i
       integer :: m1_lmax_required, site_lmax
@@ -907,7 +868,6 @@ end subroutine calculate_band_moments
 
       call root_info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
 
-      call this%ensure_full_mesh_for_spinor_integrations('calculate_ldm_from_eigenvectors')
       use_complex_projector = .false.
       if (present(fixed_liechtenstein)) use_complex_projector = fixed_liechtenstein
       m1_only_use = .false.
@@ -942,11 +902,13 @@ end subroutine calculate_band_moments
             call g_logger%fatal('calculate_ldm_from_eigenvectors: m1_out has incompatible extents', __FILE__, __LINE__)
          end if
          m1_out = cmplx(0.0_rp, 0.0_rp, rp)
-         allocate(DM_m1(n_orb_site, n_orb_site))
+         allocate(DM_m1(n_orb_site, n_orb_site), rho_m1(n_orb_site, n_orb_site, nsites))
+         rho_m1 = (0.0_rp, 0.0_rp)
       end if
 
       ! Allocate temporary DM (n_orb_site x n_orb_site)
-      allocate(DM(n_orb_site, n_orb_site))
+      allocate(DM(n_orb_site, n_orb_site), rho(n_orb_site, n_orb_site, nsites))
+      rho = (0.0_rp, 0.0_rp)
 
       ! Zero per-site LDM storage before accumulation
       if (.not. m1_only_use) then
@@ -1030,54 +992,45 @@ end subroutine calculate_band_moments
                end if
             end if
             
-            ! Project DM into ldm structure: iterate over angular momentum channels
-            do iorb = 0, min(3, lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%lmax)
-               norb_l = 2*iorb + 1
-               basis_offset = iorb**2  ! 0, 1, 4 mapping
-               
-               do ispin = 1, this%n_spin_components
-                  do alpha = 1, norb_l
-                     do beta = 1, norb_l
-                        ! Map to DM indices: spin_block_offset + basis_offset + m
-                        idx_a = (ispin - 1) * n_orb_per_spin + basis_offset + alpha
-                        idx_b = (ispin - 1) * n_orb_per_spin + basis_offset + beta
-                        if (idx_a > n_orb_site .or. idx_b > n_orb_site) cycle
-                        
-                        ! The fixed Liechtenstein path keeps the full coherent projector.
-                        if (.not. m1_only_use) then
-                           lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) = &
-                              lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) + &
-                              merge(DM(idx_a, idx_b), cmplx(real(DM(idx_a, idx_b),rp), 0.0_rp,rp), use_complex_projector)
-                        end if
-                        if (present(m1_out)) then
-                           m1_out(isite, iorb + 1, ispin, alpha, beta) = &
-                              m1_out(isite, iorb + 1, ispin, alpha, beta) + DM_m1(idx_a, idx_b)
-                        end if
-                     end do
-                  end do
-               end do
-            end do
-            
+            rho(:, :, isite) = rho(:, :, isite) + DM
+            if (present(m1_out)) rho_m1(:, :, isite) = rho_m1(:, :, isite) + DM_m1
          end do ! sites
       end do ! k-points
 
 #ifdef USE_MPI
       if (this%k_mesh_distributed_active) then
-         if (.not. m1_only_use) call sync_lattice_ldm(lattice_obj)
-         if (present(m1_out)) then
-            allocate(m1_comm_real(size(m1_out, 1), size(m1_out, 2), size(m1_out, 3), size(m1_out, 4), size(m1_out, 5)))
-            allocate(m1_comm_imag(size(m1_out, 1), size(m1_out, 2), size(m1_out, 3), size(m1_out, 4), size(m1_out, 5)))
-            m1_comm_real = real(m1_out, rp)
-            m1_comm_imag = aimag(m1_out)
-            call MPI_ALLREDUCE(MPI_IN_PLACE, m1_comm_real, product(shape(m1_comm_real)), &
-                               MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-            call MPI_ALLREDUCE(MPI_IN_PLACE, m1_comm_imag, product(shape(m1_comm_imag)), &
-                               MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-            m1_out = cmplx(m1_comm_real, m1_comm_imag, rp)
-            deallocate(m1_comm_real, m1_comm_imag)
-         end if
+         call sum_over_ranks(rho)
+         if (present(m1_out)) call sum_over_ranks(rho_m1)
       end if
 #endif
+
+      ! Group average over the reduced mesh, P_ab convention (the legacy projector is its transpose)
+      if (.not. use_complex_projector) rho = conjg(rho)
+      call this%symmetrize_site_dm(rho)
+      if (.not. use_complex_projector) rho = conjg(rho)
+      if (present(m1_out)) call this%symmetrize_site_dm(rho_m1)
+
+      do isite = 1, nsites
+         do iorb = 0, min(3, lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%lmax)
+            norb_l = 2*iorb + 1
+            basis_offset = iorb**2  ! 0, 1, 4 mapping
+            do ispin = 1, this%n_spin_components
+               do alpha = 1, norb_l
+                  do beta = 1, norb_l
+                     idx_a = (ispin - 1) * n_orb_per_spin + basis_offset + alpha
+                     idx_b = (ispin - 1) * n_orb_per_spin + basis_offset + beta
+                     if (idx_a > n_orb_site .or. idx_b > n_orb_site) cycle
+                     ! The fixed Liechtenstein path keeps the full coherent projector.
+                     if (.not. m1_only_use) then
+                        lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) = &
+                           merge(rho(idx_a, idx_b, isite), cmplx(real(rho(idx_a, idx_b, isite), rp), 0.0_rp, rp), use_complex_projector)
+                     end if
+                     if (present(m1_out)) m1_out(isite, iorb + 1, ispin, alpha, beta) = rho_m1(idx_a, idx_b, isite)
+                  end do
+               end do
+            end do
+         end do
+      end do
 
       if (use_complex_projector .and. .not. m1_only_use) then
          do isite = 1, nsites
@@ -1113,8 +1066,8 @@ end subroutine calculate_band_moments
          end do
       end if
 
-      deallocate(DM)
-      if (allocated(DM_m1)) deallocate(DM_m1)
+      deallocate(DM, rho)
+      if (allocated(DM_m1)) deallocate(DM_m1, rho_m1)
       call root_info('calculate_ldm_from_eigenvectors: Eigenvector-based site density matrix -> ldm complete', __FILE__, __LINE__)
       
    end subroutine calculate_ldm_from_eigenvectors
@@ -1134,7 +1087,6 @@ end subroutine calculate_band_moments
       character(len=400) :: line
       integer :: ik, ik_global, isite, ib, s, t, i, j, row, col, plusbulk, site_offset
 
-      call this%ensure_full_mesh_for_spinor_integrations('calculate_spinor_dm')
       kT = max(this%temperature*kB_Ry_per_K, 1.0e-10_rp)
       nsites = lattice_obj%nrec
       n_orb_site = size(this%eigenvectors, 1)/nsites
@@ -1182,6 +1134,8 @@ end subroutine calculate_band_moments
          deallocate(comm_real, comm_imag)
       end if
 #endif
+      call symmetrize_d_spinor(this, p)
+      call symmetrize_d_spinor(this, m1)
       do isite = 1, nsites
          plusbulk = lattice_obj%nbulk + isite
          if (.not. allocated(lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_spinor)) &
@@ -1199,5 +1153,35 @@ end subroutine calculate_band_moments
       end do
       deallocate(p, m1)
    end subroutine calculate_spinor_dm
+
+   !> Group average of per-site d-shell spinor matrices a(site, (s-1)*5+m, (t-1)*5+m'), embedded in the nb x nb site matrices.
+   subroutine symmetrize_d_spinor(this, a)
+      class(reciprocal), intent(in) :: this
+      complex(rp), intent(inout) :: a(:, :, :)
+      complex(rp), allocatable :: rho(:, :, :)
+      integer :: s, t, i, j
+
+      allocate(rho(nb, nb, size(a, 1)))
+      rho = (0.0_rp, 0.0_rp)
+      do s = 1, 2
+         do t = 1, 2
+            do i = 1, 5
+               do j = 1, 5
+                  rho((s - 1)*norb + 4 + i, (t - 1)*norb + 4 + j, :) = a(:, (s - 1)*5 + i, (t - 1)*5 + j)
+               end do
+            end do
+         end do
+      end do
+      call this%symmetrize_site_dm(rho)
+      do s = 1, 2
+         do t = 1, 2
+            do i = 1, 5
+               do j = 1, 5
+                  a(:, (s - 1)*5 + i, (t - 1)*5 + j) = rho((s - 1)*norb + 4 + i, (t - 1)*norb + 4 + j, :)
+               end do
+            end do
+         end do
+      end do
+   end subroutine symmetrize_d_spinor
 
 end submodule reciprocal_projection

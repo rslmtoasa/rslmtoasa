@@ -54,24 +54,36 @@ contains
                      trim(int2str(count(this%sym_spin_flips < 0))) // ' time-reversal-combined', __FILE__, __LINE__)
    end subroutine setup_magnetic_symmetry
 
+   !> Cartesian orthogonal matrix of each stored operation (lattice%cr is in units of alat, frac = bt cart/(2 pi)).
+   function sym_cart_rotations(this) result(rc)
+      class(reciprocal), intent(in) :: this
+      real(rp) :: rc(3, 3, this%n_sym_ops)
+      real(rp) :: bt(3, 3)
+      integer :: k
+
+      bt = transpose(this%reciprocal_vectors)
+      do k = 1, this%n_sym_ops
+         rc(:, :, k) = matmul(inverse_3x3(bt), matmul(real(this%sym_rotations(:, :, k), rp), bt))
+      end do
+   end function sym_cart_rotations
+
    !> @brief Cartesian action of each stored operation on a spin vector.
    !> @details SOC modes (nsp = 2, 4): det(R) R_cart, negated for time-reversal-combined operations (axial vector).
    !>          nsp = 1, 3: identity, the spin does not rotate.
    function sym_spin_matrices(this) result(w)
       class(reciprocal), intent(in) :: this
       real(rp) :: w(3, 3, this%n_sym_ops)
-      real(rp) :: bt(3, 3), rf(3, 3)
+      real(rp) :: rc(3, 3, this%n_sym_ops)
       integer :: k, nsp
 
       nsp = 1
       if (associated(this%control)) nsp = this%control%nsp
-      bt = transpose(this%reciprocal_vectors)   ! frac = bt cart/(2 pi), so R_cart = bt^-1 R_frac bt
+      rc = sym_cart_rotations(this)
       do k = 1, this%n_sym_ops
          w(:, :, k) = 0.0_rp
          if (nsp == 2 .or. nsp == 4) then
-            rf = real(this%sym_rotations(:, :, k), rp)
-            w(:, :, k) = matmul(inverse_3x3(bt), matmul(rf, bt))
-            w(:, :, k) = w(:, :, k)*real(nint(determinant(rf)), rp)*real(this%sym_spin_flips(k), rp)
+            w(:, :, k) = rc(:, :, k)*real(nint(determinant(real(this%sym_rotations(:, :, k), rp))), rp) &
+                         *real(this%sym_spin_flips(k), rp)
          else
             w(1, 1, k) = 1.0_rp
             w(2, 2, k) = 1.0_rp
@@ -130,5 +142,53 @@ contains
       end do
       v = avg/real(this%n_sym_ops, rp)
    end subroutine symmetrize_site_moments
+
+   !> @brief Group average of per-site density matrices rho_a = 1/|G| sum_g U_g T_g[rho_(g^-1 a)] U_g^dagger.
+   !> @details rho(:, :, site) is P_ab = psi_a psi_b^* over the nb eigenvector components of the site (spin block of norb
+   !>          orbitals, spherical basis). U_g = D(R) for nsp = 1, 3 (spin untouched), D(R) x SU(2)(det(R) R) for nsp = 2, 4,
+   !>          T_g the antiunitary i sigma_y K of the time-reversal-combined operations. The average runs in the real-harmonic
+   !>          basis, where D is real and K is plain conjugation. Does nothing without a group (n_sym_ops = 0).
+   module subroutine symmetrize_site_dm(this, rho)
+      class(reciprocal), intent(in) :: this
+      complex(rp), intent(inout) :: rho(:, :, :)
+      complex(rp), allocatable :: u(:, :, :)
+      complex(rp) :: d(norb, norb), sp(2, 2)
+      real(rp), allocatable :: rc(:, :, :)
+      integer :: k, i, s, t, nsp
+
+      if (this%n_sym_ops == 0) return
+      if (lmax_basis > 2) call g_logger%fatal('symmetrize_site_dm: only s, p, d blocks (lmax_basis <= 2); generate_reduced_kpoint_mesh keeps the full mesh above that', __FILE__, __LINE__)
+      if (size(rho, 1) /= nb .or. size(rho, 2) /= nb) call g_logger%fatal('symmetrize_site_dm: matrix size is not nb', __FILE__, __LINE__)
+      nsp = 1
+      if (associated(this%control)) nsp = this%control%nsp
+      allocate(u(nb, nb, this%n_sym_ops), rc(3, 3, this%n_sym_ops))
+      rc = sym_cart_rotations(this)
+      u = (0.0_rp, 0.0_rp)
+      do k = 1, this%n_sym_ops
+         call orbital_rotation(rc(:, :, k), d)
+         sp = sigma_0
+         if (nsp == 2 .or. nsp == 4) call spin_rotation(rc(:, :, k), sp)
+         do s = 1, 2
+            do t = 1, 2
+               u((s - 1)*norb + 1:s*norb, (t - 1)*norb + 1:t*norb, k) = sp(s, t)*d
+            end do
+         end do
+      end do
+      do i = 1, size(rho, 3)
+         do s = 1, 2
+            do t = 1, 2
+               call hcpx(rho((s - 1)*norb + 1:s*norb, (t - 1)*norb + 1:t*norb, i), 'sph2cart')
+            end do
+         end do
+      end do
+      call group_average_dm(rho, this%sym_atom_perm, u, this%sym_spin_flips < 0)
+      do i = 1, size(rho, 3)
+         do s = 1, 2
+            do t = 1, 2
+               call hcpx(rho((s - 1)*norb + 1:s*norb, (t - 1)*norb + 1:t*norb, i), 'cart2sph')
+            end do
+         end do
+      end do
+   end subroutine symmetrize_site_dm
 
 end submodule reciprocal_symmetry

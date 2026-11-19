@@ -145,7 +145,7 @@ module math_mod
    complex(rp), allocatable, public, protected :: S_y(:, :)
    complex(rp), allocatable, public, protected :: S_z(:, :)
 
-   public :: init_math_operators
+   public :: init_math_operators, orbital_rotation, spin_rotation, group_average_dm
    public :: hubbard_projector_element, hubbard_spectral_density_element
    public :: project_spectral_density_2x2
    public :: hubbard_density_diagnostics, spinor_dm_summary, spinor_orbital_moment
@@ -731,6 +731,92 @@ contains
       end do
 
    end subroutine init_math_operators
+
+   !> Axis n and angle theta in [0, pi] of the proper part of the orthogonal matrix r (R = exp(theta [n]x)).
+   subroutine rotation_axis_angle(r, theta, n)
+      real(rp), intent(in) :: r(3, 3)
+      real(rp), intent(out) :: theta, n(3)
+      real(rp) :: rp3(3, 3), c, s
+      integer :: i
+
+      rp3 = r
+      if (determinant(r) < 0.0_rp) rp3 = -r
+      c = max(-1.0_rp, min(1.0_rp, 0.5_rp*(rp3(1, 1) + rp3(2, 2) + rp3(3, 3) - 1.0_rp)))
+      theta = acos(c)
+      n = [rp3(3, 2) - rp3(2, 3), rp3(1, 3) - rp3(3, 1), rp3(2, 1) - rp3(1, 2)]
+      s = sqrt(sum(n**2))
+      if (s > 1.0e-6_rp) then
+         n = n/s
+      else if (c > 0.0_rp) then
+         theta = 0.0_rp
+         n = [0.0_rp, 0.0_rp, 1.0_rp]
+      else   ! half turn: R + 1 = 2 n n^T
+         i = maxloc([rp3(1, 1), rp3(2, 2), rp3(3, 3)], 1)
+         n = 0.5_rp*(rp3(:, i) + merge(1.0_rp, 0.0_rp, [1, 2, 3] == i))
+         n = n/sqrt(sum(n**2))
+      end if
+   end subroutine rotation_axis_angle
+
+   !> Orbital rotation matrix d (norb x norb) of the orthogonal matrix r in the basis of L_x, L_y, L_z: exp(-i theta n.L) for
+   !> the proper part, times (-1)^l on each l block when det(r) < 0. For the real-harmonic blocks (s, p, d) it satisfies
+   !> d Y(r0) = Y(r r0).
+   subroutine orbital_rotation(r, d)
+      real(rp), intent(in) :: r(3, 3)
+      complex(rp), intent(out) :: d(norb, norb)
+      complex(rp) :: a(norb, norb), work(3*norb)
+      real(rp) :: theta, n(3), w(norb), rwork(3*norb)
+      integer :: l, info
+      external :: zheev
+
+      call rotation_axis_angle(r, theta, n)
+      a = n(1)*L_x + n(2)*L_y + n(3)*L_z
+      call zheev('V', 'U', norb, a, norb, w, work, 3*norb, rwork, info)
+      if (info /= 0) error stop 'orbital_rotation: zheev failed'
+      d = matmul(a*spread(exp(-i_unit*theta*w), 1, norb), conjg(transpose(a)))
+      if (determinant(r) < 0.0_rp) then
+         do l = 0, lmax_basis
+            d(l**2 + 1:(l + 1)**2, :) = real((-1)**l, rp)*d(l**2 + 1:(l + 1)**2, :)
+         end do
+      end if
+   end subroutine orbital_rotation
+
+   !> SU(2) matrix exp(-i theta n.sigma/2) of the proper part of the orthogonal matrix r.
+   subroutine spin_rotation(r, s)
+      real(rp), intent(in) :: r(3, 3)
+      complex(rp), intent(out) :: s(2, 2)
+      real(rp) :: theta, n(3)
+
+      call rotation_axis_angle(r, theta, n)
+      s = cos(0.5_rp*theta)*sigma_0 - i_unit*sin(0.5_rp*theta)*(n(1)*sigma_x + n(2)*sigma_y + n(3)*sigma_z)
+   end subroutine spin_rotation
+
+   !> Group average rho_(perm(i,k)) = 1/|G| sum_k U_k T_k[rho_i] U_k^dagger of per-site matrices rho(:, :, i) with two spin blocks
+   !> of n = size(rho, 1)/2 real-harmonic orbitals. T_k is the identity, or for tr(k) the antiunitary i sigma_y K on the
+   !> spin blocks: x_(st) -> e_s e_t conj(x_(s't')), s' the other spin, e = (+1, -1).
+   subroutine group_average_dm(rho, perm, u, tr)
+      complex(rp), intent(inout) :: rho(:, :, :)
+      integer, intent(in) :: perm(:, :)
+      complex(rp), intent(in) :: u(:, :, :)
+      logical, intent(in) :: tr(:)
+      complex(rp) :: avg(size(rho, 1), size(rho, 2), size(rho, 3)), x(size(rho, 1), size(rho, 2))
+      integer :: k, i, n
+
+      n = size(rho, 1)/2
+      avg = czero
+      do k = 1, size(u, 3)
+         do i = 1, size(rho, 3)
+            x = rho(:, :, i)
+            if (tr(k)) then
+               x(1:n, 1:n) = conjg(rho(n + 1:, n + 1:, i))
+               x(n + 1:, n + 1:) = conjg(rho(1:n, 1:n, i))
+               x(1:n, n + 1:) = -conjg(rho(n + 1:, 1:n, i))
+               x(n + 1:, 1:n) = -conjg(rho(1:n, n + 1:, i))
+            end if
+            avg(:, :, perm(i, k)) = avg(:, :, perm(i, k)) + matmul(u(:, :, k), matmul(x, conjg(transpose(u(:, :, k)))))
+         end do
+      end do
+      rho = avg/real(size(u, 3), rp)
+   end subroutine group_average_dm
 
    !> Factorial function by Ivan Miranda (17.09.2023)
    !> This function takes factorial(n<0) = 0, as necessary for
