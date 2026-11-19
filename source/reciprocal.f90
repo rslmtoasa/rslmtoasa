@@ -578,6 +578,8 @@ module reciprocal_mod
       procedure :: build_from_file
       procedure :: generate_reduced_kpoint_mesh
       procedure :: setup_magnetic_symmetry
+      procedure :: symmetrize_spin_density
+      procedure :: symmetrize_site_moments
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
@@ -1282,6 +1284,17 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine setup_magnetic_symmetry(this)
       class(reciprocal), intent(inout) :: this
    end subroutine setup_magnetic_symmetry
+
+   !> @brief Average this%rf_density over the symmetry group (no-op without a group).
+   module subroutine symmetrize_spin_density(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine symmetrize_spin_density
+
+   !> @brief Average one spin vector per site over the symmetry group (no-op without a group).
+   module subroutine symmetrize_site_moments(this, v)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(inout) :: v(:, :)
+   end subroutine symmetrize_site_moments
 
    !> @brief Calculate reciprocal-space density of states.
    !> @details Configures the energy grid and DOS method, ensures eigenvalues are

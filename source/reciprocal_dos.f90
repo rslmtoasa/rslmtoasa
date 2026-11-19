@@ -94,23 +94,6 @@ contains
          call this%diagonalize_hamiltonian()
       end if
 
-      ! Symmetry-reduced tetra path:
-      ! keep a correctness-first backend that switches to full mesh diagonalization
-      ! for tetra/blochl to preserve exact SCF observables.
-      if (this%use_symmetry_reduction) then
-         if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
-            call this%ensure_tetra_symmetry_backend()
-         end if
-      end if
-
-      ! Projected tetrahedron diagnostics require eigenvectors on the full
-      ! uniform mesh.  Establish that mesh before the source-of-truth FD
-      ! occupations and DOS are evaluated so no later projection rebuild can
-      ! invalidate or mix spectra from two meshes.
-      if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
-         call this%ensure_full_mesh_for_spinor_integrations('calculate_density_of_states')
-      end if
-
       ! EF, electron count, and the source-of-truth EBAND are properties of
       ! eigenvalues/weights/occupations, not of the chosen DOS output grid.
       canonical_eband = this%calculate_canonical_band_energy(this%auto_find_fermi)
@@ -136,8 +119,25 @@ contains
       character(len=100) :: filename
       character(len=360) :: energy_message
       real(rp) :: canonical_eband, dos_eband, projected_eband, dos_electrons, kT
+      real(rp), allocatable :: saved_moments(:, :, :, :)
+      real(rp) :: saved_electrons, saved_weight_sum
+      logical :: saved_valid
 
       canonical_eband = this%canonical_band_energy
+      ! Total and projected tetrahedron DOS integrate over the full uniform mesh; the SCF itself runs on the reduced one.
+      if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
+         ! The rebuild drops the SCF band moments and canonical sums; they belong to the SCF mesh and are kept.
+         call move_alloc(this%band_moments, saved_moments)
+         saved_electrons = this%canonical_electron_count
+         saved_weight_sum = this%canonical_weight_sum
+         saved_valid = this%canonical_energy_valid
+         call this%ensure_full_mesh_for_spinor_integrations('calculate_dos_output')
+         if (allocated(saved_moments)) call move_alloc(saved_moments, this%band_moments)
+         this%canonical_band_energy = canonical_eband
+         this%canonical_electron_count = saved_electrons
+         this%canonical_weight_sum = saved_weight_sum
+         this%canonical_energy_valid = saved_valid
+      end if
       filename = 'density_of_states.dat'
       if (present(output_file)) filename = output_file
 

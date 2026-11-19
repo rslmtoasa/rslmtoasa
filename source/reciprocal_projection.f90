@@ -758,13 +758,6 @@ module subroutine calculate_band_moments(this)
    call g_logger%info('calculate_band_moments: Using canonical/fixed Fermi level = ' // &
                       trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
 
-   if (this%use_symmetry_reduction .and. &
-       (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') .and. &
-       this%nk_total < this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
-      call this%ensure_full_mesh_for_spinor_integrations('calculate_band_moments')
-      call this%project_dos_orbitals_tetrahedron()
-   end if
-
    ! --- WP7: the SCF density is the shared rotating-frame contract. ----------
    ! Accumulate the full 2x2 spin density from eigenvectors / k weights /
    ! occupations with no axis in it, resolve the explicit per-site axis through

@@ -144,6 +144,7 @@ contains
          deallocate (rho_comm)
       end if
 #endif
+      call this%symmetrize_spin_density()
    end subroutine accumulate_spin_density_kspace
 
    !> @brief Fill `band_moments` by projecting the accumulated density.

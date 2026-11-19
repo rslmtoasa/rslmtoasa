@@ -206,6 +206,7 @@ contains
          call MPI_ALLREDUCE(MPI_IN_PLACE, site_mom, product(shape(site_mom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       end if
 #endif
+      call reciprocal_obj%symmetrize_site_moments(site_mom)
    end subroutine compute_kspace_spin_moments_spinor
 
    !> Field update of the k-space GBT constrained spiral, replacing the lambda controller of apply_constraints on this path
