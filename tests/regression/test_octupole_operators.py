@@ -30,13 +30,14 @@ def matrices():
     """Read actual L constants and actual hcpx transform assignments."""
     cart = []
     for axis in 'xyz':
-        block = M.split('L_' + axis + ' = reshape((/', 1)[1]
+        block = M.split('L_' + axis + '(1:9, 1:9) = reshape((/', 1)[1]
         values = block.split('/),', 1)[0]
         values = values.replace('&', '').replace('_rp', '').replace('sqrt_three', str(np.sqrt(3)))
         cart.append(-1j * np.array([float(v) for v in values.split(',')]).reshape((9, 9), order='F'))
-    v = np.zeros((9, 9), complex)
+    v = np.zeros((16, 16), complex)
     for i, j, expr in re.findall(r'^\s*v\((\d+), (\d+)\) = ([^\n]+)', subroutine(M, 'hcpx'), re.M):
         v[int(i)-1, int(j)-1] = evaluate(expr, {'cone': 1., 'const': 1/np.sqrt(2), 'i_unit': 1j})
+    v = v[:9, :9]  # the spd block; the f block of hcpx is assigned in a loop
     np.testing.assert_allclose(v.conj().T @ v, np.eye(9), atol=1e-14)
     angular = [v.conj().T @ a @ v for a in cart]
     env = {'matmul': np.matmul, **{'mL'+a: l for a, l in zip('xyz', angular)}}

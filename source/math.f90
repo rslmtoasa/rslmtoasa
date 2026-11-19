@@ -517,7 +517,7 @@ contains
    !>
    !> Must be called after basis_init().  Fills:
    !>   L_x, L_y, L_z  (norb x norb)  – orbital angular momentum (real-harmonics
-   !>                                     spd basis; other lmax values are not yet
+   !>                                     spdf basis; other lmax values are not yet
    !>                                     implemented and trigger an error stop)
    !>   S_x, S_y, S_z  (nb   x nb)    – S = (1/2) I_norb ⊗ σ  (computed for any norb)
    !---------------------------------------------------------------------------
@@ -525,6 +525,7 @@ contains
 
       integer :: i
       real(rp), dimension(3, 3) :: Lx_block, Ly_block, Lz_block
+      real(rp), parameter :: sqrt_six = sqrt(6.0_rp), sqrt_five_half = sqrt(2.5_rp), sqrt_three_half = sqrt(1.5_rp)
 
       ! ---- Orbital angular momentum operators --------------------------------
       if (allocated(L_x)) deallocate(L_x, L_y, L_z)
@@ -560,9 +561,12 @@ contains
          L_y(1, :) = czero; L_y(:, 1) = czero
          L_z(1, :) = czero; L_z(:, 1) = czero
 
-      case (2)
-         ! spd basis: hardcoded real-harmonics matrix elements (lmax=2, norb=9)
-         L_x = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+      case (2, 3)
+         ! spd basis: hardcoded real-harmonics matrix elements (lmax=2, norb=9); also the spd block at lmax=3
+         L_x = czero
+         L_y = czero
+         L_z = czero
+         L_x(1:9, 1:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -571,8 +575,8 @@ contains
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                       (/norb, norb/))*(-i_unit)
-         L_y = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                       (/9, 9/))*(-i_unit)
+         L_y(1:9, 1:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -581,8 +585,8 @@ contains
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, sqrt_three, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three, 0.0_rp, 0.0_rp/), &
-                       (/norb, norb/))*(-i_unit)
-         L_z = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                       (/9, 9/))*(-i_unit)
+         L_z(1:9, 1:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -591,120 +595,33 @@ contains
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                       (/norb, norb/))*(-i_unit)
-      case (3)
-         ! spdf basis: real-harmonics matrix elements (lmax=3, norb=16)
-         ! Cubic harmonics: s(1), p_x/y/z(2-4), d_xy/yz/zx/x²-y²/3z²-r²(5-9), f-orbitals(10-16)
-         ! f-orbital indices: 10=fz3, 11=fxz2, 12=fyz2, 13=fz(x²-y²), 14=fxyz, 15=fx3, 16=fy3
-
-         ! Initialize with zeros
-         L_x = czero
-         L_y = czero
-         L_z = czero
-
-         ! Copy spd blocks from lmax=2
-         ! L_x block for sp and d
-         L_x(2:4, 2:4) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, -1.0_rp, &
-                                   0.0_rp, 1.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
-         L_x(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, 0.0_rp, &
-                                   0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
-
-         ! L_y block for sp and d
-         L_y(2:4, 2:4) = reshape((/0.0_rp, 0.0_rp, 1.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, &
-                                   -1.0_rp, 0.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
-         L_y(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
-
-         ! L_z block for sp and d
-         L_z(2:4, 2:4) = reshape((/0.0_rp, -1.0_rp, 0.0_rp, &
-                                   1.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
-         L_z(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, &
-                                   0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
-
-         ! f-orbital diagonal elements (eigenvalues of L_z)
-         ! f-orbitals have m = -3, -2, -1, 0, 1, 2, 3
-         ! Eigenvalues of L_z: ℏm (in units where ℏ=1)
-         ! L_z(10,10) = m=-3: eigenvalue -3
-         ! L_z(11,11) = m=-2: eigenvalue -2
-         ! L_z(12,12) = m=-1: eigenvalue -1
-         ! L_z(13,13) = m=0: eigenvalue 0
-         ! L_z(14,14) = m=1: eigenvalue 1
-         ! L_z(15,15) = m=2: eigenvalue 2
-         ! L_z(16,16) = m=3: eigenvalue 3
-
-         ! f-orbital L_z matrix (diagonal in correct basis)
-         L_z(10, 10) = cmplx(-3.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_z(11, 11) = cmplx(-2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_z(12, 12) = cmplx(-1.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_z(14, 14) = cmplx( 1.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_z(15, 15) = cmplx( 2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_z(16, 16) = cmplx( 3.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! f-orbital L_+ = L_x + i*L_y and L_- = L_x - i*L_y off-diagonal elements
-         ! Using L_±|l,m⟩ = ℏ√(l(l+1) - m(m±1))|l,m±1⟩
-         ! For l=3: √(12 - m(m+1)) for L_+ and √(12 - m(m-1)) for L_-
-
-         ! L_x and L_y off-diagonal elements between f-orbitals (using raising/lowering)
-         ! These are computed from standard angular momentum algebra
-         ! L_x(i,j) = (L_+(i,j) + L_-(i,j))/2
-         ! L_y(i,j) = (L_+(i,j) - L_-(i,j))/(2i)
-
-         ! f-f raising/lowering matrix elements (representative values)
-         ! |3,-3⟩ → |3,-2⟩: √(12-(-3)(-2)) = √6
-         L_x(10, 11) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_x(11, 10) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! |3,-2⟩ → |3,-1⟩: √(12-(-2)(-1)) = √10
-         L_x(11, 12) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_x(12, 11) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! |3,-1⟩ → |3,0⟩: √(12-(-1)(0)) = √12
-         L_x(12, 13) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_x(13, 12) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! |3,0⟩ → |3,1⟩: √(12-0(1)) = √12
-         L_x(13, 14) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_x(14, 13) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! |3,1⟩ → |3,2⟩: √(12-1(2)) = √10
-         L_x(14, 15) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_x(15, 14) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! |3,2⟩ → |3,3⟩: √(12-2(3)) = √6
-         L_x(15, 16) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-         L_x(16, 15) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
-
-         ! L_y: same structure but with imaginary unit
-         L_y(10, 11) = cmplx(0.0_rp, sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-         L_y(11, 10) = cmplx(0.0_rp, -sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-
-         L_y(11, 12) = cmplx(0.0_rp, sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-         L_y(12, 11) = cmplx(0.0_rp, -sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-
-         L_y(12, 13) = cmplx(0.0_rp, sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-         L_y(13, 12) = cmplx(0.0_rp, -sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-
-         L_y(13, 14) = cmplx(0.0_rp, sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-         L_y(14, 13) = cmplx(0.0_rp, -sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-
-         L_y(14, 15) = cmplx(0.0_rp, sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-         L_y(15, 14) = cmplx(0.0_rp, -sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-
-         L_y(15, 16) = cmplx(0.0_rp, sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-         L_y(16, 15) = cmplx(0.0_rp, -sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
-
+                       (/9, 9/))*(-i_unit)
+         if (lmax_basis == 3) then
+            ! f block, canso order 10:fz3 11:fxz2 12:fyz2 13:fz(x2-y2) 14:fxyz 15:fx3 16:fy3 (normalised real harmonics):
+            ! L = -i A with A real antisymmetric, A = r x grad applied to the f polynomials
+            L_x(10:16, 10:16) = reshape([0.0_rp, 0.0_rp, -sqrt_six, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_five_half, 0.0_rp, 0.0_rp, &
+                                         sqrt_six, 0.0_rp, 0.0_rp, sqrt_five_half, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, -sqrt_five_half, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three_half, &
+                                         0.0_rp, sqrt_five_half, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three_half, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three_half, 0.0_rp, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, 0.0_rp, sqrt_three_half, 0.0_rp, 0.0_rp, 0.0_rp], &
+                                        [7, 7], order=[2, 1])*(-i_unit)
+            L_y(10:16, 10:16) = reshape([0.0_rp, sqrt_six, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                         -sqrt_six, 0.0_rp, 0.0_rp, sqrt_five_half, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_five_half, 0.0_rp, 0.0_rp, &
+                                         0.0_rp, -sqrt_five_half, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three_half, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, -sqrt_five_half, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three_half, &
+                                         0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three_half, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three_half, 0.0_rp, 0.0_rp], &
+                                        [7, 7], order=[2, 1])*(-i_unit)
+            L_z(11, 12) = -i_unit
+            L_z(12, 11) = i_unit
+            L_z(13, 14) = -2.0_rp*i_unit
+            L_z(14, 13) = 2.0_rp*i_unit
+            L_z(15, 16) = -3.0_rp*i_unit
+            L_z(16, 15) = 3.0_rp*i_unit
+         end if
       case default
          write (*, '(a,i0)') 'init_math_operators: L_x/L_y/L_z not implemented for lmax=', lmax_basis
          error stop 'init_math_operators: only lmax=1-3 (sp/spd/spdf) are implemented for L operators'
@@ -1441,14 +1358,15 @@ contains
 
    end subroutine QSort
 
-   ! Transform the spd matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
+   ! Transform the sp/spd/spdf matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
    subroutine hcpx(ham, transformation)
       ! Transform between cartesian and spherical-harmonic representations
       ! Input
       character(len=*), intent(in) :: transformation
       complex(rp), dimension(:, :), intent(inout) :: ham
       ! local variables
-      integer :: ii, n
+      integer :: ii, n, m, ic
+      real(rp) :: sg
       complex(rp) :: const, cone
       complex(rp), allocatable :: hesf(:, :), hcart(:, :), v(:, :), vc(:, :), htmp(:, :)
 
@@ -1460,8 +1378,8 @@ contains
       v = czero
       vc = czero
 
-      if (n == 9) then
-         !---base Y(lm) order (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)---
+      if (n == 4 .or. n == 9 .or. n == 16) then
+         !---base Y(lm) order (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)(3-3)...(33)---
          ! s
          v(1, 1) = cone
          vc(1, 1) = cone
@@ -1476,6 +1394,8 @@ contains
          vc(2, 3) = -i_unit*const
          v(4, 3) = cone
          vc(3, 4) = cone
+      end if
+      if (n >= 9) then
          ! d
          v(5, 5) = i_unit*const
          v(5, 9) = -i_unit*const
@@ -1495,36 +1415,27 @@ contains
          vc(5, 8) = const
          vc(9, 8) = const
          vc(7, 9) = cone
-      else if (n == 4) then
-         !---sp basis: Y(lm) order (00)(1-1)(10)(11)---
-         ! s
-         v(1, 1) = cone
-         vc(1, 1) = cone
-         ! p  (same block as in the n=9 case above)
-         v(2, 4) = -const
-         vc(4, 2) = -const
-         v(2, 2) = const
-         vc(2, 2) = const
-         v(3, 4) = i_unit*const
-         vc(4, 3) = -i_unit*const
-         v(3, 2) = i_unit*const
-         vc(2, 3) = -i_unit*const
-         v(4, 3) = cone
-         vc(3, 4) = cone
-      else
-         ! NOTE/TODO (spdf transform):
-         ! For basis sizes other than n=4 (sp) and n=9 (spd), hcpx currently
-         ! falls back to identity (no-op). This means n=16 (spdf) does NOT yet
-         ! have an explicit cartesian <-> spherical transform matrix here.
-         !
-         ! When implementing n=16, keep orbital ordering consistent with the
-         ! real-basis convention used in lattice%canso:
-         !   1:s, 2:x, 3:y, 4:z, 5:xy, 6:yz, 7:zx, 8:x2-y2, 9:3z2-r2,
-         !   10:fz3, 11:fxz2, 12:fyz2, 13:fz(x2-y2), 14:fxyz, 15:fx3, 16:fy3.
-         !
-         ! Until then, identity is intentional to avoid silently applying an
-         ! inconsistent transform.
-         ! For other basis sizes, default to identity transform (no-op)
+      end if
+      if (n == 16) then
+         ! f, same convention as d: Y(3,-m) = (c_m + i s_m)/sqrt(2), Y(3,+m) = (-1)^m (c_m - i s_m)/sqrt(2), Y(3,0) = fz3.
+         ! Cosine-type c_m / sine-type s_m in canso order: m=1 (11 fxz2, 12 fyz2), m=2 (13 fz(x2-y2), 14 fxyz), m=3 (15 fx3, 16 fy3).
+         v(10, 13) = cone
+         vc(13, 10) = cone
+         do m = 1, 3
+            ic = 9 + 2*m
+            sg = real((-1)**m, rp)
+            v(ic, 13 - m) = const
+            v(ic + 1, 13 - m) = i_unit*const
+            v(ic, 13 + m) = sg*const
+            v(ic + 1, 13 + m) = -sg*i_unit*const
+            vc(13 - m, ic) = const
+            vc(13 - m, ic + 1) = -i_unit*const
+            vc(13 + m, ic) = sg*const
+            vc(13 + m, ic + 1) = sg*i_unit*const
+         end do
+      end if
+      if (n /= 4 .and. n /= 9 .and. n /= 16) then
+         ! other basis sizes: identity (no-op)
          do ii = 1, n
             v(ii, ii) = cone
             vc(ii, ii) = cone
