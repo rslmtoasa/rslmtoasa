@@ -121,9 +121,7 @@
       "canonical_band_energy_last": -3.8349049,
       "k_weight_sum_it1": 1.0,
       "k_weight_sum_last": 1.0,
-      "dos_integral_it1": 16.010056,
       "dos_integral_last": 16.01516,
-      "dos_occupied_count_it1": 8.0,
       "dos_occupied_count_last": 8.0
     }
   }
