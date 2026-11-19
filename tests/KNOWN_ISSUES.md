@@ -543,5 +543,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### LdaURefKsBulkNsp2SocUTilted: max |delta| 6.71e-10 against tolerance 1e-10, also with the unchanged main binary — 2026-11-19
 - **Measured:** `reference_rows.py ks_soc_u2_x` gives 6.71e-10 with main and with this branch (the row sets `use_symmetry_reduction = .false.`); the stored reference is not from this platform. **Not checked:** a `ks_soc_u2_x.linux-x86_64.json` variant (not written).
 
-### Orbital L matrices for l = 3 are in the spherical basis, hcpx is identity at n = 16 — 2026-11-19
-- **Read:** `init_math_operators` lmax = 3: `L_z(10..16)` is diagonal (-3..3) while l <= 2 is real-harmonic; `hcpx` has no n = 16 transform. The density-matrix group average uses l <= 2 only; `generate_reduced_kpoint_mesh` keeps the full mesh for lmax_basis > 2.
+### lmax_basis = 3: L_d and L_f in `init_math_operators` are wrong, `hcpx` is identity at n = 16 — 2026-11-19
+- **Measured** (scratch dumpers linked against `init_math_operators`, `hcpx` and strux `sylm`; compared with L = -i r x grad applied to closed-form real harmonics in canso order, which reproduces the lmax = 2 p and d blocks to 4e-15): at lmax = 3 the d block differs by up to 2.0 and is not Hermitian (1.7); the f block differs by up to 3.3, is not Hermitian, L^2 eigenvalues -12. d-orbital L.S at lmax = 3 (xi = 1) gives eigenvalues -1, -0.866, 0, +0.866, +1 instead of -1.5 x4, +1 x6.
+- **Read:** `hcpx` has matrices for n = 4 and 9 only, so at lmax = 3 the Hamiltonian stays in the real canso basis while lmax <= 2 is in Ylm; f-f SOC prefactor is 0 in `build_lsham`. No test or deck runs lmax = 3 through L, `hcpx` or the Hamiltonian. The k-space density-matrix symmetrisation keeps the full mesh for lmax_basis > 2.
+- **Proposal:** add the n = 16 `hcpx` matrix (d convention) and reuse the lmax = 2 spd L data plus a correct f block in `math.f90` (about 120 lines); developer decision.
