@@ -91,6 +91,43 @@ module spglib_interface_mod
          integer(c_int) :: spg_get_ir_reciprocal_mesh
       end function spg_get_ir_reciprocal_mesh
 
+      ! Magnetic symmetry with site tensors (rank 1 = moment vectors)
+      function spgms_get_symmetry_with_site_tensors(rotation, translation, equivalent_atoms, primitive_lattice, &
+                                                    spin_flips, max_size, lattice, position, types, tensors, &
+                                                    tensor_rank, num_atom, with_time_reversal, is_axial, symprec, &
+                                                    angle_tolerance, mag_symprec) &
+         bind(C, name="spgms_get_symmetry_with_site_tensors")
+         import :: c_int, c_double
+         integer(c_int), intent(out) :: rotation(3,3,*)
+         real(c_double), intent(out) :: translation(3,*)
+         integer(c_int), intent(out) :: equivalent_atoms(*)
+         real(c_double), intent(out) :: primitive_lattice(3,3)
+         integer(c_int), intent(out) :: spin_flips(*)
+         integer(c_int), value :: max_size
+         real(c_double), intent(in) :: lattice(3,3)
+         real(c_double), intent(in) :: position(3,*)
+         integer(c_int), intent(in) :: types(*)
+         real(c_double), intent(in) :: tensors(*)
+         integer(c_int), value :: tensor_rank, num_atom, with_time_reversal, is_axial
+         real(c_double), value :: symprec, angle_tolerance, mag_symprec
+         integer(c_int) :: spgms_get_symmetry_with_site_tensors
+      end function spgms_get_symmetry_with_site_tensors
+
+      ! Irreducible mesh from an explicit rotation list
+      function spg_get_stabilized_reciprocal_mesh(grid_address, ir_mapping_table, mesh, is_shift, is_time_reversal, &
+                                                  num_rot, rotations, num_q, qpoints) &
+         bind(C, name="spg_get_stabilized_reciprocal_mesh")
+         import :: c_int, c_double
+         integer(c_int), intent(out) :: grid_address(3,*)
+         integer(c_int), intent(out) :: ir_mapping_table(*)
+         integer(c_int), intent(in) :: mesh(3)
+         integer(c_int), intent(in) :: is_shift(3)
+         integer(c_int), value :: is_time_reversal, num_rot, num_q
+         integer(c_int), intent(in) :: rotations(3,3,*)
+         real(c_double), intent(in) :: qpoints(3,*)
+         integer(c_int) :: spg_get_stabilized_reciprocal_mesh
+      end function spg_get_stabilized_reciprocal_mesh
+
       ! Dataset API for getting detailed information about crystal structure
       function spg_get_dataset(lattice, position, types, num_atom, symprec) &
          bind(C, name="spg_get_dataset")
@@ -131,6 +168,7 @@ module spglib_interface_mod
       procedure :: finalize
       procedure :: detect_space_group
       procedure :: get_symmetry_operations
+      procedure :: get_magnetic_symmetry
       procedure :: get_reduced_kpoint_mesh_with_points
       procedure :: get_full_kpoint_mesh_with_points
       procedure :: get_crystal_system
@@ -284,6 +322,68 @@ contains
    end function get_symmetry_operations
 
    !---------------------------------------------------------------------------
+   !> @brief Symmetry group of a magnetic structure; returns the number of operations.
+   !> @details soc = .true.: magnetic group of the moments as axial vectors (spin rotates with the lattice),
+   !>          spin_flips = -1 marks time-reversal-combined operations (k -> -R k).
+   !>          soc = .false.: crystal operations mapping every site onto a site of the same species and moment
+   !>          vector (spin is not rotated); spin_flips = +1.
+   !> @param[in] frac_pos Fractional positions (3,n); moments Cartesian moment vectors (3,n); types species (n)
+   !> @param[out] rotations R(i,j) acting on fractional coordinates, f' = R f + t; translations (3,nops)
+   !---------------------------------------------------------------------------
+   function get_magnetic_symmetry(this, frac_pos, types, moments, soc, rotations, translations, spin_flips) result(nops)
+      class(spglib_interface), intent(in) :: this
+      real(rp), intent(in) :: frac_pos(:,:), moments(:,:)
+      integer, intent(in) :: types(:)
+      logical, intent(in) :: soc
+      integer, allocatable, intent(out) :: rotations(:,:,:), spin_flips(:)
+      real(rp), allocatable, intent(out) :: translations(:,:)
+      integer :: nops
+
+#ifdef USE_SPGLIB
+      real(rp), parameter :: mag_symprec = 1.0e-5_rp
+      integer, allocatable :: rot_c(:,:,:), flips(:), equiv(:), labels(:)
+      real(rp), allocatable :: trans(:,:)
+      real(rp) :: prim(3,3)
+      integer :: n, maxop, i, j, nlab
+
+      n = size(frac_pos, 2)
+      maxop = 96*n
+      allocate(rot_c(3,3,maxop), flips(maxop), equiv(n), labels(n), trans(3,maxop))
+      flips = 1
+      if (soc) then
+         nops = spgms_get_symmetry_with_site_tensors(rot_c, trans, equiv, prim, flips, maxop, this%lattice_vectors, &
+                                                     frac_pos, types, moments, 1, n, 1, 1, this%symprec, -1.0_rp, mag_symprec)
+      else
+         labels = 0
+         nlab = 0
+         do i = 1, n
+            do j = 1, i - 1
+               if (types(j) == types(i) .and. maxval(abs(moments(:,j) - moments(:,i))) < mag_symprec) then
+                  labels(i) = labels(j)
+                  exit
+               end if
+            end do
+            if (labels(i) == 0) then
+               nlab = nlab + 1
+               labels(i) = nlab
+            end if
+         end do
+         nops = spg_get_symmetry(rot_c, trans, maxop, this%lattice_vectors, frac_pos, labels, n, this%symprec)
+      end if
+
+      allocate(rotations(3,3,nops), translations(3,nops), spin_flips(nops))
+      do i = 1, nops
+         rotations(:,:,i) = transpose(rot_c(:,:,i))
+      end do
+      translations = trans(:,1:nops)
+      spin_flips = flips(1:nops)
+#else
+      nops = 0
+      allocate(rotations(3,3,0), translations(3,0), spin_flips(0))
+#endif
+   end function get_magnetic_symmetry
+
+   !---------------------------------------------------------------------------
    !> @brief Get irreducible k-point mesh with k-points and weights
    !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
    !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]
@@ -292,7 +392,7 @@ contains
    !> @return Number of irreducible k-points
    !---------------------------------------------------------------------------
    function get_reduced_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints, weights, use_time_reversal, &
-                                                full_to_irred, irred_to_full) result(num_ir_kpoints)
+                                                full_to_irred, irred_to_full, rotations) result(num_ir_kpoints)
       class(spglib_interface), intent(in) :: this
       integer, intent(in) :: mesh_dims(3)
       integer, intent(in), optional :: is_shift(3)
@@ -301,13 +401,16 @@ contains
       logical, intent(in), optional :: use_time_reversal
       integer, allocatable, intent(out), optional :: full_to_irred(:)
       integer, allocatable, intent(out), optional :: irred_to_full(:)
+      !> Optional explicit operations R(i,j) in lattice coordinates (flip*R for time-reversal-combined ones);
+      !> replaces the crystal group of the stored structure.
+      integer, intent(in), optional :: rotations(:,:,:)
       integer :: num_ir_kpoints
 
       integer :: total_kpoints, shift(3), ir_idx, i, j, k
       integer :: trs_flag
       
 #ifdef USE_SPGLIB
-      integer, allocatable :: grid_address(:,:)
+      integer, allocatable :: grid_address(:,:), rot_c(:,:,:)
       integer, allocatable :: ir_mapping(:)
       integer :: multiplicity
       integer, allocatable :: ir_kpoint_indices(:)
@@ -339,13 +442,23 @@ contains
       allocate(ir_mapping(total_kpoints))
 
       ! Get irreducible k-points from spglib
-      num_ir_kpoints = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
-                                                 mesh_dims, shift, trs_flag, &
-                                                 this%lattice_vectors, &
-                                                 this%atomic_positions, &
-                                                 this%atomic_types, &
-                                                 this%num_atoms, &
-                                                 this%symprec)
+      if (present(rotations)) then
+         allocate(rot_c(3,3,size(rotations,3)))
+         do i = 1, size(rotations,3)
+            rot_c(:,:,i) = transpose(rotations(:,:,i))   ! C row-major layout
+         end do
+         num_ir_kpoints = spg_get_stabilized_reciprocal_mesh(grid_address, ir_mapping, mesh_dims, shift, trs_flag, &
+                                                             size(rotations,3), rot_c, 1, [0.0_c_double, 0.0_c_double, 0.0_c_double])
+         deallocate(rot_c)
+      else
+         num_ir_kpoints = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
+                                                    mesh_dims, shift, trs_flag, &
+                                                    this%lattice_vectors, &
+                                                    this%atomic_positions, &
+                                                    this%atomic_types, &
+                                                    this%num_atoms, &
+                                                    this%symprec)
+      end if
 
       ! Allocate output arrays
       allocate(kpoints(3, num_ir_kpoints))

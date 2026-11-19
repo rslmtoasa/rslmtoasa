@@ -402,6 +402,17 @@ module reciprocal_mod
       ! Symmetry analysis object
       type(symmetry) :: symmetry_analysis
 
+      ! Magnetic symmetry group behind the reduced k mesh (see setup_magnetic_symmetry)
+      !> Number of operations
+      integer :: n_sym_ops = 0
+      !> R(i,j) on fractional coordinates, f' = R f + t [3,3,n_sym_ops]
+      integer, dimension(:, :, :), allocatable :: sym_rotations
+      real(rp), dimension(:, :), allocatable :: sym_translations
+      !> -1 for time-reversal-combined operations (k -> -R k), +1 otherwise
+      integer, dimension(:), allocatable :: sym_spin_flips
+      !> Site i is mapped onto site sym_atom_perm(i, op) by operation op [nrec, n_sym_ops]
+      integer, dimension(:, :), allocatable :: sym_atom_perm
+
       ! Density of states variables
       !> Energy grid for DOS calculation [n_energy_points]
       real(rp), dimension(:), allocatable :: dos_energy_grid
@@ -566,6 +577,7 @@ module reciprocal_mod
       procedure :: invalidate_if_operator_changed
       procedure :: build_from_file
       procedure :: generate_reduced_kpoint_mesh
+      procedure :: setup_magnetic_symmetry
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
@@ -1263,6 +1275,13 @@ end subroutine check_multisite_hamiltonian_diagonal
       integer, intent(in) :: mesh_dims(3)
       logical, intent(in), optional :: use_shift
    end subroutine generate_reduced_kpoint_mesh
+
+   !> @brief Build and store the symmetry group of the current site moments.
+   !> @details The group is fixed from the moments at the time of the call; call again to rebuild it if the
+   !>          moments rotate away from it.
+   module subroutine setup_magnetic_symmetry(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine setup_magnetic_symmetry
 
    !> @brief Calculate reciprocal-space density of states.
    !> @details Configures the energy grid and DOS method, ensures eigenvalues are

@@ -535,3 +535,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Measured:** deck of `Example_k_space_scf_tetra_diamondSi_sp_nsp1` (6x6x6, nstep = 3, `use_kspace`, tetrahedron). Fermi level per step: 1.456060e-3 and 1.606018e-1 Ry in both modes, then 8.05268e-3 (serial, and 1 MPI rank) vs 7.84449e-3 Ry (2 and 3 ranks, reproducible). Step-3 `etot` differs by about 2e-5 Ry; DOS rows by up to 1.5e-2. The bcc-Fe tetrahedron cases (nsp = 1, 2) match between serial and 2 ranks at the default tolerance.
 - **Not checked:** which routine differs (steps 1-2 outputs agree), and whether the large step-2 Fermi jump (0.16 Ry) amplifies a rounding-level difference. The case is registered serial only.
 - **Proposal:** compare per-step H(k)/density between 1 and 2 ranks to locate it; half a day.
+
+### Spglib structure in `initialize_symmetry` passes Cartesian `lattice%cr` as fractional positions — 2026-11-19
+- **Read (not run):** `source/symmetry.f90` `initialize_symmetry` copies `lattice_ref%cr(:,i)` (Cartesian, units of alat) into the fractional-position argument of `spglib%initialize`. This is correct only when the two coincide (single-atom cells, diamond Si on the fcc primitive cell); for other multi-atom cells the crystal group and the existing reduced mesh would be wrong. `setup_magnetic_symmetry` converts to fractional itself and does not use the stored positions.
+- **Not checked:** any multi-atom cell where they differ. **Proposal:** convert in `initialize_symmetry` (about 5 lines) and check the affected cases; developer decision.

@@ -542,9 +542,9 @@ contains
       this%nk_mesh = mesh_dims
       effective_time_reversal = this%use_time_reversal
       if (associated(this%control)) then
-         if (this%control%nsp >= 3 .and. effective_time_reversal) then
+         if (this%control%nsp /= 1 .and. effective_time_reversal) then
             effective_time_reversal = .false.
-            call g_logger%info('generate_reduced_kpoint_mesh: Disabled time-reversal reduction for non-collinear calculation; spatial symmetry reduction remains enabled.', __FILE__, __LINE__)
+            call g_logger%info('generate_reduced_kpoint_mesh: Disabled plain time-reversal reduction for nsp /= 1; the magnetic group carries it.', __FILE__, __LINE__)
          end if
       end if
 
@@ -555,10 +555,16 @@ contains
       return
    end if
 
-   ! Get irreducible k-points and weights from spglib
+   ! Irreducible k-points and weights from the magnetic group; the full mesh for gbt_single_q
+   if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+      call this%generate_mp_mesh()
+      return
+   end if
+   call this%setup_magnetic_symmetry()
    num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh_with_points( &
                            mesh_dims, shift, kpoints_frac, weights, effective_time_reversal, &
-                           full_to_irred, irred_to_full)
+                           full_to_irred, irred_to_full, &
+                           this%sym_rotations*spread(spread(this%sym_spin_flips, 1, 3), 1, 3))
 #else
    ! SPGLIB not enabled at compile time: fall back to full mesh
    call g_logger%warning('generate_reduced_kpoint_mesh: spglib support was not compiled in, using full mesh', __FILE__, __LINE__)
