@@ -1,6 +1,5 @@
 {
   "name": "Example_k_space_scf_diamondSi_sp_tetrahedron",
-  "quick": true,
   "labels": [
     "functional",
     "scf",
@@ -43,7 +42,6 @@
       "nk3": 4,
       "use_symmetry_reduction": false,
       "use_time_reversal": true,
-      "use_shift": false,
       "n_energy_points": 2001,
       "dos_method": "tetrahedron",
       "gaussian_sigma": 0.01
@@ -191,22 +189,23 @@
       "min_lines": 1
     }
   ],
+  "tier": "quick",
   "reference_provenance": {
     "binary": "rslmto.x",
     "cmake_cache": {
       "CMAKE_BUILD_TYPE": "Release",
-      "CMAKE_Fortran_COMPILER": "/opt/homebrew/bin/gfortran-13",
+      "CMAKE_Fortran_COMPILER": "/usr/bin/gfortran",
       "ENABLE_MARCH_NATIVE": "OFF",
       "ENABLE_MKL_KERNELS": "OFF",
-      "ENABLE_MPI": "OFF"
+      "ENABLE_MPI": "ON"
     },
-    "cmake_version": "cmake version 4.4.2",
-    "compiler": "/opt/homebrew/bin/gfortran-13",
-    "compiler_version": "GNU Fortran (Homebrew GCC 13.4.0) 13.4.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
-    "git_commit": "4c58bef61727957fe3e72b79b0d11413ce6502c4",
-    "mpi_enabled": false,
+    "cmake_version": "cmake version 3.28.3",
+    "compiler": "/usr/bin/gfortran",
+    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "git_commit": "101c8985c5a07853366953976e67baf207dcb2d7",
+    "mpi_enabled": true,
     "mpi_omp_threads": 1,
-    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
     "profile": "runner-native",
     "serial_omp_threads": 2,
     "underlying_compiler": "unavailable"

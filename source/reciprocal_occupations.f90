@@ -117,7 +117,7 @@ contains
 
       integer :: iteration, nbands
       real(rp) :: e_min, e_max, e_mid, electron_count, band_energy
-      real(rp) :: extrema(2), kT, margin, count_tolerance
+      real(rp) :: extrema(2), kT, margin, count_tolerance, snap_tolerance, gap_edges(2)
 
       if (.not. allocated(this%eigenvalues)) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: eigenvalues are not available', __FILE__, __LINE__)
@@ -148,12 +148,15 @@ contains
       margin = max(1.0_rp, 64.0_rp*kT)
       e_min = extrema(1) - margin
       e_max = extrema(2) + margin
-      count_tolerance = max(5.0e-12_rp, 5.0e-12_rp*max(1.0_rp, total_electrons))
+      count_tolerance = 64*spacing(1.0_rp)*max(1.0_rp, total_electrons)
+
+      snap_tolerance = 1.0e-10_rp*max(1.0_rp, total_electrons)
 
       do iteration = 1, 256
          e_mid = 0.5_rp*(e_min + e_max)
          call this%evaluate_eigenvalue_occupations(e_mid, electron_count, band_energy)
          if (abs(electron_count - total_electrons) <= count_tolerance) exit
+         if (e_mid <= e_min .or. e_mid >= e_max) exit
          if (electron_count < total_electrons) then
             e_min = e_mid
          else
@@ -161,6 +164,21 @@ contains
          end if
       end do
       fermi_level = e_mid
+
+      ! Convention for a gapped spectrum: EF is the middle of the gap, independent of where the bisection stopped in it.
+      ! It is used when the count there is within 1e-10*N of N (physically negligible, below the 1e-9 convergence check).
+      ! gap_edges holds (highest level <= EF, minus lowest level > EF) so one MPI_MAX serves both.
+      gap_edges = [maxval(this%eigenvalues, mask=this%eigenvalues <= fermi_level), &
+                   -minval(this%eigenvalues, mask=this%eigenvalues > fermi_level)]
+#ifdef USE_MPI
+      if (this%k_mesh_distributed_active) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, gap_edges, 2, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+      end if
+#endif
+      if (all(gap_edges > -huge(1.0_rp)) .and. -gap_edges(2) > gap_edges(1)) then
+         call this%evaluate_eigenvalue_occupations(0.5_rp*(gap_edges(1) - gap_edges(2)), electron_count, band_energy)
+         if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_edges(1) - gap_edges(2))
+      end if
 
       call this%evaluate_eigenvalue_occupations(fermi_level, electron_count, band_energy)
       if (abs(electron_count - total_electrons) > 1.0e-9_rp*max(1.0_rp, total_electrons)) then

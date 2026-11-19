@@ -137,9 +137,7 @@
           "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
           "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
           "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-          "dos_integral_it1": "calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
           "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-          "dos_occupied_count_it1": "calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
           "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)"
         }
       }
@@ -167,5 +165,25 @@
       "min_lines": 1
     }
   ],
-  "tier": "quick"
+  "tier": "quick",
+  "reference_provenance": {
+    "binary": "rslmto.x",
+    "cmake_cache": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_Fortran_COMPILER": "/usr/bin/gfortran",
+      "ENABLE_MARCH_NATIVE": "OFF",
+      "ENABLE_MKL_KERNELS": "OFF",
+      "ENABLE_MPI": "ON"
+    },
+    "cmake_version": "cmake version 3.28.3",
+    "compiler": "/usr/bin/gfortran",
+    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "git_commit": "101c8985c5a07853366953976e67baf207dcb2d7",
+    "mpi_enabled": true,
+    "mpi_omp_threads": 1,
+    "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+    "profile": "runner-native",
+    "serial_omp_threads": 2,
+    "underlying_compiler": "unavailable"
+  }
 }
