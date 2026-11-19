@@ -735,6 +735,7 @@ module subroutine calculate_band_moments(this)
    real(rp), allocatable :: reference(:, :), axis_used(:, :)
 
    call root_info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
+   this%n_sites = this%lattice%nrec
    call root_info('calculate_band_moments: DEBUG - this%auto_find_fermi = ' // &
                   merge('TRUE ', 'FALSE', this%auto_find_fermi) // &
                   ', this%total_electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &

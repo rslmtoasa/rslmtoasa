@@ -7,8 +7,8 @@ submodule (reciprocal_mod) reciprocal_dos
 contains
 
    !> @brief Calculate reciprocal-space density of states.
-   !> @details Configures the energy grid and DOS method, ensures eigenvalues are
-   !>          available, evaluates total/projected DOS, moments, and writes output.
+   !> @details Prepares eigenvalues and the canonical Fermi level, then evaluates
+   !>          total/projected DOS, band moments, and writes output.
    !> @param[inout] this Reciprocal object receiving DOS and moment arrays.
    !> @param[in] ham Hamiltonian object for k-space construction if needed.
    !> @param[in] n_energy_points Optional number of DOS grid points.
@@ -33,10 +33,27 @@ contains
       logical, intent(in), optional :: auto_find_fermi
       character(len=*), intent(in), optional :: output_file
 
-      ! Local variables
-      character(len=100) :: filename
-      character(len=360) :: energy_message
-      real(rp) :: canonical_eband, dos_eband, projected_eband, dos_electrons, kT
+      call this%prepare_density_of_states(ham, n_energy_points, energy_range, method, gaussian_sigma, &
+         temperature, fermi_level, total_electrons, auto_find_fermi)
+      call this%calculate_dos_output(output_file, .true.)
+   end subroutine calculate_density_of_states
+
+   !> @brief Diagonalize if needed and fix EF, electron count and canonical EBAND.
+   !> @details First half of calculate_density_of_states; the canonical EBAND is
+   !>          left in this%canonical_band_energy. Arguments as for calculate_density_of_states.
+   module subroutine prepare_density_of_states(this, ham, n_energy_points, energy_range, method, gaussian_sigma, temperature, fermi_level, total_electrons, auto_find_fermi)
+      class(reciprocal), intent(inout) :: this
+      class(hamiltonian), intent(in) :: ham
+      integer, intent(in), optional :: n_energy_points
+      real(rp), dimension(2), intent(in), optional :: energy_range
+      character(len=*), intent(in), optional :: method
+      real(rp), intent(in), optional :: gaussian_sigma
+      real(rp), intent(in), optional :: temperature
+      real(rp), intent(in), optional :: fermi_level
+      real(rp), intent(in), optional :: total_electrons
+      logical, intent(in), optional :: auto_find_fermi
+
+      real(rp) :: canonical_eband
 
       call root_info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
 
@@ -54,10 +71,6 @@ contains
       if (present(fermi_level)) this%fermi_level = fermi_level
       if (present(total_electrons)) this%total_electrons = total_electrons
       if (present(auto_find_fermi)) this%auto_find_fermi = auto_find_fermi
-
-      ! Set output filename
-      filename = 'density_of_states.dat'
-      if (present(output_file)) filename = output_file
 
       ! Setup energy grid
       call this%setup_dos_energy_grid()
@@ -100,6 +113,24 @@ contains
       ! EF, electron count, and the source-of-truth EBAND are properties of
       ! eigenvalues/weights/occupations, not of the chosen DOS output grid.
       canonical_eband = this%calculate_canonical_band_energy(this%auto_find_fermi)
+   end subroutine prepare_density_of_states
+
+   !> @brief Total and projected DOS, energy cross-checks and DOS file.
+   !> @details Second half of calculate_density_of_states; needs a prepared object.
+   !> @param[in] output_file Optional DOS output file.
+   !> @param[in] with_moments If true, band moments are evaluated here (standalone route).
+   module subroutine calculate_dos_output(this, output_file, with_moments)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in), optional :: output_file
+      logical, intent(in), optional :: with_moments
+
+      character(len=100) :: filename
+      character(len=360) :: energy_message
+      real(rp) :: canonical_eband, dos_eband, projected_eband, dos_electrons, kT
+
+      canonical_eband = this%canonical_band_energy
+      filename = 'density_of_states.dat'
+      if (present(output_file)) filename = output_file
 
       ! Calculate DOS based on method
       select case (trim(this%dos_method))
@@ -117,9 +148,10 @@ contains
          return
       end select
 
-      ! Calculate orbital projections and band moments
       call this%project_dos_orbitals()
-      call this%calculate_band_moments()
+      if (present(with_moments)) then
+         if (with_moments) call this%calculate_band_moments()
+      end if
 
       ! Grid/projection routes are diagnostics only.  They intentionally run
       ! after the canonical result and never feed EF or EBAND back into it.
@@ -138,7 +170,7 @@ contains
       call this%write_dos_to_file(filename)
 
       call root_info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
-   end subroutine calculate_density_of_states
+   end subroutine calculate_dos_output
 
    !> @brief Validate full-to-irreducible k-point symmetry maps.
    !> @param[inout] this Reciprocal object containing symmetry maps and weights.

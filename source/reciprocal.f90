@@ -535,6 +535,8 @@ module reciprocal_mod
       procedure :: diagonalize_hall_experimental
       procedure :: calculate_band_structure
       procedure :: calculate_density_of_states
+      procedure :: prepare_density_of_states
+      procedure :: calculate_dos_output
       procedure :: calculate_dos_tetrahedron
       procedure :: calculate_dos_gaussian
       procedure :: calculate_dos_blochl
@@ -1287,6 +1289,25 @@ end subroutine check_multisite_hamiltonian_diagonal
       logical, intent(in), optional :: auto_find_fermi
       character(len=*), intent(in), optional :: output_file
    end subroutine calculate_density_of_states
+
+   module subroutine prepare_density_of_states(this, ham, n_energy_points, energy_range, method, gaussian_sigma, temperature, fermi_level, total_electrons, auto_find_fermi)
+      class(reciprocal), intent(inout) :: this
+      class(hamiltonian), intent(in) :: ham
+      integer, intent(in), optional :: n_energy_points
+      real(rp), dimension(2), intent(in), optional :: energy_range
+      character(len=*), intent(in), optional :: method
+      real(rp), intent(in), optional :: gaussian_sigma
+      real(rp), intent(in), optional :: temperature
+      real(rp), intent(in), optional :: fermi_level
+      real(rp), intent(in), optional :: total_electrons
+      logical, intent(in), optional :: auto_find_fermi
+   end subroutine prepare_density_of_states
+
+   module subroutine calculate_dos_output(this, output_file, with_moments)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in), optional :: output_file
+      logical, intent(in), optional :: with_moments
+   end subroutine calculate_dos_output
 
    !> @brief Invalidate eigensystem, DOS, projection, and canonical-energy state.
    !> @details K-point geometry and weights are retained so a frozen-potential
