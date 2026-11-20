@@ -608,6 +608,7 @@ module reciprocal_mod
    public :: fermi_dirac_occupation
    public :: fermi_dirac_entropy_term, fermi_dirac_entropy
    public :: tetra_corner_weights
+   public :: tetra_integrated_weights
    real(rp), parameter, public :: kB_Ry_per_K = 6.3336814e-6_rp
 
    interface
@@ -1524,6 +1525,16 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(in) :: ecorn(4), energy
       real(rp), intent(out) :: w_lin(4), dw_corr(4)
    end subroutine tetra_corner_weights
+
+   !> @brief Integrated corner weights (PRB 49, 16223 App. B) and the Eq. (22) correction of one tetrahedron at one energy.
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] energy Energy at which the weights are evaluated.
+   !> @param[out] w_lin Linear-tetrahedron integration weights in caller order.
+   !> @param[out] w_corr Curvature-correction weights in caller order.
+   module subroutine tetra_integrated_weights(ecorn, energy, w_lin, w_corr)
+      real(rp), intent(in) :: ecorn(4), energy
+      real(rp), intent(out) :: w_lin(4), w_corr(4)
+   end subroutine tetra_integrated_weights
 
 !> @brief Calculate total DOS with Gaussian broadening.
 !> @details Smears all eigenvalues over the DOS energy grid using the configured

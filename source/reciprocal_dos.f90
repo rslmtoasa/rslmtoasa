@@ -814,21 +814,13 @@ contains
       real(rp), intent(in) :: ecorn(4), energy
       real(rp), intent(out) :: w_lin(4), dw_corr(4)
 
-      integer :: ord(4), i, j, k, tmp
+      integer :: ord(4), k
       real(rp) :: e(4), ws(4), dens_p, x, x2, y, c, dc, c1, c2, c3, dc1, dc2, dc3, ssum
       real(rp) :: e21, e31, e41, e32, e42, e43
 
       w_lin = 0.0_rp
       dw_corr = 0.0_rp
-      ord = [1, 2, 3, 4]
-      do i = 2, 4
-         j = i
-         do while (j > 1)
-            if (ecorn(ord(j - 1)) <= ecorn(ord(j))) exit
-            tmp = ord(j); ord(j) = ord(j - 1); ord(j - 1) = tmp
-            j = j - 1
-         end do
-      end do
+      call tetra_order(ecorn, ord)
       e = ecorn(ord)
       if (energy <= e(1) .or. energy >= e(4)) return
       e21 = e(2) - e(1); e31 = e(3) - e(1); e41 = e(4) - e(1)
@@ -879,6 +871,82 @@ contains
          dw_corr(ord(k)) = dens_p*(sum(e) - 4.0_rp*e(k))/40.0_rp
       end do
    end subroutine tetra_corner_weights
+
+   !> @brief Ascending order of four corner energies (stable insertion sort): ecorn(ord) is sorted.
+   subroutine tetra_order(ecorn, ord)
+      real(rp), intent(in) :: ecorn(4)
+      integer, intent(out) :: ord(4)
+      integer :: i, j, tmp
+
+      ord = [1, 2, 3, 4]
+      do i = 2, 4
+         j = i
+         do while (j > 1)
+            if (ecorn(ord(j - 1)) <= ecorn(ord(j))) exit
+            tmp = ord(j); ord(j) = ord(j - 1); ord(j - 1) = tmp
+            j = j - 1
+         end do
+      end do
+   end subroutine tetra_order
+
+   !> @brief Integrated corner weights of one linear tetrahedron and the Bloechl curvature correction at one energy.
+   !> @details Per unit tetrahedron volume. w_lin are the weights (B1)-(B19) of PRB 49, 16223 App. B (sum = n(E) of App. A,
+   !>          each corner tends to 1/4 above the top corner); w_corr is Eq. (22), (1/40) D_T(E) sum_j (e_j - e_i), with D_T
+   !>          from (C2)-(C4); sum(w_corr) = 0.
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] energy Energy at which the weights are evaluated.
+   !> @param[out] w_lin Linear-tetrahedron integration weights in caller order.
+   !> @param[out] w_corr Curvature-correction weights in caller order.
+   module subroutine tetra_integrated_weights(ecorn, energy, w_lin, w_corr)
+      real(rp), intent(in) :: ecorn(4), energy
+      real(rp), intent(out) :: w_lin(4), w_corr(4)
+
+      integer :: ord(4), k
+      real(rp) :: e(4), ws(4), dens, x, x2, y, c, c1, c2, c3, ssum
+      real(rp) :: e21, e31, e41, e32, e42, e43
+
+      call tetra_order(ecorn, ord)
+      e = ecorn(ord)
+      dens = 0.0_rp
+      if (energy <= e(1)) then
+         ws = 0.0_rp
+      else if (energy >= e(4)) then
+         ws = 0.25_rp
+      else
+         e21 = e(2) - e(1); e31 = e(3) - e(1); e41 = e(4) - e(1)
+         e32 = e(3) - e(2); e42 = e(4) - e(2); e43 = e(4) - e(3)
+         if (energy < e(2)) then
+            x = energy - e(1)
+            c = x**3/(4.0_rp*e21*e31*e41)
+            ssum = 1.0_rp/e21 + 1.0_rp/e31 + 1.0_rp/e41
+            ws = [c*(4.0_rp - x*ssum), c*x/e21, c*x/e31, c*x/e41]
+            dens = 3.0_rp*x*x/(e21*e31*e41)
+         else if (energy < e(3)) then
+            x = energy - e(1)
+            x2 = energy - e(2)
+            y = e(3) - energy
+            c1 = x*x/(4.0_rp*e41*e31)
+            c2 = x*x2*y/(4.0_rp*e41*e32*e31)
+            c3 = x2*x2*(e(4) - energy)/(4.0_rp*e42*e32*e41)
+            ws(1) = c1 + (c1 + c2)*y/e31 + (c1 + c2 + c3)*(e(4) - energy)/e41
+            ws(2) = c1 + c2 + c3 + (c2 + c3)*y/e32 + c3*(e(4) - energy)/e42
+            ws(3) = (c1 + c2)*x/e31 + (c2 + c3)*x2/e32
+            ws(4) = (c1 + c2 + c3)*x/e41 + c3*x2/e42
+            dens = (3.0_rp*e21 + 6.0_rp*x2 - 3.0_rp*(e31 + e42)*x2*x2/(e32*e42))/(e31*e41)
+         else
+            y = e(4) - energy
+            c = y**3/(4.0_rp*e41*e42*e43)
+            ssum = 1.0_rp/e41 + 1.0_rp/e42 + 1.0_rp/e43
+            ws = [0.25_rp - c*y/e41, 0.25_rp - c*y/e42, 0.25_rp - c*y/e43, 0.25_rp - c*(4.0_rp - ssum*y)]
+            dens = 3.0_rp*y*y/(e41*e42*e43)
+         end if
+      end if
+
+      do k = 1, 4
+         w_lin(ord(k)) = ws(k)
+         w_corr(ord(k)) = dens*(sum(e) - 4.0_rp*e(k))/40.0_rp
+      end do
+   end subroutine tetra_integrated_weights
 
 !> @brief Calculate total DOS with Gaussian broadening.
 !> @details Smears all eigenvalues over the DOS energy grid using the configured

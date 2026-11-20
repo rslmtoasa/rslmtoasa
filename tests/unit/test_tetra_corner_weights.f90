@@ -7,10 +7,13 @@
 !>  (c) shifted free-electron band eps = |k-k0|^2 on cubic meshes of [-1,1]^3 (6 tetrahedra per cell): at the Fermi energy
 !>      where the linear count equals the ball volume (4 pi/3) R^3, the corner-weighted band energy int eps theta
 !>      (exact 4 pi R^5/5) and an f2 integral (closed form via the ball moment int u_x^2 = 4 pi R^5/15) are compared for
-!>      linear and corrected weights. The correction leaves the count unchanged (sum of corner corrections is zero).
+!>      linear and corrected weights. The correction leaves the count unchanged (sum of corner corrections is zero);
+!>  (d) tetra_integrated_weights against (B1)-(B19) and (22) written out here, sum w = n (A), sum dw = 0, and sum_i w_i e_i
+!>      against the exact quadrature int^E e D_T(e) de of the linear band over the occupied part of one tetrahedron;
+!>  (e) the same free-electron meshes with the integrated weights evaluated directly at E_F (no energy quadrature).
 program test_tetra_corner_weights
    use precision_mod, only: rp
-   use reciprocal_mod, only: tetra_corner_weights
+   use reciprocal_mod, only: tetra_corner_weights, tetra_integrated_weights
    implicit none
 
    real(rp), parameter :: pi = 3.14159265358979323846_rp
@@ -18,7 +21,7 @@ program test_tetra_corner_weights
    real(rp) :: gx(ngl), gw(ngl)
    real(rp) :: etet(4, 4)
    integer :: it, m, i, ie
-   real(rp) :: worst_a, worst_b, worst_sum
+   real(rp) :: worst_a, worst_b, worst_sum, worst_int
 
    call gauss_legendre(ngl, gx, gw)
    etet(:, 1) = [0.00_rp, 0.31_rp, 0.52_rp, 1.10_rp]
@@ -43,6 +46,13 @@ program test_tetra_corner_weights
    if (.not. worst_sum <= 1.0e-12_rp) error stop 'sum of corner weights differs from tetrahedron DOS'
    if (.not. worst_a <= 1.0e-12_rp) error stop 'corner-weight moments differ from simplex quadrature'
    if (.not. worst_b <= 1.0e-12_rp) error stop 'integrated weights differ from (B) or (22)'
+
+   worst_int = 0.0_rp
+   do it = 1, 4
+      call check_integrated(etet(:, it), worst_int)
+   end do
+   print '(a,es11.3)', 'worst |w - (B)|, |dw - (22)|, |sum w - n (A)|, |sum dw|, |sum w e - quadrature| :', worst_int
+   if (.not. worst_int <= 1.0e-12_rp) error stop 'integrated weights differ from (B), (22), (A) or the linear-band quadrature'
 
    call check_mesh()
    print '(a)', 'test_tetra_corner_weights: passed'
@@ -228,11 +238,37 @@ contains
       worst = max(worst, maxval(abs(accw - bweights(e, upto))), maxval(abs(accd - corr22(e, upto))))
    end subroutine check_corr_integral
 
+   !> tetra_integrated_weights at 22 energies spanning and exceeding the corner range of one tetrahedron.
+   subroutine check_integrated(e, worst)
+      real(rp), intent(in) :: e(4)
+      real(rp), intent(inout) :: worst
+      real(rp) :: es(4), w(4), dw(4), en, a, b, quad
+      integer :: ie, seg, k
+
+      call sorted(e, es)
+      do ie = 0, 21
+         en = es(1) - 0.1_rp + real(ie, rp)*(es(4) - es(1) + 0.2_rp)/21.0_rp
+         call tetra_integrated_weights(e, en, w, dw)
+         quad = 0.0_rp
+         do seg = 1, 3
+            a = es(seg); b = min(es(seg + 1), en)
+            if (b <= a) cycle
+            do k = 1, ngl
+               quad = quad + 0.5_rp*(b - a)*gw(k)*dos_closed(es, 0.5_rp*(a + b) + 0.5_rp*(b - a)*gx(k))* &
+                      (0.5_rp*(a + b) + 0.5_rp*(b - a)*gx(k))
+            end do
+         end do
+         worst = max(worst, maxval(abs(w - bweights(e, en))), maxval(abs(dw - corr22(e, en))), &
+                     abs(sum(w) - nos_closed(es, en)), abs(sum(dw)), abs(sum(w*e) - quad))
+      end do
+   end subroutine check_integrated
+
    !> Corner-weighted integrals sums(1:4, 1:2) = [count, f1, f2, f3] (linear, corrected) at Fermi energy efe on an n^3 mesh.
-   subroutine mesh_sums(n, efe, sums)
+   subroutine mesh_sums(n, efe, sums, direct)
       integer, intent(in) :: n
       real(rp), intent(in) :: efe
       real(rp), intent(out) :: sums(4, 2)
+      logical, intent(in), optional :: direct
       real(rp), parameter :: k0(3) = [0.13_rp, -0.07_rp, 0.21_rp]
       integer, parameter :: perm(3, 6) = reshape([1, 2, 3, 1, 3, 2, 2, 1, 3, 2, 3, 1, 3, 1, 2, 3, 2, 1], [3, 6])
       real(rp) :: h, vt, kc(3, 4), ec(4), fc(4, 4), w(4), dw(4), a, b, en, wint(4), cint(4), es(4)
@@ -268,7 +304,13 @@ contains
                   end do
                   call sorted(ec, es)
                   wint = 0.0_rp; cint = 0.0_rp
+                  if (present(direct)) then
+                     if (direct) call tetra_integrated_weights(ec, efe, wint, cint)
+                  end if
                   do seg = 1, 3
+                     if (present(direct)) then
+                        if (direct) exit
+                     end if
                      a = es(seg); b = min(es(seg + 1), efe)
                      if (b <= a) cycle
                      do k = 1, 6
@@ -293,7 +335,7 @@ contains
    subroutine check_mesh()
       real(rp), parameter :: k0(3) = [0.13_rp, -0.07_rp, 0.21_rp], ef = 0.45_rp
       integer, parameter :: ns(4) = [4, 8, 16, 32]
-      real(rp) :: ball, ex(4), sums(4, 2), lo, hi, mid, prev
+      real(rp) :: ball, ex(4), sums(4, 2), sums_d(4, 2), lo, hi, mid, prev
       integer :: in, it
 
       ball = 4.0_rp*pi/3.0_rp*ef**1.5_rp
@@ -316,6 +358,8 @@ contains
             if (hi - lo < 1.0e-9_rp) exit
          end do
          call mesh_sums(ns(in), 0.5_rp*(lo + hi), sums)
+         call mesh_sums(ns(in), 0.5_rp*(lo + hi), sums_d, .true.)
+         if (maxval(abs(sums_d - sums)) > 1.0e-12_rp) error stop 'integrated kernel differs from the quadrature of tetra_corner_weights'
          print '(i4,f10.6,4es13.3,a,4es13.3)', ns(in), 0.5_rp*(lo + hi), sums(:, 1) - ex, ' |', sums(:, 2) - ex
          if (abs(sums(1, 2) - ex(1)) > 1.0e-7_rp) error stop 'Fermi-level bisection did not reach the exact count'
          if (abs(sums(4, 2) - ex(4)) >= abs(sums(4, 1) - ex(4))) error stop 'corrected band energy not closer than linear'
