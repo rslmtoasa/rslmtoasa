@@ -1452,7 +1452,7 @@ end subroutine check_multisite_hamiltonian_diagonal
    !> @param[out] tet_mult Multiplicity of each irreducible tetrahedron.
    !> @param[out] n_tet_ir Number of irreducible tetrahedra.
    module subroutine build_irreducible_tetrahedra(this, tet_ir, tet_mult, n_tet_ir)
-      class(reciprocal), intent(inout) :: this
+      class(reciprocal), intent(in) :: this
       integer, allocatable, intent(out) :: tet_ir(:, :)
       integer, allocatable, intent(out) :: tet_mult(:)
       integer, intent(out) :: n_tet_ir

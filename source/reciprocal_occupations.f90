@@ -77,13 +77,67 @@ contains
       call this%gather_k_columns(nbands + 1, packed_local, packed)
    end subroutine gather_occupation_inputs
 
+   !> @brief Irreducible tetrahedra of the mesh when dos_method='blochl'; left unallocated otherwise (Fermi-Dirac).
+   subroutine blochl_tetrahedra(this, tet, mult)
+      class(reciprocal), intent(in) :: this
+      integer, allocatable, intent(out) :: tet(:, :), mult(:)
+      integer :: n_tet
+
+      if (trim(this%dos_method) /= 'blochl') return
+      if (allocated(this%k_path)) then
+         call g_logger%fatal("dos_method='blochl' occupations need a uniform k mesh, not a k-path", __FILE__, __LINE__)
+      end if
+      call this%build_irreducible_tetrahedra(tet, mult, n_tet)
+   end subroutine blochl_tetrahedra
+
+   !> @brief Bloechl-corrected tetrahedron occupations of the packed global mesh at T=0 (PRB 49, 16223 Eqs. 4, 22).
+   !> @details occ(ib, ik) is defined so that k_weight(ik)*occ(ib, ik)/sum(k_weight) is the integration weight of band ib
+   !>          at irreducible point ik: the corner weights of every full-mesh tetrahedron (irreducible class with
+   !>          multiplicity) folded onto the irreducible corners. Corrected weights are not clipped. Points of zero weight get 0.
+   subroutine tetra_occupations(this, packed, fermi_level, tet, mult, occ)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: packed(:, :), fermi_level
+      integer, intent(in) :: tet(:, :), mult(:)
+      real(rp), allocatable, intent(out) :: occ(:, :)
+
+      integer :: it, ib, ic, nbands
+      real(rp) :: w(4), dw(4), vol, wsum
+
+      nbands = size(packed, 1) - 1
+      allocate(occ(nbands, size(packed, 2)))
+      occ = 0.0_rp
+      wsum = sum(packed(nbands + 1, :))
+      do it = 1, size(tet, 2)
+         vol = wsum*real(mult(it), rp)/(6.0_rp*real(product(this%nk_mesh), rp))
+         do ib = 1, nbands
+            call tetra_integrated_weights(packed(ib, tet(:, it)), fermi_level, w, dw)
+            do ic = 1, 4
+               occ(ib, tet(ic, it)) = occ(ib, tet(ic, it)) + vol*(w(ic) + dw(ic))
+            end do
+         end do
+      end do
+      do ib = 1, nbands
+         where (packed(nbands + 1, :) > 0.0_rp)
+            occ(ib, :) = occ(ib, :)/packed(nbands + 1, :)
+         elsewhere
+            occ(ib, :) = 0.0_rp
+         end where
+      end do
+   end subroutine tetra_occupations
+
    !> @brief Sums of weight, weight*occupation and weight*occupation*eigenvalue over the packed global mesh.
-   subroutine occupation_sums(packed, fermi_level, kT, sums)
+   !> @details With tet/mult present (dos_method='blochl') the occupations are the tetrahedron weights, otherwise Fermi-Dirac.
+   subroutine occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)
+      class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: packed(:, :), fermi_level, kT
       real(rp), intent(out) :: sums(3)
+      integer, intent(in), optional :: tet(:, :), mult(:)
 
       integer :: ik, ib, nbands
       real(rp) :: wk, occupation
+      real(rp), allocatable :: occ_t(:, :)
+
+      if (present(tet)) call tetra_occupations(this, packed, fermi_level, tet, mult, occ_t)
 
       nbands = size(packed, 1) - 1
       sums = 0.0_rp
@@ -94,7 +148,11 @@ contains
          end if
          sums(1) = sums(1) + wk
          do ib = 1, nbands
-            occupation = fermi_dirac_occupation(packed(ib, ik), fermi_level, kT)
+            if (present(tet)) then
+               occupation = occ_t(ib, ik)
+            else
+               occupation = fermi_dirac_occupation(packed(ib, ik), fermi_level, kT)
+            end if
             sums(2) = sums(2) + wk*occupation
             sums(3) = sums(3) + wk*occupation*packed(ib, ik)
          end do
@@ -117,10 +175,12 @@ contains
 
       real(rp) :: kT, sums(3)
       real(rp), allocatable :: packed(:, :)
+      integer, allocatable :: tet(:, :), mult(:)
 
       call gather_occupation_inputs(this, packed)
+      call blochl_tetrahedra(this, tet, mult)
       kT = max(this%temperature*kB_Ry_per_K, occupation_kT_floor)
-      call occupation_sums(packed, fermi_level, kT, sums)
+      call occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)
 
       electron_count = sums(2)/sums(1)
       band_energy = sums(3)/sums(1)
@@ -138,8 +198,10 @@ contains
       real(rp) :: e_min, e_max, e_mid, electron_count, kT, margin, count_tolerance, snap_tolerance
       real(rp) :: sums(3), extrema(2), gap_below, gap_above
       real(rp), allocatable :: packed(:, :)
+      integer, allocatable :: tet(:, :), mult(:)
 
       call gather_occupation_inputs(this, packed)
+      call blochl_tetrahedra(this, tet, mult)
       nbands = size(packed, 1) - 1
       if (total_electrons < -1.0e-12_rp .or. total_electrons > real(nbands, rp) + 1.0e-12_rp) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: target electron count is outside [0, nbands]', &
@@ -166,7 +228,7 @@ contains
 
       do iteration = 1, 256
          e_mid = 0.5_rp*(e_min + e_max)
-         call occupation_sums(packed, e_mid, kT, sums)
+         call occupation_sums(this, packed, e_mid, kT, sums, tet, mult)
          electron_count = sums(2)/sums(1)
          if (abs(electron_count - total_electrons) <= count_tolerance) exit
          if (e_mid <= e_min .or. e_mid >= e_max) exit
@@ -183,12 +245,12 @@ contains
       gap_below = maxval(packed(1:nbands, :), mask=packed(1:nbands, :) <= fermi_level)
       gap_above = minval(packed(1:nbands, :), mask=packed(1:nbands, :) > fermi_level)
       if (gap_below > -huge(1.0_rp) .and. gap_above < huge(1.0_rp) .and. gap_above > gap_below) then
-         call occupation_sums(packed, 0.5_rp*(gap_below + gap_above), kT, sums)
+         call occupation_sums(this, packed, 0.5_rp*(gap_below + gap_above), kT, sums, tet, mult)
          electron_count = sums(2)/sums(1)
          if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_below + gap_above)
       end if
 
-      call occupation_sums(packed, fermi_level, kT, sums)
+      call occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)
       electron_count = sums(2)/sums(1)
       if (abs(electron_count - total_electrons) > 1.0e-9_rp*max(1.0_rp, total_electrons)) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: electron-number bisection did not converge', &
