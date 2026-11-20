@@ -257,14 +257,14 @@ contains
 
       select case (trim(this%tetra_symmetry_mode))
       case ('irreducible_native')
-         call g_logger%info('ensure_tetra_symmetry_backend: Using irreducible_native backend for scalar tetra DOS.', __FILE__, __LINE__)
+         call root_info('ensure_tetra_symmetry_backend: Using irreducible_native backend for scalar tetra DOS.', __FILE__, __LINE__)
          return
       case default
          continue
       end select
 
       ! Explicit compatibility path: rebuild full mesh and rediagonalize there.
-      call g_logger%info('ensure_tetra_symmetry_backend: Switching to full mesh reference backend for tetra/blochl parity.', __FILE__, __LINE__)
+      call root_info('ensure_tetra_symmetry_backend: Switching to full mesh reference backend for tetra/blochl parity.', __FILE__, __LINE__)
       call this%generate_mp_mesh()
       call this%build_kspace_hamiltonian()
       call this%diagonalize_hamiltonian()
@@ -347,7 +347,7 @@ contains
       tet_mult = mult_tmp(1:n_tet_ir)
 
       deallocate(keys, mult_tmp)
-      call g_logger%info('build_irreducible_tetrahedra: Reduced ' // trim(int2str(tet_full_count)) // &
+      call root_info('build_irreducible_tetrahedra: Reduced ' // trim(int2str(tet_full_count)) // &
                          ' full tetrahedra to ' // trim(int2str(n_tet_ir)) // ' irreducible classes', __FILE__, __LINE__)
    contains
       subroutine sort4_int(arr)
@@ -478,7 +478,7 @@ contains
       real(rp), allocatable :: local_dos(:), local_nos(:), eig_full(:, :)
       integer :: nk_full_expected, tet_start, tet_end, tet_count
 
-      call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
+      call root_info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
 
       ! Setup tetrahedra if not already done
       if (.not. allocated(this%tetrahedra)) then
@@ -502,7 +502,7 @@ contains
       if (this%use_symmetry_reduction .and. trim(this%tetra_symmetry_mode) == 'irreducible_native' .and. &
           this%nk_total < nk_full_expected) then
          call this%build_irreducible_tetrahedra(tet_ir, tet_mult, n_tet_ir)
-         call g_logger%info('calculate_dos_tetrahedron: Using irreducible tetrahedra for scalar total DOS.', __FILE__, __LINE__)
+         call root_info('calculate_dos_tetrahedron: Using irreducible tetrahedra for scalar total DOS.', __FILE__, __LINE__)
       else
          n_tet_ir = this%n_tetrahedra
       end if
@@ -555,7 +555,7 @@ contains
 
       dos_integral = trapezoidal_integral(this%dos_energy_grid, this%total_dos)
       nos_integral = this%total_nos(this%n_energy_points) - this%total_nos(1)
-      call g_logger%info('calculate_dos_tetrahedron: DOS integral = ' // &
+      call root_info('calculate_dos_tetrahedron: DOS integral = ' // &
                         trim(real2str(dos_integral, '(F12.6)')) // ', N(Emax)-N(Emin) = ' // &
                         trim(real2str(nos_integral, '(F12.6)')) // ', expected states = ' // &
                         trim(int2str(nbands)), __FILE__, __LINE__)
@@ -563,7 +563,7 @@ contains
       if (this%total_electrons > 0.0_rp) then
          fermi_count = interpolate_grid_value(this%dos_energy_grid, this%total_nos, this%n_energy_points, this%fermi_level)
          fermi_error = fermi_count - this%total_electrons
-         call g_logger%info('calculate_dos_tetrahedron: N(E_F=' // &
+         call root_info('calculate_dos_tetrahedron: N(E_F=' // &
                            trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry) = ' // &
                            trim(real2str(fermi_count, '(F12.6)')) // ', target valence = ' // &
                            trim(real2str(this%total_electrons, '(F12.6)')) // ', error = ' // &
@@ -574,7 +574,7 @@ contains
       if (allocated(tet_mult)) deallocate(tet_mult)
       deallocate(eig_full)
 
-      call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
+      call root_info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_tetrahedron
 
    module subroutine gather_k_columns(this, ld, local, full)
@@ -1069,9 +1069,9 @@ end subroutine calculate_dos_gaussian
    module subroutine calculate_dos_blochl(this)
       class(reciprocal), intent(inout) :: this
 
-      call g_logger%info('calculate_dos_blochl: Using LMTO-style tetrahedron DOS/NOS backend for scalar DOS.', __FILE__, __LINE__)
+      call root_info('calculate_dos_blochl: Using LMTO-style tetrahedron DOS/NOS backend for scalar DOS.', __FILE__, __LINE__)
       call this%calculate_dos_tetrahedron()
-      call g_logger%info('calculate_dos_blochl: Blöchl-compatible scalar DOS calculation completed', __FILE__, __LINE__)
+      call root_info('calculate_dos_blochl: Blöchl-compatible scalar DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_blochl
 
    !> @brief Build full-mesh tetrahedron connectivity.
@@ -1084,7 +1084,7 @@ end subroutine calculate_dos_gaussian
       integer :: it, ic, idx
       integer, dimension(3, 4, 6) :: tetra_cut
 
-      call g_logger%info('setup_tetrahedra: Setting up tetrahedra for Brillouin zone integration', __FILE__, __LINE__)
+      call root_info('setup_tetrahedra: Setting up tetrahedra for Brillouin zone integration', __FILE__, __LINE__)
 
       ! Get mesh dimensions
       nk1 = this%nk_mesh(1)
@@ -1131,7 +1131,7 @@ end subroutine calculate_dos_gaussian
          end do
       end do
 
-      call g_logger%info('setup_tetrahedra: Created ' // trim(int2str(this%n_tetrahedra)) // &
+      call root_info('setup_tetrahedra: Created ' // trim(int2str(this%n_tetrahedra)) // &
                         ' tetrahedra from ' // trim(int2str(nk1)) // 'x' // trim(int2str(nk2)) // &
                         'x' // trim(int2str(nk3)) // ' k-mesh', __FILE__, __LINE__)
    end subroutine setup_tetrahedra
@@ -1193,7 +1193,7 @@ end subroutine calculate_dos_gaussian
          sigma = 0.1_rp  ! Default fallback
       end if
       
-   call g_logger%info('calculate_adaptive_sigma: Adaptive sigma = ' // trim(real2str(sigma, '(F8.5)')) // &
+   call root_info('calculate_adaptive_sigma: Adaptive sigma = ' // trim(real2str(sigma, '(F8.5)')) // &
             ' Ry for ' // trim(int2str(nk_total)) // ' k-points', __FILE__, __LINE__)
    end function calculate_adaptive_sigma
 

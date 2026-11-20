@@ -544,7 +544,7 @@ contains
       if (associated(this%control)) then
          if (this%control%nsp /= 1 .and. effective_time_reversal) then
             effective_time_reversal = .false.
-            call g_logger%info('generate_reduced_kpoint_mesh: Disabled plain time-reversal reduction for nsp /= 1; the magnetic group carries it.', __FILE__, __LINE__)
+            call root_info('generate_reduced_kpoint_mesh: Disabled plain time-reversal reduction for nsp /= 1; the magnetic group carries it.', __FILE__, __LINE__)
          end if
       end if
 
