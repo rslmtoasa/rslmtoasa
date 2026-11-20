@@ -988,6 +988,7 @@ contains
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
+      real(rp) :: dfrac(3), a_inv(3, 3)
 
       call g_timer%start('bravais')
 
@@ -999,6 +1000,16 @@ contains
       end if
 
       n = this%ntot
+      ! Two basis sites differing by a lattice vector are one site: check that a(:,i) holds lattice vector i
+      a_inv = inverse_3x3(this%a)
+      do i = 1, n - 1
+         do k = i + 1, n
+            dfrac = matmul(a_inv, this%crd(:, i) - this%crd(:, k))
+            if (maxval(abs(dfrac - nint(dfrac))) < 1.0e-4_rp) call g_logger%fatal('lattice%bravais: basis sites ' // &
+               trim(int2str(i)) // ' and ' // trim(int2str(k)) // ' differ by a lattice vector; check that a(:,i) holds lattice vector i ' // &
+               'and that no two basis positions differ by a lattice vector', __FILE__, __LINE__)
+         end do
+      end do
       ! Defining a size-like parameter for the clust before the cut
       npe = this%npe
       ndim = this%ndim
