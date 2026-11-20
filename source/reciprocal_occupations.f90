@@ -125,6 +125,19 @@ contains
       end do
    end subroutine tetra_occupations
 
+   !> @brief Occupations of the current eigensystem at this%fermi_level for the density consumers (dos_method='blochl').
+   !> @details Every rank gathers the whole mesh and computes the same weights; a consumer reads its own k columns.
+   module subroutine blochl_occupations(this, occ)
+      class(reciprocal), intent(in) :: this
+      real(rp), allocatable, intent(out) :: occ(:, :)
+      real(rp), allocatable :: packed(:, :)
+      integer, allocatable :: tet(:, :), mult(:)
+
+      call gather_occupation_inputs(this, packed)
+      call blochl_tetrahedra(this, tet, mult)
+      call tetra_occupations(this, packed, this%fermi_level, tet, mult, occ)
+   end subroutine blochl_occupations
+
    !> @brief Sums of weight, weight*occupation and weight*occupation*eigenvalue over the packed global mesh.
    !> @details With tet/mult present (dos_method='blochl') the occupations are the tetrahedron weights, otherwise Fermi-Dirac.
    subroutine occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)

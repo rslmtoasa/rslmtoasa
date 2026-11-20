@@ -58,6 +58,8 @@ contains
       real(rp) :: wk, occ, e, kT, farg, epow
       complex(rp) :: u, d
       complex(rp) :: blk(2, 2)
+      logical :: blochl
+      real(rp), allocatable :: occ_t(:, :)
 #ifdef USE_MPI
       real(rp), allocatable :: rho_comm(:)
       integer :: nflat
@@ -68,6 +70,8 @@ contains
             'build_kspace_hamiltonian/diagonalize_hamiltonian must run first.', __FILE__, __LINE__)
       end if
 
+      blochl = trim(this%dos_method) == 'blochl'
+      if (blochl) call this%blochl_occupations(occ_t)   ! collective: before the rank chain below
       this%n_sites = this%lattice%nrec
       this%n_orb_types = 4
       this%n_spin_components = 2
@@ -104,7 +108,9 @@ contains
          wk = this%k_weights(ik_global)
          do ib = 1, nbands
             e = this%eigenvalues(ib, ik)
-            if (kT > 1.0e-12_rp) then
+            if (blochl) then
+               occ = occ_t(ib, ik_global)
+            else if (kT > 1.0e-12_rp) then
                farg = (e - this%fermi_level)/kT
                if (farg > 50.0_rp) then
                   occ = 0.0_rp
@@ -116,7 +122,7 @@ contains
             else
                occ = merge(1.0_rp, 0.0_rp, e <= this%fermi_level)
             end if
-            if (occ <= 1.0e-14_rp) cycle
+            if (abs(occ) <= 1.0e-14_rp) cycle
 
             do isite = 1, this%n_sites
                site_orb_start = (isite - 1)*n_orb_site

@@ -167,9 +167,13 @@ contains
       real(rp) :: wk, occ, e, kT, farg
       complex(rp) :: u, d, ud
       real(rp) :: mxs, mys, mzs
+      logical :: blochl
+      real(rp), allocatable :: occ_t(:, :)
 
       site_mom(:, :) = 0.0_rp
       kT = reciprocal_obj%temperature*kB_Ry_per_K
+      blochl = trim(reciprocal_obj%dos_method) == 'blochl'
+      if (blochl) call reciprocal_obj%blochl_occupations(occ_t)
       if (reciprocal_obj%k_mesh_distributed_active) call chain_recv(site_mom, size(site_mom))
 
       do ik = 1, size(reciprocal_obj%eigenvalues, 2)
@@ -180,7 +184,9 @@ contains
          wk = reciprocal_obj%k_weights(ik_global)
          do ib = 1, size(reciprocal_obj%eigenvalues, 1)
             e = reciprocal_obj%eigenvalues(ib, ik)
-            if (kT > 1.0e-12_rp) then
+            if (blochl) then
+               occ = occ_t(ib, ik_global)
+            else if (kT > 1.0e-12_rp) then
                farg = (e - reciprocal_obj%fermi_level)/kT
                if (farg > 50.0_rp) then
                   occ = 0.0_rp
@@ -192,7 +198,7 @@ contains
             else
                occ = merge(1.0_rp, 0.0_rp, e <= reciprocal_obj%fermi_level)
             end if
-            if (occ <= 1.0e-14_rp) cycle
+            if (abs(occ) <= 1.0e-14_rp) cycle
 
             do ia = 1, this%lattice%nrec
                site_offset = (ia - 1)*nb

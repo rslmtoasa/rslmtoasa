@@ -930,6 +930,8 @@ end subroutine calculate_band_moments
       logical :: use_complex_projector
       logical :: m1_only_use
       real(rp) :: fermi_occ_m1
+      logical :: blochl
+      real(rp), allocatable :: occ_t(:, :)
       real(rp) :: kT
       real(rp) :: ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm
       integer :: ldm_diag_info
@@ -990,6 +992,8 @@ end subroutine calculate_band_moments
          end do
       end if
 
+      blochl = trim(this%dos_method) == 'blochl'
+      if (blochl) call this%blochl_occupations(occ_t)   ! collective: before the rank chain below
       if (this%k_mesh_distributed_active) then
          if (present(m1_out)) then
             call chain_complex(rho, .true., rho_m1)
@@ -1012,7 +1016,9 @@ end subroutine calculate_band_moments
             
             ! Accumulate contributions from all occupied bands at this k-point
             do ib = 1, nbands
-               if (use_complex_projector .or. m1_only_use) then
+               if (blochl) then
+                  fermi_occ = occ_t(ib, ik_global)
+               else if (use_complex_projector .or. m1_only_use) then
                   fermi_occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
                else
                   if (this%eigenvalues(ib, ik) > this%fermi_level) cycle
@@ -1026,7 +1032,11 @@ end subroutine calculate_band_moments
                   do beta = 1, n_orb_site
                      psi_b = this%eigenvectors(site_offset + beta, ib, ik)
                      if (present(m1_out)) then
-                        fermi_occ_m1 = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
+                        if (blochl) then
+                           fermi_occ_m1 = occ_t(ib, ik_global)
+                        else
+                           fermi_occ_m1 = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
+                        end if
                         DM_m1(alpha, beta) = DM_m1(alpha, beta) + &
                            hubbard_projector_element(psi_a, psi_b) * fermi_occ_m1 * kweight * this%eigenvalues(ib, ik)
                      end if
@@ -1164,6 +1174,8 @@ end subroutine calculate_band_moments
       real(rp) :: kT
       complex(rp), allocatable :: p(:, :, :), m1(:, :, :)
       real(rp) :: kweight, occ, axis(3)
+      logical :: blochl
+      real(rp), allocatable :: occ_t(:, :)
       complex(rp) :: element
       character(len=400) :: line
       integer :: ik, ik_global, isite, ib, s, t, i, j, row, col, plusbulk, site_offset
@@ -1173,6 +1185,8 @@ end subroutine calculate_band_moments
       n_orb_site = size(this%eigenvectors, 1)/nsites
       n_orb_per_spin = n_orb_site/this%n_spin_components
       if (n_orb_per_spin < 9) return
+      blochl = trim(this%dos_method) == 'blochl'
+      if (blochl) call this%blochl_occupations(occ_t)
       allocate(p(nsites, 10, 10), m1(nsites, 10, 10))
       p = (0.0_rp, 0.0_rp)
       m1 = (0.0_rp, 0.0_rp)
@@ -1185,7 +1199,11 @@ end subroutine calculate_band_moments
          do isite = 1, nsites
             site_offset = (isite - 1)*n_orb_site
             do ib = 1, size(this%eigenvalues, 1)
-               occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
+               if (blochl) then
+                  occ = occ_t(ib, ik_global)*kweight
+               else
+                  occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
+               end if
                do s = 1, 2
                   do t = 1, 2
                      do i = 1, 5

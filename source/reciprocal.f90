@@ -592,6 +592,7 @@ module reciprocal_mod
       procedure :: full_mesh_operations
       procedure :: full_mesh_projection
       procedure :: build_irreducible_tetrahedra
+      procedure :: blochl_occupations
       ! k-space Green’s-function engine (milestone B2)
       procedure :: fill_green
       procedure :: fill_moments
@@ -1457,6 +1458,12 @@ end subroutine check_multisite_hamiltonian_diagonal
       integer, allocatable, intent(out) :: tet_mult(:)
       integer, intent(out) :: n_tet_ir
    end subroutine build_irreducible_tetrahedra
+
+   !> @brief Bloechl-corrected tetrahedron occupations at the current Fermi level, occ(band, global k); dos_method='blochl' only.
+   module subroutine blochl_occupations(this, occ)
+      class(reciprocal), intent(in) :: this
+      real(rp), allocatable, intent(out) :: occ(:, :)
+   end subroutine blochl_occupations
 
    !> @brief Select tetrahedron corner offsets for the current mesh geometry.
    !> @param[in] this Reciprocal object providing reciprocal lattice geometry.
