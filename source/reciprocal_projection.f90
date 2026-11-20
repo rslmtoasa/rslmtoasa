@@ -339,7 +339,7 @@ end subroutine project_dos_orbitals_gaussian
       real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
       ! Projection weights per k-point: (total, mx, my, mz; l; site; band; k)
-      real(rp), allocatable :: proj_cache(:, :, :, :, :)
+      real(rp), allocatable :: proj_cache(:, :, :, :, :), proj_local(:, :, :, :, :), eig_full(:, :)
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -409,9 +409,9 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Each k-point is a corner of many tetrahedra: compute its projection weights once.
       nbands = size(this%eigenvalues, 1)
-      allocate(proj_cache(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
-      proj_cache = 0.0_rp
-      !$OMP PARALLEL DO DEFAULT(NONE) SHARED(this, proj_cache, site_orb_offset, lstart, lend, n_orb_per_spin, nbands) &
+      allocate(proj_local(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
+      proj_local = 0.0_rp
+      !$OMP PARALLEL DO DEFAULT(NONE) SHARED(this, proj_local, site_orb_offset, lstart, lend, n_orb_per_spin, nbands) &
       !$OMP PRIVATE(ik, i_band, isite, iorb, orbital_char) SCHEDULE(DYNAMIC)
       do ik = 1, size(this%eigenvectors, 3)
          do i_band = 1, nbands
@@ -419,18 +419,23 @@ end subroutine project_dos_orbitals_gaussian
                do iorb = 1, 4
                   if (lstart(iorb) > n_orb_per_spin) cycle
                   call compute_spinor_block_projection(this, ik, i_band, site_orb_offset(isite), n_orb_per_spin, &
-                                                       lstart(iorb), lend(iorb), orbital_char, proj_cache(2, iorb, isite, i_band, ik), &
-                                                       proj_cache(3, iorb, isite, i_band, ik), proj_cache(4, iorb, isite, i_band, ik))
-                  proj_cache(1, iorb, isite, i_band, ik) = orbital_char
+                                                       lstart(iorb), lend(iorb), orbital_char, proj_local(2, iorb, isite, i_band, ik), &
+                                                       proj_local(3, iorb, isite, i_band, ik), proj_local(4, iorb, isite, i_band, ik))
+                  proj_local(1, iorb, isite, i_band, ik) = orbital_char
                end do
             end do
          end do
       end do
       !$OMP END PARALLEL DO
+      allocate(proj_cache(4, 4, this%n_sites, nbands, this%k_workset%nk_global))
+      call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_cache)
+      deallocate(proj_local)
+      allocate(eig_full(nbands, this%k_workset%nk_global))
+      call this%gather_k_columns(nbands, this%eigenvalues, eig_full)
 
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &
-      !$OMP SHARED(this, proj_cache, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
+      !$OMP SHARED(this, proj_cache, eig_full, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
       !$OMP        tet_start, tet_end, de) &
       !$OMP PRIVATE(i_tet, i_band, i_corner, ik, e_corners, sorted_e, e1, e2, e3, e4, i_start, i_end, &
       !$OMP         i_energy, energy, dos_contrib, x, C, tet_weight, isite, site_orb_start, axis, iorb, &
@@ -454,7 +459,7 @@ end subroutine project_dos_orbitals_gaussian
          do i_band = 1, size(this%eigenvalues, 1)
             do i_corner = 1, 4
                ik = this%tetrahedra(i_corner, i_tet)
-               e_corners(i_corner) = this%eigenvalues(i_band, ik)
+               e_corners(i_corner) = eig_full(i_band, ik)
             end do
             call sort4(e_corners, sorted_e)
             e1 = sorted_e(1)
@@ -587,7 +592,7 @@ end subroutine project_dos_orbitals_gaussian
       end if
 #endif
 
-      deallocate(proj_cache)
+      deallocate(proj_cache, eig_full)
       deallocate(site_orb_offset)
       deallocate(site_axes)
 

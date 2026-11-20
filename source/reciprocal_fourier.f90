@@ -770,7 +770,7 @@ contains
                                         ' k-points and ', this%lattice%ntype, ' atom types'
       call root_info(trim(debug_msg), __FILE__, __LINE__)
 
-      distribute_mesh = (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian')
+      distribute_mesh = (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian' .or. this%distribute_k_mesh)
       call setup_k_mesh_distribution(this, nk, distribute_mesh)
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
@@ -1085,7 +1085,7 @@ contains
          return
       end if
 
-      call setup_k_mesh_distribution(this, nk, (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian'))
+      call setup_k_mesh_distribution(this, nk, (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian' .or. this%distribute_k_mesh))
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local])

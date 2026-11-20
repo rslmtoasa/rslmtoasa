@@ -55,6 +55,7 @@ contains
          call g_logger%fatal('self%finalize_kspace_scf_state: unsupported calculation type.', __FILE__, __LINE__)
       end select
 
+      this%reciprocal_scf_cache%distribute_k_mesh = .false.
       call this%reciprocal_scf_cache%build_kspace_hamiltonian()
       call this%reciprocal_scf_cache%diagonalize_hamiltonian()
       this%reciprocal_scf_cache%auto_find_fermi = .true.

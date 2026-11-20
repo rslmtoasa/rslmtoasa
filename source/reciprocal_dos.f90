@@ -512,11 +512,10 @@ contains
       integer :: n_tet_ir
       real(rp) :: tet_weight, dos_integral, nos_integral
       real(rp) :: fermi_count, fermi_error
-      real(rp), allocatable :: local_dos(:), local_nos(:)
+      real(rp), allocatable :: local_dos(:), local_nos(:), eig_full(:, :)
       integer :: nk_full_expected, tet_start, tet_end, tet_count
 
       call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
-      call this%require_replicated_k_workset('calculate_dos_tetrahedron')
 
       ! Setup tetrahedra if not already done
       if (.not. allocated(this%tetrahedra)) then
@@ -533,6 +532,8 @@ contains
       this%total_nos = 0.0_rp
 
       nbands = size(this%eigenvalues, 1)
+      allocate(eig_full(nbands, this%k_workset%nk_global))
+      call this%gather_k_columns(nbands, this%eigenvalues, eig_full)
       nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
 
       if (this%use_symmetry_reduction .and. trim(this%tetra_symmetry_mode) == 'irreducible_native' .and. &
@@ -545,7 +546,7 @@ contains
       call get_mpi_range(rank, n_tet_ir, tet_start, tet_end, tet_count, region_tag='tetra')
 
 !$OMP PARALLEL DEFAULT(NONE) &
-!$OMP& SHARED(this, tet_ir, tet_mult, tet_start, tet_end, nbands, nk_full_expected) &
+!$OMP& SHARED(this, tet_ir, tet_mult, tet_start, tet_end, nbands, nk_full_expected, eig_full) &
 !$OMP& PRIVATE(i_tet, i_band, i_corner, e_corners, tet_weight, local_dos, local_nos)
       allocate(local_dos(this%n_energy_points), local_nos(this%n_energy_points))
       local_dos = 0.0_rp
@@ -561,9 +562,9 @@ contains
          do i_band = 1, nbands
             do i_corner = 1, 4
                if (allocated(tet_ir)) then
-                  e_corners(i_corner) = this%eigenvalues(i_band, tet_ir(i_corner, i_tet))
+                  e_corners(i_corner) = eig_full(i_band, tet_ir(i_corner, i_tet))
                else
-                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+                  e_corners(i_corner) = eig_full(i_band, this%tetrahedra(i_corner, i_tet))
                end if
             end do
             call tetra_add_nos(tet_weight, e_corners, this%dos_energy_grid(1), &
@@ -608,9 +609,34 @@ contains
 
       if (allocated(tet_ir)) deallocate(tet_ir)
       if (allocated(tet_mult)) deallocate(tet_mult)
+      deallocate(eig_full)
 
       call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_tetrahedron
+
+   module subroutine gather_k_columns(this, ld, local, full)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ld
+      real(rp), intent(in) :: local(*)
+      real(rp), intent(inout) :: full(*)
+      integer :: irank, k_first, k_last, k_count
+      integer, allocatable :: counts(:), displs(:)
+
+      if (.not. this%k_mesh_distributed_active) then
+         full(1:ld*this%nk_local) = local(1:ld*this%nk_local)
+         return
+      end if
+#ifdef USE_MPI
+      allocate(counts(0:numprocs - 1), displs(0:numprocs - 1))
+      do irank = 0, numprocs - 1
+         call get_mpi_range(irank, this%k_workset%nk_global, k_first, k_last, k_count)
+         counts(irank) = ld*k_count
+         displs(irank) = ld*(k_first - 1)
+      end do
+      call MPI_ALLGATHERV(local, counts(rank), MPI_DOUBLE_PRECISION, full, counts, displs, MPI_DOUBLE_PRECISION, MPI_COMM_WORLD, ierr)
+      deallocate(counts, displs)
+#endif
+   end subroutine gather_k_columns
 
    !> @brief Sort four real values in ascending order.
    !> @param[in] arr_in Four input values.

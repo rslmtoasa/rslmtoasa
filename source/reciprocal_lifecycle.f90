@@ -136,6 +136,7 @@ contains
       this%k_start = 1
       this%k_end = 0
       this%k_mesh_distributed_active = .false.
+      this%distribute_k_mesh = .false.
       call this%k_workset%restore_to_default()
       this%fs_nk1 = 0
       this%fs_nk2 = 0

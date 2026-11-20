@@ -2427,6 +2427,7 @@ contains
          if (.not. allocated(this%reciprocal_scf_cache)) then
             allocate(this%reciprocal_scf_cache)
             this%reciprocal_scf_cache = reciprocal(this%hamiltonian)
+            this%reciprocal_scf_cache%distribute_k_mesh = .true.
          end if
          if (rank == 0) then
             call g_logger%info('k-space SCF mesh: ' // &

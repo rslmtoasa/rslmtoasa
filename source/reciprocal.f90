@@ -313,6 +313,8 @@ module reciprocal_mod
       integer, dimension(:), allocatable :: k_l2g_map
       integer, dimension(:), allocatable :: k_g2l_map
       logical :: k_mesh_distributed_active
+      !> Distribute a tetrahedron/Blochl mesh over MPI ranks (set by the k-space SCF cache only)
+      logical :: distribute_k_mesh
       !> Include time-reversal symmetry in k-point generation
       logical :: use_time_reversal
       !> Offset for k-point mesh (for shifted grids)
@@ -536,6 +538,7 @@ module reciprocal_mod
       procedure :: make_execution_backend
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: require_replicated_k_workset
+      procedure :: gather_k_columns
       procedure :: set_basis_sizes
       procedure :: check_multisite_hamiltonian_diagonal
       procedure :: build_kspace_overlap
@@ -1132,6 +1135,17 @@ module reciprocal_mod
       class(reciprocal), intent(in) :: this
       character(len=*), intent(in) :: consumer
    end subroutine require_replicated_k_workset
+
+   !> Collect per-k columns of a k-distributed array into the full mesh on every rank (plain copy if not distributed).
+   !> @param[in] ld Number of values per k point.
+   !> @param[in] local Local columns, ld x nk_local, any rank.
+   !> @param[inout] full Full mesh, ld x nk_global, any rank.
+   module subroutine gather_k_columns(this, ld, local, full)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ld
+      real(rp), intent(in) :: local(*)
+      real(rp), intent(inout) :: full(*)
+   end subroutine gather_k_columns
 
    !> @brief Configure MPI ownership for a k-point set.
    !> @param[inout] this Reciprocal object receiving local/global k maps.
