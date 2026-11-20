@@ -7,6 +7,7 @@
 !> after MPI_Init (or deterministically serial when MPI is unavailable).
 module mpi_mod
    use logger_mod, only: g_logger
+   use precision_mod, only: rp
 #ifdef USE_MPI
    use mpi
 #endif
@@ -49,6 +50,7 @@ module mpi_mod
 
    public :: get_mpi_range, get_mpi_variables, get_mpi_mapping
    public :: split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
+   public :: chain_recv, chain_send_bcast
 
 contains
 
@@ -250,6 +252,29 @@ contains
       numprocs = context%size
       ierr = 0
    end subroutine synchronize_compatibility_globals
+
+   !> @brief Ordered k-sum, step 1: receive the running accumulator from rank-1 (rank 0 keeps its own start value).
+   subroutine chain_recv(buf, n)
+      integer, intent(in) :: n
+      real(rp), intent(inout) :: buf(n)
+#ifdef USE_MPI
+      integer :: status(MPI_STATUS_SIZE)
+      if (numprocs > 1 .and. rank > 0) &
+         call MPI_RECV(buf, n, MPI_DOUBLE_PRECISION, rank - 1, 4711, MPI_COMM_WORLD, status, ierr)
+#endif
+   end subroutine chain_recv
+
+   !> @brief Ordered k-sum, step 2: pass the accumulator to rank+1; the last rank broadcasts the finished sum.
+   subroutine chain_send_bcast(buf, n)
+      integer, intent(in) :: n
+      real(rp), intent(inout) :: buf(n)
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         if (rank < numprocs - 1) call MPI_SEND(buf, n, MPI_DOUBLE_PRECISION, rank + 1, 4711, MPI_COMM_WORLD, ierr)
+         call MPI_BCAST(buf, n, MPI_DOUBLE_PRECISION, numprocs - 1, MPI_COMM_WORLD, ierr)
+      end if
+#endif
+   end subroutine chain_send_bcast
 
    subroutine get_mpi_range(rank_in, n_items, start_idx, end_idx, items_per_process, l2g_map_out, g2l_map_out, region_tag)
       integer, intent(in) :: rank_in, n_items

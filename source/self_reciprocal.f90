@@ -156,6 +156,7 @@ contains
 
       site_mom(:, :) = 0.0_rp
       kT = reciprocal_obj%temperature*kB_Ry_per_K
+      if (reciprocal_obj%k_mesh_distributed_active) call chain_recv(site_mom, size(site_mom))
 
       do ik = 1, size(reciprocal_obj%eigenvalues, 2)
          ik_global = ik
@@ -201,11 +202,7 @@ contains
             end do
          end do
       end do
-#ifdef USE_MPI
-      if (reciprocal_obj%k_mesh_distributed_active) then
-         call MPI_ALLREDUCE(MPI_IN_PLACE, site_mom, product(shape(site_mom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      end if
-#endif
+      if (reciprocal_obj%k_mesh_distributed_active) call chain_send_bcast(site_mom, size(site_mom))
       call reciprocal_obj%symmetrize_site_moments(site_mom)
    end subroutine compute_kspace_spin_moments_spinor
 

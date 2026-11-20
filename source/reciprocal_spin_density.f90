@@ -86,6 +86,19 @@ contains
       lend = [1, 4, 9, 16]
       kT = this%temperature*kB_Ry_per_K
 
+#ifdef USE_MPI
+      if (this%k_mesh_distributed_active) then
+         nflat = 2*size(this%rf_density%rho)
+         allocate (rho_comm(nflat))
+         rho_comm(1:nflat:2) = real(reshape(this%rf_density%rho, [size(this%rf_density%rho)]), rp)
+         rho_comm(2:nflat:2) = aimag(reshape(this%rf_density%rho, [size(this%rf_density%rho)]))
+         call chain_recv(rho_comm, nflat)
+         this%rf_density%rho = reshape(cmplx(rho_comm(1:nflat:2), rho_comm(2:nflat:2), rp), &
+                                       shape(this%rf_density%rho))
+         deallocate (rho_comm)
+      end if
+#endif
+
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
          wk = this%k_weights(ik_global)
@@ -138,7 +151,7 @@ contains
          allocate (rho_comm(nflat))
          rho_comm(1:nflat:2) = real(reshape(this%rf_density%rho, [size(this%rf_density%rho)]), rp)
          rho_comm(2:nflat:2) = aimag(reshape(this%rf_density%rho, [size(this%rf_density%rho)]))
-         call MPI_ALLREDUCE(MPI_IN_PLACE, rho_comm, nflat, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call chain_send_bcast(rho_comm, nflat)
          this%rf_density%rho = reshape(cmplx(rho_comm(1:nflat:2), rho_comm(2:nflat:2), rp), &
                                        shape(this%rf_density%rho))
          deallocate (rho_comm)

@@ -233,19 +233,23 @@ end subroutine project_dos_orbitals_gaussian
       end if
    end subroutine get_site_spin_axis
 
-#ifdef USE_MPI
-   !> Sum a complex rank-3 array over all MPI ranks.
-   subroutine sum_over_ranks(a)
+   !> Ordered k-sum of a complex rank-3 array: before the k loop (start=.true.) take the running sum from rank-1,
+   !> after it pass the sum on and receive the final one.
+   subroutine chain_complex(a, start)
       complex(rp), intent(inout) :: a(:, :, :)
-      real(rp), allocatable :: re(:, :, :), im(:, :, :)
+      logical, intent(in) :: start
+      real(rp), allocatable :: buf(:)
 
-      re = real(a, rp)
-      im = aimag(a)
-      call MPI_ALLREDUCE(MPI_IN_PLACE, re, size(re), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      call MPI_ALLREDUCE(MPI_IN_PLACE, im, size(im), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      a = cmplx(re, im, rp)
-   end subroutine sum_over_ranks
-#endif
+      allocate (buf(2*size(a)))
+      buf(1:size(buf):2) = real(reshape(a, [size(a)]), rp)
+      buf(2:size(buf):2) = aimag(reshape(a, [size(a)]))
+      if (start) then
+         call chain_recv(buf, size(buf))
+      else
+         call chain_send_bcast(buf, size(buf))
+      end if
+      a = reshape(cmplx(buf(1:size(buf):2), buf(2:size(buf):2), rp), shape(a))
+   end subroutine chain_complex
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
    !> @param[in] this Reciprocal object containing eigenvectors.
@@ -917,6 +921,11 @@ end subroutine calculate_band_moments
          end do
       end if
 
+      if (this%k_mesh_distributed_active) then
+         call chain_complex(rho, .true.)
+         if (present(m1_out)) call chain_complex(rho_m1, .true.)
+      end if
+
       ! Accumulate density matrix per site
       ! Loop order: k-points -> sites -> bands for better cache locality
       do ik = 1, size(this%eigenvalues, 2)
@@ -997,12 +1006,10 @@ end subroutine calculate_band_moments
          end do ! sites
       end do ! k-points
 
-#ifdef USE_MPI
       if (this%k_mesh_distributed_active) then
-         call sum_over_ranks(rho)
-         if (present(m1_out)) call sum_over_ranks(rho_m1)
+         call chain_complex(rho, .false.)
+         if (present(m1_out)) call chain_complex(rho_m1, .false.)
       end if
-#endif
 
       ! Group average over the reduced mesh, P_ab convention (the legacy projector is its transpose)
       if (.not. use_complex_projector) rho = conjg(rho)
@@ -1081,7 +1088,6 @@ end subroutine calculate_band_moments
       integer :: nsites, n_orb_site, n_orb_per_spin
       real(rp) :: kT
       complex(rp), allocatable :: p(:, :, :), m1(:, :, :)
-      real(rp), allocatable :: comm_real(:, :, :, :), comm_imag(:, :, :, :)
       real(rp) :: kweight, occ, axis(3)
       complex(rp) :: element
       character(len=400) :: line
@@ -1095,6 +1101,10 @@ end subroutine calculate_band_moments
       allocate(p(nsites, 10, 10), m1(nsites, 10, 10))
       p = (0.0_rp, 0.0_rp)
       m1 = (0.0_rp, 0.0_rp)
+      if (this%k_mesh_distributed_active) then
+         call chain_complex(p, .true.)
+         call chain_complex(m1, .true.)
+      end if
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
          kweight = this%k_weights(ik_global)
@@ -1120,20 +1130,10 @@ end subroutine calculate_band_moments
             end do
          end do
       end do
-#ifdef USE_MPI
       if (this%k_mesh_distributed_active) then
-         allocate(comm_real(nsites, 10, 10, 2), comm_imag(nsites, 10, 10, 2))
-         comm_real(:, :, :, 1) = real(p, rp)
-         comm_real(:, :, :, 2) = real(m1, rp)
-         comm_imag(:, :, :, 1) = aimag(p)
-         comm_imag(:, :, :, 2) = aimag(m1)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, comm_real, size(comm_real), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, comm_imag, size(comm_imag), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         p = cmplx(comm_real(:, :, :, 1), comm_imag(:, :, :, 1), rp)
-         m1 = cmplx(comm_real(:, :, :, 2), comm_imag(:, :, :, 2), rp)
-         deallocate(comm_real, comm_imag)
+         call chain_complex(p, .false.)
+         call chain_complex(m1, .false.)
       end if
-#endif
       call symmetrize_d_spinor(this, p)
       call symmetrize_d_spinor(this, m1)
       do isite = 1, nsites

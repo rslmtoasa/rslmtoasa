@@ -76,6 +76,7 @@ contains
 
       kT = max(this%temperature*kB_Ry_per_K, occupation_kT_floor)
       sums = 0.0_rp
+      if (this%k_mesh_distributed_active) call chain_recv(sums, 3)
 
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
@@ -94,11 +95,7 @@ contains
          end do
       end do
 
-#ifdef USE_MPI
-      if (this%k_mesh_distributed_active) then
-         call MPI_ALLREDUCE(MPI_IN_PLACE, sums, 3, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      end if
-#endif
+      if (this%k_mesh_distributed_active) call chain_send_bcast(sums, 3)
 
       if (sums(1) <= tiny(1.0_rp)) then
          call g_logger%fatal('evaluate_eigenvalue_occupations: global k-point weight sum is zero', __FILE__, __LINE__)
