@@ -353,12 +353,12 @@ end subroutine project_dos_orbitals_gaussian
       integer :: n_orb_per_spin, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
       integer :: tet_start, tet_end, tet_count
-      real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char, de
+      real(rp) :: dos_contrib, orbital_char_avg, orbital_char, de
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
       integer :: lstart(4), lend(4)
-      real(rp) :: e1, e2, e3, e4, x
+      real(rp) :: e1, e4
       real(rp) :: tet_weight, w4(4), dw4(4), corner_char
       real(rp), parameter :: TOL = 1.0e-10_rp
       integer :: n_tet_ir
@@ -484,8 +484,8 @@ end subroutine project_dos_orbitals_gaussian
       !$OMP PARALLEL DEFAULT(NONE) &
       !$OMP SHARED(this, proj_cache, eig_full, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
       !$OMP        tet_start, tet_end, de, use_blochl) &
-      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, e_corners, sorted_e, e1, e2, e3, e4, i_start, i_end, &
-      !$OMP         i_energy, energy, dos_contrib, x, tet_weight, isite, site_orb_start, axis, iorb, &
+      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, e_corners, sorted_e, e1, e4, i_start, i_end, &
+      !$OMP         i_energy, dos_contrib, tet_weight, isite, site_orb_start, axis, iorb, &
       !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_chars, &
       !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
       !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, degenerate_tetra, &
@@ -512,8 +512,6 @@ end subroutine project_dos_orbitals_gaussian
             end do
             call sort4(e_corners, sorted_e)
             e1 = sorted_e(1)
-            e2 = sorted_e(2)
-            e3 = sorted_e(3)
             e4 = sorted_e(4)
             if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
             tet_weight = this%tetrahedron_volumes(i_tet)
@@ -539,28 +537,11 @@ end subroutine project_dos_orbitals_gaussian
                   corner_w(:, i_energy) = tet_weight*(w4 + dw4)
                end do
             else
-               if (abs(e2 - e1) < TOL .or. abs(e3 - e1) < TOL .or. abs(e4 - e1) < TOL .or. &
-                   abs(e3 - e2) < TOL .or. abs(e4 - e2) < TOL .or. abs(e4 - e3) < TOL) cycle
                i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
                i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
-               do i_energy = i_start, i_end
-                  energy = this%dos_energy_grid(i_energy)
-                  if (energy < e1 .or. energy >= e4) cycle
-                  if (energy < e2) then
-                     x = energy - e1
-                     dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
-                  else if (energy < e3) then
-                     x = energy - e2
-                     dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
-                                 x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
-                                 x * (3.0_rp * (e1 + e2 - e3 - e4) / &
-                                 ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
-                  else
-                     x = energy - e4
-                     dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
-                  end if
-                  dos_line(i_energy) = dos_contrib * tet_weight
-               end do
+               ! Same per-tetrahedron DOS as the total DOS, including tetrahedra with equal corner energies.
+               call tetra_add_dos(tet_weight, e_corners, this%dos_energy_grid(1), &
+                                  this%dos_energy_grid(this%n_energy_points), dos_line, this%n_energy_points)
             end if
 
             do isite = 1, this%n_sites
