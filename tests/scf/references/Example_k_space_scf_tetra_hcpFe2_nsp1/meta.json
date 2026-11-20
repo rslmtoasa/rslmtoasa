@@ -181,7 +181,7 @@
     "cmake_version": "cmake version 3.28.3",
     "compiler": "/usr/bin/gfortran",
     "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
-    "git_commit": "7b1bacbb2dc2df548d8f275fd54e1ab5eac518a0",
+    "git_commit": "6c42953acb610a025f3ff0bc319275bb7a34799d",
     "mpi_enabled": true,
     "mpi_omp_threads": 1,
     "platform": "Linux-6.18.44-fc-v726-x86_64-with-glibc2.39",

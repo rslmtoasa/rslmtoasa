@@ -2,9 +2,9 @@
   "nml": {
     "Fe_out.nml": {
       "lmax": 2.0,
-      "etot": -2541.493541679113,
+      "etot": -2541.4935417437746,
       "ws_r": 2.6622,
-      "vmad": -0.0012874435594397472,
+      "vmad": -0.001287416645170222,
       "mom": {
         "3": 1.0
       },
@@ -73,12 +73,12 @@
   },
   "log": {
     "testrun.log": {
-      "fermi_level_it1": -0.0603360627,
-      "fermi_level_last": -0.0480662745,
+      "fermi_level_it1": -0.0603360632,
+      "fermi_level_last": -0.0480662752,
       "canonical_electron_count_it1": 16.0,
       "canonical_electron_count_last": 16.0,
-      "canonical_band_energy_it1": -2.94216382,
-      "canonical_band_energy_last": -2.84082972,
+      "canonical_band_energy_it1": -2.94216396,
+      "canonical_band_energy_last": -2.84082987,
       "k_weight_sum_it1": 1.0,
       "k_weight_sum_last": 1.0,
       "dos_integral_last": 36.0,
