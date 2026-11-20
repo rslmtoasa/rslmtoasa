@@ -379,6 +379,11 @@ contains
       this%gaussian_sigma = gaussian_sigma
       this%temperature = temperature
       this%dos_method = dos_method
+      if (trim(this%dos_method) == 'blochl') then
+         call root_info("reciprocal%build_from_file: dos_method='blochl' uses T=0 tetrahedron occupations; deck temperature " // &
+                        trim(real2str(this%temperature, '(F10.2)')) // ' K overridden to 0', __FILE__, __LINE__)
+         this%temperature = 0.0_rp
+      end if
       this%auto_find_fermi = auto_find_fermi
       this%suppress_internal_logs = suppress_internal_logs
       this%reciprocal_mode = lower(trim(reciprocal_mode))

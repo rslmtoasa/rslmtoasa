@@ -1,0 +1,98 @@
+{
+  "nml": {
+    "Fe_out.nml": {
+      "lmax": 2.0,
+      "etot": -2541.9818845734644,
+      "ws_r": 2.6622,
+      "vmad": 4.860987222147698e-14,
+      "mom": {
+        "3": 1.0
+      },
+      "lmom": {
+        "3": 0.04170166576999944
+      }
+    }
+  },
+  "text": {
+    "totaldos.out": {
+      "120": {
+        "1": -0.76824,
+        "2": 0.0
+      },
+      "200": {
+        "1": 0.01416,
+        "2": 10.17609
+      },
+      "280": {
+        "1": 0.79656,
+        "2": 8.81493
+      }
+    },
+    "band_moments.dat": {
+      "11": {
+        "4": 0.333012,
+        "5": -0.461755,
+        "6": 0.144676
+      },
+      "12": {
+        "4": 0.355903,
+        "5": -0.43718,
+        "6": 0.131368
+      },
+      "13": {
+        "4": 0.36941,
+        "5": -0.305209,
+        "6": 0.123751
+      },
+      "14": {
+        "4": 0.4442,
+        "5": -0.246831,
+        "6": 0.121979
+      },
+      "15": {
+        "4": 4.362981,
+        "5": -0.232832,
+        "6": 0.102148
+      },
+      "16": {
+        "4": 2.134494,
+        "5": -0.211493,
+        "6": 0.072906
+      },
+      "17": {
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      },
+      "18": {
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      }
+    }
+  },
+  "log": {
+    "testrun.log": {
+      "fermi_level_it1": -0.0677036866,
+      "fermi_level_last": -0.0679504568,
+      "canonical_electron_count_it1": 8.0,
+      "canonical_electron_count_last": 8.0,
+      "canonical_band_energy_it1": -1.99794725,
+      "canonical_band_energy_last": -1.99902395,
+      "k_weight_sum_it1": 1.0,
+      "k_weight_sum_last": 1.0,
+      "dos_integral_last": 18.211718,
+      "dos_occupied_count_last": 8.000303,
+      "site_spin_moment_it1": 2.13032,
+      "site_spin_moment_last": 2.130805,
+      "site_valence_it1": 8.0,
+      "site_valence_last": 8.0,
+      "site_charge_transfer_z_it1": 0.0,
+      "site_charge_transfer_z_last": 0.0
+    },
+    "report.out": {
+      "site_occupation": 8.0,
+      "site_charge_transfer": -0.0
+    }
+  }
+}
