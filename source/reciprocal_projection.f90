@@ -133,6 +133,7 @@ module subroutine project_dos_orbitals_gaussian(this)
       end do
    end do
    allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global), eig_irr(nbands, this%k_workset%nk_global))
+   call average_degenerate_projections(this%eigenvalues, proj_local)
    call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
    call this%gather_k_columns(nbands, this%eigenvalues, eig_irr)
    deallocate(proj_local)
@@ -341,6 +342,32 @@ end subroutine project_dos_orbitals_gaussian
       end do
    end subroutine compute_spinor_block_projection
 
+   !> @brief Replace each band's projection characters by their average over its degenerate group at the same k.
+   !> @details The characters of a single band inside a degenerate group depend on the arbitrary basis the eigensolver
+   !>          returns; the group sum does not, so the group average is the basis-invariant per-band value.
+   !>          Bands belong to one group when consecutive eigenvalues differ by less than DEGENERACY_TOL (Ry).
+   !> @param[in] eig Eigenvalues (band, k), ascending in band.
+   !> @param[inout] proj Projection characters (4, 4, site, band, k).
+   subroutine average_degenerate_projections(eig, proj)
+      real(rp), intent(in) :: eig(:, :)
+      real(rp), intent(inout) :: proj(:, :, :, :, :)
+      real(rp), parameter :: DEGENERACY_TOL = 1.0e-8_rp
+      integer :: ik, ib, ie
+
+      do ik = 1, size(eig, 2)
+         ib = 1
+         do while (ib <= size(eig, 1))
+            ie = ib
+            do while (ie < size(eig, 1))
+               if (abs(eig(ie + 1, ik) - eig(ie, ik)) >= DEGENERACY_TOL) exit
+               ie = ie + 1
+            end do
+            if (ie > ib) proj(:, :, :, ib:ie, ik) = spread(sum(proj(:, :, :, ib:ie, ik), dim=4)/real(ie - ib + 1, rp), 4, ie - ib + 1)
+            ib = ie + 1
+         end do
+      end do
+   end subroutine average_degenerate_projections
+
    !> @brief Calculate projected DOS with tetrahedron integration.
    !> @details Averages orbital/spinor projection weights over tetrahedron
    !>          corners and accumulates scalar plus directional projected DOS.
@@ -465,6 +492,7 @@ end subroutine project_dos_orbitals_gaussian
          end do
       end do
       !$OMP END PARALLEL DO
+      call average_degenerate_projections(this%eigenvalues, proj_local)
       allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global))
       call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
       deallocate(proj_local)
