@@ -1527,7 +1527,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
@@ -1698,7 +1698,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
@@ -1871,7 +1871,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
@@ -2044,7 +2044,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
@@ -2215,7 +2215,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
@@ -4032,7 +4032,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
@@ -4216,7 +4216,7 @@
         "dos",
         "tetrahedron",
         "basis_spd",
-        "nonmagnetic",
+        "collinear",
         "strux",
         "mpi"
       ],
