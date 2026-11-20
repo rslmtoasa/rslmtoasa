@@ -623,6 +623,9 @@ end subroutine project_dos_orbitals_gaussian
          if (abs(proj_dos_integral) > 1.0e-10_rp) then
             norm_factor = total_dos_integral / proj_dos_integral
             this%projected_dos = this%projected_dos * norm_factor
+            this%dos_mx_tot = this%dos_mx_tot * norm_factor
+            this%dos_my_tot = this%dos_my_tot * norm_factor
+            this%dos_mz_tot = this%dos_mz_tot * norm_factor
             call g_logger%info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
                               trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
          end if

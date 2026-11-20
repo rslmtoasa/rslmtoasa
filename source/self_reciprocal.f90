@@ -114,12 +114,20 @@ contains
          dos_dw_tot = 0.5_rp*this%reciprocal_scf_cache%total_dos
       end if
 
-      dos_mz_tot = dos_up_tot - dos_dw_tot
-      dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
-
-      if (allocated(this%reciprocal_scf_cache%dos_mx_tot)) dos_mx_tot = this%reciprocal_scf_cache%dos_mx_tot
-      if (allocated(this%reciprocal_scf_cache%dos_my_tot)) dos_my_tot = this%reciprocal_scf_cache%dos_my_tot
-      if (allocated(this%reciprocal_scf_cache%dos_mz_tot)) dos_mz_tot = this%reciprocal_scf_cache%dos_mz_tot
+      ! Global-frame convention of bands%calculate_fermi: up/dw = (n +- <sigma_z>)/2, m = <sigma>/2.
+      ! The per-site projected_dos is along local axes, so its sums are not these.
+      if (allocated(this%reciprocal_scf_cache%dos_mx_tot)) dos_mx_tot = 0.5_rp*this%reciprocal_scf_cache%dos_mx_tot
+      if (allocated(this%reciprocal_scf_cache%dos_my_tot)) dos_my_tot = 0.5_rp*this%reciprocal_scf_cache%dos_my_tot
+      if (allocated(this%reciprocal_scf_cache%dos_mz_tot)) then
+         dos_mz_tot = 0.5_rp*this%reciprocal_scf_cache%dos_mz_tot
+         dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
+         ! |<sigma_z>| <= n per state; the clamp only removes rounding below zero
+         dos_up_tot = max(0.0_rp, dos_nmag_tot + dos_mz_tot)
+         dos_dw_tot = max(0.0_rp, dos_nmag_tot - dos_mz_tot)
+      else
+         dos_mz_tot = 0.5_rp*(dos_up_tot - dos_dw_tot)
+         dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
+      end if
 
       open(unit=125, file='totaldos.out', status='replace', action='write')
       do i = 1, this%reciprocal_scf_cache%n_energy_points
