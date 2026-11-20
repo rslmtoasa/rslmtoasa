@@ -636,6 +636,13 @@ if(RUN_EXAMPLE_TESTS)
     LABELS functional example scf equivalence rs kspace chebyshev
     COMMAND "${PY}" "${TestDIR}/scf/test_si_dos_equivalence.py" --binary "${TestBinary}"
       --case-root "${TestDIR}/scf/cases/bulk/diamondSi" --scratch-root "${CMAKE_BINARY_DIR}/Testing/scf/si_dos_equivalence")
+  if(ENABLE_MPI)
+    rslmto_add_test(NAME Example_k_space_scf_mpi_serial_agreement TIER standard TIMEOUT 300
+      LABELS functional example scf kspace mpi launch_mpi
+      COMMAND "${PY}" "${TestDIR}/scf/test_mpi_serial_agreement.py" --binary "${TestBinary}"
+        --cases-json "${TestDIR}/scf/cases.json" --scratch-root "${CMAKE_BINARY_DIR}/Testing/scf/mpi_serial_agreement"
+        PROPERTIES PROCESSORS 3)
+  endif()
   if(ENABLE_LIBXC)
     rslmto_add_test(NAME Val03LibxcScfEquivalence TIER validation LABELS validation functional scf libxc equivalence
       COMMAND "${PY}" "${TestDIR}/validation/val03_libxc_scf.py" --binary "${TestBinary}"

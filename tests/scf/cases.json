@@ -1149,7 +1149,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "STAB-03: full 4x4x4 reciprocal Si/sp mesh with linear tetrahedron DOS. The explicit state-count and occupied-count assertions cover the singular flat-tetrahedron contributions as well as finite sampled DOS output.",
       "namelists": {
@@ -1538,7 +1539,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "R1: bcc-Fe spd nsp=1, 10x10x10 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
@@ -1708,7 +1710,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-12.",
       "namelists": {
@@ -1873,7 +1876,16 @@
       ],
       "case": "bulk/diamondSi",
       "timeout": 300,
-      "_note": "R2: diamond Si sp nsp=1 (two sites), 6x6x6 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main. Serial only: with 2 or 3 MPI ranks, SCF step 3 differs from serial (see tests/KNOWN_ISSUES.md).",
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
+      "mpi_procs": 2,
+      "mpi_rank_counts": [
+        2,
+        3
+      ],
+      "_note": "R2: diamond Si sp nsp=1 (two sites), 6x6x6 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -2041,6 +2053,15 @@
       ],
       "case": "bulk/diamondSi",
       "timeout": 300,
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
+      "mpi_procs": 2,
+      "mpi_rank_counts": [
+        2,
+        3
+      ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_diamondSi_sp_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-12.",
       "namelists": {
         "lattice": {
@@ -2218,7 +2239,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "R3: bcc-Fe spd nsp=2 magnetic (moment along z), 4x4x4 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
@@ -2388,7 +2410,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp2: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-12.",
       "namelists": {
@@ -2560,7 +2583,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "R4: bcc-Fe spd nsp=3 non-collinear, moment along (1,2,3)/sqrt(14) set by mom in Fe.nml, 4x4x4 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
@@ -2747,7 +2771,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp3: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-12.",
       "namelists": {
@@ -2936,7 +2961,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "R5: bcc-Fe spd nsp=4 non-collinear + SOC, moment along [111] set by mom in Fe.nml, 4x4x4 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
@@ -3123,7 +3149,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp4: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-12.",
       "namelists": {
@@ -3312,7 +3339,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "bcc-Fe spd nsp=1 collinear, Hubbard U = 2 eV (J = 0) on Fe d, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
@@ -3495,7 +3523,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
@@ -3680,7 +3709,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "bcc-Fe spd nsp=3 non-collinear, moment along (1,2,3)/sqrt(14), Hubbard U = 2 eV (J = 0) on Fe d, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
@@ -3880,7 +3910,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp3: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
@@ -4082,7 +4113,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "bcc-Fe spd nsp=4 non-collinear + SOC, moment along x, Hubbard U = 2 eV (J = 0) on Fe d, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
@@ -4282,7 +4314,8 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        2
+        2,
+        3
       ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp4: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
