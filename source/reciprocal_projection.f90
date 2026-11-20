@@ -42,6 +42,10 @@ module subroutine project_dos_orbitals_gaussian(this)
    integer, dimension(:), allocatable :: site_orb_offset
    real(rp) :: mx_char, my_char, mz_char, local_char
    real(rp) :: axis(3)
+   real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :)
+   real(rp), allocatable :: proj_cache(:, :, :, :, :), eig_full(:, :)
+   integer, allocatable :: star_size(:)
+   integer :: nk_full, e_start, e_end, e_count
 
    call root_info('project_dos_orbitals_gaussian: Starting projection', __FILE__, __LINE__)
 
@@ -110,40 +114,69 @@ module subroutine project_dos_orbitals_gaussian(this)
    !                   trim(int2str(site_orb_offset(4))) // ', ' // &
    !                   trim(int2str(site_orb_offset(5))) // ']', __FILE__, __LINE__)
 
-   ! Calculate projected DOS (raw) - same weights as total DOS
-   do ie = 1, this%n_energy_points
+   ! Band projections of every irreducible k once; a reduced mesh is expanded by symmetry to the full mesh, where each
+   ! full-mesh point carries the weight of its irreducible point shared over its star.
+   allocate(proj_local(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
+   proj_local = 0.0_rp
+   do ik = 1, size(this%eigenvectors, 3)
+      do ib = 1, nbands
+         do isite = 1, this%n_sites
+            do iorb = 1, 4
+               if (lstart(iorb) > n_orb_per_spin) cycle
+               call compute_spinor_block_projection(this, ik, ib, site_orb_offset(isite), n_orb_per_spin, &
+                                                    lstart(iorb), lend(iorb), orbital_char, proj_local(2, iorb, isite, ib, ik), &
+                                                    proj_local(3, iorb, isite, ib, ik), proj_local(4, iorb, isite, ib, ik))
+               proj_local(1, iorb, isite, ib, ik) = orbital_char
+            end do
+         end do
+      end do
+   end do
+   allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global), eig_irr(nbands, this%k_workset%nk_global))
+   call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
+   call this%gather_k_columns(nbands, this%eigenvalues, eig_irr)
+   deallocate(proj_local)
+   nk_full = product(this%nk_mesh)
+   if (this%nk_total < nk_full) then
+      allocate(proj_cache(4, 4, this%n_sites, nbands, nk_full), eig_full(nbands, nk_full))
+      call this%expand_projections_to_full_mesh(proj_irr, eig_irr, proj_cache, eig_full)
+      deallocate(proj_irr, eig_irr)
+   else
+      call move_alloc(proj_irr, proj_cache)
+      call move_alloc(eig_irr, eig_full)
+   end if
+   allocate(star_size(this%nk_total))
+   star_size = 0
+   do ik = 1, size(this%full_to_irred_k)
+      star_size(this%full_to_irred_k(ik)) = star_size(this%full_to_irred_k(ik)) + 1
+   end do
+   ! Ranks split the energy grid, so every sum runs over the full mesh in the same order whatever the rank count.
+   call get_mpi_range(rank, this%n_energy_points, e_start, e_end, e_count, region_tag='projected gaussian')
+
+   do ie = e_start, e_end
       energy = this%dos_energy_grid(ie)  ! Already in Ry
 
-      do ik = 1, size(this%eigenvalues, 2)
-         ik_global = local_k_index_to_global(this, ik)
+      do ik = 1, size(eig_full, 2)
+         ik_global = this%full_to_irred_k(ik)
          do ib = 1, nbands  ! Loop over all bands, not just max_orb_channels
             ! Skip if eigenvalue is far from current energy
-            if (abs(this%eigenvalues(ib, ik) - energy) > 5.0_rp * sigma_use) cycle
+            if (abs(eig_full(ib, ik) - energy) > 5.0_rp * sigma_use) cycle
 
             ! Calculate Gaussian weight (already normalized)
-            gaussian_weight = exp(-((energy - this%eigenvalues(ib, ik))**2) / (2.0_rp * sigma_squared))
+            gaussian_weight = exp(-((energy - eig_full(ib, ik))**2) / (2.0_rp * sigma_squared))
             gaussian_weight = gaussian_weight / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
-            
+
             if (abs(gaussian_weight) < 1.0e-10_rp) cycle
 
-            ! Apply k-point weight
-            weight = gaussian_weight * this%k_weights(ik_global)
+            ! Weight of this full-mesh point: its irreducible weight shared over the star
+            weight = gaussian_weight * this%k_weights(ik_global) / real(star_size(ik_global), rp)
 
             do isite = 1, this%n_sites
-               ! Site-blocked layout: each site contains the active spinor block,
-               ! with the up channels followed by the down channels.
-               site_orb_start = site_orb_offset(isite)
-
                axis = this%dos_site_axes(:, isite)
                do iorb = 1, 4
-                  orbital_char = 0.0_rp
-                  mx_char = 0.0_rp
-                  my_char = 0.0_rp
-                  mz_char = 0.0_rp
-                  if (lstart(iorb) <= n_orb_per_spin) then
-                     call compute_spinor_block_projection(this, ik, ib, site_orb_start, n_orb_per_spin, &
-                                                          lstart(iorb), lend(iorb), orbital_char, mx_char, my_char, mz_char)
-                  end if
+                  orbital_char = proj_cache(1, iorb, isite, ib, ik)
+                  mx_char = proj_cache(2, iorb, isite, ib, ik)
+                  my_char = proj_cache(3, iorb, isite, ib, ik)
+                  mz_char = proj_cache(4, iorb, isite, ib, ik)
                   if (abs(orbital_char) < 1.0e-14_rp) cycle
 
                   local_char = axis(1)*mx_char + axis(2)*my_char + axis(3)*mz_char
@@ -162,9 +195,10 @@ module subroutine project_dos_orbitals_gaussian(this)
          end do
       end do
    end do
+   deallocate(proj_cache, eig_full, star_size)
 
 #ifdef USE_MPI
-   if (this%k_mesh_distributed_active) then
+   if (numprocs > 1) then
       call MPI_ALLREDUCE(MPI_IN_PLACE, this%projected_dos, product(shape(this%projected_dos)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, this%projected_dos_moments, product(shape(this%projected_dos_moments)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_mx_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)

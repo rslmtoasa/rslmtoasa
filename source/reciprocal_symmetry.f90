@@ -123,51 +123,66 @@ contains
       this%rf_density%rho = avg/real(this%n_sym_ops, rp)
    end subroutine symmetrize_spin_density
 
-   !> @brief Fill full-mesh eigenvalues and band projections from the irreducible mesh (see the interface).
-   module subroutine expand_projections_to_full_mesh(this, proj_irr, eig_irr, proj_full, eig_full)
+   !> @brief Operation of each full-mesh point (see the interface).
+   module subroutine full_mesh_operations(this, op)
       class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: proj_irr(:, :, :, :, :), eig_irr(:, :)
-      real(rp), intent(out) :: proj_full(:, :, :, :, :), eig_full(:, :)
+      integer, allocatable, intent(out) :: op(:)
       real(rp), parameter :: k_tol = 1.0e-6_rp
-      real(rp), allocatable :: kfull(:, :), w(:, :, :), rit(:, :, :)
+      real(rp), allocatable :: kfull(:, :), rit(:, :, :)
       real(rp) :: kt(3), d(3)
-      integer :: shift(3), kf, ki, op, itr, s, l, nk_full, nsp
+      integer :: shift(3), kf, ki, o, itr, nk_full
       logical :: found, tr_only
 
-      nk_full = size(proj_full, 5)
+      nk_full = product(this%nk_mesh)
       if (this%n_sym_ops == 0 .or. size(this%full_to_irred_k) /= nk_full) &
-         call g_logger%fatal('expand_projections_to_full_mesh: no symmetry group or full_to_irred_k size mismatch', __FILE__, __LINE__)
+         call g_logger%fatal('full_mesh_operations: no symmetry group or full_to_irred_k size mismatch', __FILE__, __LINE__)
       shift = merge(1, 0, abs(this%k_offset) > 1.0e-12_rp)
       if (this%symmetry_analysis%spglib%get_full_kpoint_mesh_with_points(this%nk_mesh, shift, kfull) /= nk_full) &
-         call g_logger%fatal('expand_projections_to_full_mesh: full mesh unavailable', __FILE__, __LINE__)
-      nsp = 1
-      if (associated(this%control)) nsp = this%control%nsp
-      tr_only = this%use_time_reversal .and. nsp == 1
-      allocate(w(3, 3, this%n_sym_ops), rit(3, 3, this%n_sym_ops))
-      w = sym_spin_matrices(this)
-      do op = 1, this%n_sym_ops
-         rit(:, :, op) = transpose(inverse_3x3(real(this%sym_rotations(:, :, op), rp)))
+         call g_logger%fatal('full_mesh_operations: full mesh unavailable', __FILE__, __LINE__)
+      tr_only = this%use_time_reversal
+      if (associated(this%control)) tr_only = tr_only .and. this%control%nsp == 1
+      allocate(op(nk_full), rit(3, 3, this%n_sym_ops))
+      do o = 1, this%n_sym_ops
+         rit(:, :, o) = transpose(inverse_3x3(real(this%sym_rotations(:, :, o), rp)))
       end do
 
       do kf = 1, nk_full
          ki = this%full_to_irred_k(kf)
          found = .false.
-         do op = 1, this%n_sym_ops
+         do o = 1, this%n_sym_ops
             do itr = 0, merge(1, 0, tr_only)
-               kt = real(this%sym_spin_flips(op)*(1 - 2*itr), rp)*matmul(rit(:, :, op), this%k_points(:, ki))
+               kt = real(this%sym_spin_flips(o)*(1 - 2*itr), rp)*matmul(rit(:, :, o), this%k_points(:, ki))
                d = kt - kfull(:, kf)
                found = maxval(abs(d - nint(d))) < k_tol
                if (found) exit
             end do
             if (found) exit
          end do
-         if (.not. found) call g_logger%fatal('expand_projections_to_full_mesh: no operation maps irreducible k ' // &
+         if (.not. found) call g_logger%fatal('full_mesh_operations: no operation maps irreducible k ' // &
                                               trim(int2str(ki)) // ' onto full k ' // trim(int2str(kf)), __FILE__, __LINE__)
+         op(kf) = o
+      end do
+   end subroutine full_mesh_operations
+
+   !> @brief Fill full-mesh eigenvalues and band projections from the irreducible mesh (see the interface).
+   module subroutine expand_projections_to_full_mesh(this, proj_irr, eig_irr, proj_full, eig_full)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :), eig_irr(:, :)
+      real(rp), intent(out) :: proj_full(:, :, :, :, :), eig_full(:, :)
+      real(rp), allocatable :: w(:, :, :)
+      integer, allocatable :: op(:)
+      integer :: kf, ki, s, l
+
+      call this%full_mesh_operations(op)
+      allocate(w(3, 3, this%n_sym_ops))
+      w = sym_spin_matrices(this)
+      do kf = 1, size(proj_full, 5)
+         ki = this%full_to_irred_k(kf)
          eig_full(:, kf) = eig_irr(:, ki)
          do s = 1, size(proj_irr, 3)
             do l = 1, size(proj_irr, 2)
-               proj_full(1, l, this%sym_atom_perm(s, op), :, kf) = proj_irr(1, l, s, :, ki)
-               proj_full(2:4, l, this%sym_atom_perm(s, op), :, kf) = matmul(w(:, :, op), proj_irr(2:4, l, s, :, ki))
+               proj_full(1, l, this%sym_atom_perm(s, op(kf)), :, kf) = proj_irr(1, l, s, :, ki)
+               proj_full(2:4, l, this%sym_atom_perm(s, op(kf)), :, kf) = matmul(w(:, :, op(kf)), proj_irr(2:4, l, s, :, ki))
             end do
          end do
       end do

@@ -588,6 +588,7 @@ module reciprocal_mod
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
+      procedure :: full_mesh_operations
       procedure :: expand_projections_to_full_mesh
       procedure :: build_irreducible_tetrahedra
       ! k-space Green’s-function engine (milestone B2)
@@ -1405,6 +1406,15 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine ensure_tetra_symmetry_backend(this)
       class(reciprocal), intent(inout) :: this
    end subroutine ensure_tetra_symmetry_backend
+
+   !> @brief Operation that maps the irreducible point of each full-mesh point onto it.
+   !> @details Searches the stored group, with time reversal for nsp = 1 (the sign is sym_spin_flips(op)); stops if none
+   !>          maps the irreducible point onto the full-mesh point.
+   !> @param[out] op Operation index of each full-mesh point [nk_full].
+   module subroutine full_mesh_operations(this, op)
+      class(reciprocal), intent(in) :: this
+      integer, allocatable, intent(out) :: op(:)
+   end subroutine full_mesh_operations
 
    !> @brief Fill full-mesh eigenvalues and band projections from the irreducible mesh.
    !> @details Each full-mesh point takes the eigenvalues of its irreducible point and its projections rotated by the
