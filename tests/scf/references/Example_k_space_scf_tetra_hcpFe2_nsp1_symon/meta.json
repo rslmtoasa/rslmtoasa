@@ -7,7 +7,7 @@
     "dos",
     "tetrahedron",
     "basis_spd",
-    "nonmagnetic",
+    "collinear",
     "strux",
     "mpi"
   ],
@@ -28,14 +28,13 @@
       "strux_backend": "strux_lib"
     },
     "control": {
-      "cheb_backend": "legacy",
       "nsp": 1,
       "lmax": 2,
       "recur": "block",
       "lld": 12
     },
     "self": {
-      "nstep": 2,
+      "nstep": 1,
       "use_kspace": true
     },
     "reciprocal": {
