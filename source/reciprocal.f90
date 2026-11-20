@@ -589,7 +589,7 @@ module reciprocal_mod
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
       procedure :: full_mesh_operations
-      procedure :: expand_projections_to_full_mesh
+      procedure :: full_mesh_projection
       procedure :: build_irreducible_tetrahedra
       ! k-space Green’s-function engine (milestone B2)
       procedure :: fill_green
@@ -1408,27 +1408,34 @@ end subroutine check_multisite_hamiltonian_diagonal
       class(reciprocal), intent(inout) :: this
    end subroutine ensure_tetra_symmetry_backend
 
-   !> @brief Operation that maps the irreducible point of each full-mesh point onto it.
+   !> @brief Operation that maps the irreducible point of each full-mesh point onto it, and the spin matrix of each operation.
    !> @details Searches the stored group, with time reversal for nsp = 1 (the sign is sym_spin_flips(op)); stops if none
    !>          maps the irreducible point onto the full-mesh point.
    !> @param[out] op Operation index of each full-mesh point [nk_full].
-   module subroutine full_mesh_operations(this, op)
+   !> @param[out] w Cartesian action of each stored operation on a spin vector [3, 3, n_sym_ops].
+   module subroutine full_mesh_operations(this, op, w)
       class(reciprocal), intent(in) :: this
       integer, allocatable, intent(out) :: op(:)
+      real(rp), allocatable, intent(out) :: w(:, :, :)
    end subroutine full_mesh_operations
 
-   !> @brief Fill full-mesh eigenvalues and band projections from the irreducible mesh.
-   !> @details Each full-mesh point takes the eigenvalues of its irreducible point and its projections rotated by the
-   !>          operation that maps one onto the other: sites are permuted, the spin vector is acted on by sym_spin_matrices.
+   !> @brief Band projections of one full-mesh point from the irreducible mesh.
+   !> @details The irreducible point of kf is rotated by the operation that maps it onto kf: the site is permuted, the spin
+   !>          vector is acted on by sym_spin_matrices. An empty op means the mesh is not reduced and kf is irreducible.
    !> @param[in] proj_irr Projections (total, mx, my, mz; l; site; band; irreducible k).
-   !> @param[in] eig_irr Eigenvalues (band; irreducible k).
-   !> @param[out] proj_full Projections on the full mesh.
-   !> @param[out] eig_full Eigenvalues on the full mesh.
-   module subroutine expand_projections_to_full_mesh(this, proj_irr, eig_irr, proj_full, eig_full)
+   !> @param[in] op Operation index of each full-mesh point, from full_mesh_operations.
+   !> @param[in] w Spin matrix of each operation, from full_mesh_operations.
+   !> @param[in] kf Full-mesh point.
+   !> @param[in] l Orbital type.
+   !> @param[in] isite Site on the full mesh.
+   !> @param[in] ib Band.
+   !> @return (total, mx, my, mz) projection.
+   module function full_mesh_projection(this, proj_irr, op, w, kf, l, isite, ib) result(p)
       class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: proj_irr(:, :, :, :, :), eig_irr(:, :)
-      real(rp), intent(out) :: proj_full(:, :, :, :, :), eig_full(:, :)
-   end subroutine expand_projections_to_full_mesh
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :), w(:, :, :)
+      integer, intent(in) :: op(:), kf, l, isite, ib
+      real(rp) :: p(4)
+   end function full_mesh_projection
 
    !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
    !> @param[inout] this Reciprocal object containing symmetry maps and mesh dimensions.

@@ -42,8 +42,9 @@ module subroutine project_dos_orbitals_gaussian(this)
    integer, dimension(:), allocatable :: site_orb_offset
    real(rp) :: mx_char, my_char, mz_char, local_char
    real(rp) :: axis(3)
-   real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :)
-   real(rp), allocatable :: proj_cache(:, :, :, :, :), eig_full(:, :)
+   real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :), w(:, :, :)
+   real(rp) :: proj(4)
+   integer, allocatable :: op(:)
    integer, allocatable :: star_size(:)
    integer :: nk_full, e_start, e_end, e_count
 
@@ -137,12 +138,9 @@ module subroutine project_dos_orbitals_gaussian(this)
    deallocate(proj_local)
    nk_full = product(this%nk_mesh)
    if (this%nk_total < nk_full) then
-      allocate(proj_cache(4, 4, this%n_sites, nbands, nk_full), eig_full(nbands, nk_full))
-      call this%expand_projections_to_full_mesh(proj_irr, eig_irr, proj_cache, eig_full)
-      deallocate(proj_irr, eig_irr)
+      call this%full_mesh_operations(op, w)
    else
-      call move_alloc(proj_irr, proj_cache)
-      call move_alloc(eig_irr, eig_full)
+      allocate(op(0), w(3, 3, 0))
    end if
    allocate(star_size(this%nk_total))
    star_size = 0
@@ -155,14 +153,14 @@ module subroutine project_dos_orbitals_gaussian(this)
    do ie = e_start, e_end
       energy = this%dos_energy_grid(ie)  ! Already in Ry
 
-      do ik = 1, size(eig_full, 2)
+      do ik = 1, nk_full
          ik_global = this%full_to_irred_k(ik)
          do ib = 1, nbands  ! Loop over all bands, not just max_orb_channels
             ! Skip if eigenvalue is far from current energy
-            if (abs(eig_full(ib, ik) - energy) > 5.0_rp * sigma_use) cycle
+            if (abs(eig_irr(ib, ik_global) - energy) > 5.0_rp * sigma_use) cycle
 
             ! Calculate Gaussian weight (already normalized)
-            gaussian_weight = exp(-((energy - eig_full(ib, ik))**2) / (2.0_rp * sigma_squared))
+            gaussian_weight = exp(-((energy - eig_irr(ib, ik_global))**2) / (2.0_rp * sigma_squared))
             gaussian_weight = gaussian_weight / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
 
             if (abs(gaussian_weight) < 1.0e-10_rp) cycle
@@ -173,10 +171,11 @@ module subroutine project_dos_orbitals_gaussian(this)
             do isite = 1, this%n_sites
                axis = this%dos_site_axes(:, isite)
                do iorb = 1, 4
-                  orbital_char = proj_cache(1, iorb, isite, ib, ik)
-                  mx_char = proj_cache(2, iorb, isite, ib, ik)
-                  my_char = proj_cache(3, iorb, isite, ib, ik)
-                  mz_char = proj_cache(4, iorb, isite, ib, ik)
+                  proj = this%full_mesh_projection(proj_irr, op, w, ik, iorb, isite, ib)
+                  orbital_char = proj(1)
+                  mx_char = proj(2)
+                  my_char = proj(3)
+                  mz_char = proj(4)
                   if (abs(orbital_char) < 1.0e-14_rp) cycle
 
                   local_char = axis(1)*mx_char + axis(2)*my_char + axis(3)*mz_char
@@ -195,7 +194,7 @@ module subroutine project_dos_orbitals_gaussian(this)
          end do
       end do
    end do
-   deallocate(proj_cache, eig_full, star_size)
+   deallocate(proj_irr, eig_irr, op, w, star_size)
 
 #ifdef USE_MPI
    if (numprocs > 1) then
@@ -375,8 +374,9 @@ end subroutine project_dos_orbitals_gaussian
       real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
       ! Projection weights per k-point: (total, mx, my, mz; l; site; band; k)
-      real(rp), allocatable :: proj_cache(:, :, :, :, :), proj_local(:, :, :, :, :), eig_full(:, :)
-      real(rp), allocatable :: proj_irr(:, :, :, :, :), eig_irr(:, :)
+      real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :), w(:, :, :)
+      real(rp) :: proj(4)
+      integer, allocatable :: op(:)
       integer :: nk_full
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
@@ -472,19 +472,16 @@ end subroutine project_dos_orbitals_gaussian
       ! The tetrahedra live on the full mesh; a reduced mesh is expanded by symmetry, not rediagonalised.
       nk_full = product(this%nk_mesh)
       if (this%nk_total < nk_full) then
-         allocate(proj_cache(4, 4, this%n_sites, nbands, nk_full), eig_full(nbands, nk_full))
-         call this%expand_projections_to_full_mesh(proj_irr, eig_irr, proj_cache, eig_full)
-         deallocate(proj_irr, eig_irr)
+         call this%full_mesh_operations(op, w)
       else
-         call move_alloc(proj_irr, proj_cache)
-         call move_alloc(eig_irr, eig_full)
+         allocate(op(0), w(3, 3, 0))
       end if
 
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &
-      !$OMP SHARED(this, proj_cache, eig_full, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
+      !$OMP SHARED(this, proj_irr, eig_irr, op, w, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
       !$OMP        tet_start, tet_end, de, use_blochl) &
-      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, e_corners, sorted_e, e1, e4, i_start, i_end, &
+      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, sorted_e, e1, e4, i_start, i_end, &
       !$OMP         i_energy, dos_contrib, tet_weight, isite, site_orb_start, axis, iorb, &
       !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_chars, &
       !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
@@ -508,7 +505,7 @@ end subroutine project_dos_orbitals_gaussian
          do i_band = 1, size(this%eigenvalues, 1)
             do i_corner = 1, 4
                ik = this%tetrahedra(i_corner, i_tet)
-               e_corners(i_corner) = eig_full(i_band, ik)
+               e_corners(i_corner) = eig_irr(i_band, this%full_to_irred_k(ik))
             end do
             call sort4(e_corners, sorted_e)
             e1 = sorted_e(1)
@@ -555,10 +552,11 @@ end subroutine project_dos_orbitals_gaussian
                   if (lstart(iorb) <= n_orb_per_spin) then
                      do i_corner = 1, 4
                         ik = this%tetrahedra(i_corner, i_tet)
-                        orbital_chars(i_corner) = proj_cache(1, iorb, isite, i_band, ik)
-                        mx_chars(i_corner) = proj_cache(2, iorb, isite, i_band, ik)
-                        my_chars(i_corner) = proj_cache(3, iorb, isite, i_band, ik)
-                        mz_chars(i_corner) = proj_cache(4, iorb, isite, i_band, ik)
+                        proj = this%full_mesh_projection(proj_irr, op, w, ik, iorb, isite, i_band)
+                        orbital_chars(i_corner) = proj(1)
+                        mx_chars(i_corner) = proj(2)
+                        my_chars(i_corner) = proj(3)
+                        mz_chars(i_corner) = proj(4)
                      end do
                      orbital_char_avg = sum(orbital_chars) / 4.0_rp
                      mx_char_avg = sum(mx_chars) / 4.0_rp
@@ -641,7 +639,7 @@ end subroutine project_dos_orbitals_gaussian
       end if
 #endif
 
-      deallocate(proj_cache, eig_full)
+      deallocate(proj_irr, eig_irr, op, w)
       deallocate(site_orb_offset)
       deallocate(site_axes)
 

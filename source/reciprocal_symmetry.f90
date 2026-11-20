@@ -124,9 +124,10 @@ contains
    end subroutine symmetrize_spin_density
 
    !> @brief Operation of each full-mesh point (see the interface).
-   module subroutine full_mesh_operations(this, op)
+   module subroutine full_mesh_operations(this, op, w)
       class(reciprocal), intent(in) :: this
       integer, allocatable, intent(out) :: op(:)
+      real(rp), allocatable, intent(out) :: w(:, :, :)
       real(rp), parameter :: k_tol = 1.0e-6_rp
       real(rp), allocatable :: kfull(:, :), rit(:, :, :)
       real(rp) :: kt(3), d(3)
@@ -162,31 +163,28 @@ contains
                                               trim(int2str(ki)) // ' onto full k ' // trim(int2str(kf)), __FILE__, __LINE__)
          op(kf) = o
       end do
-   end subroutine full_mesh_operations
-
-   !> @brief Fill full-mesh eigenvalues and band projections from the irreducible mesh (see the interface).
-   module subroutine expand_projections_to_full_mesh(this, proj_irr, eig_irr, proj_full, eig_full)
-      class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: proj_irr(:, :, :, :, :), eig_irr(:, :)
-      real(rp), intent(out) :: proj_full(:, :, :, :, :), eig_full(:, :)
-      real(rp), allocatable :: w(:, :, :)
-      integer, allocatable :: op(:)
-      integer :: kf, ki, s, l
-
-      call this%full_mesh_operations(op)
       allocate(w(3, 3, this%n_sym_ops))
       w = sym_spin_matrices(this)
-      do kf = 1, size(proj_full, 5)
-         ki = this%full_to_irred_k(kf)
-         eig_full(:, kf) = eig_irr(:, ki)
-         do s = 1, size(proj_irr, 3)
-            do l = 1, size(proj_irr, 2)
-               proj_full(1, l, this%sym_atom_perm(s, op(kf)), :, kf) = proj_irr(1, l, s, :, ki)
-               proj_full(2:4, l, this%sym_atom_perm(s, op(kf)), :, kf) = matmul(w(:, :, op(kf)), proj_irr(2:4, l, s, :, ki))
-            end do
-         end do
-      end do
-   end subroutine expand_projections_to_full_mesh
+   end subroutine full_mesh_operations
+
+   !> @brief Band projections of one full-mesh point from the irreducible mesh (see the interface).
+   module function full_mesh_projection(this, proj_irr, op, w, kf, l, isite, ib) result(p)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :), w(:, :, :)
+      integer, intent(in) :: op(:), kf, l, isite, ib
+      real(rp) :: p(4)
+      integer :: ki, o, s
+
+      if (size(op) == 0) then
+         p = proj_irr(:, l, isite, ib, kf)
+         return
+      end if
+      ki = this%full_to_irred_k(kf)
+      o = op(kf)
+      s = findloc(this%sym_atom_perm(:, o), isite, 1)
+      p(1) = proj_irr(1, l, s, ib, ki)
+      p(2:4) = matmul(w(:, :, o), proj_irr(2:4, l, s, ib, ki))
+   end function full_mesh_projection
 
    !> @brief Group average of one spin vector per site, with the rule of symmetrize_spin_density.
    !> @param[inout] v Spin vector of each site [3, nrec].
