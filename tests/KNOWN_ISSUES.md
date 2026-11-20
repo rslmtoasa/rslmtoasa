@@ -100,9 +100,10 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
 - **2026-11-16:** `Val04LdaUPhysics` is no longer registered and `val04_lda_u.py` is not in the tree; Val12 was not re-run.
 
-### The lmax=3 symmetry twins do not exercise symmetrize_site_dm — 2026-11-19
-- **Verified:** `Example_k_space_scf_tetra_bccFe_lmax3_nsp4_symon` (U = 0, `hubbard_spinor_dm_diagnostic`) still passes at 1e-8 with `symmetrize_site_dm` damaged locally (not committed): zeroing the f rows/columns of the orbital rotation, and zeroing the d rows/columns (`d(5:9,:)`, `d(:,5:9)`). The checked quantities (Fe_out.nml, totaldos, band_moments, log patterns) do not depend on the symmetrised site density matrix at U = 0.
-- **Not tested:** whether a U != 0 case, or a check on `ldm`/`ldm_spinor` or the HUBBARD_SPINOR_DM log line, would see it. The spinor-DM path symmetrises the d block only, so the f block is reached only through `calculate_ldm_from_eigenvectors`.
+### The lmax=3 symmetry twins do not exercise the f block of symmetrize_site_dm — 2026-11-20
+- **Verified:** both twins check the HUBBARD_SPINOR_DM log line (trace, eig_min, eig_max, max_up_dn, first and last iteration). With `symmetrize_site_dm` damaged locally (not committed), zeroing the d rows/columns of the orbital rotation (`d(5:9,:)`, `d(:,5:9)`) makes `_symon` fail on all 8 of these values (they print 0); zeroing the f rows/columns (`d(10:16,:)`, `d(:,10:16)`) still passes at 1e-8. Before these checks, neither damage was detected.
+- **Why (verified for the spinor path, inferred for the rest):** the spinor DM embeds the d block only, so the f block is reached only through `calculate_ldm_from_eigenvectors`, which no checked quantity depends on at U = 0.
+- **Not tested:** the f block stays uncovered until a case with U at lmax = 3 exists (`validate_fixed_u_scope` currently aborts it).
 
 ## Fixed-potential and frozen-magnon (GBT) findings
 

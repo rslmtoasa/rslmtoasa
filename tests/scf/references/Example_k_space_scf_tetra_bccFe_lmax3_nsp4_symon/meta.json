@@ -142,7 +142,15 @@
           "site_mom_z_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
           "site_mom_x_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
           "site_mom_y_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-          "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+          "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
+          "spinor_dm_trace_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_trace_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_eig_min_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_eig_min_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_eig_max_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_eig_max_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_max_up_dn_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)",
+          "spinor_dm_max_up_dn_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)"
         }
       },
       {
@@ -202,10 +210,10 @@
     "cmake_version": "cmake version 3.28.3",
     "compiler": "/usr/bin/gfortran",
     "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
-    "git_commit": "260827e58c7e88c28e2c0b54e8e88e1f71a9c2b9",
+    "git_commit": "9fd12060a8afb7dbc8ef245dae6f95d0e180fa9f",
     "mpi_enabled": false,
     "mpi_omp_threads": 1,
-    "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+    "platform": "Linux-6.18.44-fc-v726-x86_64-with-glibc2.39",
     "profile": "runner-native",
     "serial_omp_threads": 2,
     "underlying_compiler": "unavailable"

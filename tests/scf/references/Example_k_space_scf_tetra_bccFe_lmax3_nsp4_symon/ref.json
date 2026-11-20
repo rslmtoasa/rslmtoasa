@@ -94,7 +94,15 @@
       "site_mom_z_it1": -0.0,
       "site_mom_x_last": 1.0,
       "site_mom_y_last": -0.0,
-      "site_mom_z_last": 0.0
+      "site_mom_z_last": 0.0,
+      "spinor_dm_trace_it1": 2.87255666,
+      "spinor_dm_trace_last": 6.77253408,
+      "spinor_dm_eig_min_it1": 0.111823,
+      "spinor_dm_eig_min_last": 0.365177,
+      "spinor_dm_eig_max_it1": 0.456558,
+      "spinor_dm_eig_max_last": 0.946631,
+      "spinor_dm_max_up_dn_it1": 0.1691,
+      "spinor_dm_max_up_dn_last": 0.2901
     },
     "report.out": {
       "site_occupation": 8.00164,

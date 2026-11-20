@@ -4606,7 +4606,15 @@
               "site_mom_z_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
               "site_mom_x_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
               "site_mom_y_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
+              "spinor_dm_trace_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_trace_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_min_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_min_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_max_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_max_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_max_up_dn_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_max_up_dn_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)"
             }
           },
           {
@@ -4796,7 +4804,15 @@
               "site_mom_z_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
               "site_mom_x_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
               "site_mom_y_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
+              "spinor_dm_trace_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_trace_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_min_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_min_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_max_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_eig_max_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_max_up_dn_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)",
+              "spinor_dm_max_up_dn_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)"
             }
           },
           {
