@@ -28,6 +28,12 @@ contains
       obj%lattice => hamiltonian_obj%lattice
       obj%control => hamiltonian_obj%lattice%control
 
+      ! k-space sees nrec sites per cell, so fewer recursion classes than basis sites would describe another crystal.
+      if (obj%control%calctype == 'B' .and. obj%lattice%nrec < obj%lattice%ntot) then
+         call g_logger%fatal('k-space needs every basis site to be its own recursion class (nrec = '// &
+                             trim(int2str(obj%lattice%nrec))//' < ntot = '//trim(int2str(obj%lattice%ntot))//').', __FILE__, __LINE__)
+      end if
+
       call obj%restore_to_default()
       call obj%build_from_file()  ! Read parameters from input.nml
       call obj%generate_reciprocal_vectors()
