@@ -1347,7 +1347,7 @@ end function integrate_dos_up_to_energy
          write(unit, '(A)') '# Format: site, orbital_type, spin, m0, m1, m2'
          write(unit, '(A)') '# Orbital types: 1=s, 2=p, 3=d, 4=f'
          write(unit, '(A)') '# Spin: 1=up, 2=down'
-         write(unit, '(A)') '# m0 = integrated DOS up to Fermi level with Fermi-Dirac weighting'
+         write(unit, '(A)') '# m0 = integrated DOS up to Fermi level with ' // trim(merge('Bloechl tetrahedron', 'Fermi-Dirac        ', trim(this%dos_method) == 'blochl')) // ' weighting'
          write(unit, '(A)') '# m1 = center of gravity (occupied states)'
          write(unit, '(A)') '# m2 = width of occupied states'
 
