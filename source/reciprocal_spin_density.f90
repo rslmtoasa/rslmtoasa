@@ -210,14 +210,14 @@ contains
          ! Same per-site policy report the real-space route emits, so the two
          ! routes can be diffed line for line.
          if (trim(this%rf_density%policy) == sd_constrained_spiral) then
-            call g_logger%info('DENSITY_POLICY constrained_spiral atom'//fmt('i4', isite)// &
+            call root_info('DENSITY_POLICY constrained_spiral atom'//fmt('i4', isite)// &
                                ' m_long='//fmt('f10.6', m_long)// &
                                ' |m_transverse|='//fmt('f10.6', sqrt(sum(m_transverse(:)**2)))// &
                                ' torque=('//fmt('f10.6', torque(1))//','// &
                                fmt('f10.6', torque(2))//','//fmt('f10.6', torque(3))//')', &
                                __FILE__, __LINE__)
          else
-            call g_logger%info('DENSITY_POLICY relaxed_reference atom'//fmt('i4', isite)// &
+            call root_info('DENSITY_POLICY relaxed_reference atom'//fmt('i4', isite)// &
                                ' |m|='//fmt('f10.6', m_long)// &
                                ' axis=('//fmt('f10.6', axis(1))//','// &
                                fmt('f10.6', axis(2))//','//fmt('f10.6', axis(3))//')', &
@@ -250,7 +250,7 @@ contains
          end do
       end do
 
-      call g_logger%info('reciprocal%fill_band_moments_from_spin_density: band moments ' // &
+      call root_info('reciprocal%fill_band_moments_from_spin_density: band moments ' // &
          'projected from the shared rotating-frame density (policy "'//trim(policy)// &
          '", electron count '//trim(real2str(this%rf_density%electron_count(), '(F12.6)'))//').', &
          __FILE__, __LINE__)

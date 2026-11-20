@@ -407,7 +407,7 @@ end subroutine project_dos_orbitals_gaussian
       integer, allocatable :: op(:)
       integer :: nk_full
 
-      call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
+      call root_info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
       ! Initialize dimensions - get number of sites from lattice
       this%n_sites = this%lattice%nrec
@@ -430,7 +430,7 @@ end subroutine project_dos_orbitals_gaussian
       lstart = [1, 2, 5, 10]
       lend = [1, 4, 9, 16]
 
-      call g_logger%info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
+      call root_info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
                         ' site(s)', __FILE__, __LINE__)
 
       ! Allocate projected DOS array
@@ -708,12 +708,12 @@ end subroutine project_dos_orbitals_gaussian
             this%dos_mx_tot = this%dos_mx_tot * norm_factor
             this%dos_my_tot = this%dos_my_tot * norm_factor
             this%dos_mz_tot = this%dos_mz_tot * norm_factor
-            call g_logger%info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
+            call root_info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
                               trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
          end if
       end if
 
-      call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
+      call root_info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
    end subroutine project_dos_orbitals_tetrahedron
 
    !> @brief Integrate tabulated data with the trapezoidal rule.
@@ -809,7 +809,7 @@ module subroutine calculate_band_moments(this)
    if (this%total_electrons <= 1.0e-3_rp) then
       if (this%lattice%nbulk_bulk > 0) then
          this%total_electrons = real(sum(this%lattice%symbolic_atoms(1:this%lattice%nbulk_bulk)%element%valence), rp)
-         call g_logger%info('calculate_band_moments: Recovered total_electrons from valence = ' // &
+         call root_info('calculate_band_moments: Recovered total_electrons from valence = ' // &
                            trim(real2str(this%total_electrons, '(F10.5)')), __FILE__, __LINE__)
       else if (this%lattice%nrec > 0) then
          this%total_electrons = real(sum(this%lattice%symbolic_atoms(1:this%lattice%nrec)%element%valence), rp)
@@ -820,7 +820,7 @@ module subroutine calculate_band_moments(this)
    ! EF is already canonical here: calculate_density_of_states solves it from
    ! eigenvalues/k weights before any DOS projection.  This routine must never
    ! replace it with a grid/window-dependent DOS root.
-   call g_logger%info('calculate_band_moments: Using canonical/fixed Fermi level = ' // &
+   call root_info('calculate_band_moments: Using canonical/fixed Fermi level = ' // &
                       trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
 
    ! --- WP7: the SCF density is the shared rotating-frame contract. ----------
@@ -849,7 +849,7 @@ module subroutine calculate_band_moments(this)
       trim(this%lattice%control%density_policy), reference, axis_used)
 
    do isite = 1, this%n_sites
-      call g_logger%info('calculate_band_moments: site '//trim(int2str(isite))// &
+      call root_info('calculate_band_moments: site '//trim(int2str(isite))// &
                          ' projection axis = ('//trim(real2str(axis_used(1, isite), '(F9.5)'))//', '// &
                          trim(real2str(axis_used(2, isite), '(F9.5)'))//', '// &
                          trim(real2str(axis_used(3, isite), '(F9.5)'))//')', __FILE__, __LINE__)
@@ -866,12 +866,12 @@ module subroutine calculate_band_moments(this)
       end do
    end do
 
-   call g_logger%info('calculate_band_moments: Sum of all m0 moments = ' // &
+   call root_info('calculate_band_moments: Sum of all m0 moments = ' // &
                      trim(real2str(m0, '(F10.5)')) // &
                      ', expected electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
                      __FILE__, __LINE__)
 
-   call g_logger%info('calculate_band_moments: Completed', __FILE__, __LINE__)
+   call root_info('calculate_band_moments: Completed', __FILE__, __LINE__)
 end subroutine calculate_band_moments
 
    !> @brief Reconstruct lattice local density matrices from projected DOS moments.
