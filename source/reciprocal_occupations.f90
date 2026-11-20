@@ -78,16 +78,30 @@ contains
    end subroutine gather_occupation_inputs
 
    !> @brief Irreducible tetrahedra of the mesh when dos_method='blochl'; left unallocated otherwise (Fermi-Dirac).
+   !> @details Built once per mesh and symmetry map and kept on the reciprocal object.
    subroutine blochl_tetrahedra(this, tet, mult)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       integer, allocatable, intent(out) :: tet(:, :), mult(:)
       integer :: n_tet
+      integer, allocatable :: key(:)
 
       if (trim(this%dos_method) /= 'blochl') return
       if (allocated(this%k_path)) then
          call g_logger%fatal("dos_method='blochl' occupations need a uniform k mesh, not a k-path", __FILE__, __LINE__)
       end if
-      call this%build_irreducible_tetrahedra(tet, mult, n_tet)
+      key = [this%nk_mesh, this%full_to_irred_k]
+      if (allocated(this%occ_tetra_key)) then
+         if (size(this%occ_tetra_key) /= size(key)) deallocate(this%occ_tetra_key)
+      end if
+      if (allocated(this%occ_tetra_key)) then
+         if (any(this%occ_tetra_key /= key)) deallocate(this%occ_tetra_key)
+      end if
+      if (.not. allocated(this%occ_tetra_key)) then
+         call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
+         call move_alloc(key, this%occ_tetra_key)
+      end if
+      tet = this%occ_tetra
+      mult = this%occ_tetra_mult
    end subroutine blochl_tetrahedra
 
    !> @brief Bloechl-corrected tetrahedron occupations of the packed global mesh at T=0 (PRB 49, 16223 Eqs. 4, 22).
@@ -128,7 +142,7 @@ contains
    !> @brief Occupations of the current eigensystem at this%fermi_level for the density consumers (dos_method='blochl').
    !> @details Every rank gathers the whole mesh and computes the same weights; a consumer reads its own k columns.
    module subroutine blochl_occupations(this, occ)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), allocatable, intent(out) :: occ(:, :)
       real(rp), allocatable :: packed(:, :)
       integer, allocatable :: tet(:, :), mult(:)
@@ -181,7 +195,7 @@ contains
    !>          Both observables are divided by the global raw weight sum.  The sums run over the gathered
    !>          global mesh in global k order (one all-gather on a distributed mesh).
    module subroutine evaluate_eigenvalue_occupations(this, fermi_level, electron_count, band_energy, weight_sum)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: fermi_level
       real(rp), intent(out) :: electron_count, band_energy
       real(rp), intent(out), optional :: weight_sum
@@ -203,7 +217,7 @@ contains
    !> @brief Solve the projection-free Fermi-level equation N(EF)=N_target.
    !> @details The eigenvalues are gathered once; bisection and the final sums use the local full copy.
    module function find_fermi_level_from_eigenvalues(this, total_electrons) result(fermi_level)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: total_electrons
       real(rp) :: fermi_level
 

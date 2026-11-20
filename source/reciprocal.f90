@@ -479,6 +479,11 @@ module reciprocal_mod
       real(rp), dimension(:), allocatable :: tetrahedron_volumes
       !> Number of tetrahedra
       integer :: n_tetrahedra
+      !> Irreducible tetrahedra and multiplicities of the dos_method='blochl' occupations, built once per mesh
+      integer, dimension(:, :), allocatable :: occ_tetra
+      integer, dimension(:), allocatable :: occ_tetra_mult
+      !> nk_mesh followed by full_to_irred_k at the time occ_tetra was built; a different mesh or symmetry map rebuilds it
+      integer, dimension(:), allocatable :: occ_tetra_key
 
       ! K-path (band structure) control variables
       !> Automatic k-path generation enabled
@@ -1461,7 +1466,7 @@ end subroutine check_multisite_hamiltonian_diagonal
 
    !> @brief Bloechl-corrected tetrahedron occupations at the current Fermi level, occ(band, global k); dos_method='blochl' only.
    module subroutine blochl_occupations(this, occ)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), allocatable, intent(out) :: occ(:, :)
    end subroutine blochl_occupations
 
@@ -1690,7 +1695,7 @@ end subroutine fill_band_moments_from_spin_density
 !>          when the mesh is distributed, then occupation and energy are divided
 !>          by the explicit global weight sum.
    module subroutine evaluate_eigenvalue_occupations(this, fermi_level, electron_count, band_energy, weight_sum)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: fermi_level
       real(rp), intent(out) :: electron_count, band_energy
       real(rp), intent(out), optional :: weight_sum
@@ -1698,7 +1703,7 @@ end subroutine fill_band_moments_from_spin_density
 
 !> @brief Find EF directly from eigenvalues, k weights, and Fermi occupations.
    module function find_fermi_level_from_eigenvalues(this, total_electrons) result(fermi_level)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: total_electrons
       real(rp) :: fermi_level
    end function find_fermi_level_from_eigenvalues
