@@ -5,7 +5,7 @@ verbose = T
 &lattice
 !ndim = 50000 ! cluster dimension to begin with. We could think about guess it from the atom density in the primitive cell and the radius cut
 rc = 080 ! radius cut. We could think about setting a default
-alat = 4.7 ! lattice parapeter
+alat = 2.47 ! lattice parapeter
 crystal_sym = 'hcp' ! options are bcc, fcc and hcp so far.
 strux_backend = 'strux_lib'
 wav = 1.40880
@@ -24,7 +24,7 @@ nstep = 1
 use_kspace = .true.
 /
 &energy
-fermi = -0.060336
+fermi = -0.054906
 energy_min = -1.0
 energy_max = 0.5
 channels_ldos = 2500

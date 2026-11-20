@@ -2059,13 +2059,13 @@
         2,
         3
       ],
-      "_note": "hcp, two Fe species (P-6m2, 12 operations), nsp=1, 4x4x4 mesh, tetrahedron DOS, 2 k-space SCF steps. Sym-off reference.",
+      "_note": "hcp, two Fe species (P-6m2, 12 operations), nsp=1, 4x4x4 mesh, tetrahedron DOS, alat 2.47 A, r2 16 (19 neighbours per site), 1 k-space SCF step. Sym-off reference.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
         },
         "self": {
-          "nstep": 2,
+          "nstep": 1,
           "use_kspace": true
         },
         "reciprocal": {
@@ -2236,7 +2236,7 @@
           "strux_backend": "strux_lib"
         },
         "self": {
-          "nstep": 2,
+          "nstep": 1,
           "use_kspace": true
         },
         "reciprocal": {

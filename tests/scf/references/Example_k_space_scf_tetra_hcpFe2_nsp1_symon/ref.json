@@ -2,9 +2,9 @@
   "nml": {
     "Fe_out.nml": {
       "lmax": 2.0,
-      "etot": -2541.4935417437746,
+      "etot": -2541.990186324027,
       "ws_r": 2.6622,
-      "vmad": -0.001287416645170222,
+      "vmad": 3.2475252086197576e-14,
       "mom": {
         "3": 1.0
       },
@@ -16,48 +16,48 @@
   "text": {
     "totaldos.out": {
       "120": {
-        "1": -0.78812,
+        "1": -0.78119,
         "2": 0.0
       },
       "200": {
-        "1": -0.00572,
-        "2": 0.0
+        "1": 0.00121,
+        "2": 45.89355
       },
       "280": {
-        "1": 0.77667,
-        "2": 0.0
+        "1": 0.78361,
+        "2": 18.17247
       }
     },
     "band_moments.dat": {
       "11": {
-        "4": 1.0,
-        "5": -0.179925,
-        "6": 1e-06
+        "4": 0.322038,
+        "5": -0.487847,
+        "6": 0.123762
       },
       "12": {
-        "4": 1.0,
-        "5": -0.143911,
-        "6": 0.0
+        "4": 0.35881,
+        "5": -0.446346,
+        "6": 0.135383
       },
       "13": {
-        "4": 0.0,
-        "5": -0.21023,
-        "6": 3.3e-05
+        "4": 0.416835,
+        "5": -0.314975,
+        "6": 0.125008
       },
       "14": {
-        "4": 0.0,
-        "5": -0.045428,
-        "6": 0.000163
+        "4": 0.478235,
+        "5": -0.261668,
+        "6": 0.128151
       },
       "15": {
-        "4": 5.0,
-        "5": -0.210238,
-        "6": 3.1e-05
+        "4": 3.930567,
+        "5": -0.252384,
+        "6": 0.107496
       },
       "16": {
-        "4": 1.002717,
-        "5": -0.045439,
-        "6": 4.2e-05
+        "4": 2.493515,
+        "5": -0.200075,
+        "6": 0.099153
       },
       "17": {
         "4": 0.0,
@@ -73,26 +73,26 @@
   },
   "log": {
     "testrun.log": {
-      "fermi_level_it1": -0.0603360632,
-      "fermi_level_last": -0.0480662752,
+      "fermi_level_it1": -0.0550000829,
+      "fermi_level_last": -0.0550000829,
       "canonical_electron_count_it1": 16.0,
       "canonical_electron_count_last": 16.0,
-      "canonical_band_energy_it1": -2.94216396,
-      "canonical_band_energy_last": -2.84082987,
+      "canonical_band_energy_it1": -4.1291787,
+      "canonical_band_energy_last": -4.1291787,
       "k_weight_sum_it1": 1.0,
       "k_weight_sum_last": 1.0,
-      "dos_integral_last": 36.0,
-      "dos_occupied_count_last": 19.852234,
-      "site_spin_moment_it1": 4.000082,
-      "site_spin_moment_last": 3.997283,
+      "dos_integral_last": 36.292354,
+      "dos_occupied_count_last": 16.079016,
+      "site_spin_moment_it1": 1.338879,
+      "site_spin_moment_last": 1.338879,
       "site_valence_it1": 8.0,
       "site_valence_last": 8.0,
-      "site_charge_transfer_z_it1": -7.4e-05,
-      "site_charge_transfer_z_last": -5e-06
+      "site_charge_transfer_z_it1": 0.0,
+      "site_charge_transfer_z_last": 0.0
     },
     "report.out": {
-      "site_occupation": 8.002722,
-      "site_charge_transfer": 0.002722
+      "site_occupation": 8.0,
+      "site_charge_transfer": -0.0
     }
   }
 }

@@ -7,7 +7,7 @@
     "dos",
     "tetrahedron",
     "basis_spd",
-    "nonmagnetic",
+    "collinear",
     "strux",
     "mpi"
   ],
@@ -22,7 +22,7 @@
     2,
     3
   ],
-  "_note": "hcp, two Fe species (P-6m2, 12 operations), nsp=1, 4x4x4 mesh, tetrahedron DOS, 2 k-space SCF steps. Sym-off reference.",
+  "_note": "hcp, two Fe species (P-6m2, 12 operations), nsp=1, 4x4x4 mesh, tetrahedron DOS, alat 2.47 A, r2 16 (19 neighbours per site), 1 k-space SCF step. Sym-off reference.",
   "namelists": {
     "lattice": {
       "strux_backend": "strux_lib"
@@ -35,7 +35,7 @@
       "lld": 12
     },
     "self": {
-      "nstep": 2,
+      "nstep": 1,
       "use_kspace": true
     },
     "reciprocal": {
@@ -181,7 +181,7 @@
     "cmake_version": "cmake version 3.28.3",
     "compiler": "/usr/bin/gfortran",
     "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
-    "git_commit": "6c42953acb610a025f3ff0bc319275bb7a34799d",
+    "git_commit": "36057596fbf33a413211ceabaeaade291500475a",
     "mpi_enabled": true,
     "mpi_omp_threads": 1,
     "platform": "Linux-6.18.44-fc-v726-x86_64-with-glibc2.39",
