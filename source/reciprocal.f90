@@ -588,7 +588,7 @@ module reciprocal_mod
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
-      procedure :: ensure_full_mesh_for_spinor_integrations
+      procedure :: expand_projections_to_full_mesh
       procedure :: build_irreducible_tetrahedra
       ! k-space Green’s-function engine (milestone B2)
       procedure :: fill_green
@@ -1406,13 +1406,18 @@ end subroutine check_multisite_hamiltonian_diagonal
       class(reciprocal), intent(inout) :: this
    end subroutine ensure_tetra_symmetry_backend
 
-   !> @brief Ensure spinor integrations operate on a full k-mesh.
-   !> @param[inout] this Reciprocal object whose eigenvalues/eigenvectors may be expanded.
-   !> @param[in] context_tag Diagnostic label for the caller/context.
-   module subroutine ensure_full_mesh_for_spinor_integrations(this, context_tag)
-      class(reciprocal), intent(inout) :: this
-      character(len=*), intent(in) :: context_tag
-   end subroutine ensure_full_mesh_for_spinor_integrations
+   !> @brief Fill full-mesh eigenvalues and band projections from the irreducible mesh.
+   !> @details Each full-mesh point takes the eigenvalues of its irreducible point and its projections rotated by the
+   !>          operation that maps one onto the other: sites are permuted, the spin vector is acted on by sym_spin_matrices.
+   !> @param[in] proj_irr Projections (total, mx, my, mz; l; site; band; irreducible k).
+   !> @param[in] eig_irr Eigenvalues (band; irreducible k).
+   !> @param[out] proj_full Projections on the full mesh.
+   !> @param[out] eig_full Eigenvalues on the full mesh.
+   module subroutine expand_projections_to_full_mesh(this, proj_irr, eig_irr, proj_full, eig_full)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :), eig_irr(:, :)
+      real(rp), intent(out) :: proj_full(:, :, :, :, :), eig_full(:, :)
+   end subroutine expand_projections_to_full_mesh
 
    !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
    !> @param[inout] this Reciprocal object containing symmetry maps and mesh dimensions.

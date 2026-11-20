@@ -340,6 +340,8 @@ end subroutine project_dos_orbitals_gaussian
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
       ! Projection weights per k-point: (total, mx, my, mz; l; site; band; k)
       real(rp), allocatable :: proj_cache(:, :, :, :, :), proj_local(:, :, :, :, :), eig_full(:, :)
+      real(rp), allocatable :: proj_irr(:, :, :, :, :), eig_irr(:, :)
+      integer :: nk_full
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -363,8 +365,6 @@ end subroutine project_dos_orbitals_gaussian
       n_orb_per_spin = n_orb_site/this%n_spin_components
       lstart = [1, 2, 5, 10]
       lend = [1, 4, 9, 16]
-
-      call this%ensure_full_mesh_for_spinor_integrations('project_dos_orbitals_tetrahedron')
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
                         ' site(s)', __FILE__, __LINE__)
@@ -427,11 +427,21 @@ end subroutine project_dos_orbitals_gaussian
          end do
       end do
       !$OMP END PARALLEL DO
-      allocate(proj_cache(4, 4, this%n_sites, nbands, this%k_workset%nk_global))
-      call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_cache)
+      allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global))
+      call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
       deallocate(proj_local)
-      allocate(eig_full(nbands, this%k_workset%nk_global))
-      call this%gather_k_columns(nbands, this%eigenvalues, eig_full)
+      allocate(eig_irr(nbands, this%k_workset%nk_global))
+      call this%gather_k_columns(nbands, this%eigenvalues, eig_irr)
+      ! The tetrahedra live on the full mesh; a reduced mesh is expanded by symmetry, not rediagonalised.
+      nk_full = product(this%nk_mesh)
+      if (this%nk_total < nk_full) then
+         allocate(proj_cache(4, 4, this%n_sites, nbands, nk_full), eig_full(nbands, nk_full))
+         call this%expand_projections_to_full_mesh(proj_irr, eig_irr, proj_cache, eig_full)
+         deallocate(proj_irr, eig_irr)
+      else
+         call move_alloc(proj_irr, proj_cache)
+         call move_alloc(eig_irr, eig_full)
+      end if
 
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &

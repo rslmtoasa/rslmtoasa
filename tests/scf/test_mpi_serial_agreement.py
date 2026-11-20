@@ -15,7 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-CASES = ["Example_k_space_scf_tetra_diamondSi_sp_nsp1", "Example_k_space_scf_tetra_bccFe_u_nsp4_symon"]
+CASES = ["Example_k_space_scf_tetra_diamondSi_sp_nsp1", "Example_k_space_scf_tetra_bccFe_u_nsp4_symon",
+         "Example_k_space_scf_tetra_bccFe_nsp1_symon"]
 RANKS = [2, 3]
 DOS_FILES = ["totaldos.out", "magneticdos.out", "band_moments.dat", "projected_dos.dat"]
 EF_LINE = re.compile(r"Canonical k-space occupations: EF=.*")
