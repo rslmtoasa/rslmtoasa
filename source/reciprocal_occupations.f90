@@ -52,54 +52,75 @@ contains
       end do
    end function fermi_dirac_entropy
 
+   !> @brief Gather eigenvalues and k weights of the whole mesh on every rank, one collective per solve.
+   !> @details packed(1:nbands, ik) are the eigenvalues and packed(nbands+1, ik) the weight of global k-point ik.
+   !>          A replicated mesh copies its local data.  Every later sum runs over the local full copy in global
+   !>          k order, so results do not depend on the rank count and need no further communication.
+   subroutine gather_occupation_inputs(this, packed)
+      class(reciprocal), intent(in) :: this
+      real(rp), allocatable, intent(out) :: packed(:, :)
+
+      integer :: nbands, nk_loc
+      real(rp), allocatable :: packed_local(:, :)
+
+      if (.not. allocated(this%eigenvalues)) then
+         call g_logger%fatal('gather_occupation_inputs: eigenvalues are not available', __FILE__, __LINE__)
+      end if
+      if (.not. allocated(this%k_workset%weights)) then
+         call g_logger%fatal('gather_occupation_inputs: k-point weights are not available', __FILE__, __LINE__)
+      end if
+      nbands = size(this%eigenvalues, 1)
+      nk_loc = size(this%eigenvalues, 2)
+      allocate(packed_local(nbands + 1, nk_loc), packed(nbands + 1, this%k_workset%nk_global))
+      packed_local(1:nbands, :) = this%eigenvalues
+      packed_local(nbands + 1, :) = this%k_workset%weights(1:nk_loc)
+      call this%gather_k_columns(nbands + 1, packed_local, packed)
+   end subroutine gather_occupation_inputs
+
+   !> @brief Sums of weight, weight*occupation and weight*occupation*eigenvalue over the packed global mesh.
+   subroutine occupation_sums(packed, fermi_level, kT, sums)
+      real(rp), intent(in) :: packed(:, :), fermi_level, kT
+      real(rp), intent(out) :: sums(3)
+
+      integer :: ik, ib, nbands
+      real(rp) :: wk, occupation
+
+      nbands = size(packed, 1) - 1
+      sums = 0.0_rp
+      do ik = 1, size(packed, 2)
+         wk = packed(nbands + 1, ik)
+         if (wk < 0.0_rp) then
+            call g_logger%fatal('occupation_sums: negative k-point weight', __FILE__, __LINE__)
+         end if
+         sums(1) = sums(1) + wk
+         do ib = 1, nbands
+            occupation = fermi_dirac_occupation(packed(ib, ik), fermi_level, kT)
+            sums(2) = sums(2) + wk*occupation
+            sums(3) = sums(3) + wk*occupation*packed(ib, ik)
+         end do
+      end do
+
+      if (sums(1) <= tiny(1.0_rp)) then
+         call g_logger%fatal('occupation_sums: global k-point weight sum is zero', __FILE__, __LINE__)
+      end if
+   end subroutine occupation_sums
+
    !> @brief Projection-free occupation and energy accumulation.
    !> @details k_weights may be normalized probabilities or raw multiplicities.
-   !>          Both observables are divided by the global raw weight sum.  A
-   !>          distributed mesh owns each eigenvalue exactly once and performs
-   !>          one three-scalar all-reduction; a replicated mesh performs none.
+   !>          Both observables are divided by the global raw weight sum.  The sums run over the gathered
+   !>          global mesh in global k order (one all-gather on a distributed mesh).
    module subroutine evaluate_eigenvalue_occupations(this, fermi_level, electron_count, band_energy, weight_sum)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: fermi_level
       real(rp), intent(out) :: electron_count, band_energy
       real(rp), intent(out), optional :: weight_sum
 
-      integer :: ik, ib, ik_global
-      real(rp) :: wk, occupation, kT
-      real(rp) :: sums(3)
+      real(rp) :: kT, sums(3)
+      real(rp), allocatable :: packed(:, :)
 
-      if (.not. allocated(this%eigenvalues)) then
-         call g_logger%fatal('evaluate_eigenvalue_occupations: eigenvalues are not available', __FILE__, __LINE__)
-      end if
-      if (.not. allocated(this%k_workset%weights)) then
-         call g_logger%fatal('evaluate_eigenvalue_occupations: k-point weights are not available', __FILE__, __LINE__)
-      end if
-
+      call gather_occupation_inputs(this, packed)
       kT = max(this%temperature*kB_Ry_per_K, occupation_kT_floor)
-      sums = 0.0_rp
-      if (this%k_mesh_distributed_active) call chain_recv(sums, 3)
-
-      do ik = 1, size(this%eigenvalues, 2)
-         ik_global = local_k_index_to_global(this, ik)
-         if (ik_global < 1 .or. ik_global > this%k_workset%nk_global) then
-            call g_logger%fatal('evaluate_eigenvalue_occupations: local/global k-point map is invalid', __FILE__, __LINE__)
-         end if
-         wk = this%k_workset%weights(ik)
-         if (wk < 0.0_rp) then
-            call g_logger%fatal('evaluate_eigenvalue_occupations: negative k-point weight', __FILE__, __LINE__)
-         end if
-         sums(1) = sums(1) + wk
-         do ib = 1, size(this%eigenvalues, 1)
-            occupation = fermi_dirac_occupation(this%eigenvalues(ib, ik), fermi_level, kT)
-            sums(2) = sums(2) + wk*occupation
-            sums(3) = sums(3) + wk*occupation*this%eigenvalues(ib, ik)
-         end do
-      end do
-
-      if (this%k_mesh_distributed_active) call chain_send_bcast(sums, 3)
-
-      if (sums(1) <= tiny(1.0_rp)) then
-         call g_logger%fatal('evaluate_eigenvalue_occupations: global k-point weight sum is zero', __FILE__, __LINE__)
-      end if
+      call occupation_sums(packed, fermi_level, kT, sums)
 
       electron_count = sums(2)/sums(1)
       band_energy = sums(3)/sums(1)
@@ -107,35 +128,29 @@ contains
    end subroutine evaluate_eigenvalue_occupations
 
    !> @brief Solve the projection-free Fermi-level equation N(EF)=N_target.
+   !> @details The eigenvalues are gathered once; bisection and the final sums use the local full copy.
    module function find_fermi_level_from_eigenvalues(this, total_electrons) result(fermi_level)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: total_electrons
       real(rp) :: fermi_level
 
       integer :: iteration, nbands
-      real(rp) :: e_min, e_max, e_mid, electron_count, band_energy
-      real(rp) :: extrema(2), kT, margin, count_tolerance, snap_tolerance, gap_edges(2)
+      real(rp) :: e_min, e_max, e_mid, electron_count, kT, margin, count_tolerance, snap_tolerance
+      real(rp) :: sums(3), extrema(2), gap_below, gap_above
+      real(rp), allocatable :: packed(:, :)
 
-      if (.not. allocated(this%eigenvalues)) then
-         call g_logger%fatal('find_fermi_level_from_eigenvalues: eigenvalues are not available', __FILE__, __LINE__)
-      end if
-      nbands = size(this%eigenvalues, 1)
+      call gather_occupation_inputs(this, packed)
+      nbands = size(packed, 1) - 1
       if (total_electrons < -1.0e-12_rp .or. total_electrons > real(nbands, rp) + 1.0e-12_rp) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: target electron count is outside [0, nbands]', &
                              __FILE__, __LINE__)
       end if
 
-      if (size(this%eigenvalues, 2) > 0) then
-         extrema = [minval(this%eigenvalues), maxval(this%eigenvalues)]
+      if (size(packed, 2) > 0) then
+         extrema = [minval(packed(1:nbands, :)), maxval(packed(1:nbands, :))]
       else
          extrema = [huge(1.0_rp), -huge(1.0_rp)]
       end if
-#ifdef USE_MPI
-      if (this%k_mesh_distributed_active) then
-         call MPI_ALLREDUCE(MPI_IN_PLACE, extrema(1), 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, extrema(2), 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-      end if
-#endif
       if (extrema(1) > extrema(2)) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: no eigenvalues are owned by the global mesh', &
                              __FILE__, __LINE__)
@@ -151,7 +166,8 @@ contains
 
       do iteration = 1, 256
          e_mid = 0.5_rp*(e_min + e_max)
-         call this%evaluate_eigenvalue_occupations(e_mid, electron_count, band_energy)
+         call occupation_sums(packed, e_mid, kT, sums)
+         electron_count = sums(2)/sums(1)
          if (abs(electron_count - total_electrons) <= count_tolerance) exit
          if (e_mid <= e_min .or. e_mid >= e_max) exit
          if (electron_count < total_electrons) then
@@ -164,20 +180,16 @@ contains
 
       ! Convention for a gapped spectrum: EF is the middle of the gap, independent of where the bisection stopped in it.
       ! It is used when the count there is within 1e-10*N of N (physically negligible, below the 1e-9 convergence check).
-      ! gap_edges holds (highest level <= EF, minus lowest level > EF) so one MPI_MAX serves both.
-      gap_edges = [maxval(this%eigenvalues, mask=this%eigenvalues <= fermi_level), &
-                   -minval(this%eigenvalues, mask=this%eigenvalues > fermi_level)]
-#ifdef USE_MPI
-      if (this%k_mesh_distributed_active) then
-         call MPI_ALLREDUCE(MPI_IN_PLACE, gap_edges, 2, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-      end if
-#endif
-      if (all(gap_edges > -huge(1.0_rp)) .and. -gap_edges(2) > gap_edges(1)) then
-         call this%evaluate_eigenvalue_occupations(0.5_rp*(gap_edges(1) - gap_edges(2)), electron_count, band_energy)
-         if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_edges(1) - gap_edges(2))
+      gap_below = maxval(packed(1:nbands, :), mask=packed(1:nbands, :) <= fermi_level)
+      gap_above = minval(packed(1:nbands, :), mask=packed(1:nbands, :) > fermi_level)
+      if (gap_below > -huge(1.0_rp) .and. gap_above < huge(1.0_rp) .and. gap_above > gap_below) then
+         call occupation_sums(packed, 0.5_rp*(gap_below + gap_above), kT, sums)
+         electron_count = sums(2)/sums(1)
+         if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_below + gap_above)
       end if
 
-      call this%evaluate_eigenvalue_occupations(fermi_level, electron_count, band_energy)
+      call occupation_sums(packed, fermi_level, kT, sums)
+      electron_count = sums(2)/sums(1)
       if (abs(electron_count - total_electrons) > 1.0e-9_rp*max(1.0_rp, total_electrons)) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: electron-number bisection did not converge', &
                              __FILE__, __LINE__)
