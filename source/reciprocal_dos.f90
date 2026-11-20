@@ -802,6 +802,84 @@ contains
       end if
    end subroutine tetra_add_dos
 
+   !> @brief Per-corner DOS weights of one linear tetrahedron and the Bloechl curvature correction at one energy.
+   !> @details Per unit tetrahedron volume (V_T/V_G = 1). w_lin is the energy derivative of the uncorrected integration
+   !>          weights of PRB 49, 16223 App. B (B1)-(B19); sum(w_lin) is D_T of App. C and each corner integrates to 1/4.
+   !>          dw_corr is the energy derivative of the correction Eq. (22), (1/40) D_T(E) sum_j (e_j - e_i).
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] energy Energy at which the weights are evaluated.
+   !> @param[out] w_lin Linear-tetrahedron corner weights in caller order.
+   !> @param[out] dw_corr Curvature-correction corner weights in caller order.
+   module subroutine tetra_corner_weights(ecorn, energy, w_lin, dw_corr)
+      real(rp), intent(in) :: ecorn(4), energy
+      real(rp), intent(out) :: w_lin(4), dw_corr(4)
+
+      integer :: ord(4), i, j, k, tmp
+      real(rp) :: e(4), ws(4), dens_p, x, x2, y, c, dc, c1, c2, c3, dc1, dc2, dc3, ssum
+      real(rp) :: e21, e31, e41, e32, e42, e43
+
+      w_lin = 0.0_rp
+      dw_corr = 0.0_rp
+      ord = [1, 2, 3, 4]
+      do i = 2, 4
+         j = i
+         do while (j > 1)
+            if (ecorn(ord(j - 1)) <= ecorn(ord(j))) exit
+            tmp = ord(j); ord(j) = ord(j - 1); ord(j - 1) = tmp
+            j = j - 1
+         end do
+      end do
+      e = ecorn(ord)
+      if (energy <= e(1) .or. energy >= e(4)) return
+      e21 = e(2) - e(1); e31 = e(3) - e(1); e41 = e(4) - e(1)
+      e32 = e(3) - e(2); e42 = e(4) - e(2); e43 = e(4) - e(3)
+
+      if (energy < e(2)) then
+         ! (B2)-(B6) differentiated; D_T' from (C2)
+         x = energy - e(1)
+         c = x**3/(4.0_rp*e21*e31*e41)
+         dc = 3.0_rp*x*x/(4.0_rp*e21*e31*e41)
+         ssum = 1.0_rp/e21 + 1.0_rp/e31 + 1.0_rp/e41
+         ws(1) = dc*(4.0_rp - x*ssum) - c*ssum
+         ws(2) = (dc*x + c)/e21
+         ws(3) = (dc*x + c)/e31
+         ws(4) = (dc*x + c)/e41
+         dens_p = 6.0_rp*x/(e21*e31*e41)
+      else if (energy < e(3)) then
+         ! (B7)-(B13) differentiated; D_T' from (C3)
+         x = energy - e(1)
+         x2 = energy - e(2)
+         y = e(3) - energy
+         c1 = x*x/(4.0_rp*e41*e31)
+         c2 = x*x2*y/(4.0_rp*e41*e32*e31)
+         c3 = x2*x2*(e(4) - energy)/(4.0_rp*e42*e32*e41)
+         dc1 = 2.0_rp*x/(4.0_rp*e41*e31)
+         dc2 = (x2*y + x*y - x*x2)/(4.0_rp*e41*e32*e31)
+         dc3 = (2.0_rp*x2*(e(4) - energy) - x2*x2)/(4.0_rp*e42*e32*e41)
+         ws(1) = dc1 + (dc1 + dc2)*y/e31 - (c1 + c2)/e31 + (dc1 + dc2 + dc3)*(e(4) - energy)/e41 - (c1 + c2 + c3)/e41
+         ws(2) = dc1 + dc2 + dc3 + (dc2 + dc3)*y/e32 - (c2 + c3)/e32 + dc3*(e(4) - energy)/e42 - c3/e42
+         ws(3) = (dc1 + dc2)*x/e31 + (c1 + c2)/e31 + (dc2 + dc3)*x2/e32 + (c2 + c3)/e32
+         ws(4) = (dc1 + dc2 + dc3)*x/e41 + (c1 + c2 + c3)/e41 + dc3*x2/e42 + c3/e42
+         dens_p = (6.0_rp - 6.0_rp*(e31 + e42)*x2/(e32*e42))/(e31*e41)
+      else
+         ! (B14)-(B18) differentiated; D_T' from (C4)
+         y = e(4) - energy
+         c = y**3/(4.0_rp*e41*e42*e43)
+         dc = -3.0_rp*y*y/(4.0_rp*e41*e42*e43)
+         ssum = 1.0_rp/e41 + 1.0_rp/e42 + 1.0_rp/e43
+         ws(1) = -dc*y/e41 + c/e41
+         ws(2) = -dc*y/e42 + c/e42
+         ws(3) = -dc*y/e43 + c/e43
+         ws(4) = -dc*(4.0_rp - ssum*y) - c*ssum
+         dens_p = -6.0_rp*y/(e41*e42*e43)
+      end if
+
+      do k = 1, 4
+         w_lin(ord(k)) = ws(k)
+         dw_corr(ord(k)) = dens_p*(sum(e) - 4.0_rp*e(k))/40.0_rp
+      end do
+   end subroutine tetra_corner_weights
+
 !> @brief Calculate total DOS with Gaussian broadening.
 !> @details Smears all eigenvalues over the DOS energy grid using the configured
 !>          or adaptive sigma and k-point weights.
