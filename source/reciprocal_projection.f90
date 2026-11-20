@@ -353,7 +353,7 @@ end subroutine project_dos_orbitals_gaussian
       integer :: i_start, i_end
       integer :: n_orb_per_spin, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
-      integer :: tet_start, tet_end, tet_count
+      integer :: e_start, e_end, e_count
       real(rp) :: dos_contrib, orbital_char_avg, orbital_char, de
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
@@ -362,7 +362,6 @@ end subroutine project_dos_orbitals_gaussian
       real(rp) :: e1, e4
       real(rp) :: tet_weight, w4(4), dw4(4), corner_char
       real(rp), parameter :: TOL = 1.0e-10_rp
-      integer :: n_tet_ir
       logical :: use_blochl, corner_weighted
       real(rp), allocatable :: corner_w(:, :)
       ! Per-site orbital offsets for mixed atom types
@@ -443,8 +442,8 @@ end subroutine project_dos_orbitals_gaussian
       if (de <= 0.0_rp) then
          call g_logger%fatal('project_dos_orbitals_tetrahedron: Invalid DOS energy grid spacing', __FILE__, __LINE__)
       end if
-      n_tet_ir = this%n_tetrahedra
-      call get_mpi_range(rank, n_tet_ir, tet_start, tet_end, tet_count, region_tag='projected tetra')
+      ! Ranks split the energy grid, so every sum runs over all tetrahedra in the same order whatever the rank count.
+      call get_mpi_range(rank, this%n_energy_points, e_start, e_end, e_count, region_tag='projected tetra')
 
       ! Each k-point is a corner of many tetrahedra: compute its projection weights once.
       nbands = size(this%eigenvalues, 1)
@@ -481,8 +480,8 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &
-      !$OMP SHARED(this, proj_irr, eig_irr, op, w, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
-      !$OMP        tet_start, tet_end, de, use_blochl) &
+      !$OMP SHARED(this, proj_irr, eig_irr, op, w, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, &
+      !$OMP        e_start, e_end, de, use_blochl) &
       !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, sorted_e, e1, e4, i_start, i_end, &
       !$OMP         i_energy, dos_contrib, tet_weight, isite, site_orb_start, axis, iorb, &
       !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_chars, &
@@ -503,7 +502,7 @@ end subroutine project_dos_orbitals_gaussian
       local_dos_mz = 0.0_rp
 
       !$OMP DO SCHEDULE(DYNAMIC)
-      do i_tet = tet_start, tet_end
+      do i_tet = 1, this%n_tetrahedra
          do i_band = 1, size(this%eigenvalues, 1)
             do i_corner = 1, 4
                ik = this%tetrahedra(i_corner, i_tet)
@@ -530,7 +529,7 @@ end subroutine project_dos_orbitals_gaussian
             else if (corner_weighted) then
                i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
                i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
-               do i_energy = i_start, i_end
+               do i_energy = max(i_start, e_start), min(i_end, e_end)
                   ! PRB 49, 16223: App. B weights plus Eq. (22) correction, differentiated in energy (Sec. II after Eq. 4)
                   call tetra_corner_weights(e_corners, this%dos_energy_grid(i_energy), w4, dw4)
                   corner_w(:, i_energy) = tet_weight*(w4 + dw4)
@@ -542,6 +541,10 @@ end subroutine project_dos_orbitals_gaussian
                call tetra_add_dos(tet_weight, e_corners, this%dos_energy_grid(1), &
                                   this%dos_energy_grid(this%n_energy_points), dos_line, this%n_energy_points)
             end if
+
+            i_start = max(i_start, e_start)
+            i_end = min(i_end, e_end)
+            if (i_start > i_end) cycle
 
             do isite = 1, this%n_sites
                site_orb_start = site_orb_offset(isite)
