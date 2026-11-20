@@ -1,0 +1,98 @@
+{
+  "nml": {
+    "Fe_out.nml": {
+      "lmax": 2.0,
+      "etot": -2541.493541679113,
+      "ws_r": 2.6622,
+      "vmad": -0.0012874435594397472,
+      "mom": {
+        "3": 1.0
+      },
+      "lmom": {
+        "3": 0.04170166576999944
+      }
+    }
+  },
+  "text": {
+    "totaldos.out": {
+      "120": {
+        "1": -0.78812,
+        "2": 0.0
+      },
+      "200": {
+        "1": -0.00572,
+        "2": 0.0
+      },
+      "280": {
+        "1": 0.77667,
+        "2": 0.0
+      }
+    },
+    "band_moments.dat": {
+      "11": {
+        "4": 1.0,
+        "5": -0.179925,
+        "6": 1e-06
+      },
+      "12": {
+        "4": 1.0,
+        "5": -0.143911,
+        "6": 0.0
+      },
+      "13": {
+        "4": 0.0,
+        "5": -0.21023,
+        "6": 3.3e-05
+      },
+      "14": {
+        "4": 0.0,
+        "5": -0.045428,
+        "6": 0.000163
+      },
+      "15": {
+        "4": 5.0,
+        "5": -0.210238,
+        "6": 3.1e-05
+      },
+      "16": {
+        "4": 1.002717,
+        "5": -0.045439,
+        "6": 4.2e-05
+      },
+      "17": {
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      },
+      "18": {
+        "4": 0.0,
+        "5": 0.0,
+        "6": 0.0
+      }
+    }
+  },
+  "log": {
+    "testrun.log": {
+      "fermi_level_it1": -0.0603360627,
+      "fermi_level_last": -0.0480662745,
+      "canonical_electron_count_it1": 16.0,
+      "canonical_electron_count_last": 16.0,
+      "canonical_band_energy_it1": -2.94216382,
+      "canonical_band_energy_last": -2.84082972,
+      "k_weight_sum_it1": 1.0,
+      "k_weight_sum_last": 1.0,
+      "dos_integral_last": 36.0,
+      "dos_occupied_count_last": 19.852234,
+      "site_spin_moment_it1": 4.000082,
+      "site_spin_moment_last": 3.997283,
+      "site_valence_it1": 8.0,
+      "site_valence_last": 8.0,
+      "site_charge_transfer_z_it1": -7.4e-05,
+      "site_charge_transfer_z_last": -5e-06
+    },
+    "report.out": {
+      "site_occupation": 8.002722,
+      "site_charge_transfer": 0.002722
+    }
+  }
+}

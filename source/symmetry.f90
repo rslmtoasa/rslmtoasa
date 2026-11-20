@@ -17,6 +17,7 @@ module symmetry_mod
    use logger_mod, only: g_logger
    use string_mod, only: int2str, real2str
    use lattice_mod, only: lattice
+   use math_mod, only: inverse_3x3
    use mpi_mod, only: rank
 #ifdef USE_SPGLIB
    use spglib_interface_mod, only: spglib_interface
@@ -97,22 +98,23 @@ contains
 #ifdef USE_SPGLIB
       ! Initialize spglib interface
       block
-         real(rp), dimension(3,3) :: lattice_vectors
+         real(rp), dimension(3,3) :: lattice_vectors, a_inv
          real(rp), dimension(:,:), allocatable :: atomic_positions
          integer, dimension(:), allocatable :: atomic_types
          integer :: i
          
-         ! Get lattice vectors (convert from units of alat to absolute Cartesian)
+         ! lattice%a(:,i) is primitive vector i (units of alat); spglib wants vectors in rows
          do i = 1, 3
-            lattice_vectors(i,:) = lattice_ref%a(i,:) * lattice_ref%alat
+            lattice_vectors(i,:) = lattice_ref%a(:,i) * lattice_ref%alat
          end do
+         a_inv = inverse_3x3(lattice_ref%a)
          
          ! Get atomic positions and types from lattice
          allocate(atomic_positions(3, lattice_ref%nrec))
          allocate(atomic_types(lattice_ref%nrec))
          
          do i = 1, lattice_ref%nrec
-            atomic_positions(:,i) = lattice_ref%cr(:,i)  ! Fractional coordinates
+            atomic_positions(:,i) = matmul(a_inv, lattice_ref%cr(:,i))  ! cr is Cartesian in units of alat
             atomic_types(i) = lattice_ref%iz(i)          ! Atomic number
          end do
          

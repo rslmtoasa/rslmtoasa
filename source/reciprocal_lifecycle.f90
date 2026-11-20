@@ -560,8 +560,8 @@ contains
       real(rp) :: det
       integer :: i
 
-      ! Get real-space lattice vectors from lattice%a
-      real_vectors = this%lattice%a
+      ! lattice%a(:, i) is primitive vector i; real_vectors(i, :) holds it as a row below
+      real_vectors = transpose(this%lattice%a)
 
       ! Calculate determinant (volume of unit cell)
       det = real_vectors(1, 1) * (real_vectors(2, 2) * real_vectors(3, 3) - real_vectors(2, 3) * real_vectors(3, 2)) &
