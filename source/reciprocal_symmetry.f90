@@ -16,6 +16,8 @@ contains
       real(rp), parameter :: pos_tol = 1.0e-4_rp
       real(rp), allocatable :: frac(:, :), moments(:, :)
       real(rp) :: x(3), d(3)
+      logical, allocatable :: hit(:)
+      integer, allocatable :: src(:)
       integer :: nsp, n, i, j, k
 
       nsp = 1
@@ -42,13 +44,26 @@ contains
             do j = 1, n
                d = x - frac(:, j)
                if (maxval(abs(d - nint(d))) < pos_tol) then
+                  if (this%sym_atom_perm(i, k) /= 0) call g_logger%fatal('setup_magnetic_symmetry: sites ' // &
+                     trim(int2str(this%sym_atom_perm(i, k))) // ' and ' // trim(int2str(j)) // ' coincide modulo a lattice vector; check that ' // &
+                     'a(:,i) holds lattice vector i and that no two basis positions differ by a lattice vector', __FILE__, __LINE__)
                   this%sym_atom_perm(i, k) = j
-                  exit
                end if
             end do
          end do
       end do
       if (any(this%sym_atom_perm == 0)) call g_logger%fatal('setup_magnetic_symmetry: operation does not map the sites onto themselves', __FILE__, __LINE__)
+      allocate(hit(n), src(n))
+      do k = 1, this%n_sym_ops
+         hit = .false.
+         do i = 1, n
+            j = this%sym_atom_perm(i, k)
+            if (hit(j)) call g_logger%fatal('setup_magnetic_symmetry: sites ' // trim(int2str(src(j))) // ' and ' // trim(int2str(i)) // &
+               ' map onto the same site; the site map of an operation is not one-to-one', __FILE__, __LINE__)
+            hit(j) = .true.
+            src(j) = i
+         end do
+      end do
 
       call root_info('setup_magnetic_symmetry: ' // trim(int2str(this%n_sym_ops)) // ' operations, ' // &
                      trim(int2str(count(this%sym_spin_flips < 0))) // ' time-reversal-combined', __FILE__, __LINE__)
