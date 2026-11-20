@@ -233,22 +233,32 @@ end subroutine project_dos_orbitals_gaussian
       end if
    end subroutine get_site_spin_axis
 
-   !> Ordered k-sum of a complex rank-3 array: before the k loop (start=.true.) take the running sum from rank-1,
-   !> after it pass the sum on and receive the final one.
-   subroutine chain_complex(a, start)
+   !> Ordered k-sum of a complex rank-3 array and an optional second one, sent as one message: before the k loop
+   !> (start=.true.) take the running sums from rank-1, after it pass them on and receive the final ones.
+   subroutine chain_complex(a, start, b)
       complex(rp), intent(inout) :: a(:, :, :)
       logical, intent(in) :: start
+      complex(rp), intent(inout), optional :: b(:, :, :)
       real(rp), allocatable :: buf(:)
+      integer :: na, nb
 
-      allocate (buf(2*size(a)))
-      buf(1:size(buf):2) = real(reshape(a, [size(a)]), rp)
-      buf(2:size(buf):2) = aimag(reshape(a, [size(a)]))
+      na = size(a)
+      nb = 0
+      if (present(b)) nb = size(b)
+      allocate (buf(2*(na + nb)))
+      buf(1:2*na:2) = real(reshape(a, [na]), rp)
+      buf(2:2*na:2) = aimag(reshape(a, [na]))
+      if (present(b)) then
+         buf(2*na + 1::2) = real(reshape(b, [nb]), rp)
+         buf(2*na + 2::2) = aimag(reshape(b, [nb]))
+      end if
       if (start) then
          call chain_recv(buf, size(buf))
       else
          call chain_send_bcast(buf, size(buf))
       end if
-      a = reshape(cmplx(buf(1:size(buf):2), buf(2:size(buf):2), rp), shape(a))
+      a = reshape(cmplx(buf(1:2*na:2), buf(2:2*na:2), rp), shape(a))
+      if (present(b)) b = reshape(cmplx(buf(2*na + 1::2), buf(2*na + 2::2), rp), shape(b))
    end subroutine chain_complex
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
@@ -922,8 +932,11 @@ end subroutine calculate_band_moments
       end if
 
       if (this%k_mesh_distributed_active) then
-         call chain_complex(rho, .true.)
-         if (present(m1_out)) call chain_complex(rho_m1, .true.)
+         if (present(m1_out)) then
+            call chain_complex(rho, .true., rho_m1)
+         else
+            call chain_complex(rho, .true.)
+         end if
       end if
 
       ! Accumulate density matrix per site
@@ -1007,8 +1020,11 @@ end subroutine calculate_band_moments
       end do ! k-points
 
       if (this%k_mesh_distributed_active) then
-         call chain_complex(rho, .false.)
-         if (present(m1_out)) call chain_complex(rho_m1, .false.)
+         if (present(m1_out)) then
+            call chain_complex(rho, .false., rho_m1)
+         else
+            call chain_complex(rho, .false.)
+         end if
       end if
 
       ! Group average over the reduced mesh, P_ab convention (the legacy projector is its transpose)
@@ -1102,8 +1118,7 @@ end subroutine calculate_band_moments
       p = (0.0_rp, 0.0_rp)
       m1 = (0.0_rp, 0.0_rp)
       if (this%k_mesh_distributed_active) then
-         call chain_complex(p, .true.)
-         call chain_complex(m1, .true.)
+         call chain_complex(p, .true., m1)
       end if
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
@@ -1131,8 +1146,7 @@ end subroutine calculate_band_moments
          end do
       end do
       if (this%k_mesh_distributed_active) then
-         call chain_complex(p, .false.)
-         call chain_complex(m1, .false.)
+         call chain_complex(p, .false., m1)
       end if
       call symmetrize_d_spinor(this, p)
       call symmetrize_d_spinor(this, m1)
