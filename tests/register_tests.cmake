@@ -302,6 +302,7 @@ if(RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitKpointWorkset quick SOURCES ${TestDIR}/unit/test_kpoint_workset.f90 LABELS reciprocal)
   add_fortran_unit_test(UnitKpointWorksetReducedReject quick SOURCES ${TestDIR}/unit/test_kpoint_workset_reduced_rejection.f90
     LABELS reciprocal PROPERTIES WILL_FAIL TRUE)
+  add_fortran_unit_test(UnitReciprocalVectors quick SOURCES ${TestDIR}/unit/test_reciprocal_vectors.f90 LABELS reciprocal)
   add_fortran_unit_test(UnitArbitraryKEigenpairs quick SOURCES ${TestDIR}/unit/test_arbitrary_k_eigenpairs.f90 LABELS reciprocal)
   add_fortran_unit_test(UnitStructureConstantsBackends quick SOURCES ${TestDIR}/unit/test_structure_constants_backends.f90
     LABELS strux WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
