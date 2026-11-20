@@ -556,8 +556,7 @@ contains
    end if
 
    ! Irreducible k-points and weights from the magnetic group; the full mesh for gbt_single_q
-   ! and for lmax_basis > 2 (hcpx has no tesseral f-block transform, so the density matrices cannot be symmetrised)
-   if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .or. lmax_basis > 2) then
+   if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
       call this%generate_mp_mesh()
       return
    end if

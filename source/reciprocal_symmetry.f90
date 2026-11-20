@@ -157,7 +157,6 @@ contains
       integer :: k, i, s, t, nsp
 
       if (this%n_sym_ops == 0) return
-      if (lmax_basis > 2) call g_logger%fatal('symmetrize_site_dm: only s, p, d blocks (lmax_basis <= 2); generate_reduced_kpoint_mesh keeps the full mesh above that', __FILE__, __LINE__)
       if (size(rho, 1) /= nb .or. size(rho, 2) /= nb) call g_logger%fatal('symmetrize_site_dm: matrix size is not nb', __FILE__, __LINE__)
       nsp = 1
       if (associated(this%control)) nsp = this%control%nsp

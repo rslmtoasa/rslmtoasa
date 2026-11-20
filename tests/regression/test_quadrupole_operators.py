@@ -19,7 +19,7 @@ def operators():
     env = {'matmul': np.matmul}
     angular = []
     for axis in 'xyz':
-        block = math_source.split('L_' + axis + ' = reshape((/', 1)[1]
+        block = math_source.split('L_' + axis + '(1:9, 1:9) = reshape((/', 1)[1]
         values = block.split('/),', 1)[0]
         values = values.replace('&', '').replace('_rp', '')
         values = values.replace('sqrt_three', str(np.sqrt(3)))
