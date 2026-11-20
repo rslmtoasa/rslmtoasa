@@ -206,6 +206,52 @@ contains
       v = avg/real(this%n_sym_ops, rp)
    end subroutine symmetrize_site_moments
 
+   !> @brief Group average of the projected DOS curves of each site and l (see the interface).
+   module subroutine symmetrize_projected_dos(this)
+      class(reciprocal), intent(inout) :: this
+      real(rp), allocatable :: w(:, :, :), n(:, :, :), n_avg(:, :, :), m_avg(:, :, :, :)
+      real(rp) :: loc
+      integer :: k, i, j, il, ie
+
+      if (this%n_sym_ops == 0) return
+      allocate(w(3, 3, this%n_sym_ops))
+      w = sym_spin_matrices(this)
+      n = this%projected_dos(:, :, 1, :) + this%projected_dos(:, :, 2, :)
+      allocate(n_avg(size(n, 1), size(n, 2), size(n, 3)), m_avg(3, size(n, 1), size(n, 2), size(n, 3)))
+      n_avg = 0.0_rp
+      m_avg = 0.0_rp
+      do k = 1, this%n_sym_ops
+         do i = 1, this%n_sites
+            j = this%sym_atom_perm(i, k)
+            n_avg(j, :, :) = n_avg(j, :, :) + n(i, :, :)
+            do il = 1, size(n, 2)
+               do ie = 1, size(n, 3)
+                  m_avg(:, j, il, ie) = m_avg(:, j, il, ie) + matmul(w(:, :, k), this%projected_dos_moments(i, il, 1, :, ie))
+               end do
+            end do
+         end do
+      end do
+      n_avg = n_avg/real(this%n_sym_ops, rp)
+      m_avg = m_avg/real(this%n_sym_ops, rp)
+
+      this%dos_mx_tot = 0.0_rp
+      this%dos_my_tot = 0.0_rp
+      this%dos_mz_tot = 0.0_rp
+      do ie = 1, size(n, 3)
+         do il = 1, size(n, 2)
+            do i = 1, this%n_sites
+               loc = sum(this%dos_site_axes(:, i)*m_avg(:, i, il, ie))
+               this%projected_dos(i, il, 1, ie) = 0.5_rp*(n_avg(i, il, ie) + loc)
+               this%projected_dos(i, il, 2, ie) = 0.5_rp*(n_avg(i, il, ie) - loc)
+               this%projected_dos_moments(i, il, 1, :, ie) = m_avg(:, i, il, ie)
+               this%dos_mx_tot(ie) = this%dos_mx_tot(ie) + m_avg(1, i, il, ie)
+               this%dos_my_tot(ie) = this%dos_my_tot(ie) + m_avg(2, i, il, ie)
+               this%dos_mz_tot(ie) = this%dos_mz_tot(ie) + m_avg(3, i, il, ie)
+            end do
+         end do
+      end do
+   end subroutine symmetrize_projected_dos
+
    !> @brief Group average of per-site density matrices rho_a = 1/|G| sum_g U_g T_g[rho_(g^-1 a)] U_g^dagger.
    !> @details rho(:, :, site) is P_ab = psi_a psi_b^* over the nb eigenvector components of the site (spin block of norb
    !>          orbitals, spherical basis). U_g = D(R) for nsp = 1, 3 (spin untouched), D(R) x SU(2)(det(R) R) for nsp = 2, 4,

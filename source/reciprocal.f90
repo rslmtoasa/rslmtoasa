@@ -584,6 +584,7 @@ module reciprocal_mod
       procedure :: setup_magnetic_symmetry
       procedure :: symmetrize_spin_density
       procedure :: symmetrize_site_moments
+      procedure :: symmetrize_projected_dos
       procedure :: symmetrize_site_dm
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
@@ -1407,6 +1408,13 @@ end subroutine check_multisite_hamiltonian_diagonal
    module subroutine ensure_tetra_symmetry_backend(this)
       class(reciprocal), intent(inout) :: this
    end subroutine ensure_tetra_symmetry_backend
+
+   !> @brief Average the per-site, per-l projected DOS curves over the symmetry group (no-op without a group).
+   !> @details The charge curve n is permuted over sites, the spin-vector curves projected_dos_moments are also acted on by
+   !>          sym_spin_matrices. projected_dos (along dos_site_axes) and the totals dos_mx/my/mz_tot are rebuilt from them.
+   module subroutine symmetrize_projected_dos(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine symmetrize_projected_dos
 
    !> @brief Operation that maps the irreducible point of each full-mesh point onto it, and the spin matrix of each operation.
    !> @details Searches the stored group, with time reversal for nsp = 1 (the sign is sym_spin_flips(op)); stops if none

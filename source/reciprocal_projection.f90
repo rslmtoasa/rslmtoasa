@@ -206,6 +206,8 @@ module subroutine project_dos_orbitals_gaussian(this)
    end if
 #endif
 
+   call this%symmetrize_projected_dos()
+
    ! Normalize projected DOS so integrated sum over projections equals nbands
    call root_info('project_dos_orbitals_gaussian: Projection completed (raw)', __FILE__, __LINE__)
    if (this%n_energy_points > 2) then
@@ -642,6 +644,8 @@ end subroutine project_dos_orbitals_gaussian
       deallocate(proj_irr, eig_irr, op, w)
       deallocate(site_orb_offset)
       deallocate(site_axes)
+
+      call this%symmetrize_projected_dos()
 
       ! Normalize projected DOS to match total DOS normalization
       ! When using Blöchl or standard tetrahedron method, the raw DOS needs normalization

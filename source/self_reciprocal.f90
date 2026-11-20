@@ -129,6 +129,11 @@ contains
          dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
       end if
 
+      ! Components that print as 0.00000 carry rounding noise of either sign; print them as +0.00000.
+      where (abs(dos_mx_tot) < 5.0e-6_rp) dos_mx_tot = 0.0_rp
+      where (abs(dos_my_tot) < 5.0e-6_rp) dos_my_tot = 0.0_rp
+      where (abs(dos_mz_tot) < 5.0e-6_rp) dos_mz_tot = 0.0_rp
+
       open(unit=125, file='totaldos.out', status='replace', action='write')
       do i = 1, this%reciprocal_scf_cache%n_energy_points
          write(125, '(2f16.5)') this%reciprocal_scf_cache%dos_energy_grid(i) - this%reciprocal_scf_cache%fermi_level, this%reciprocal_scf_cache%total_dos(i)
