@@ -617,6 +617,8 @@ contains
       real(rp), allocatable :: kpoints_full(:,:)
 
       this%nk_total = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      ! A full mesh carries no symmetry group; drop one left from an earlier reduced mesh
+      this%n_sym_ops = 0
 
       ! Allocate k-point arrays
 #ifdef USE_SAFE_ALLOC
