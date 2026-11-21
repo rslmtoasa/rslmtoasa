@@ -12,13 +12,16 @@ program test_kpm_transport
    use precision_mod, only: rp
    use basis_mod, only: basis_init, nb, spin_off
    use control_mod, only: control
+   use energy_mod, only: energy
+   use recursion_mod, only: recursion, transport_moment_diagonal
    use charge_mod, only: charge
    use hamiltonian_mod, only: hamiltonian, select_spin_operator, select_orbital_operator
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators, i_unit
    use moment_kernel_mod, only: moment_onsite_block
-   use conductivity_mod, only: gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, pack_gamma_mu_diagonal
+   use conductivity_mod, only: conductivity, gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, &
+      pack_gamma_mu_diagonal, gamma_mu_factorized
    implicit none
 
    integer, parameter :: nsite = 2
@@ -43,8 +46,12 @@ program test_kpm_transport
    call test_spin_operator()
    call test_orbital_operator()
    call test_transport_moments()
+   call test_compact_diagonal_moments()
    call test_s_only_orbital_symmetry()
    call test_gamma_mu_layout()
+   call test_factorized_gamma(2)
+   call test_factorized_gamma(5)
+   call test_factorized_gamma(13)
    call test_gamma_mu_cblas()
    call test_gamma_mu_trace_modes()
 
@@ -234,6 +241,59 @@ contains
       call require(max_error < tolerance, trim(name)//' KPM/eigenpair moment agreement')
    end subroutine compare_direct_chebyshev
 
+   ! Catches loss of a propagated orbital/site, a transposed Chebyshev pair,
+   ! or a missing conjugation. Use spin-orbit-mixed Chebyshev states and two
+   ! independent initial site blocks with distinct complex phases.
+   subroutine test_compact_diagonal_moments()
+      complex(rp) :: hk(nsite*nb, nsite*nb), tmat(nsite*nb, nsite*nb, ll)
+      complex(rp) :: va(nsite*nb, nsite*nb), vb(nsite*nb, nsite*nb)
+      complex(rp) :: ref(nsite*nb, nb), left(nsite*nb, nb), right(nsite*nb, nb), full(nb, nb)
+      complex(rp) :: left_sites(nb, nb, nsite), right_sites(nb, nb, nsite), diagonal(nb), expected(nb)
+      complex(rp) :: spin(nb, nb), orbital(nb, nb), soc(nb, nb), hop(nb, nb)
+      real(rp) :: max_error, relative_error, scale
+      integer :: n, m, l, site, nmat
+
+      nmat = nsite*nb
+      hk = make_hamiltonian()
+      call select_spin_operator('y', spin)
+      call select_orbital_operator('x', orbital)
+      soc = 0.12_rp*matmul(spin, orbital)
+      hk(1:nb, 1:nb) = hk(1:nb, 1:nb) + soc
+      hk(nb+1:nmat, nb+1:nmat) = hk(nb+1:nmat, nb+1:nmat) - 0.7_rp*soc
+      hop = ham%v_a(:, :, 2, 1) + cmplx(0.03_rp, 0.09_rp, rp)*orbital
+      va = make_full_operator(hop)
+      vb = make_full_operator(ham%v_b(:, :, 2, 1) + cmplx(-0.02_rp, 0.04_rp, rp)*spin)
+      call matrix_chebyshev(hk, cheb_scale, cheb_shift, tmat)
+      max_error = 0.0_rp
+      relative_error = 0.0_rp
+      scale = 0.0_rp
+      do site = 1, nsite
+         ref = (0.0_rp, 0.0_rp)
+         do l = 1, nb
+            ref((site - 1)*nb + l, l) = exp(i_unit*real(site*l, rp))
+         end do
+         do m = 1, ll
+            left = matmul(tmat(:, :, m), ref)
+            left_sites = reshape(left, shape(left_sites), order=[1, 3, 2])
+            do n = 1, ll
+               right = matmul(va, matmul(tmat(:, :, n), matmul(vb, ref)))
+               right_sites = reshape(right, shape(right_sites), order=[1, 3, 2])
+               full = matmul(conjg(transpose(left)), right)
+               expected = [(full(l, l), l=1,nb)]
+               call transport_moment_diagonal(left_sites, right_sites, diagonal)
+               scale = max(scale, maxval(abs(expected)))
+               max_error = max(max_error, maxval(abs(diagonal - expected)))
+               relative_error = max(relative_error, &
+                  maxval(abs(diagonal - expected)/max(1.0e-8_rp, abs(expected)), mask=abs(expected) >= 1.0e-8_rp))
+            end do
+         end do
+      end do
+      write (*, '(2(a,es12.4))') 'Compact moment max absolute error=', max_error, ' relative error=', relative_error
+      call require(scale > 1.0e-8_rp, 'compact moment oracle is nontrivial')
+      call require(max_error <= 1.0e-12_rp*max(1.0_rp, scale) .and. relative_error <= 1.0e-12_rp, &
+         'compact moment diagonal agrees with full spin-orbit-mixed Chebyshev contractions')
+   end subroutine test_compact_diagonal_moments
+
    subroutine test_s_only_orbital_symmetry()
       complex(rp), dimension(nb, nb) :: q_orbital
 
@@ -278,6 +338,72 @@ contains
          call require(abs(c(i, 2)) < tolerance, 'Gamma layout leaves inactive orbital column zero')
       end do
    end subroutine test_gamma_mu_layout
+
+   ! Catches a swapped n/m, accidental conjugation, or a missing phase,
+   ! Lorentz damping or zeroth-order weight in the production factors.
+   subroutine test_factorized_gamma(order)
+      integer, intent(in) :: order
+      integer, parameter :: ne = 12, nl = 3
+      real(rp), parameter :: factor = 1.375_rp
+      type(conductivity) :: transport
+      type(control), target :: control_obj
+      type(energy), target :: energy_obj
+      type(recursion), target :: recursion_obj
+      complex(rp) :: mu(order, order, nl), gamma(ne, order, order), expected(ne, nl), actual(ne, nl)
+      complex(rp) :: work(ne, order), cn, cm
+      real(rp) :: x, angle, root, kn, km, q, error
+      real(rp) :: samples(order, order, nl, 2)
+      integer, allocatable :: seed(:)
+      integer :: e, n, m, l, seed_size
+
+      transport%control => control_obj
+      transport%en => energy_obj
+      transport%recursion => recursion_obj
+      control_obj%cheb_backend = 'legacy'
+      control_obj%cond_ll = order
+      energy_obj%energy_min = -0.85_rp
+      energy_obj%energy_max = 0.85_rp
+      energy_obj%channels_ldos = ne - 10
+      energy_obj%ene = [(-0.975_rp + 1.94_rp*(e-1)/(ne-1), e=1,ne)]
+      allocate(recursion_obj%mu_nm_diag(order, order, nl, 1))
+      call transport%calculate_gamma_nm()
+      call require(.not. allocated(transport%gamma_nm), 'factorized route does not allocate full Gamma')
+
+      call random_seed(size=seed_size)
+      allocate(seed(seed_size), source=1947)
+      call random_seed(put=seed)
+      call random_number(samples)
+      mu = cmplx(samples(:, :, :, 1)-0.5_rp, samples(:, :, :, 2)-0.5_rp, kind=rp)
+      expected = (0.0_rp, 0.0_rp)
+      do e = 1, ne
+         ! Match the historical scaling and default-real order ratio in the Lorentz kernel.
+         x = energy_obj%ene(e)/((energy_obj%energy_max - energy_obj%energy_min)/(2 - 0.3))
+         angle = acos(x)
+         root = sqrt(1.0_rp - x*x)
+         do m = 1, order
+            km = sinh(6.0_rp*(1 - real(m-1)/real(order)))/sinh(6.0_rp)
+            if (m == 1) km = 0.5_rp*km
+            q = real(m-1, rp)
+            cm = cmplx(x, q*root, rp)*cmplx(cos(q*angle), -sin(q*angle), rp)
+            do n = 1, order
+               kn = sinh(6.0_rp*(1 - real(n-1)/real(order)))/sinh(6.0_rp)
+               if (n == 1) kn = 0.5_rp*kn
+               q = real(n-1, rp)
+               cn = cmplx(x, -q*root, rp)*cmplx(cos(q*angle), sin(q*angle), rp)
+               gamma(e, n, m) = kn*km*(cn*cos((m-1)*angle) + cm*cos(q*angle))/(1.0_rp - x*x)**2
+               do l = 1, nl
+                  expected(e, l) = expected(e, l) + factor*gamma(e, n, m)*mu(n, m, l)
+               end do
+            end do
+         end do
+      end do
+
+      call gamma_mu_factorized(transport%gamma_poly, transport%gamma_phase, mu, factor, work, actual)
+      error = maxval(abs(actual - expected)/max(1.0_rp, abs(expected)))
+      write (*, '(a,i0,2(a,es12.4))') 'Factorized Gamma M=', order, &
+         ' max absolute error=', maxval(abs(actual - expected)), ' normalized error=', error
+      call require(error < 1.0e-11_rp, 'factorized Gamma against explicit independent complex oracle')
+   end subroutine test_factorized_gamma
 
    subroutine test_gamma_mu_cblas()
       integer, parameter :: ne_test = 3, k_test = 4, ncol_test = 2
