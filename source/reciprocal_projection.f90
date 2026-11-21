@@ -525,37 +525,39 @@ end subroutine project_dos_orbitals_gaussian
             if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
             tet_weight = this%tetrahedron_volumes(i_tet)
 
-            dos_line = 0.0_rp
             degenerate_tetra = e4 - e1 <= max(TOL, 1.0e-6_rp*de)
             corner_weighted = use_blochl .and. .not. degenerate_tetra
             if (degenerate_tetra) then
                i_start = max(1, min(this%n_energy_points, 2 + int((0.5_rp*(e1 + e4) - &
                   this%dos_energy_grid(1)) / de - 1.0e-12_rp)))
                i_end = i_start
+            else
+               i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
+               i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
+            end if
+            ! This rank's energy window only
+            i_start = max(i_start, e_start)
+            i_end = min(i_end, e_end)
+            if (i_start > i_end) cycle
+
+            if (degenerate_tetra) then
                if (i_start == 1 .or. i_start == this%n_energy_points) then
                   dos_line(i_start) = 2.0_rp*tet_weight/de
                else
                   dos_line(i_start) = tet_weight/de
                end if
             else if (corner_weighted) then
-               i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
-               i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
-               do i_energy = max(i_start, e_start), min(i_end, e_end)
+               do i_energy = i_start, i_end
                   ! PRB 49, 16223: App. B weights plus Eq. (22) correction, differentiated in energy (Sec. II after Eq. 4)
                   call tetra_corner_weights(e_corners, this%dos_energy_grid(i_energy), w4, dw4)
                   corner_w(:, i_energy) = tet_weight*(w4 + dw4)
                end do
             else
-               i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
-               i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
                ! Same per-tetrahedron DOS as the total DOS, including tetrahedra with equal corner energies.
+               dos_line(i_start:i_end) = 0.0_rp
                call tetra_add_dos(tet_weight, e_corners, this%dos_energy_grid(1), &
                                   this%dos_energy_grid(this%n_energy_points), dos_line, this%n_energy_points)
             end if
-
-            i_start = max(i_start, e_start)
-            i_end = min(i_end, e_end)
-            if (i_start > i_end) cycle
 
             do isite = 1, this%n_sites
                site_orb_start = site_orb_offset(isite)

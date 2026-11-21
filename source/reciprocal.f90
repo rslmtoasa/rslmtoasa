@@ -415,6 +415,8 @@ module reciprocal_mod
       integer, dimension(:), allocatable :: sym_spin_flips
       !> Site i is mapped onto site sym_atom_perm(i, op) by operation op [nrec, n_sym_ops]
       integer, dimension(:, :), allocatable :: sym_atom_perm
+      !> Site sym_atom_inv(j, op) is mapped onto site j by operation op, the inverse of sym_atom_perm [nrec, n_sym_ops]
+      integer, dimension(:, :), allocatable :: sym_atom_inv
       !> Cartesian action of each operation on a spin vector, see sym_spin_matrices [3,3,n_sym_ops]
       real(rp), dimension(:, :, :), allocatable :: sym_spin_w
       !> Transformation of a site density matrix by each operation, see sym_dm_transformations [nb,nb,n_sym_ops]

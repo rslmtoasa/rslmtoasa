@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import sys
 
+from manifest_defaults import resolve_extends
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CI_SERIAL_OMP_THREADS = 2
@@ -200,7 +202,7 @@ def main() -> None:
         ci_env["RSLMTO_MPI_LAUNCHER"] = resolve_mpi_launcher(ci_env)
     ci_env["RSLMTO_OMP_THREADS_SERIAL"] = str(CI_SERIAL_OMP_THREADS)
     effective_compiler = cache.get("CMAKE_Fortran_COMPILER", "unknown")
-    manifest = json.loads(cases_json.read_text())
+    manifest = resolve_extends(json.loads(cases_json.read_text()))
     available_cases = {
         case["name"]: case for case in manifest.get("cases", [])
     }
@@ -209,6 +211,9 @@ def main() -> None:
     for name in requested_cases:
         if name not in available_cases:
             raise RuntimeError(f"case {name!r} not found in {cases_json}")
+        if "reference" in available_cases[name]:
+            print(f"SKIP  [{name}]: uses the reference of {available_cases[name]['reference']}")
+            continue
         required = available_cases[name].get("requires_cmake_option")
         if required and not cmake_option_enabled(build_dir / "CMakeCache.txt", required):
             if args.case:

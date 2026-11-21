@@ -38,6 +38,8 @@ contains
       if (allocated(this%sym_atom_perm)) deallocate(this%sym_atom_perm)
       allocate(this%sym_atom_perm(n, this%n_sym_ops))
       this%sym_atom_perm = 0
+      if (allocated(this%sym_atom_inv)) deallocate(this%sym_atom_inv)
+      allocate(this%sym_atom_inv(n, this%n_sym_ops))
       do k = 1, this%n_sym_ops
          do i = 1, n
             x = matmul(this%sym_rotations(:, :, k), frac(:, i)) + this%sym_translations(:, k)
@@ -62,6 +64,7 @@ contains
                ' map onto the same site; the site map of an operation is not one-to-one', __FILE__, __LINE__)
             hit(j) = .true.
             src(j) = i
+            this%sym_atom_inv(j, k) = i
          end do
       end do
 
@@ -224,7 +227,7 @@ contains
       end if
       ki = this%full_to_irred_k(kf)
       o = op(kf)
-      s = findloc(this%sym_atom_perm(:, o), isite, 1)
+      s = this%sym_atom_inv(isite, o)
       p(1) = proj_irr(1, l, s, ib, ki)
       p(2:4) = matmul(this%sym_spin_w(:, :, o), proj_irr(2:4, l, s, ib, ki))
    end function full_mesh_projection

@@ -44,7 +44,7 @@ from pathlib import Path
 import f90nml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manifest_defaults import apply_manifest_defaults
+from manifest_defaults import apply_manifest_defaults, resolve_extends
 
 
 # Non-Jackson damping kernels: label -> control keys given to both the CPU and the GPU run.
@@ -57,7 +57,7 @@ KERNEL_VARIANTS = {
 
 def load_chebyshev_cases(cases_json: Path) -> list[dict]:
     with cases_json.open() as fh:
-        data = json.load(fh)
+        data = resolve_extends(json.load(fh))
     cases = [apply_manifest_defaults(data, c) for c in data["cases"]]
     return [c for c in cases if c["namelists"]["control"].get("recur") == "chebyshev"]
 

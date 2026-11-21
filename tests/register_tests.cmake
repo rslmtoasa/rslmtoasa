@@ -546,7 +546,16 @@ if(RUN_EXAMPLE_TESTS)
   # Register one CTest entry per case of a cases.json manifest.
   # Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
   function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
-    file(READ "${CASES_JSON}" _json)
+    # Cases with "extends" are resolved into a copy in the build tree, which is what is read and passed on.
+    get_filename_component(_cases_dir "${CASES_JSON}" DIRECTORY)
+    set(_resolved_json "${CMAKE_BINARY_DIR}/Testing/manifests/${SUITE}.json")
+    execute_process(COMMAND "${PY}" "${TestDIR}/expand_manifest.py" "${CASES_JSON}" "${_resolved_json}"
+      RESULT_VARIABLE _expand_rc ERROR_VARIABLE _expand_err)
+    if(NOT _expand_rc EQUAL 0)
+      message(FATAL_ERROR "expanding ${CASES_JSON} failed:\n${_expand_err}")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CASES_JSON}")
+    file(READ "${_resolved_json}" _json)
     string(JSON _n LENGTH "${_json}" "cases")
     math(EXPR _last "${_n} - 1")
     foreach(_i RANGE ${_last})
@@ -569,8 +578,8 @@ if(RUN_EXAMPLE_TESTS)
       elseif(_case_strux_backend STREQUAL "legacy")
         list(APPEND _case_labels "legacy_strux")
       endif()
-      set(_cmd "${PY}" "${TestDIR}/run_test.py" "--binary" "${TestBinary}" "--cases-json" "${CASES_JSON}"
-        "--case-name" "${_name}" "--scratch-root" "${SCRATCH_ROOT}" "--compare-ref" "${REFS_DIR}"
+      set(_cmd "${PY}" "${TestDIR}/run_test.py" "--binary" "${TestBinary}" "--cases-json" "${_resolved_json}"
+        "--cases-dir" "${_cases_dir}/cases" "--case-name" "${_name}" "--scratch-root" "${SCRATCH_ROOT}" "--compare-ref" "${REFS_DIR}"
         "--abs-tol" "${EXAMPLE_REF_ABS_TOL}" "--rel-tol" "${EXAMPLE_REF_REL_TOL}")
       # Cases listing "launch_modes" register a serial/MPI pair that shares one reference.
       string(JSON _n_modes ERROR_VARIABLE _modes_err LENGTH "${_json}" "cases" ${_i} "launch_modes")
