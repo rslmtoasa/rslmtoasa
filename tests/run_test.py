@@ -623,11 +623,13 @@ def save_ref(workdir: str, case_name: str, ref_dir: str, case: dict) -> None:
     ref_data = build_ref_data(workdir, checks)
     with open(os.path.join(dest_dir, "ref.json"), "w") as fh:
         json.dump(ref_data, fh, indent=2)
-    meta = dict(case)
+    meta = {"name": case_name, "generation_command": "unknown", "git_sha": "unknown",
+            "provenance": "unknown"}
     provenance = os.environ.get("RSLMTO_REFERENCE_PROVENANCE")
     if provenance:
         try:
-            meta["reference_provenance"] = json.loads(provenance)
+            meta.update(json.loads(provenance))
+            meta["generation_command"] += f" --case {case_name}"
         except json.JSONDecodeError as exc:
             raise ValueError("RSLMTO_REFERENCE_PROVENANCE must contain valid JSON") from exc
     with open(os.path.join(dest_dir, "meta.json"), "w") as fh:

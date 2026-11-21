@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import platform
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -98,6 +99,27 @@ def cmake_option_enabled(cache_path: Path, option: str) -> bool:
     return cache_values(cache_path, [option]).get(option, "OFF").upper() in {
         "ON", "TRUE", "1"
     }
+
+
+def condense_provenance(p: dict) -> str:
+    """One short line: compiler, build type, MPI, march_native, OS/arch, profile."""
+    version = re.search(r"\d+\.\d+\.\d+", p.get("compiler_version", ""))
+    cache = p.get("cmake_cache", {})
+    arch = re.search(r"(x86_64|arm64|aarch64)", p.get("platform", ""))
+    return ", ".join([
+        f"gfortran {version.group(0) if version else 'unknown'}",
+        cache.get("CMAKE_BUILD_TYPE", "unknown"),
+        f"MPI {cache.get('ENABLE_MPI', 'unknown')}",
+        f"march_native {cache.get('ENABLE_MARCH_NATIVE', 'unknown')}",
+        f"{p.get('platform', 'unknown').split('-')[0]} {arch.group(0) if arch else 'unknown'}",
+        f"profile {p.get('profile', 'unknown')}",
+    ])
+
+
+def generation_command(cases_json: Path, references_dir: Path) -> str:
+    return ("tests/generate_ci_references.py --build-dir BUILD "
+            f"--cases-json {cases_json.relative_to(ROOT)} "
+            f"--references-dir {references_dir.relative_to(ROOT)}")
 
 
 def main() -> None:
@@ -202,27 +224,18 @@ def main() -> None:
         "profile": args.profile,
         "platform": platform.platform(),
         "git_commit": command_text(["git", "-C", str(ROOT), "rev-parse", "HEAD"]),
-        "compiler": effective_compiler,
         "compiler_version": (
             command_text([effective_compiler, "--version"])
             if effective_compiler != "unknown" else "unavailable"
         ),
-        "underlying_compiler": (
-            command_text([effective_compiler, "--showme:command"])
-            if effective_compiler != "unknown" else "unavailable"
-        ),
-        "cmake_version": command_text(["cmake", "--version"]).splitlines()[0],
         "cmake_cache": cache,
-        # Keep committed metadata relocatable; the build directory is printed
-        # by this script and remains available to run additional tests.
-        "binary": binary.name,
-        "serial_omp_threads": CI_SERIAL_OMP_THREADS,
-        "mpi_omp_threads": 1,
-        "mpi_enabled": mpi_enabled,
     }
-
     env = ci_env.copy()
-    env["RSLMTO_REFERENCE_PROVENANCE"] = json.dumps(provenance, sort_keys=True)
+    env["RSLMTO_REFERENCE_PROVENANCE"] = json.dumps({
+        "git_sha": provenance["git_commit"],
+        "provenance": condense_provenance(provenance),
+        "generation_command": generation_command(cases_json, references_dir),
+    })
     generator = [
         sys.executable, str(ROOT / "tests" / "generate_references.py"),
         "--binary", str(binary),
