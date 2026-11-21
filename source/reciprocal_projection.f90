@@ -5,6 +5,9 @@ submodule (reciprocal_mod) reciprocal_projection
    use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
+   !> First and last orbital index of the s, p, d, f blocks within one spin
+   integer, parameter :: lstart(4) = [1, 2, 5, 10], lend(4) = [1, 4, 9, 16]
+
 contains
 
    !> @brief Dispatch projected-DOS calculation for the active DOS method.
@@ -29,16 +32,13 @@ contains
 module subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
    integer :: ik, ik_global, ib, ie, iorb, isite
-   integer :: n_orb_per_spin, site_orb_start, n_orb_site
-   integer :: lstart(4), lend(4)
+   integer :: n_orb_site
    real(rp) :: weight, orbital_char, energy
    real(rp) :: gaussian_weight, sigma_squared, sigma_use
    integer :: nbands
-   ! Per-site orbital offsets for mixed atom types
-   integer, dimension(:), allocatable :: site_orb_offset
    real(rp) :: mx_char, my_char, mz_char, local_char
    real(rp) :: axis(3)
-   real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :)
+   real(rp), allocatable :: proj_irr(:, :, :, :, :), eig_irr(:, :)
    real(rp) :: proj(4)
    integer, allocatable :: op(:)
    integer, allocatable :: star_size(:)
@@ -72,7 +72,6 @@ module subroutine project_dos_orbitals_gaussian(this)
    if (mod(n_orb_site, this%n_spin_components) /= 0) then
       call g_logger%fatal('project_dos_orbitals_gaussian: per-site basis size incompatible with spin components', __FILE__, __LINE__)
    end if
-   n_orb_per_spin = n_orb_site/this%n_spin_components
 
    if (allocated(this%projected_dos)) deallocate(this%projected_dos)
    allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
@@ -83,7 +82,7 @@ module subroutine project_dos_orbitals_gaussian(this)
    if (allocated(this%dos_mz_tot)) deallocate(this%dos_mz_tot)
    allocate(this%dos_mx_tot(this%n_energy_points))
    allocate(this%dos_my_tot(this%n_energy_points))
-    allocate(this%dos_mz_tot(this%n_energy_points))
+   allocate(this%dos_mz_tot(this%n_energy_points))
    this%dos_mx_tot = 0.0_rp
    this%dos_my_tot = 0.0_rp
    this%dos_mz_tot = 0.0_rp
@@ -92,53 +91,16 @@ module subroutine project_dos_orbitals_gaussian(this)
    allocate(this%projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
    this%projected_dos_moments = 0.0_rp
 
-   allocate(site_orb_offset(this%n_sites + 1))
-   do isite = 1, this%n_sites + 1
-      site_orb_offset(isite) = (isite - 1) * n_orb_site
-   end do
-   lstart = [1, 2, 5, 10]
-   lend = [1, 4, 9, 16]
-
    ! Diagnostic logging
    call root_info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
                      ', nbands = ' // trim(int2str(nbands)) // &
                      ', max_orb_channels = ' // trim(int2str(this%max_orbs)) // &
                      ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
-   ! call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset = [' // &
-   !                   trim(int2str(site_orb_offset(1))) // ', ' // &
-   !                   trim(int2str(site_orb_offset(2))) // ', ' // &
-   !                   trim(int2str(site_orb_offset(3))) // ', ' // &
-   !                   trim(int2str(site_orb_offset(4))) // ', ' // &
-   !                   trim(int2str(site_orb_offset(5))) // ']', __FILE__, __LINE__)
 
    ! Band projections of every irreducible k once; a reduced mesh is expanded by symmetry to the full mesh, where each
    ! full-mesh point carries the weight of its irreducible point shared over its star.
-   allocate(proj_local(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
-   proj_local = 0.0_rp
-   do ik = 1, size(this%eigenvectors, 3)
-      do ib = 1, nbands
-         do isite = 1, this%n_sites
-            do iorb = 1, 4
-               if (lstart(iorb) > n_orb_per_spin) cycle
-               call compute_spinor_block_projection(this, ik, ib, site_orb_offset(isite), n_orb_per_spin, &
-                                                    lstart(iorb), lend(iorb), orbital_char, proj_local(2, iorb, isite, ib, ik), &
-                                                    proj_local(3, iorb, isite, ib, ik), proj_local(4, iorb, isite, ib, ik))
-               proj_local(1, iorb, isite, ib, ik) = orbital_char
-            end do
-         end do
-      end do
-   end do
-   allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global), eig_irr(nbands, this%k_workset%nk_global))
-   call average_degenerate_projections(this%eigenvalues, proj_local)
-   call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
-   call this%gather_k_columns(nbands, this%eigenvalues, eig_irr)
-   deallocate(proj_local)
+   call prepare_projections(this, n_orb_site, proj_irr, eig_irr, op)
    nk_full = product(this%nk_mesh)
-   if (this%nk_total < nk_full) then
-      call this%full_mesh_operations(op)
-   else
-      allocate(op(0))
-   end if
    allocate(star_size(this%nk_total))
    star_size = 0
    do ik = 1, size(this%full_to_irred_k)
@@ -204,8 +166,6 @@ module subroutine project_dos_orbitals_gaussian(this)
 #endif
 
    call this%symmetrize_projected_dos()
-
-   deallocate(site_orb_offset)
 end subroutine project_dos_orbitals_gaussian
 
    !> @brief Return the local spin axis for a projected-DOS site.
@@ -238,34 +198,6 @@ end subroutine project_dos_orbitals_gaussian
          axis = [0.0_rp, 0.0_rp, 1.0_rp]
       end if
    end subroutine get_site_spin_axis
-
-   !> Ordered k-sum of a complex rank-3 array and an optional second one, sent as one message: before the k loop
-   !> (start=.true.) take the running sums from rank-1, after it pass them on and receive the final ones.
-   subroutine chain_complex(a, start, b)
-      complex(rp), intent(inout) :: a(:, :, :)
-      logical, intent(in) :: start
-      complex(rp), intent(inout), optional :: b(:, :, :)
-      real(rp), allocatable :: buf(:)
-      integer :: na, nb
-
-      na = size(a)
-      nb = 0
-      if (present(b)) nb = size(b)
-      allocate (buf(2*(na + nb)))
-      buf(1:2*na:2) = real(reshape(a, [na]), rp)
-      buf(2:2*na:2) = aimag(reshape(a, [na]))
-      if (present(b)) then
-         buf(2*na + 1::2) = real(reshape(b, [nb]), rp)
-         buf(2*na + 2::2) = aimag(reshape(b, [nb]))
-      end if
-      if (start) then
-         call chain_recv(buf, size(buf))
-      else
-         call chain_send_bcast(buf, size(buf))
-      end if
-      a = reshape(cmplx(buf(1:2*na:2), buf(2:2*na:2), rp), shape(a))
-      if (present(b)) b = reshape(cmplx(buf(2*na + 1::2), buf(2*na + 2::2), rp), shape(b))
-   end subroutine chain_complex
 
    !> Occupation of one band: its Bloechl tetrahedron weight when occ_t is allocated (dos_method = 'blochl'), else Fermi-Dirac.
    pure function band_occupation(occ_t, ib, ik_global, energy, fermi_level, kT) result(occ)
@@ -326,6 +258,54 @@ end subroutine project_dos_orbitals_gaussian
       end do
    end subroutine compute_spinor_block_projection
 
+   !> @brief Band projections of every irreducible k, the eigenvalues and the operation of each full-mesh point.
+   !> @details Shared setup of the Gaussian and tetrahedron projected DOS. Projections are averaged over degenerate groups and
+   !>          gathered on every rank; op is empty when the mesh is not reduced.
+   !> @param[in] n_orb_site Eigenvector components of one site.
+   !> @param[out] proj_irr Projection characters (4, 4, site, band, irreducible k).
+   !> @param[out] eig_irr Eigenvalues (band, irreducible k).
+   !> @param[out] op Operation index of each full-mesh point, see full_mesh_operations.
+   subroutine prepare_projections(this, n_orb_site, proj_irr, eig_irr, op)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: n_orb_site
+      real(rp), allocatable, intent(out) :: proj_irr(:, :, :, :, :), eig_irr(:, :)
+      integer, allocatable, intent(out) :: op(:)
+      real(rp), allocatable :: proj_local(:, :, :, :, :)
+      real(rp) :: orbital_char
+      integer :: ik, ib, isite, iorb, nbands, n_orb_per_spin
+
+      nbands = size(this%eigenvalues, 1)
+      n_orb_per_spin = n_orb_site/this%n_spin_components
+      allocate(proj_local(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
+      proj_local = 0.0_rp
+      !$OMP PARALLEL DO DEFAULT(NONE) SHARED(this, proj_local, n_orb_site, n_orb_per_spin, nbands) &
+      !$OMP PRIVATE(ik, ib, isite, iorb, orbital_char) SCHEDULE(DYNAMIC)
+      do ik = 1, size(this%eigenvectors, 3)
+         do ib = 1, nbands
+            do isite = 1, this%n_sites
+               do iorb = 1, 4
+                  if (lstart(iorb) > n_orb_per_spin) cycle
+                  call compute_spinor_block_projection(this, ik, ib, (isite - 1)*n_orb_site, n_orb_per_spin, &
+                                                       lstart(iorb), lend(iorb), orbital_char, proj_local(2, iorb, isite, ib, ik), &
+                                                       proj_local(3, iorb, isite, ib, ik), proj_local(4, iorb, isite, ib, ik))
+                  proj_local(1, iorb, isite, ib, ik) = orbital_char
+               end do
+            end do
+         end do
+      end do
+      !$OMP END PARALLEL DO
+      call average_degenerate_projections(this%eigenvalues, proj_local)
+      allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global), eig_irr(nbands, this%k_workset%nk_global))
+      call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
+      call this%gather_k_columns(nbands, this%eigenvalues, eig_irr)
+      ! A reduced mesh is expanded by symmetry to the full mesh, not rediagonalised.
+      if (this%nk_total < product(this%nk_mesh)) then
+         call this%full_mesh_operations(op)
+      else
+         allocate(op(0))
+      end if
+   end subroutine prepare_projections
+
    !> @brief Replace each band's projection characters by their average over its degenerate group at the same k.
    !> @details The characters of a single band inside a degenerate group depend on the arbitrary basis the eigensolver
    !>          returns; the group sum does not, so the group average is the basis-invariant per-band value.
@@ -362,33 +342,28 @@ end subroutine project_dos_orbitals_gaussian
       ! Local variables
       integer :: i_energy, i_tet, i_corner, i_band, iorb, isite
       integer :: i_start, i_end
-      integer :: n_orb_per_spin, site_orb_start, ik, n_orb_site
+      integer :: n_orb_per_spin, ik, n_orb_site
       integer :: nbands
       integer :: e_start, e_end, e_count
-      real(rp) :: dos_contrib, orbital_char_avg, orbital_char, de
+      real(rp) :: dos_contrib, orbital_char_avg, de
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
-      integer :: lstart(4), lend(4)
       real(rp) :: e1, e4
       real(rp) :: tet_weight, w4(4), dw4(4), corner_char
       real(rp), parameter :: TOL = 1.0e-10_rp
       logical :: use_blochl, corner_weighted
       real(rp), allocatable :: corner_w(:, :)
-      ! Per-site orbital offsets for mixed atom types
-      integer, dimension(:), allocatable :: site_orb_offset
       real(rp) :: mx_char_avg, my_char_avg, mz_char_avg, local_char
       real(rp) :: axis(3)
       logical :: degenerate_tetra
-      real(rp), allocatable :: site_axes(:, :)
       real(rp), allocatable :: dos_line(:)
       real(rp), allocatable :: local_projected_dos(:, :, :, :)
       real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
       ! Projection weights per k-point: (total, mx, my, mz; l; site; band; k)
-      real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :)
+      real(rp), allocatable :: proj_irr(:, :, :, :, :), eig_irr(:, :)
       real(rp) :: proj(4)
       integer, allocatable :: op(:)
-      integer :: nk_full
 
       call root_info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -410,8 +385,6 @@ end subroutine project_dos_orbitals_gaussian
          call g_logger%fatal('project_dos_orbitals_tetrahedron: per-site basis size incompatible with spin components', __FILE__, __LINE__)
       end if
       n_orb_per_spin = n_orb_site/this%n_spin_components
-      lstart = [1, 2, 5, 10]
-      lend = [1, 4, 9, 16]
 
       call root_info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
                         ' site(s)', __FILE__, __LINE__)
@@ -435,12 +408,6 @@ end subroutine project_dos_orbitals_gaussian
       allocate(this%projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
       this%projected_dos_moments = 0.0_rp
 
-      allocate(site_orb_offset(this%n_sites + 1))
-      allocate(site_axes(3, this%n_sites))
-      do isite = 1, this%n_sites + 1
-         site_orb_offset(isite) = (isite - 1) * n_orb_site
-      end do
-      site_axes = this%dos_site_axes
       use_blochl = trim(this%dos_method) == 'blochl'
 
       ! Setup tetrahedra if not already done
@@ -457,44 +424,14 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Each k-point is a corner of many tetrahedra: compute its projection weights once.
       nbands = size(this%eigenvalues, 1)
-      allocate(proj_local(4, 4, this%n_sites, nbands, size(this%eigenvectors, 3)))
-      proj_local = 0.0_rp
-      !$OMP PARALLEL DO DEFAULT(NONE) SHARED(this, proj_local, site_orb_offset, lstart, lend, n_orb_per_spin, nbands) &
-      !$OMP PRIVATE(ik, i_band, isite, iorb, orbital_char) SCHEDULE(DYNAMIC)
-      do ik = 1, size(this%eigenvectors, 3)
-         do i_band = 1, nbands
-            do isite = 1, this%n_sites
-               do iorb = 1, 4
-                  if (lstart(iorb) > n_orb_per_spin) cycle
-                  call compute_spinor_block_projection(this, ik, i_band, site_orb_offset(isite), n_orb_per_spin, &
-                                                       lstart(iorb), lend(iorb), orbital_char, proj_local(2, iorb, isite, i_band, ik), &
-                                                       proj_local(3, iorb, isite, i_band, ik), proj_local(4, iorb, isite, i_band, ik))
-                  proj_local(1, iorb, isite, i_band, ik) = orbital_char
-               end do
-            end do
-         end do
-      end do
-      !$OMP END PARALLEL DO
-      call average_degenerate_projections(this%eigenvalues, proj_local)
-      allocate(proj_irr(4, 4, this%n_sites, nbands, this%k_workset%nk_global))
-      call this%gather_k_columns(16*this%n_sites*nbands, proj_local, proj_irr)
-      deallocate(proj_local)
-      allocate(eig_irr(nbands, this%k_workset%nk_global))
-      call this%gather_k_columns(nbands, this%eigenvalues, eig_irr)
-      ! The tetrahedra live on the full mesh; a reduced mesh is expanded by symmetry, not rediagonalised.
-      nk_full = product(this%nk_mesh)
-      if (this%nk_total < nk_full) then
-         call this%full_mesh_operations(op)
-      else
-         allocate(op(0))
-      end if
+      call prepare_projections(this, n_orb_site, proj_irr, eig_irr, op)
 
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &
-      !$OMP SHARED(this, proj_irr, eig_irr, op, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, &
+      !$OMP SHARED(this, proj_irr, eig_irr, op, n_orb_per_spin, &
       !$OMP        e_start, e_end, de, use_blochl) &
       !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, sorted_e, e1, e4, i_start, i_end, &
-      !$OMP         i_energy, dos_contrib, tet_weight, isite, site_orb_start, axis, iorb, &
+      !$OMP         i_energy, dos_contrib, tet_weight, isite, axis, iorb, &
       !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_chars, &
       !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
       !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, degenerate_tetra, &
@@ -560,8 +497,7 @@ end subroutine project_dos_orbitals_gaussian
             end if
 
             do isite = 1, this%n_sites
-               site_orb_start = site_orb_offset(isite)
-               axis = site_axes(:, isite)
+               axis = this%dos_site_axes(:, isite)
                do iorb = 1, 4
                   orbital_char_avg = 0.0_rp
                   mx_char_avg = 0.0_rp
@@ -658,8 +594,6 @@ end subroutine project_dos_orbitals_gaussian
 #endif
 
       deallocate(proj_irr, eig_irr, op)
-      deallocate(site_orb_offset)
-      deallocate(site_axes)
 
       call this%symmetrize_projected_dos()
 
@@ -743,18 +677,11 @@ module subroutine calculate_band_moments(this)
    class(reciprocal), intent(inout) :: this
 
    integer :: isite, iorb, ispin
-   integer :: atom_idx
    real(rp) :: m0
    real(rp), allocatable :: reference(:, :), axis_used(:, :)
 
    call root_info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
    this%n_sites = this%lattice%nrec
-   call root_info('calculate_band_moments: DEBUG - this%auto_find_fermi = ' // &
-                  merge('TRUE ', 'FALSE', this%auto_find_fermi) // &
-                  ', this%total_electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
-                  __FILE__, __LINE__)
-   call root_info('calculate_band_moments: DEBUG - Fermi level on entry = ' // &
-                  trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
 
    if (this%total_electrons <= 1.0e-3_rp) then
       if (this%lattice%nbulk_bulk > 0) then
@@ -782,28 +709,13 @@ module subroutine calculate_band_moments(this)
    allocate(reference(3, this%n_sites))
    allocate(axis_used(3, this%n_sites))
    do isite = 1, this%n_sites
-      reference(:, isite) = [0.0_rp, 0.0_rp, 1.0_rp]
-      atom_idx = this%lattice%nbulk + isite
-      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) atom_idx = 0   ! local frame: see get_site_spin_axis
-      if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
-         if (sqrt(sum(this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)**2)) > 1.0e-12_rp) then
-            reference(:, isite) = this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)
-         else if (allocated(this%lattice%symbolic_atoms(atom_idx)%potential%mom)) then
-            reference(:, isite) = this%lattice%symbolic_atoms(atom_idx)%potential%mom(1:3)
-         end if
-      end if
+      call get_site_spin_axis(this, isite, reference(:, isite))
    end do
 
    call this%accumulate_spin_density_kspace()
    call this%fill_band_moments_from_spin_density( &
       trim(this%lattice%control%density_policy), reference, axis_used)
 
-   do isite = 1, this%n_sites
-      call root_info('calculate_band_moments: site '//trim(int2str(isite))// &
-                         ' projection axis = ('//trim(real2str(axis_used(1, isite), '(F9.5)'))//', '// &
-                         trim(real2str(axis_used(2, isite), '(F9.5)'))//', '// &
-                         trim(real2str(axis_used(3, isite), '(F9.5)'))//')', __FILE__, __LINE__)
-   end do
    deallocate(reference, axis_used)
 
    ! Calculate sum of all m0 moments (should equal total occupation)
@@ -977,9 +889,9 @@ end subroutine calculate_band_moments
       if (blochl) call this%blochl_occupations(occ_t)   ! collective: before the rank chain below
       if (this%k_mesh_distributed_active) then
          if (present(m1_out)) then
-            call chain_complex(rho, .true., rho_m1)
+            call chain_complex(rho, size(rho), .true., rho_m1, size(rho_m1))
          else
-            call chain_complex(rho, .true.)
+            call chain_complex(rho, size(rho), .true.)
          end if
       end if
 
@@ -1065,9 +977,9 @@ end subroutine calculate_band_moments
 
       if (this%k_mesh_distributed_active) then
          if (present(m1_out)) then
-            call chain_complex(rho, .false., rho_m1)
+            call chain_complex(rho, size(rho), .false., rho_m1, size(rho_m1))
          else
-            call chain_complex(rho, .false.)
+            call chain_complex(rho, size(rho), .false.)
          end if
       end if
 
@@ -1166,7 +1078,7 @@ end subroutine calculate_band_moments
       p = (0.0_rp, 0.0_rp)
       m1 = (0.0_rp, 0.0_rp)
       if (this%k_mesh_distributed_active) then
-         call chain_complex(p, .true., m1)
+         call chain_complex(p, size(p), .true., m1, size(m1))
       end if
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
@@ -1194,7 +1106,7 @@ end subroutine calculate_band_moments
          end do
       end do
       if (this%k_mesh_distributed_active) then
-         call chain_complex(p, .false., m1)
+         call chain_complex(p, size(p), .false., m1, size(m1))
       end if
       call symmetrize_d_spinor(this, p)
       call symmetrize_d_spinor(this, m1)

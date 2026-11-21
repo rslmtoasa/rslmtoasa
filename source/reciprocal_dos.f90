@@ -927,7 +927,7 @@ module subroutine calculate_dos_gaussian(this)
    integer :: i_energy, i_k, i_band, i_k_global
    real(rp) :: energy, weight, gaussian_factor
    real(rp) :: sigma_squared, sigma_use
-   real(rp) :: local_sum, dos_integral, norm_factor, kweight_sum
+   real(rp) :: local_sum, dos_integral, norm_factor
    integer :: nbands
 
    ! Debug: Check eigenvalue range
@@ -963,22 +963,6 @@ module subroutine calculate_dos_gaussian(this)
    sigma_squared = sigma_use**2
    nbands = size(this%eigenvalues, 1)
    
-   ! DEBUG: Check k-point weights sum
-   if (this%k_mesh_distributed_active) then
-      kweight_sum = sum(this%k_weights(this%k_start:this%k_end))
-   else
-      kweight_sum = sum(this%k_weights)
-   end if
-   
-   call root_info('calculate_dos_gaussian: nbands = ' // trim(int2str(nbands)) // &
-                     ', nk_local = ' // trim(int2str(size(this%eigenvalues, 2))) // &
-                     ', k_weights sum = ' // trim(real2str(kweight_sum, '(F12.8)')), __FILE__, __LINE__)
-   
-   ! DEBUG: Check eigenvalue array size
-   call root_info('calculate_dos_gaussian: eigenvalues array size = ' // &
-                     trim(int2str(size(this%eigenvalues, 1))) // ' x ' // &
-                     trim(int2str(size(this%eigenvalues, 2))), __FILE__, __LINE__)
-
    ! Calculate raw DOS
    do i_energy = 1, this%n_energy_points
       energy = this%dos_energy_grid(i_energy)  ! Already in Ry
@@ -1005,7 +989,7 @@ module subroutine calculate_dos_gaussian(this)
    end if
 #endif
 
-   ! DEBUG: Check DOS integral WITHOUT normalization first
+   ! Integral of the raw DOS
    dos_integral = 0.0_rp
    do i_energy = 1, this%n_energy_points - 1
       dos_integral = dos_integral + 0.5_rp * (this%total_dos(i_energy) + this%total_dos(i_energy+1)) * &

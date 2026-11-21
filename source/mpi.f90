@@ -50,7 +50,7 @@ module mpi_mod
 
    public :: get_mpi_range, get_mpi_variables, get_mpi_mapping
    public :: split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
-   public :: chain_recv, chain_send_bcast
+   public :: chain_recv, chain_send_bcast, chain_complex
 
 contains
 
@@ -275,6 +275,36 @@ contains
       end if
 #endif
    end subroutine chain_send_bcast
+
+   !> @brief Ordered k-sum of complex arrays a(na) and optional b(nb), sent as one message.
+   !> @details Before the k loop (start = .true.) take the running sums from rank-1, after it pass them on and receive the
+   !>          final ones.
+   subroutine chain_complex(a, na, start, b, nb)
+      integer, intent(in) :: na
+      complex(rp), intent(inout) :: a(na)
+      logical, intent(in) :: start
+      complex(rp), intent(inout), optional :: b(*)
+      integer, intent(in), optional :: nb
+      real(rp), allocatable :: buf(:)
+      integer :: nbb
+
+      nbb = 0
+      if (present(b)) nbb = nb
+      allocate (buf(2*(na + nbb)))
+      buf(1:2*na:2) = real(a, rp)
+      buf(2:2*na:2) = aimag(a)
+      if (present(b)) then
+         buf(2*na + 1::2) = real(b(1:nbb), rp)
+         buf(2*na + 2::2) = aimag(b(1:nbb))
+      end if
+      if (start) then
+         call chain_recv(buf, size(buf))
+      else
+         call chain_send_bcast(buf, size(buf))
+      end if
+      a = cmplx(buf(1:2*na:2), buf(2:2*na:2), rp)
+      if (present(b)) b(1:nbb) = cmplx(buf(2*na + 1::2), buf(2*na + 2::2), rp)
+   end subroutine chain_complex
 
    subroutine get_mpi_range(rank_in, n_items, start_idx, end_idx, items_per_process, l2g_map_out, g2l_map_out, region_tag)
       integer, intent(in) :: rank_in, n_items
