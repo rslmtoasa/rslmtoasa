@@ -46,11 +46,14 @@ module conductivity_mod
    use logger_mod, only: g_logger
    use cfd
    use basis_mod, only: nb, norb, spin_off
+#ifdef USE_SAFE_ALLOC
+   use safe_alloc_mod, only: g_safe_alloc
+#endif
    implicit none
 
    private
    public :: gamma_mu_reference, gamma_mu_blas, gamma_mu_cblas, pack_gamma_mu_diagonal, &
-      conductivity_integral, response_operator_units
+      conductivity_integral, response_operator_units, gamma_mu_factorized
 
    type, public :: conductivity
       !> Control
@@ -68,6 +71,9 @@ module conductivity_mod
       integer :: ll_cond
       !> Pre factor Gamma_nm for the conductivity tensor calculation
       complex(rp), dimension(:, :, :), allocatable :: gamma_nm
+      ! FP64 factors indexed by (energy, Chebyshev index). The second phase is
+      ! the complex conjugate of gamma_phase because the scaled energy is real.
+      complex(rp), allocatable :: gamma_poly(:, :), gamma_phase(:, :)
       !> Unit-cell volume (Angstrom^3) or in-plane area (Angstrom^2).
       !> A positive measure overrides the cell measure, not the cluster measure.
       character(len=16) :: response_geometry = 'bulk'
@@ -168,6 +174,33 @@ contains
       call zgemm('N', 'N', ne, size(u, 2), size(u, 1), alpha, gamma_matrix, ne, &
                  u, size(u, 1), beta, c, ne)
    end subroutine gamma_mu_blas
+
+   ! Contract Gamma(n,m) = phase(n)*poly(m) + poly(n)*conjg(phase(m)).
+   ! mu(n,m,l) shares the Chebyshev orientation of gamma_mu_reference.
+   subroutine gamma_mu_factorized(poly, phase, mu, factor, work, c)
+      complex(rp), contiguous, intent(in) :: poly(:, :), phase(:, :), mu(:, :, :)
+      real(rp), intent(in) :: factor
+      complex(rp), contiguous, intent(inout) :: work(:, :)
+      complex(rp), contiguous, intent(out) :: c(:, :)
+      integer :: ne, order, l, j
+
+      ne = size(poly, 1)
+      order = size(poly, 2)
+      do l = 1, size(mu, 3)
+         ! work(e,n) = sum_m poly(e,m)*mu(n,m,l).
+         call zgemm('n', 't', ne, order, order, cone, poly, ne, mu(:, :, l), order, czero, work, ne)
+         c(:, l) = czero
+         do j = 1, order
+            c(:, l) = c(:, l) + phase(:, j)*work(:, j)
+         end do
+         ! work(e,m) = sum_n poly(e,n)*mu(n,m,l).
+         call zgemm('n', 'n', ne, order, order, cone, poly, ne, mu(:, :, l), order, czero, work, ne)
+         do j = 1, order
+            c(:, l) = c(:, l) + conjg(phase(:, j))*work(:, j)
+         end do
+      end do
+      c = factor*c
+   end subroutine gamma_mu_factorized
 
    !> @brief Single-precision BLAS analogue for precision-fair reconstruction.
    !> @details This is intentionally a small helper rather than a second
@@ -330,12 +363,14 @@ contains
    !> 
    !> @param[out] gamma_nm      Gamma_nm array (dimension: energy_grid, recursion_level, recursion_level).
    !*************************************************************************
-   subroutine calculate_gamma_nm(this)
+   subroutine calculate_gamma_nm(this, use_factorized)
       class(conductivity), intent(inout) :: this
+      logical, optional, intent(in) :: use_factorized
 
       ! Local variables
-      integer :: i, n, m
+      integer :: n, m, ne, order
       real(rp) :: a, b
+      logical :: factorized
       real(rp), dimension(:), allocatable :: g_kernel(:)       ! Jackson kernel
       real(rp), dimension(:), allocatable :: weights(:)        ! Weight factors
       real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
@@ -363,18 +398,13 @@ contains
 
       call g_kpm_profile%start('P_gamma_basis_setup')
       
-      ! Initialize global variable
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('recursion.gamma_nm', this%gamma_nm, (/this%en%channels_ldos + 10, &
-#else
-      allocate (this%gamma_nm(this%en%channels_ldos + 10, this%lattice%control%cond_ll, this%lattice%control%cond_ll))
-#endif
-
-      ! Initialize variables
-      allocate(acos_x(this%en%channels_ldos + 10), sqrt_term(this%en%channels_ldos + 10), wscale(this%en%channels_ldos + 10))
-      allocate(chebyshev_poly(this%en%channels_ldos + 10, this%control%cond_ll))
-      allocate(cn(this%en%channels_ldos + 10, this%control%cond_ll), cm(this%en%channels_ldos + 10, this%control%cond_ll))
-      allocate(g_kernel(this%control%cond_ll), weights(this%control%cond_ll))
+      ne = this%en%channels_ldos + 10
+      order = this%control%cond_ll
+      factorized = .false.
+      if (present(use_factorized)) factorized = use_factorized
+      allocate(acos_x(ne), sqrt_term(ne), wscale(ne), chebyshev_poly(ne, order))
+      allocate(cn(ne, order), g_kernel(order), weights(order))
+      if (.not. factorized) allocate(cm(ne, order))
 
       call g_kpm_profile%start('D_gamma_basis')
       ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
@@ -397,7 +427,7 @@ contains
       ! Compute Cn and Cm
       do n = 1, this%control%cond_ll
          cn(:, n) = (wscale(:) - i_unit * real(n-1, rp) * sqrt_term(:)) * exp(i_unit * real(n-1, rp) * acos_x(:))
-         cm(:, n) = (wscale(:) + i_unit * real(n-1, rp) * sqrt_term(:)) * exp(-i_unit * real(n-1, rp) * acos_x(:))
+         if (.not. factorized) cm(:, n) = (wscale(:) + i_unit * real(n-1, rp) * sqrt_term(:)) * exp(-i_unit * real(n-1, rp) * acos_x(:))
       end do
 
       chebyshev_poly(:, 1) = 1.0_rp
@@ -411,20 +441,29 @@ contains
       ! Initialize Gamma_nm
       call g_kpm_profile%start('P_gamma_generation')
       call g_kpm_profile%start('D_gamma_fill')
-      this%gamma_nm(:, :, :) = 0.0_rp
-
-      ! Compute Gamma_nm
-      do n = 1, this%control%cond_ll
-         do m = 1, this%control%cond_ll
-            this%gamma_nm(:, n, m) = (cn(:, n) * chebyshev_poly(:, m) + cm(:, m) * chebyshev_poly(:, n))
-            this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) / ((1.0_rp - wscale(:)**2)**2)
-            this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) * g_kernel(n) * g_kernel(m) * weights(n) * weights(m)
+      if (factorized) then
+#ifdef USE_SAFE_ALLOC
+         call g_safe_alloc%allocate('conductivity.gamma_poly', this%gamma_poly, [ne, order])
+         call g_safe_alloc%allocate('conductivity.gamma_phase', this%gamma_phase, [ne, order])
+#else
+         allocate(this%gamma_poly(ne, order), this%gamma_phase(ne, order))
+#endif
+         do n = 1, order
+            this%gamma_poly(:, n) = chebyshev_poly(:, n)*g_kernel(n)*weights(n)
+            this%gamma_phase(:, n) = cn(:, n)*g_kernel(n)*weights(n)/((1.0_rp - wscale**2)**2)
          end do
-      end do
+      else
+         allocate(this%gamma_nm(ne, order, order))
+         do m = 1, order
+            do n = 1, order
+               this%gamma_nm(:, n, m) = (cn(:, n) * chebyshev_poly(:, m) + cm(:, m) * chebyshev_poly(:, n))
+               this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) / ((1.0_rp - wscale(:)**2)**2)
+               this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) * g_kernel(n) * g_kernel(m) * weights(n) * weights(m)
+            end do
+         end do
+      end if
 
-      ! Clean up
       call g_kpm_profile%stop('D_gamma_fill')
-      deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
       call g_kpm_profile%stop('P_gamma_generation')
    end subroutine 
 
@@ -499,7 +538,9 @@ contains
       integer :: i, l2, ntype, loop_over, ne, m_cond, k_cond
       complex(rp), dimension(:, :, :), allocatable :: integrand
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
-      complex(rp), dimension(:, :), allocatable :: mu_diag, gamma_mu
+      complex(rp), allocatable, target :: mu_diag(:, :)
+      complex(rp), allocatable :: gamma_mu(:, :), gamma_work(:, :)
+      complex(rp), contiguous, pointer :: mu_matrices(:, :, :)
       complex(rp), dimension(:, :, :), allocatable :: gpu_reconstruction
       complex(real32), dimension(:, :), allocatable :: gamma_sp, mu_diag_sp, gamma_mu_sp
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
@@ -587,9 +628,18 @@ contains
          ! workspaces are allocated once per conductivity call and reused for
          ! every trace.
          allocate(mu_diag(k_cond, nb), gamma_mu(ne, nb))
-         call g_kpm_profile%set_reconstruction_bytes( &
-            int(size(this%gamma_nm), int64)*int(storage_size(this%gamma_nm)/8, int64), &
-            int(size(mu_diag), int64)*int(storage_size(mu_diag)/8, int64))
+         if (allocated(this%gamma_poly)) then
+            allocate(gamma_work(ne, m_cond))
+            mu_matrices(1:m_cond, 1:m_cond, 1:nb) => mu_diag
+            call g_kpm_profile%set_reconstruction_bytes(0_int64, &
+               size(mu_diag, kind=int64)*int(storage_size(mu_diag)/8, int64), &
+               factor_bytes=(size(this%gamma_poly, kind=int64) + size(this%gamma_phase, kind=int64) + &
+                             size(gamma_work, kind=int64))*int(storage_size(gamma_work)/8, int64))
+         else
+            call g_kpm_profile%set_reconstruction_bytes( &
+               size(this%gamma_nm, kind=int64)*int(storage_size(this%gamma_nm)/8, int64), &
+               size(mu_diag, kind=int64)*int(storage_size(mu_diag)/8, int64))
+         end if
          if (use_cpu_fp32_reconstruction) then
             allocate(gamma_sp(ne, k_cond), mu_diag_sp(k_cond, nb), gamma_mu_sp(ne, nb))
             gamma_sp = cmplx(reshape(this%gamma_nm, [ne, k_cond]), kind=real32)
@@ -647,6 +697,8 @@ contains
             mu_diag_sp = cmplx(mu_diag, kind=real32)
             call gamma_mu_cblas(gamma_sp, mu_diag_sp, real(factor, real32), gamma_mu_sp)
             gamma_mu = cmplx(gamma_mu_sp, kind=rp)
+         else if (allocated(this%gamma_poly)) then
+            call gamma_mu_factorized(this%gamma_poly, this%gamma_phase, mu_matrices, factor, gamma_work, gamma_mu)
          else
             call gamma_mu_blas(this%gamma_nm, mu_diag, factor, gamma_mu)
          end if
@@ -789,6 +841,7 @@ contains
          integrated_type_l_real, integrated_type_l_im, output_type, output_type_orb_real, output_type_orb_im)
       if (allocated(gpu_reconstruction)) deallocate(gpu_reconstruction)
       if (allocated(mu_diag)) deallocate(mu_diag, gamma_mu)
+      if (allocated(gamma_work)) deallocate(gamma_work)
       if (allocated(gamma_sp)) deallocate(gamma_sp, mu_diag_sp, gamma_mu_sp)
    end subroutine calculate_conductivity_tensor
 

@@ -12,13 +12,16 @@ program test_kpm_transport
    use precision_mod, only: rp
    use basis_mod, only: basis_init, nb, spin_off
    use control_mod, only: control
+   use energy_mod, only: energy
+   use recursion_mod, only: recursion
    use charge_mod, only: charge
    use hamiltonian_mod, only: hamiltonian, select_spin_operator, select_orbital_operator
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators, i_unit
    use moment_kernel_mod, only: moment_onsite_block
-   use conductivity_mod, only: gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, pack_gamma_mu_diagonal
+   use conductivity_mod, only: conductivity, gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, &
+      pack_gamma_mu_diagonal, gamma_mu_factorized
    implicit none
 
    integer, parameter :: nsite = 2
@@ -45,6 +48,9 @@ program test_kpm_transport
    call test_transport_moments()
    call test_s_only_orbital_symmetry()
    call test_gamma_mu_layout()
+   call test_factorized_gamma(2)
+   call test_factorized_gamma(5)
+   call test_factorized_gamma(13)
    call test_gamma_mu_cblas()
    call test_gamma_mu_trace_modes()
 
@@ -278,6 +284,71 @@ contains
          call require(abs(c(i, 2)) < tolerance, 'Gamma layout leaves inactive orbital column zero')
       end do
    end subroutine test_gamma_mu_layout
+
+   ! Catches a swapped n/m, accidental conjugation, or a missing phase,
+   ! Lorentz damping or zeroth-order weight in the production factors.
+   subroutine test_factorized_gamma(order)
+      integer, intent(in) :: order
+      integer, parameter :: ne = 12, nl = 3
+      real(rp), parameter :: factor = 1.375_rp
+      type(conductivity) :: transport
+      type(control), target :: control_obj
+      type(energy), target :: energy_obj
+      type(recursion), target :: recursion_obj
+      complex(rp) :: mu(order, order, nl), gamma(ne, order, order), expected(ne, nl), actual(ne, nl)
+      complex(rp) :: work(ne, order), cn, cm
+      real(rp) :: x, angle, root, kn, km, q, error
+      real(rp) :: samples(order, order, nl, 2)
+      integer, allocatable :: seed(:)
+      integer :: e, n, m, l, seed_size
+
+      transport%control => control_obj
+      transport%en => energy_obj
+      transport%recursion => recursion_obj
+      control_obj%cheb_backend = 'legacy'
+      control_obj%cond_ll = order
+      energy_obj%energy_min = -0.85_rp
+      energy_obj%energy_max = 0.85_rp
+      energy_obj%channels_ldos = ne - 10
+      energy_obj%ene = [(-0.975_rp + 1.94_rp*(e-1)/(ne-1), e=1,ne)]
+      call transport%calculate_gamma_nm(.true.)
+      call require(.not. allocated(transport%gamma_nm), 'factorized route does not allocate full Gamma')
+
+      call random_seed(size=seed_size)
+      allocate(seed(seed_size), source=1947)
+      call random_seed(put=seed)
+      call random_number(samples)
+      mu = cmplx(samples(:, :, :, 1)-0.5_rp, samples(:, :, :, 2)-0.5_rp, kind=rp)
+      expected = (0.0_rp, 0.0_rp)
+      do e = 1, ne
+         ! Match the historical scaling and default-real order ratio in the Lorentz kernel.
+         x = energy_obj%ene(e)/((energy_obj%energy_max - energy_obj%energy_min)/(2 - 0.3))
+         angle = acos(x)
+         root = sqrt(1.0_rp - x*x)
+         do m = 1, order
+            km = sinh(6.0_rp*(1 - real(m-1)/real(order)))/sinh(6.0_rp)
+            if (m == 1) km = 0.5_rp*km
+            q = real(m-1, rp)
+            cm = cmplx(x, q*root, rp)*cmplx(cos(q*angle), -sin(q*angle), rp)
+            do n = 1, order
+               kn = sinh(6.0_rp*(1 - real(n-1)/real(order)))/sinh(6.0_rp)
+               if (n == 1) kn = 0.5_rp*kn
+               q = real(n-1, rp)
+               cn = cmplx(x, -q*root, rp)*cmplx(cos(q*angle), sin(q*angle), rp)
+               gamma(e, n, m) = kn*km*(cn*cos((m-1)*angle) + cm*cos(q*angle))/(1.0_rp - x*x)**2
+               do l = 1, nl
+                  expected(e, l) = expected(e, l) + factor*gamma(e, n, m)*mu(n, m, l)
+               end do
+            end do
+         end do
+      end do
+
+      call gamma_mu_factorized(transport%gamma_poly, transport%gamma_phase, mu, factor, work, actual)
+      error = maxval(abs(actual - expected)/max(1.0_rp, abs(expected)))
+      write (*, '(a,i0,2(a,es12.4))') 'Factorized Gamma M=', order, &
+         ' max absolute error=', maxval(abs(actual - expected)), ' normalized error=', error
+      call require(error < 1.0e-11_rp, 'factorized Gamma against explicit independent complex oracle')
+   end subroutine test_factorized_gamma
 
    subroutine test_gamma_mu_cblas()
       integer, parameter :: ne_test = 3, k_test = 4, ncol_test = 2

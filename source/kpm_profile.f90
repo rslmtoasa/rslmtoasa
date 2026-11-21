@@ -94,6 +94,7 @@ module kpm_profile_mod
       integer(int64) :: bytes_h2d = 0_int64
       integer(int64) :: bytes_d2h = 0_int64
       integer(int64) :: bytes_gamma = 0_int64
+      integer(int64) :: bytes_gamma_factors = 0_int64
       integer(int64) :: bytes_mu_pack = 0_int64
       integer(int64) :: bytes_resident_moments = 0_int64
       integer(int64) :: bytes_host_full_moments = 0_int64
@@ -155,6 +156,7 @@ contains
       this%bytes_h2d = 0_int64
       this%bytes_d2h = 0_int64
       this%bytes_gamma = 0_int64
+      this%bytes_gamma_factors = 0_int64
       this%bytes_mu_pack = 0_int64
       this%bytes_resident_moments = 0_int64
       this%bytes_host_full_moments = 0_int64
@@ -350,12 +352,17 @@ contains
       end select
    end subroutine kpm_profile_add_bytes
 
-   subroutine kpm_profile_set_reconstruction_bytes(this, gamma_bytes, mu_pack_bytes)
+   subroutine kpm_profile_set_reconstruction_bytes(this, gamma_bytes, mu_pack_bytes, factor_bytes)
       class(kpm_profile), intent(inout) :: this
       integer(int64), intent(in) :: gamma_bytes, mu_pack_bytes
+      integer(int64), intent(in), optional :: factor_bytes
 
       this%bytes_gamma = max(0_int64, gamma_bytes)
       this%bytes_mu_pack = max(0_int64, mu_pack_bytes)
+      if (present(factor_bytes)) then
+         this%bytes_gamma_factors = max(0_int64, factor_bytes)
+         this%reconstruction_backend = 'cpu_factorized'
+      end if
    end subroutine kpm_profile_set_reconstruction_bytes
 
    subroutine kpm_profile_set_moment_memory(this, resident_bytes, host_full_bytes)
@@ -437,6 +444,7 @@ contains
          'clock_source=system_clock_wall ', &
          'bytes_h2d= ', this%bytes_h2d, 'bytes_d2h= ', this%bytes_d2h, &
          'bytes_gamma= ', this%bytes_gamma, 'bytes_mu_pack= ', this%bytes_mu_pack, &
+         'gamma_factor_workspace_bytes= ', this%bytes_gamma_factors, &
          'resident_device_moment_bytes= ', this%bytes_resident_moments, &
          'host_full_moment_bytes= ', this%bytes_host_full_moments, &
          'full_moment_d2h_bytes= ', this%bytes_full_moment_d2h, &
