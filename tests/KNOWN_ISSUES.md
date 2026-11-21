@@ -571,3 +571,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### hcpFe2 nsp = 4 twin: `magneticdos.out` differs between symmetry on and off (not compared by the case) — 2026-11-20
 - **Measured** (be80d5c7, `Example_k_space_scf_tetra_hcpFe2_nsp4` vs `_nsp4_symon`, moment along x, 1 step): `Fe_out.nml`, `totaldos.out`, `projected_dos.dat`, `band_moments.dat` agree (1.6e-9 absolute or identical), printed `magneticdos.out` values differ by up to 2.4e-2 (symmetry-off up/dw split and `dos_my` about 1.6e-4 where symmetry-on prints 0.00000); the cases check it only through `min_lines`.
 - **Not diagnosed.** Suspect (guess): tetrahedron-split noise in the symmetry-off magnetic DOS that the group average of the final per-site DOS (abd78639) removes.
+
+### Example_bulk_bccFe_nsp2_block_hoh: output differs between identical runs of the same binary — 2026-11-21
+- **Measured** (coordinator): same binary, fresh scratch dir, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `--force-serial`: `Fe_out.nml`, `Fe_scf.nml`, `totaldos.out`, `magneticdos.out`, `Fe_dos.out`, `Fe_orbital_dos.out`, `Fe_orbene.out`, `Fe_orbquadene.out`, `Fe_1_spinene.out`, `report.out` differ. On this branch etot -2541.98228230631 vs ...62041, `ql` differs by about 1e-14; on main (adc3318) etot differs by up to 4.9e-10 absolute.
+- **Consequence:** byte-compare baselines must exclude this case. **Cause not yet diagnosed.**
