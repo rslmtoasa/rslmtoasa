@@ -65,6 +65,9 @@ contains
          end do
       end do
 
+      this%sym_spin_w = sym_spin_matrices(this)
+      this%sym_dm_u = sym_dm_transformations(this)
+
       call root_info('setup_magnetic_symmetry: ' // trim(int2str(this%n_sym_ops)) // ' operations, ' // &
                      trim(int2str(count(this%sym_spin_flips < 0))) // ' time-reversal-combined', __FILE__, __LINE__)
    end subroutine setup_magnetic_symmetry
@@ -107,6 +110,30 @@ contains
       end do
    end function sym_spin_matrices
 
+   !> @brief Transformation U_g of a site density matrix by each stored operation (see symmetrize_site_dm).
+   function sym_dm_transformations(this) result(u)
+      class(reciprocal), intent(in) :: this
+      complex(rp) :: u(nb, nb, this%n_sym_ops)
+      complex(rp) :: d(norb, norb), sp(2, 2)
+      real(rp) :: rc(3, 3, this%n_sym_ops)
+      integer :: k, s, t, nsp
+
+      nsp = 1
+      if (associated(this%control)) nsp = this%control%nsp
+      rc = sym_cart_rotations(this)
+      u = (0.0_rp, 0.0_rp)
+      do k = 1, this%n_sym_ops
+         call orbital_rotation(rc(:, :, k), d)
+         sp = sigma_0
+         if (nsp == 2 .or. nsp == 4) call spin_rotation(rc(:, :, k), sp)
+         do s = 1, 2
+            do t = 1, 2
+               u((s - 1)*norb + 1:s*norb, (t - 1)*norb + 1:t*norb, k) = sp(s, t)*d
+            end do
+         end do
+      end do
+   end function sym_dm_transformations
+
    !> @brief Average the accumulated spin density over the symmetry group: rho_a = 1/|G| sum_g g[rho_(g^-1 a)].
    !> @details Charge n is kept, the spin vector m of each 2x2 block is rotated by sym_spin_matrices. Does nothing
    !>          without a group (n_sym_ops = 0).
@@ -114,22 +141,26 @@ contains
       class(reciprocal), intent(inout) :: this
       complex(rp), allocatable :: avg(:, :, :, :, :)
       complex(rp) :: blk(2, 2)
-      real(rp), allocatable :: w(:, :, :)
-      real(rp) :: n, m(3)
+      real(rp), allocatable :: n(:, :, :), m(:, :, :, :)
       integer :: k, i, il, io
 
       if (this%n_sym_ops == 0) return
-      allocate(w(3, 3, this%n_sym_ops))
-      w = sym_spin_matrices(this)
       allocate(avg(size(this%rf_density%rho, 1), size(this%rf_density%rho, 2), size(this%rf_density%rho, 3), &
                    size(this%rf_density%rho, 4), size(this%rf_density%rho, 5)))
       avg = (0.0_rp, 0.0_rp)
+      allocate(n(size(avg, 3), this%n_sites, size(avg, 5)), m(3, size(avg, 3), this%n_sites, size(avg, 5)))
+      do io = 1, size(avg, 5)
+         do i = 1, this%n_sites
+            do il = 1, size(avg, 3)
+               call sd_cartesian_from_matrix(this%rf_density%rho(:, :, il, i, io), n(il, i, io), m(:, il, i, io))
+            end do
+         end do
+      end do
       do k = 1, this%n_sym_ops
          do i = 1, this%n_sites
             do io = 1, size(avg, 5)
                do il = 1, size(avg, 3)
-                  call sd_cartesian_from_matrix(this%rf_density%rho(:, :, il, i, io), n, m)
-                  call sd_matrix_from_cartesian(n, matmul(w(:, :, k), m), blk)
+                  call sd_matrix_from_cartesian(n(il, i, io), matmul(this%sym_spin_w(:, :, k), m(:, il, i, io)), blk)
                   avg(:, :, il, this%sym_atom_perm(i, k), io) = avg(:, :, il, this%sym_atom_perm(i, k), io) + blk
                end do
             end do
@@ -139,10 +170,9 @@ contains
    end subroutine symmetrize_spin_density
 
    !> @brief Operation of each full-mesh point (see the interface).
-   module subroutine full_mesh_operations(this, op, w)
+   module subroutine full_mesh_operations(this, op)
       class(reciprocal), intent(in) :: this
       integer, allocatable, intent(out) :: op(:)
-      real(rp), allocatable, intent(out) :: w(:, :, :)
       real(rp), parameter :: k_tol = 1.0e-6_rp
       real(rp), allocatable :: kfull(:, :), rit(:, :, :)
       real(rp) :: kt(3), d(3)
@@ -178,14 +208,12 @@ contains
                                               trim(int2str(ki)) // ' onto full k ' // trim(int2str(kf)), __FILE__, __LINE__)
          op(kf) = o
       end do
-      allocate(w(3, 3, this%n_sym_ops))
-      w = sym_spin_matrices(this)
    end subroutine full_mesh_operations
 
    !> @brief Band projections of one full-mesh point from the irreducible mesh (see the interface).
-   module function full_mesh_projection(this, proj_irr, op, w, kf, l, isite, ib) result(p)
+   module function full_mesh_projection(this, proj_irr, op, kf, l, isite, ib) result(p)
       class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: proj_irr(:, :, :, :, :), w(:, :, :)
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :)
       integer, intent(in) :: op(:), kf, l, isite, ib
       real(rp) :: p(4)
       integer :: ki, o, s
@@ -198,7 +226,7 @@ contains
       o = op(kf)
       s = findloc(this%sym_atom_perm(:, o), isite, 1)
       p(1) = proj_irr(1, l, s, ib, ki)
-      p(2:4) = matmul(w(:, :, o), proj_irr(2:4, l, s, ib, ki))
+      p(2:4) = matmul(this%sym_spin_w(:, :, o), proj_irr(2:4, l, s, ib, ki))
    end function full_mesh_projection
 
    !> @brief Group average of one spin vector per site, with the rule of symmetrize_spin_density.
@@ -206,16 +234,15 @@ contains
    module subroutine symmetrize_site_moments(this, v)
       class(reciprocal), intent(in) :: this
       real(rp), intent(inout) :: v(:, :)
-      real(rp), allocatable :: w(:, :, :), avg(:, :)
+      real(rp), allocatable :: avg(:, :)
       integer :: k, i
 
       if (this%n_sym_ops == 0) return
-      allocate(w(3, 3, this%n_sym_ops), avg(3, size(v, 2)))
-      w = sym_spin_matrices(this)
+      allocate(avg(3, size(v, 2)))
       avg = 0.0_rp
       do k = 1, this%n_sym_ops
          do i = 1, size(v, 2)
-            avg(:, this%sym_atom_perm(i, k)) = avg(:, this%sym_atom_perm(i, k)) + matmul(w(:, :, k), v(:, i))
+            avg(:, this%sym_atom_perm(i, k)) = avg(:, this%sym_atom_perm(i, k)) + matmul(this%sym_spin_w(:, :, k), v(:, i))
          end do
       end do
       v = avg/real(this%n_sym_ops, rp)
@@ -224,13 +251,11 @@ contains
    !> @brief Group average of the projected DOS curves of each site and l (see the interface).
    module subroutine symmetrize_projected_dos(this)
       class(reciprocal), intent(inout) :: this
-      real(rp), allocatable :: w(:, :, :), n(:, :, :), n_avg(:, :, :), m_avg(:, :, :, :)
+      real(rp), allocatable :: n(:, :, :), n_avg(:, :, :), m_avg(:, :, :, :)
       real(rp) :: loc
       integer :: k, i, j, il, ie
 
       if (this%n_sym_ops == 0) return
-      allocate(w(3, 3, this%n_sym_ops))
-      w = sym_spin_matrices(this)
       n = this%projected_dos(:, :, 1, :) + this%projected_dos(:, :, 2, :)
       allocate(n_avg(size(n, 1), size(n, 2), size(n, 3)), m_avg(3, size(n, 1), size(n, 2), size(n, 3)))
       n_avg = 0.0_rp
@@ -241,7 +266,7 @@ contains
             n_avg(j, :, :) = n_avg(j, :, :) + n(i, :, :)
             do il = 1, size(n, 2)
                do ie = 1, size(n, 3)
-                  m_avg(:, j, il, ie) = m_avg(:, j, il, ie) + matmul(w(:, :, k), this%projected_dos_moments(i, il, 1, :, ie))
+                  m_avg(:, j, il, ie) = m_avg(:, j, il, ie) + matmul(this%sym_spin_w(:, :, k), this%projected_dos_moments(i, il, 1, :, ie))
                end do
             end do
          end do
@@ -275,28 +300,10 @@ contains
    module subroutine symmetrize_site_dm(this, rho)
       class(reciprocal), intent(in) :: this
       complex(rp), intent(inout) :: rho(:, :, :)
-      complex(rp), allocatable :: u(:, :, :)
-      complex(rp) :: d(norb, norb), sp(2, 2)
-      real(rp), allocatable :: rc(:, :, :)
-      integer :: k, i, s, t, nsp
+      integer :: i, s, t
 
       if (this%n_sym_ops == 0) return
       if (size(rho, 1) /= nb .or. size(rho, 2) /= nb) call g_logger%fatal('symmetrize_site_dm: matrix size is not nb', __FILE__, __LINE__)
-      nsp = 1
-      if (associated(this%control)) nsp = this%control%nsp
-      allocate(u(nb, nb, this%n_sym_ops), rc(3, 3, this%n_sym_ops))
-      rc = sym_cart_rotations(this)
-      u = (0.0_rp, 0.0_rp)
-      do k = 1, this%n_sym_ops
-         call orbital_rotation(rc(:, :, k), d)
-         sp = sigma_0
-         if (nsp == 2 .or. nsp == 4) call spin_rotation(rc(:, :, k), sp)
-         do s = 1, 2
-            do t = 1, 2
-               u((s - 1)*norb + 1:s*norb, (t - 1)*norb + 1:t*norb, k) = sp(s, t)*d
-            end do
-         end do
-      end do
       do i = 1, size(rho, 3)
          do s = 1, 2
             do t = 1, 2
@@ -304,7 +311,7 @@ contains
             end do
          end do
       end do
-      call group_average_dm(rho, this%sym_atom_perm, u, this%sym_spin_flips < 0)
+      call group_average_dm(rho, this%sym_atom_perm, this%sym_dm_u, this%sym_spin_flips < 0)
       do i = 1, size(rho, 3)
          do s = 1, 2
             do t = 1, 2

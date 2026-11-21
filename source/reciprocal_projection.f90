@@ -38,7 +38,7 @@ module subroutine project_dos_orbitals_gaussian(this)
    integer, dimension(:), allocatable :: site_orb_offset
    real(rp) :: mx_char, my_char, mz_char, local_char
    real(rp) :: axis(3)
-   real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :), w(:, :, :)
+   real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :)
    real(rp) :: proj(4)
    integer, allocatable :: op(:)
    integer, allocatable :: star_size(:)
@@ -135,9 +135,9 @@ module subroutine project_dos_orbitals_gaussian(this)
    deallocate(proj_local)
    nk_full = product(this%nk_mesh)
    if (this%nk_total < nk_full) then
-      call this%full_mesh_operations(op, w)
+      call this%full_mesh_operations(op)
    else
-      allocate(op(0), w(3, 3, 0))
+      allocate(op(0))
    end if
    allocate(star_size(this%nk_total))
    star_size = 0
@@ -168,7 +168,7 @@ module subroutine project_dos_orbitals_gaussian(this)
             do isite = 1, this%n_sites
                axis = this%dos_site_axes(:, isite)
                do iorb = 1, 4
-                  proj = this%full_mesh_projection(proj_irr, op, w, ik, iorb, isite, ib)
+                  proj = this%full_mesh_projection(proj_irr, op, ik, iorb, isite, ib)
                   orbital_char = proj(1)
                   mx_char = proj(2)
                   my_char = proj(3)
@@ -191,7 +191,7 @@ module subroutine project_dos_orbitals_gaussian(this)
          end do
       end do
    end do
-   deallocate(proj_irr, eig_irr, op, w, star_size)
+   deallocate(proj_irr, eig_irr, op, star_size)
 
 #ifdef USE_MPI
    if (numprocs > 1) then
@@ -266,6 +266,20 @@ end subroutine project_dos_orbitals_gaussian
       a = reshape(cmplx(buf(1:2*na:2), buf(2:2*na:2), rp), shape(a))
       if (present(b)) b = reshape(cmplx(buf(2*na + 1::2), buf(2*na + 2::2), rp), shape(b))
    end subroutine chain_complex
+
+   !> Occupation of one band: its Bloechl tetrahedron weight when occ_t is allocated (dos_method = 'blochl'), else Fermi-Dirac.
+   pure function band_occupation(occ_t, ib, ik_global, energy, fermi_level, kT) result(occ)
+      real(rp), allocatable, intent(in) :: occ_t(:, :)
+      integer, intent(in) :: ib, ik_global
+      real(rp), intent(in) :: energy, fermi_level, kT
+      real(rp) :: occ
+
+      if (allocated(occ_t)) then
+         occ = occ_t(ib, ik_global)
+      else
+         occ = fermi_dirac_occupation(energy, fermi_level, kT)
+      end if
+   end function band_occupation
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
    !> @param[in] this Reciprocal object containing eigenvectors.
@@ -371,7 +385,7 @@ end subroutine project_dos_orbitals_gaussian
       real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
       ! Projection weights per k-point: (total, mx, my, mz; l; site; band; k)
-      real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :), w(:, :, :)
+      real(rp), allocatable :: proj_local(:, :, :, :, :), proj_irr(:, :, :, :, :), eig_irr(:, :)
       real(rp) :: proj(4)
       integer, allocatable :: op(:)
       integer :: nk_full
@@ -470,14 +484,14 @@ end subroutine project_dos_orbitals_gaussian
       ! The tetrahedra live on the full mesh; a reduced mesh is expanded by symmetry, not rediagonalised.
       nk_full = product(this%nk_mesh)
       if (this%nk_total < nk_full) then
-         call this%full_mesh_operations(op, w)
+         call this%full_mesh_operations(op)
       else
-         allocate(op(0), w(3, 3, 0))
+         allocate(op(0))
       end if
 
       ! Tetra/band-first traversal with one tetra shape evaluation per band.
       !$OMP PARALLEL DEFAULT(NONE) &
-      !$OMP SHARED(this, proj_irr, eig_irr, op, w, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, &
+      !$OMP SHARED(this, proj_irr, eig_irr, op, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, &
       !$OMP        e_start, e_end, de, use_blochl) &
       !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, sorted_e, e1, e4, i_start, i_end, &
       !$OMP         i_energy, dos_contrib, tet_weight, isite, site_orb_start, axis, iorb, &
@@ -554,7 +568,7 @@ end subroutine project_dos_orbitals_gaussian
                   if (lstart(iorb) <= n_orb_per_spin) then
                      do i_corner = 1, 4
                         ik = this%tetrahedra(i_corner, i_tet)
-                        proj = this%full_mesh_projection(proj_irr, op, w, ik, iorb, isite, i_band)
+                        proj = this%full_mesh_projection(proj_irr, op, ik, iorb, isite, i_band)
                         orbital_chars(i_corner) = proj(1)
                         mx_chars(i_corner) = proj(2)
                         my_chars(i_corner) = proj(3)
@@ -641,7 +655,7 @@ end subroutine project_dos_orbitals_gaussian
       end if
 #endif
 
-      deallocate(proj_irr, eig_irr, op, w)
+      deallocate(proj_irr, eig_irr, op)
       deallocate(site_orb_offset)
       deallocate(site_axes)
 
@@ -981,10 +995,8 @@ end subroutine calculate_band_moments
             
             ! Accumulate contributions from all occupied bands at this k-point
             do ib = 1, nbands
-               if (blochl) then
-                  fermi_occ = occ_t(ib, ik_global)
-               else if (use_complex_projector .or. m1_only_use) then
-                  fermi_occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
+               if (blochl .or. use_complex_projector .or. m1_only_use) then
+                  fermi_occ = band_occupation(occ_t, ib, ik_global, this%eigenvalues(ib, ik), this%fermi_level, kT)
                else
                   if (this%eigenvalues(ib, ik) > this%fermi_level) cycle
                   fermi_occ = 1.0_rp
@@ -997,11 +1009,7 @@ end subroutine calculate_band_moments
                   do beta = 1, n_orb_site
                      psi_b = this%eigenvectors(site_offset + beta, ib, ik)
                      if (present(m1_out)) then
-                        if (blochl) then
-                           fermi_occ_m1 = occ_t(ib, ik_global)
-                        else
-                           fermi_occ_m1 = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
-                        end if
+                        fermi_occ_m1 = band_occupation(occ_t, ib, ik_global, this%eigenvalues(ib, ik), this%fermi_level, kT)
                         DM_m1(alpha, beta) = DM_m1(alpha, beta) + &
                            hubbard_projector_element(psi_a, psi_b) * fermi_occ_m1 * kweight * this%eigenvalues(ib, ik)
                      end if
@@ -1164,11 +1172,7 @@ end subroutine calculate_band_moments
          do isite = 1, nsites
             site_offset = (isite - 1)*n_orb_site
             do ib = 1, size(this%eigenvalues, 1)
-               if (blochl) then
-                  occ = occ_t(ib, ik_global)*kweight
-               else
-                  occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
-               end if
+               occ = band_occupation(occ_t, ib, ik_global, this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
                do s = 1, 2
                   do t = 1, 2
                      do i = 1, 5

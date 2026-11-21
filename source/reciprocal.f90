@@ -415,6 +415,10 @@ module reciprocal_mod
       integer, dimension(:), allocatable :: sym_spin_flips
       !> Site i is mapped onto site sym_atom_perm(i, op) by operation op [nrec, n_sym_ops]
       integer, dimension(:, :), allocatable :: sym_atom_perm
+      !> Cartesian action of each operation on a spin vector, see sym_spin_matrices [3,3,n_sym_ops]
+      real(rp), dimension(:, :, :), allocatable :: sym_spin_w
+      !> Transformation of a site density matrix by each operation, see sym_dm_transformations [nb,nb,n_sym_ops]
+      complex(rp), dimension(:, :, :), allocatable :: sym_dm_u
 
       ! Density of states variables
       !> Energy grid for DOS calculation [n_energy_points]
@@ -1407,36 +1411,33 @@ end subroutine check_multisite_hamiltonian_diagonal
 
    !> @brief Average the per-site, per-l projected DOS curves over the symmetry group (no-op without a group).
    !> @details The charge curve n is permuted over sites, the spin-vector curves projected_dos_moments are also acted on by
-   !>          sym_spin_matrices. projected_dos (along dos_site_axes) and the totals dos_mx/my/mz_tot are rebuilt from them.
+   !>          sym_spin_w. projected_dos (along dos_site_axes) and the totals dos_mx/my/mz_tot are rebuilt from them.
    module subroutine symmetrize_projected_dos(this)
       class(reciprocal), intent(inout) :: this
    end subroutine symmetrize_projected_dos
 
-   !> @brief Operation that maps the irreducible point of each full-mesh point onto it, and the spin matrix of each operation.
+   !> @brief Operation that maps the irreducible point of each full-mesh point onto it.
    !> @details Searches the stored group, with time reversal for nsp = 1 (the sign is sym_spin_flips(op)); stops if none
    !>          maps the irreducible point onto the full-mesh point.
    !> @param[out] op Operation index of each full-mesh point [nk_full].
-   !> @param[out] w Cartesian action of each stored operation on a spin vector [3, 3, n_sym_ops].
-   module subroutine full_mesh_operations(this, op, w)
+   module subroutine full_mesh_operations(this, op)
       class(reciprocal), intent(in) :: this
       integer, allocatable, intent(out) :: op(:)
-      real(rp), allocatable, intent(out) :: w(:, :, :)
    end subroutine full_mesh_operations
 
    !> @brief Band projections of one full-mesh point from the irreducible mesh.
    !> @details The irreducible point of kf is rotated by the operation that maps it onto kf: the site is permuted, the spin
-   !>          vector is acted on by sym_spin_matrices. An empty op means the mesh is not reduced and kf is irreducible.
+   !>          vector is acted on by sym_spin_w. An empty op means the mesh is not reduced and kf is irreducible.
    !> @param[in] proj_irr Projections (total, mx, my, mz; l; site; band; irreducible k).
    !> @param[in] op Operation index of each full-mesh point, from full_mesh_operations.
-   !> @param[in] w Spin matrix of each operation, from full_mesh_operations.
    !> @param[in] kf Full-mesh point.
    !> @param[in] l Orbital type.
    !> @param[in] isite Site on the full mesh.
    !> @param[in] ib Band.
    !> @return (total, mx, my, mz) projection.
-   module function full_mesh_projection(this, proj_irr, op, w, kf, l, isite, ib) result(p)
+   module function full_mesh_projection(this, proj_irr, op, kf, l, isite, ib) result(p)
       class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: proj_irr(:, :, :, :, :), w(:, :, :)
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :)
       integer, intent(in) :: op(:), kf, l, isite, ib
       real(rp) :: p(4)
    end function full_mesh_projection
