@@ -209,6 +209,9 @@ def main() -> None:
     for name in requested_cases:
         if name not in available_cases:
             raise RuntimeError(f"case {name!r} not found in {cases_json}")
+        if "reference" in available_cases[name]:
+            print(f"SKIP  [{name}]: uses the reference of {available_cases[name]['reference']}")
+            continue
         required = available_cases[name].get("requires_cmake_option")
         if required and not cmake_option_enabled(build_dir / "CMakeCache.txt", required):
             if args.case:

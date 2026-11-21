@@ -35,7 +35,10 @@ def load_cases(cases_json: str, selected: list[str]) -> list[dict]:
     cases = data["cases"]
     if selected:
         cases = [c for c in cases if c["name"] in selected]
-    return cases
+    for c in cases:
+        if "reference" in c:
+            print(f"SKIP [{c['name']}]: uses the reference of {c['reference']}")
+    return [c for c in cases if "reference" not in c]
 
 
 def run_case(

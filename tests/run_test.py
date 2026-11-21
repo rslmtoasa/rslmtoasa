@@ -690,7 +690,10 @@ def main() -> None:
     cases_dir = os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
     case_dir = os.path.join(cases_dir, case["case"])
     scratch_name = args.scratch_name or args.case_name
-    ref_name = args.ref_name or args.case_name
+    if args.gen_ref and "reference" in case:
+        parser.error(f"case {args.case_name!r} uses the reference of {case['reference']!r}; "
+                     "generate that case's reference instead")
+    ref_name = case.get("reference", args.ref_name or args.case_name)
     workdir = os.path.join(args.scratch_root, scratch_name)
 
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))

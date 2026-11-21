@@ -1,6 +1,0 @@
-{
-  "name": "Example_k_space_scf_tetra_bccFe_nsp1_symon",
-  "generation_command": "tests/generate_ci_references.py --build-dir BUILD --cases-json tests/scf/cases.json --references-dir tests/scf/references --case Example_k_space_scf_tetra_bccFe_nsp1_symon",
-  "git_sha": "unknown",
-  "provenance": "unknown"
-}

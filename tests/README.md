@@ -59,6 +59,8 @@ Every new test states the bug it would catch (docstring or header comment) and h
   --update "reason"` store the reason, binary hash and date. A reference is never rewritten to make a check pass.
 - Each manifest reference directory holds `ref.json` and a four-key `meta.json` (`name`, `generation_command`, `git_sha`,
   `provenance`; `unknown` where it was not recorded). `meta.json` is written by `--gen-ref` and read by no test.
+- A manifest case with `"reference": "<case name>"` compares against that case's reference directory and has none of its own
+  (the sym-on twins in `scf/cases.json`). `--gen-ref` refuses such a case; both generators skip it.
 - Native-platform reference variants (`ref.<platform>.json`) hold last-digit differences of BLAS and compiler builds, not different physics.
 - The spin-response reference `.nml` files are not committed: `tests/spin_response/with_oracles.py` regenerates them from the
   generators in `tests/spin_response/oracles/` at test time (about 3 s).

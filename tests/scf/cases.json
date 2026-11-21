@@ -1680,6 +1680,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp1_symon",
+      "reference": "Example_k_space_scf_tetra_bccFe_nsp1",
       "labels": [
         "functional",
         "scf",
@@ -1701,7 +1702,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -2187,6 +2188,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_hcpFe2_nsp4_symon",
+      "reference": "Example_k_space_scf_tetra_hcpFe2_nsp4",
       "labels": [
         "functional",
         "scf",
@@ -2208,7 +2210,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_hcpFe2_nsp4: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_hcpFe2_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -2538,6 +2540,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_diamondSi_sp_nsp1_symon",
+      "reference": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
       "labels": [
         "functional",
         "scf",
@@ -2558,7 +2561,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_diamondSi_sp_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_diamondSi_sp_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -2877,6 +2880,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp2_symon",
+      "reference": "Example_k_space_scf_tetra_bccFe_nsp2",
       "labels": [
         "functional",
         "scf",
@@ -2889,7 +2893,7 @@
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp2: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp2: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -3218,6 +3222,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp4_symon",
+      "reference": "Example_k_space_scf_tetra_bccFe_nsp4",
       "labels": [
         "functional",
         "scf",
@@ -3239,7 +3244,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp4: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -3768,6 +3773,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp1_symon",
+      "reference": "Example_k_space_scf_tetra_bccFe_u_nsp1",
       "labels": [
         "functional",
         "scf",
@@ -3780,7 +3786,7 @@
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -4135,6 +4141,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp4_symon",
+      "reference": "Example_k_space_scf_tetra_bccFe_u_nsp4",
       "labels": [
         "functional",
         "scf",
@@ -4156,7 +4163,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp4: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -4526,6 +4533,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4_symon",
+      "reference": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4",
       "labels": [
         "functional",
         "scf",
@@ -4547,7 +4555,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_lmax3_nsp4: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_lmax3_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -4879,6 +4887,7 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFeSkew3_nsp1_symon",
+      "reference": "Example_k_space_scf_tetra_bccFeSkew3_nsp1",
       "labels": [
         "functional",
         "scf",
@@ -4900,7 +4909,7 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFeSkew3_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFeSkew3_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
