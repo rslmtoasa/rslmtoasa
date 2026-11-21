@@ -1000,16 +1000,20 @@ contains
       end if
 
       n = this%ntot
-      ! Two basis sites differing by a lattice vector are one site: check that a(:,i) holds lattice vector i
-      a_inv = inverse_3x3(this%a)
-      do i = 1, n - 1
-         do k = i + 1, n
-            dfrac = matmul(a_inv, this%crd(:, i) - this%crd(:, k))
-            if (maxval(abs(dfrac - nint(dfrac))) < 1.0e-4_rp) call g_logger%fatal('lattice%bravais: basis sites ' // &
-               trim(int2str(i)) // ' and ' // trim(int2str(k)) // ' differ by a lattice vector; check that a(:,i) holds lattice vector i ' // &
-               'and that no two basis positions differ by a lattice vector', __FILE__, __LINE__)
+      ! Bulk (calctype 'B'): two basis sites differing by a lattice vector are one site; check that a(:,i) holds lattice
+      ! vector i. Skipped when det(a) is below 1e-8 (slab decks with a(:,3) = 0 have no inverse).
+      if (this%control%calctype == 'B' .and. abs(determinant(this%a)) > 1.0e-8_rp) then
+         a_inv = inverse_3x3(this%a)
+         do i = 1, n - 1
+            do k = i + 1, n
+               dfrac = matmul(a_inv, this%crd(:, i) - this%crd(:, k))
+               if (maxval(abs(dfrac - nint(dfrac))) < 1.0e-4_rp) call g_logger%fatal('lattice%bravais: basis sites ' // &
+                  trim(int2str(i)) // ' and ' // trim(int2str(k)) // ' differ by a lattice vector (fractional tolerance 1e-4); ' // &
+                  'check that a(:,i) holds lattice vector i and that no two basis positions differ by a lattice vector', &
+                  __FILE__, __LINE__)
+            end do
          end do
-      end do
+      end if
       ! Defining a size-like parameter for the clust before the cut
       npe = this%npe
       ndim = this%ndim
