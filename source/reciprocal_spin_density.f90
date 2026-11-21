@@ -55,7 +55,7 @@ contains
       integer :: nbands, n_orb_site, n_orb_per_spin, site_orb_start
       integer :: iorder
       integer :: lstart(4), lend(4)
-      real(rp) :: wk, occ, e, kT, farg, epow
+      real(rp) :: wk, occ, e, kT, epow
       complex(rp) :: u, d
       complex(rp) :: blk(2, 2)
       logical :: blochl
@@ -110,17 +110,8 @@ contains
             e = this%eigenvalues(ib, ik)
             if (blochl) then
                occ = occ_t(ib, ik_global)
-            else if (kT > 1.0e-12_rp) then
-               farg = (e - this%fermi_level)/kT
-               if (farg > 50.0_rp) then
-                  occ = 0.0_rp
-               else if (farg < -50.0_rp) then
-                  occ = 1.0_rp
-               else
-                  occ = 1.0_rp/(exp(farg) + 1.0_rp)
-               end if
             else
-               occ = merge(1.0_rp, 0.0_rp, e <= this%fermi_level)
+               occ = fermi_dirac_occupation(e, this%fermi_level, kT)
             end if
             if (abs(occ) <= 1.0e-14_rp) cycle
 

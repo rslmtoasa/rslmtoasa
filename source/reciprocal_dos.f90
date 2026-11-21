@@ -240,36 +240,6 @@ contains
       close(u)
    end subroutine write_symmetry_kmap_dump
 
-   !> @brief Ensure the configured tetrahedron symmetry backend is usable.
-   !> @details Expands or preserves the k-mesh as needed for scalar tetrahedron
-   !>          DOS versus spinor/projection integrations.
-   !> @param[inout] this Reciprocal object whose mesh/backend state may be updated.
-   module subroutine ensure_tetra_symmetry_backend(this)
-      class(reciprocal), intent(inout) :: this
-      integer :: nk_full_expected
-      logical :: need_full
-
-      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
-      need_full = (this%nk_total /= nk_full_expected)
-      if (.not. need_full) return
-
-      call this%validate_symmetry_kmap('ensure_tetra_symmetry_backend')
-
-      select case (trim(this%tetra_symmetry_mode))
-      case ('irreducible_native')
-         call root_info('ensure_tetra_symmetry_backend: Using irreducible_native backend for scalar tetra DOS.', __FILE__, __LINE__)
-         return
-      case default
-         continue
-      end select
-
-      ! Explicit compatibility path: rebuild full mesh and rediagonalize there.
-      call root_info('ensure_tetra_symmetry_backend: Switching to full mesh reference backend for tetra/blochl parity.', __FILE__, __LINE__)
-      call this%generate_mp_mesh()
-      call this%build_kspace_hamiltonian()
-      call this%diagonalize_hamiltonian()
-   end subroutine ensure_tetra_symmetry_backend
-
    !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
    !> @param[inout] this Reciprocal object containing symmetry maps and mesh dimensions.
    !> @param[out] tet_ir Irreducible tetrahedron corner indices.
@@ -499,8 +469,7 @@ contains
       call this%gather_k_columns(nbands, this%eigenvalues, eig_full)
       nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
 
-      if (this%use_symmetry_reduction .and. trim(this%tetra_symmetry_mode) == 'irreducible_native' .and. &
-          this%nk_total < nk_full_expected) then
+      if (this%nk_total < nk_full_expected) then
          call this%build_irreducible_tetrahedra(tet_ir, tet_mult, n_tet_ir)
          call root_info('calculate_dos_tetrahedron: Using irreducible tetrahedra for scalar total DOS.', __FILE__, __LINE__)
       else

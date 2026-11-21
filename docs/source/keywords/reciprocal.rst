@@ -73,11 +73,6 @@ K-point mesh and symmetry
      - logical
      - ``.false.``
      - Write the full-to-irreducible k map for inspection.
-   * - ``tetra_symmetry_mode``
-     - character
-     - ``'irreducible_native'``
-     - Tetrahedron integration on the irreducible mesh (``'irreducible_native'``) or on the
-       expanded full mesh (``'full_expand_ref'``). Other values stop the run.
 
 Density of states
 =================
