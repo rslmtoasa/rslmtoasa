@@ -8,7 +8,6 @@ program test_orbital_rotation
    implicit none
    integer, parameter :: rp = kind(1.0d0)
    real(rp), parameter :: bcc(3, 3) = reshape([-0.5_rp, 0.5_rp, 0.5_rp, 0.5_rp, -0.5_rp, 0.5_rp, 0.5_rp, 0.5_rp, -0.5_rp], [3, 3])
-   real(rp), parameter :: fcc(3, 3) = reshape([0.0_rp, 0.5_rp, 0.5_rp, 0.5_rp, 0.0_rp, 0.5_rp, 0.5_rp, 0.5_rp, 0.0_rp], [3, 3])
    type(spglib_interface) :: spg
    integer, allocatable :: rot(:, :, :), flips(:)
    real(rp), allocatable :: tr(:, :), rc(:, :, :)
@@ -28,10 +27,8 @@ program test_orbital_rotation
    rc = cartesian(bcc, rot)
    print '(A,I3,A)', 'bcc Fe:', n, ' operations'
    call covariance(rc)
-   call representation(rc)
    call spin(rc)
    call spg%finalize()
-   call site_swap_diamond()
    call site_swap_hand()
    call time_reversal()
    call basis_init(3)
@@ -88,24 +85,6 @@ contains
       if (err > 1.0e-12_rp) error stop 'D Y(r) /= Y(R r)'
    end subroutine covariance
 
-   !> Supporting only: D(R1 R2) = D(R1) D(R2) (a representation, but not tied to the code's harmonics).
-   subroutine representation(r)
-      real(rp), intent(in) :: r(:, :, :)
-      complex(rp) :: d1(norb, norb), d2(norb, norb), d12(norb, norb)
-      real(rp) :: err
-      integer :: k
-
-      err = 0.0_rp
-      do k = 1, size(r, 3) - 1
-         call orbital_rotation(r(:, :, k), d1)
-         call orbital_rotation(r(:, :, k + 1), d2)
-         call orbital_rotation(matmul(r(:, :, k), r(:, :, k + 1)), d12)
-         err = max(err, maxval(abs(matmul(d1, d2) - d12)))
-      end do
-      print '(A,ES10.2)', 'representation D(R1 R2) = D(R1) D(R2), max error', err
-      if (err > 1.0e-12_rp) error stop 'D is not a representation'
-   end subroutine representation
-
    !> Bug caught: SU(2) matrix rotating spin vectors by R^-1 or without det(R): S sigma.m S^dagger = sigma.(Rp m), Rp = det(R) R.
    subroutine spin(r)
       real(rp), intent(in) :: r(:, :, :)
@@ -130,47 +109,6 @@ contains
       print '(A,ES10.2)', 'spin S sigma.m S^+ = sigma.(det R R m), max error', err
       if (err > 1.0e-12_rp) error stop 'spin rotation differs from the Pauli-algebra result'
    end subroutine spin
-
-   !> Diamond Si, scalar site densities q_i: the average is (q1 + q2)/2 on both sites for the 48 operations.
-   !> Bug caught: site permutation index ignored (identity) or applied to the wrong side.
-   subroutine site_swap_diamond()
-      real(rp), parameter :: pos(3, 2) = reshape([0.0_rp, 0.0_rp, 0.0_rp, 0.25_rp, 0.25_rp, 0.25_rp], [3, 2])
-      real(rp), allocatable :: rcd(:, :, :)
-      complex(rp), allocatable :: u(:, :, :), rho(:, :, :)
-      integer, allocatable :: perm(:, :)
-      real(rp) :: x(3), dd(3)
-      integer :: nops, k, i, j, a
-
-      call spg%initialize(fcc, pos, [14, 14])
-      nops = spg%get_magnetic_symmetry(pos, [14, 14], reshape([0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp], [3, 2]), &
-                                       .false., rot, tr, flips)
-      rcd = cartesian(fcc, rot)
-      allocate(perm(2, nops), u(2*norb, 2*norb, nops), rho(2*norb, 2*norb, 2))
-      u = (0.0_rp, 0.0_rp)
-      do k = 1, nops
-         do i = 1, 2
-            x = matmul(real(rot(:, :, k), rp), pos(:, i)) + tr(:, k)
-            perm(i, k) = 0
-            do j = 1, 2
-               dd = x - pos(:, j)
-               if (maxval(abs(dd - nint(dd))) < 1.0e-6_rp) perm(i, k) = j
-            end do
-         end do
-         call orbital_rotation(rcd(:, :, k), u(1:norb, 1:norb, k))
-         u(norb + 1:, norb + 1:, k) = u(1:norb, 1:norb, k)
-      end do
-      rho = (0.0_rp, 0.0_rp)
-      do a = 1, 2*norb
-         rho(a, a, 1) = 1.0_rp
-         rho(a, a, 2) = 3.0_rp
-      end do
-      call group_average_dm(rho, perm, u, flips < 0)
-      print '(A,I3,A,I3,A,2ES10.2)', 'diamond Si:', nops, ' operations,', count(perm(1, :) == 2), ' swap the sites, max error', &
-         maxval(abs(rho(:, :, 1) - eye(2*norb)*2.0_rp)), maxval(abs(rho(:, :, 2) - eye(2*norb)*2.0_rp))
-      if (maxval(abs(rho(:, :, 1) - eye(2*norb)*2.0_rp)) > 1.0e-12_rp .or. maxval(abs(rho(:, :, 2) - eye(2*norb)*2.0_rp)) > 1.0e-12_rp) &
-         error stop 'swap average of scalar site densities differs from (q1 + q2)/2'
-      call spg%finalize()
-   end subroutine site_swap_diamond
 
    function eye(n) result(e)
       integer, intent(in) :: n

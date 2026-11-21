@@ -17,7 +17,6 @@ logical :: use_symmetry_reduction          ! Use crystal symmetry (recommended: 
 logical :: use_time_reversal               ! Use time-reversal symmetry (recommended: .true.)
 logical :: strict_symmetry_checks          ! Enforce strict symmetry-map checks
 logical :: dump_symmetry_kmap              ! Dump full->irreducible map diagnostics
-character(len=32) :: tetra_symmetry_mode   ! 'full_expand_ref' or 'irreducible_native'
 
 ! Dense Fermi-surface export settings (for post_processing = 'fermi_surface').
 ! The FS route always writes the complete BZ mesh; fs_use_symmetry_reduction is
@@ -67,7 +66,7 @@ character(len=256) :: eigenpair_output_file ! Base name, default 'fermi_surface'
 
 namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
    use_symmetry_reduction, use_time_reversal, strict_symmetry_checks, &
-   dump_symmetry_kmap, tetra_symmetry_mode, &
+   dump_symmetry_kmap, &
    fs_nk1, fs_nk2, fs_nk3, fs_use_symmetry_reduction, &
    n_energy_points, dos_energy_min, dos_energy_max, &
    gaussian_sigma, temperature, total_electrons, dos_method, &

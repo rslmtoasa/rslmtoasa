@@ -496,8 +496,6 @@ module reciprocal_mod
       logical :: strict_symmetry_checks
       !> Dump symmetry k-point mapping diagnostics to file
       logical :: dump_symmetry_kmap
-      !> Tetra symmetry backend: ’irreducible_native’ for scalar DOS or ’full_expand_ref’
-      character(len=32) :: tetra_symmetry_mode
       !> Full-mesh to irreducible-k mapping (size = nk1*nk2*nk3)
       integer, dimension(:), allocatable :: full_to_irred_k
       !> Irreducible-k representative indices in full mesh
@@ -593,7 +591,6 @@ module reciprocal_mod
       procedure :: symmetrize_site_dm
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
-      procedure :: ensure_tetra_symmetry_backend
       procedure :: full_mesh_operations
       procedure :: full_mesh_projection
       procedure :: build_irreducible_tetrahedra
@@ -1407,14 +1404,6 @@ end subroutine check_multisite_hamiltonian_diagonal
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: filename
    end subroutine write_symmetry_kmap_dump
-
-   !> @brief Ensure the configured tetrahedron symmetry backend is usable.
-   !> @details Expands or preserves the k-mesh as needed for scalar tetrahedron
-   !>          DOS versus spinor/projection integrations.
-   !> @param[inout] this Reciprocal object whose mesh/backend state may be updated.
-   module subroutine ensure_tetra_symmetry_backend(this)
-      class(reciprocal), intent(inout) :: this
-   end subroutine ensure_tetra_symmetry_backend
 
    !> @brief Average the per-site, per-l projected DOS curves over the symmetry group (no-op without a group).
    !> @details The charge curve n is permuted over sites, the spin-vector curves projected_dos_moments are also acted on by

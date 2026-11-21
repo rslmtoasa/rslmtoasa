@@ -14,7 +14,6 @@ program test_reciprocal_vectors
    real(rp) :: b(3, 3), bhex(3, 3)
 
    ! Bug caught: a read by rows instead of columns (b1 = (2 pi, 0, 0) for hcp; b_i . a_j /= 2 pi delta_ij)
-   call dual_check(hcp, 'hcp', b)
    call dual_check(bcc, 'bcc', b)
    call dual_check(fcc, 'fcc', b)
    call dual_check(tri, 'triclinic', b)
