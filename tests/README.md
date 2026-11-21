@@ -57,6 +57,8 @@ Every new test states the bug it would catch (docstring or header comment) and h
   or the developer-owned oracle directories (`tests/spin_response/oracles/` generators; `tests/gbt/oracles/`).
 - References are regenerated only with a recorded reason: `tests/generate_references.py` and `tests/ldau/reference_rows.py
   --update "reason"` store the reason, binary hash and date. A reference is never rewritten to make a check pass.
+- Each manifest reference directory holds `ref.json` and a four-key `meta.json` (`name`, `generation_command`, `git_sha`,
+  `provenance`; `unknown` where it was not recorded). `meta.json` is written by `--gen-ref` and read by no test.
 - Native-platform reference variants (`ref.<platform>.json`) hold last-digit differences of BLAS and compiler builds, not different physics.
 - The spin-response reference `.nml` files are not committed: `tests/spin_response/with_oracles.py` regenerates them from the
   generators in `tests/spin_response/oracles/` at test time (about 3 s).
