@@ -188,7 +188,7 @@ contains
 
       integer :: iteration, nbands
       logical :: blochl
-      real(rp) :: e_min, e_max, e_mid, electron_count, kT, margin, count_tolerance, snap_tolerance
+      real(rp) :: e_min, e_max, e_mid, electron_count, kT, margin, count_tolerance
       real(rp) :: sums(3), extrema(2), gap_below, gap_above
       real(rp), allocatable :: packed(:, :)
 
@@ -214,9 +214,7 @@ contains
       margin = max(1.0_rp, 64.0_rp*kT)
       e_min = extrema(1) - margin
       e_max = extrema(2) + margin
-      count_tolerance = 64*spacing(1.0_rp)*max(1.0_rp, total_electrons)
-
-      snap_tolerance = 1.0e-10_rp*max(1.0_rp, total_electrons)
+      count_tolerance = 1.0e-10_rp*max(1.0_rp, total_electrons)
 
       do iteration = 1, 256
          e_mid = 0.5_rp*(e_min + e_max)
@@ -233,13 +231,13 @@ contains
       fermi_level = e_mid
 
       ! Convention for a gapped spectrum: EF is the middle of the gap, independent of where the bisection stopped in it.
-      ! It is used when the count there is within 1e-10*N of N (physically negligible, below the 1e-9 convergence check).
+      ! It is used when the count there is within count_tolerance of N (below the 1e-9 convergence check).
       gap_below = maxval(packed(1:nbands, :), mask=packed(1:nbands, :) <= fermi_level)
       gap_above = minval(packed(1:nbands, :), mask=packed(1:nbands, :) > fermi_level)
       if (gap_below > -huge(1.0_rp) .and. gap_above < huge(1.0_rp)) then
          call occupation_sums(this, packed, 0.5_rp*(gap_below + gap_above), kT, blochl, sums)
          electron_count = sums(2)/sums(1)
-         if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_below + gap_above)
+         if (abs(electron_count - total_electrons) <= count_tolerance) fermi_level = 0.5_rp*(gap_below + gap_above)
       end if
 
       call occupation_sums(this, packed, fermi_level, kT, blochl, sums)
