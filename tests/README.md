@@ -53,6 +53,10 @@ Every new test states the bug it would catch (docstring or header comment) and h
 
 - References are scalars (or short arrays) compared by value with a stated tolerance; never whole-file or byte comparisons,
   except where a test states that bit identity is the contract.
+- `log` values read from a log line are known only to the digits printed. `run_test.py` raises the absolute tolerance of a
+  value printed with a decimal point to 1.1 times its last printed digit (`17.177024` -> 1.1e-6, `1.4644E-05` -> 1.1e-9), so
+  two adjacent roundings of the same number agree and a two-digit change does not; integers, namelist values and text columns
+  keep the case tolerance (DOS text rows have their own 1.1e-5 floor).
 - Expected values come from outside the code under test: committed references, closed forms written independently in the test,
   or the developer-owned oracle directories (`tests/spin_response/oracles/` generators; `tests/gbt/oracles/`).
 - References are regenerated only with a recorded reason: `tests/generate_references.py` and `tests/ldau/reference_rows.py

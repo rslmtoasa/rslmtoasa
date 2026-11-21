@@ -383,6 +383,22 @@ def extract_log_values(workdir: str, log_check: dict) -> dict:
     return result
 
 
+def extract_log_units(workdir: str, log_check: dict) -> dict:
+    """Last-digit unit of each log value as printed (10**(exponent - decimals)); integers and unmatched keys are omitted."""
+    with open(os.path.join(workdir, log_check["file"])) as fh:
+        content = fh.read()
+
+    units: dict = {}
+    for key, pattern in log_check.get("patterns", {}).items():
+        match = re.search(pattern, content)
+        if match is None:
+            continue
+        number = re.fullmatch(r"[-+]?\d*\.(\d*)(?:[EeDd]([-+]?\d+))?", match.group(1))
+        if number:
+            units[key] = 10.0 ** (int(number.group(2) or 0) - len(number.group(1)))
+    return units
+
+
 def build_ref_data(workdir: str, checks: dict) -> dict:
     """Build a complete reference data dict from the workdir outputs."""
     ref: dict = {}
@@ -592,10 +608,13 @@ def compare_ref(
     for filename, ref_vals in ref_data.get("log", {}).items():
         run_vals = run_data.get("log", {}).get(filename, {})
         log_check = _check_for_file(checks, "log", filename)
+        units = extract_log_units(workdir, log_check) if log_check else {}
         for key, ref_v in ref_vals.items():
             check_abs_tol, check_rel_tol = _check_tolerances(
                 log_check, key, abs_tol, rel_tol
             )
+            # A printed value is known only to its last digit: adjacent roundings differ by one unit.
+            check_abs_tol = max(check_abs_tol, 1.1 * units.get(key, 0.0))
             _check_value(
                 failures, f"{filename}:{key}", run_vals.get(key), ref_v,
                 check_abs_tol, check_rel_tol,
