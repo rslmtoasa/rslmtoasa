@@ -5253,7 +5253,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick",
+      "tier": "standard",
       "potentials": {
         "Fe.nml": {
           "par": {
@@ -5451,7 +5451,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick",
+      "tier": "standard",
       "potentials": {
         "Fe.nml": {
           "par": {
