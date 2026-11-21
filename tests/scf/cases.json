@@ -1527,19 +1527,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "R1: bcc-Fe spd nsp=1, 10x10x10 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
         "lattice": {
@@ -1869,19 +1860,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "bcc-Fe spd nsp=1, 10x10x10 mesh, sym-on, dos_method=blochl (Bloechl-corrected tetrahedron occupations at T=0), 2 k-space SCF steps.",
       "namelists": {
         "lattice": {
@@ -2041,19 +2023,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/hcpFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "hcp, two Fe species (P-6m2, 12 operations), nsp=1, 4x4x4 mesh, tetrahedron DOS, alat 2.47 A, r2 16 (19 neighbours per site), 1 k-space SCF step. Sym-off reference.",
       "namelists": {
         "lattice": {
@@ -2211,19 +2184,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/hcpFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_hcpFe2_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
@@ -2383,19 +2347,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/hcpFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "hcp, two Fe species (P-6m2), nsp=4 non-collinear + SOC, moment along x (in-plane, perpendicular to c), 4x4x4 mesh, tetrahedron DOS, alat 2.47 A, r2 16, 1 k-space SCF step. Sym-off reference.",
       "namelists": {
         "lattice": {
@@ -2751,14 +2706,6 @@
       ],
       "case": "bulk/diamondSi",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "R2: diamond Si sp nsp=1 (two sites), 6x6x6 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
         "lattice": {
@@ -3101,19 +3048,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "R3: bcc-Fe spd nsp=2 magnetic (moment along z), 4x4x4 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
         "lattice": {
@@ -3271,19 +3209,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp2: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
@@ -3443,19 +3372,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "R4: bcc-Fe spd nsp=3 non-collinear, moment along (1,2,3)/sqrt(14) set by mom in Fe.nml, 4x4x4 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
         "lattice": {
@@ -3630,19 +3550,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp3: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
@@ -3819,19 +3730,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "R5: bcc-Fe spd nsp=4 non-collinear + SOC, moment along [111] set by mom in Fe.nml, 4x4x4 mesh, tetrahedron DOS, 3 k-space SCF steps. Baseline from unchanged main.",
       "namelists": {
         "lattice": {
@@ -4382,19 +4284,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "bcc-Fe spd nsp=1 collinear, Hubbard U = 2 eV (J = 0) on Fe d, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
         "lattice": {
@@ -4565,19 +4458,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp1: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
@@ -4750,19 +4634,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "bcc-Fe spd nsp=3 non-collinear, moment along (1,2,3)/sqrt(14), Hubbard U = 2 eV (J = 0) on Fe d, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
         "lattice": {
@@ -4950,19 +4825,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp3: same deck with use_symmetry_reduction=.true.; its reference is a copy of the sym-off reference, compared at abs/rel 1e-8.",
       "namelists": {
         "lattice": {
@@ -5152,19 +5018,10 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "bcc-Fe spd nsp=4 non-collinear + SOC, moment along x, Hubbard U = 2 eV (J = 0) on Fe d, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
         "lattice": {
@@ -5554,19 +5411,10 @@
         "tetrahedron",
         "basis_spdf",
         "magnetic",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "bcc-Fe spdf (lmax=3) nsp=4 non-collinear + SOC, moment along x, no Hubbard U, hubbard_spinor_dm_diagnostic on, tetrahedron DOS, 2 k-space SCF steps. Reference generated from this sym-off run.",
       "namelists": {
         "lattice": {
@@ -5952,19 +5800,10 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux",
-        "mpi"
+        "strux"
       ],
       "case": "k_space_scf/bccFeSkew3",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "bcc Fe, 3 sites (Fe1..Fe3, identical potentials) in a cell with non-symmetric lattice matrix a, nsp=1, 4x4x4 mesh, tetrahedron DOS, 1 k-space SCF step. Sym-off reference.",
       "namelists": {
         "lattice": {
