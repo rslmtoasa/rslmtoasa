@@ -515,7 +515,7 @@ contains
       integer, intent(in) :: mesh_dims(3)
       logical, intent(in), optional :: use_shift
       integer :: shift(3)
-      integer :: num_ir_kpoints
+      integer :: num_ir_kpoints, n_tet
       logical :: do_shift, effective_time_reversal
       real(rp), allocatable :: kpoints_frac(:,:), weights(:)
       integer :: i
@@ -636,6 +636,7 @@ contains
             end if
          end if
       end if
+      if (trim(this%dos_method) == 'blochl') call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
       call this%validate_symmetry_kmap('generate_reduced_kpoint_mesh')
       if (this%dump_symmetry_kmap) call this%write_symmetry_kmap_dump('symmetry_kmap.dat')
    end subroutine generate_reduced_kpoint_mesh

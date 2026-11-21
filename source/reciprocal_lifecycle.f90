@@ -613,7 +613,7 @@ contains
       integer :: ik, ix, iy, iz
       real(rp) :: kx, ky, kz
       real(rp), parameter :: tol = 1.0e-8_rp
-      integer :: shift(3), nfull
+      integer :: shift(3), nfull, n_tet
       real(rp), allocatable :: kpoints_full(:,:)
 
       this%nk_total = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
@@ -652,6 +652,7 @@ contains
             end do
             deallocate(kpoints_full)
             call setup_k_mesh_distribution(this, this%nk_total, .false.)
+            if (trim(this%dos_method) == 'blochl') call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
             call g_logger%info('reciprocal%generate_mp_mesh: Generated full mesh via spglib grid convention (' // &
                                trim(int2str(this%nk_total)) // ' k-points)', __FILE__, __LINE__)
             return
@@ -680,6 +681,7 @@ contains
       end do
 
       call setup_k_mesh_distribution(this, this%nk_total, .false.)
+      if (trim(this%dos_method) == 'blochl') call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
       call root_info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
    end subroutine generate_mp_mesh
 
