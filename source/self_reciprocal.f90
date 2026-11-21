@@ -159,7 +159,7 @@ contains
       type(reciprocal), intent(inout) :: reciprocal_obj
       real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
       integer :: ik, ik_global, ib, ia, io, iup, idn, site_offset
-      real(rp) :: wk, occ, e, kT, farg
+      real(rp) :: wk, occ, e, kT
       complex(rp) :: u, d, ud
       real(rp) :: mxs, mys, mzs
       logical :: blochl
@@ -181,17 +181,8 @@ contains
             e = reciprocal_obj%eigenvalues(ib, ik)
             if (blochl) then
                occ = occ_t(ib, ik_global)
-            else if (kT > 1.0e-12_rp) then
-               farg = (e - reciprocal_obj%fermi_level)/kT
-               if (farg > 50.0_rp) then
-                  occ = 0.0_rp
-               else if (farg < -50.0_rp) then
-                  occ = 1.0_rp
-               else
-                  occ = 1.0_rp/(exp(farg) + 1.0_rp)
-               end if
             else
-               occ = merge(1.0_rp, 0.0_rp, e <= reciprocal_obj%fermi_level)
+               occ = fermi_dirac_occupation(e, reciprocal_obj%fermi_level, kT)
             end if
             if (abs(occ) <= 1.0e-14_rp) cycle
 
