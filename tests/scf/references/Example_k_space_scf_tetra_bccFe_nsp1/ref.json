@@ -21,11 +21,11 @@
       },
       "200": {
         "1": 0.00732,
-        "2": 10.01722
+        "2": 10.01347
       },
       "280": {
         "1": 0.78972,
-        "2": 8.83793
+        "2": 8.84579
       }
     },
     "band_moments.dat": {
@@ -81,7 +81,7 @@
       "canonical_band_energy_last": -1.99156507,
       "k_weight_sum_it1": 1.0,
       "k_weight_sum_last": 1.0,
-      "dos_integral_last": 17.960352,
+      "dos_integral_last": 18.0,
       "dos_occupied_count_last": 8.062849,
       "site_spin_moment_it1": 2.128054,
       "site_spin_moment_last": 2.129334,

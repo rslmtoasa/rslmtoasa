@@ -346,17 +346,13 @@ end subroutine project_dos_orbitals_gaussian
       integer :: nbands
       integer :: e_start, e_end, e_count
       real(rp) :: dos_contrib, orbital_char_avg, de
-      real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
+      real(rp), dimension(4) :: e_corners, orbital_chars
       real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
-      real(rp) :: e1, e4
-      real(rp) :: tet_weight, w4(4), dw4(4), corner_char
-      real(rp), parameter :: TOL = 1.0e-10_rp
-      logical :: use_blochl, corner_weighted
+      real(rp) :: tet_weight, corner_char
+      logical :: use_blochl
       real(rp), allocatable :: corner_w(:, :)
-      real(rp) :: mx_char_avg, my_char_avg, mz_char_avg, local_char
+      real(rp) :: local_char
       real(rp) :: axis(3)
-      logical :: degenerate_tetra
-      real(rp), allocatable :: dos_line(:)
       real(rp), allocatable :: local_projected_dos(:, :, :, :)
       real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
       real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
@@ -430,13 +426,12 @@ end subroutine project_dos_orbitals_gaussian
       !$OMP PARALLEL DEFAULT(NONE) &
       !$OMP SHARED(this, proj_irr, eig_irr, op, n_orb_per_spin, &
       !$OMP        e_start, e_end, de, use_blochl) &
-      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, sorted_e, e1, e4, i_start, i_end, &
+      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, i_start, i_end, &
       !$OMP         i_energy, dos_contrib, tet_weight, isite, axis, iorb, &
-      !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_chars, &
-      !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
-      !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, degenerate_tetra, &
-      !$OMP         corner_weighted, w4, dw4, corner_w, corner_char)
-      allocate(dos_line(this%n_energy_points))
+      !$OMP         orbital_char_avg, orbital_chars, &
+      !$OMP         mx_chars, my_chars, mz_chars, local_char, local_projected_dos, &
+      !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, &
+      !$OMP         corner_w, corner_char)
       allocate(corner_w(4, this%n_energy_points))
       allocate(local_projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       allocate(local_projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
@@ -456,53 +451,15 @@ end subroutine project_dos_orbitals_gaussian
                ik = this%tetrahedra(i_corner, i_tet)
                e_corners(i_corner) = eig_irr(i_band, this%full_to_irred_k(ik))
             end do
-            call sort4(e_corners, sorted_e)
-            e1 = sorted_e(1)
-            e4 = sorted_e(4)
-            if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
             tet_weight = this%tetrahedron_volumes(i_tet)
-
-            degenerate_tetra = e4 - e1 <= max(TOL, 1.0e-6_rp*de)
-            corner_weighted = use_blochl .and. .not. degenerate_tetra
-            if (degenerate_tetra) then
-               i_start = max(1, min(this%n_energy_points, 2 + int((0.5_rp*(e1 + e4) - &
-                  this%dos_energy_grid(1)) / de - 1.0e-12_rp)))
-               i_end = i_start
-            else
-               i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
-               i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
-            end if
-            ! This rank's energy window only
-            i_start = max(i_start, e_start)
-            i_end = min(i_end, e_end)
+            ! Bin-averaged corner weights on this rank's energy window only
+            call tetra_bin_weights(e_corners, use_blochl, this%dos_energy_grid(1), de, e_start, e_end, i_start, i_end, corner_w)
             if (i_start > i_end) cycle
-
-            if (degenerate_tetra) then
-               if (i_start == 1 .or. i_start == this%n_energy_points) then
-                  dos_line(i_start) = 2.0_rp*tet_weight/de
-               else
-                  dos_line(i_start) = tet_weight/de
-               end if
-            else if (corner_weighted) then
-               do i_energy = i_start, i_end
-                  ! PRB 49, 16223: App. B weights plus Eq. (22) correction, differentiated in energy (Sec. II after Eq. 4)
-                  call tetra_corner_weights(e_corners, this%dos_energy_grid(i_energy), w4, dw4)
-                  corner_w(:, i_energy) = tet_weight*(w4 + dw4)
-               end do
-            else
-               ! Same per-tetrahedron DOS as the total DOS, including tetrahedra with equal corner energies.
-               dos_line(i_start:i_end) = 0.0_rp
-               call tetra_add_dos(tet_weight, e_corners, this%dos_energy_grid(1), &
-                                  this%dos_energy_grid(this%n_energy_points), dos_line, this%n_energy_points)
-            end if
 
             do isite = 1, this%n_sites
                axis = this%dos_site_axes(:, isite)
                do iorb = 1, 4
                   orbital_char_avg = 0.0_rp
-                  mx_char_avg = 0.0_rp
-                  my_char_avg = 0.0_rp
-                  mz_char_avg = 0.0_rp
                   if (lstart(iorb) <= n_orb_per_spin) then
                      do i_corner = 1, 4
                         ik = this%tetrahedra(i_corner, i_tet)
@@ -513,53 +470,29 @@ end subroutine project_dos_orbitals_gaussian
                         mz_chars(i_corner) = proj(4)
                      end do
                      orbital_char_avg = sum(orbital_chars) / 4.0_rp
-                     mx_char_avg = sum(mx_chars) / 4.0_rp
-                     my_char_avg = sum(my_chars) / 4.0_rp
-                     mz_char_avg = sum(mz_chars) / 4.0_rp
                   end if
                   if (abs(orbital_char_avg) < 1.0e-14_rp) cycle
 
-                  if (corner_weighted) then
-                     ! Bloechl: each corner's own weight multiplies its own character (no tetrahedron average).
-                     do i_energy = i_start, i_end
-                        do i_corner = 1, 4
-                           corner_char = orbital_chars(i_corner)
-                           local_char = axis(1)*mx_chars(i_corner) + axis(2)*my_chars(i_corner) + axis(3)*mz_chars(i_corner)
-                           dos_contrib = corner_w(i_corner, i_energy)
-                           local_projected_dos(isite, iorb, 1, i_energy) = local_projected_dos(isite, iorb, 1, i_energy) + &
-                                                                            0.5_rp*(corner_char + local_char)*dos_contrib
-                           local_projected_dos(isite, iorb, 2, i_energy) = local_projected_dos(isite, iorb, 2, i_energy) + &
-                                                                            0.5_rp*(corner_char - local_char)*dos_contrib
-                           local_projected_dos_moments(isite, iorb, 1, 1, i_energy) = &
-                              local_projected_dos_moments(isite, iorb, 1, 1, i_energy) + mx_chars(i_corner)*dos_contrib
-                           local_projected_dos_moments(isite, iorb, 1, 2, i_energy) = &
-                              local_projected_dos_moments(isite, iorb, 1, 2, i_energy) + my_chars(i_corner)*dos_contrib
-                           local_projected_dos_moments(isite, iorb, 1, 3, i_energy) = &
-                              local_projected_dos_moments(isite, iorb, 1, 3, i_energy) + mz_chars(i_corner)*dos_contrib
-                           local_dos_mx(i_energy) = local_dos_mx(i_energy) + mx_chars(i_corner)*dos_contrib
-                           local_dos_my(i_energy) = local_dos_my(i_energy) + my_chars(i_corner)*dos_contrib
-                           local_dos_mz(i_energy) = local_dos_mz(i_energy) + mz_chars(i_corner)*dos_contrib
-                        end do
-                     end do
-                     cycle
-                  end if
-                  local_char = axis(1)*mx_char_avg + axis(2)*my_char_avg + axis(3)*mz_char_avg
+                  ! Each corner's own weight multiplies its own character (n/4 per corner without the Bloechl correction).
                   do i_energy = i_start, i_end
-                     dos_contrib = dos_line(i_energy)
-                     if (dos_contrib == 0.0_rp) cycle
-                     local_projected_dos(isite, iorb, 1, i_energy) = local_projected_dos(isite, iorb, 1, i_energy) + &
-                                                                      0.5_rp*(orbital_char_avg + local_char)*dos_contrib
-                     local_projected_dos(isite, iorb, 2, i_energy) = local_projected_dos(isite, iorb, 2, i_energy) + &
-                                                                      0.5_rp*(orbital_char_avg - local_char)*dos_contrib
-                     local_projected_dos_moments(isite, iorb, 1, 1, i_energy) = &
-                        local_projected_dos_moments(isite, iorb, 1, 1, i_energy) + mx_char_avg*dos_contrib
-                     local_projected_dos_moments(isite, iorb, 1, 2, i_energy) = &
-                        local_projected_dos_moments(isite, iorb, 1, 2, i_energy) + my_char_avg*dos_contrib
-                     local_projected_dos_moments(isite, iorb, 1, 3, i_energy) = &
-                        local_projected_dos_moments(isite, iorb, 1, 3, i_energy) + mz_char_avg*dos_contrib
-                     local_dos_mx(i_energy) = local_dos_mx(i_energy) + mx_char_avg*dos_contrib
-                     local_dos_my(i_energy) = local_dos_my(i_energy) + my_char_avg*dos_contrib
-                     local_dos_mz(i_energy) = local_dos_mz(i_energy) + mz_char_avg*dos_contrib
+                     do i_corner = 1, 4
+                        corner_char = orbital_chars(i_corner)
+                        local_char = axis(1)*mx_chars(i_corner) + axis(2)*my_chars(i_corner) + axis(3)*mz_chars(i_corner)
+                        dos_contrib = tet_weight*corner_w(i_corner, i_energy)
+                        local_projected_dos(isite, iorb, 1, i_energy) = local_projected_dos(isite, iorb, 1, i_energy) + &
+                                                                         0.5_rp*(corner_char + local_char)*dos_contrib
+                        local_projected_dos(isite, iorb, 2, i_energy) = local_projected_dos(isite, iorb, 2, i_energy) + &
+                                                                         0.5_rp*(corner_char - local_char)*dos_contrib
+                        local_projected_dos_moments(isite, iorb, 1, 1, i_energy) = &
+                           local_projected_dos_moments(isite, iorb, 1, 1, i_energy) + mx_chars(i_corner)*dos_contrib
+                        local_projected_dos_moments(isite, iorb, 1, 2, i_energy) = &
+                           local_projected_dos_moments(isite, iorb, 1, 2, i_energy) + my_chars(i_corner)*dos_contrib
+                        local_projected_dos_moments(isite, iorb, 1, 3, i_energy) = &
+                           local_projected_dos_moments(isite, iorb, 1, 3, i_energy) + mz_chars(i_corner)*dos_contrib
+                        local_dos_mx(i_energy) = local_dos_mx(i_energy) + mx_chars(i_corner)*dos_contrib
+                        local_dos_my(i_energy) = local_dos_my(i_energy) + my_chars(i_corner)*dos_contrib
+                        local_dos_mz(i_energy) = local_dos_mz(i_energy) + mz_chars(i_corner)*dos_contrib
+                     end do
                   end do
                end do
             end do
@@ -575,7 +508,7 @@ end subroutine project_dos_orbitals_gaussian
       this%dos_mz_tot = this%dos_mz_tot + local_dos_mz
       !$OMP END CRITICAL(projected_tetra_accum)
 
-      deallocate(dos_line, corner_w)
+      deallocate(corner_w)
       deallocate(local_projected_dos)
       deallocate(local_projected_dos_moments)
       deallocate(local_dos_mx)

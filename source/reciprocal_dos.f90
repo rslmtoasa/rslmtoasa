@@ -445,8 +445,9 @@ contains
       integer :: n_tet_ir
       real(rp) :: tet_weight, dos_integral, nos_integral
       real(rp) :: fermi_count, fermi_error
-      real(rp), allocatable :: local_dos(:), local_nos(:), eig_full(:, :)
-      integer :: nk_full_expected, tet_start, tet_end, tet_count
+      real(rp), allocatable :: local_dos(:), local_nos(:), eig_full(:, :), bin_w(:, :)
+      real(rp) :: de
+      integer :: nk_full_expected, tet_start, tet_end, tet_count, i_start, i_end
 
       call root_info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
 
@@ -476,11 +477,12 @@ contains
          n_tet_ir = this%n_tetrahedra
       end if
       call get_mpi_range(rank, n_tet_ir, tet_start, tet_end, tet_count, region_tag='tetra')
+      de = (this%dos_energy_grid(this%n_energy_points) - this%dos_energy_grid(1)) / real(this%n_energy_points - 1, rp)
 
 !$OMP PARALLEL DEFAULT(NONE) &
-!$OMP& SHARED(this, tet_ir, tet_mult, tet_start, tet_end, nbands, nk_full_expected, eig_full) &
-!$OMP& PRIVATE(i_tet, i_band, i_corner, e_corners, tet_weight, local_dos, local_nos)
-      allocate(local_dos(this%n_energy_points), local_nos(this%n_energy_points))
+!$OMP& SHARED(this, tet_ir, tet_mult, tet_start, tet_end, nbands, nk_full_expected, eig_full, de) &
+!$OMP& PRIVATE(i_tet, i_band, i_corner, e_corners, tet_weight, local_dos, local_nos, bin_w, i_start, i_end)
+      allocate(local_dos(this%n_energy_points), local_nos(this%n_energy_points), bin_w(4, this%n_energy_points))
       local_dos = 0.0_rp
       local_nos = 0.0_rp
 
@@ -501,8 +503,8 @@ contains
             end do
             call tetra_add_nos(tet_weight, e_corners, this%dos_energy_grid(1), &
                                this%dos_energy_grid(this%n_energy_points), local_nos, this%n_energy_points)
-            call tetra_add_dos(tet_weight, e_corners, this%dos_energy_grid(1), &
-                               this%dos_energy_grid(this%n_energy_points), local_dos, this%n_energy_points)
+            call tetra_bin_weights(e_corners, .false., this%dos_energy_grid(1), de, 1, this%n_energy_points, i_start, i_end, bin_w)
+            if (i_start <= i_end) local_dos(i_start:i_end) = local_dos(i_start:i_end) + tet_weight*sum(bin_w(:, i_start:i_end), dim=1)
          end do
       end do
 !$OMP END DO
@@ -512,7 +514,7 @@ contains
       this%total_nos = this%total_nos + local_nos
 !$OMP END CRITICAL(tetra_dos_accum)
 
-      deallocate(local_dos, local_nos)
+      deallocate(local_dos, local_nos, bin_w)
 !$OMP END PARALLEL
 
 #ifdef USE_MPI
@@ -695,81 +697,58 @@ contains
       end do
    end subroutine tetra_add_nos
 
-   !> @brief Add one tetrahedron’s DOS contribution to a grid.
-   !> @param[in] volwgt Tetrahedron volume/weight factor.
-   !> @param[in] ecorn_in Tetrahedron corner energies.
-   !> @param[in] emin Lower grid energy.
-   !> @param[in] emax Upper grid energy.
-   !> @param[inout] dos DOS grid.
-   !> @param[in] npts Number of grid points.
-   module subroutine tetra_add_dos(volwgt, ecorn_in, emin, emax, dos, npts)
-      real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
-      integer, intent(in) :: npts
-      real(rp), intent(inout) :: dos(npts)
+   !> @brief Bin-averaged DOS weights of one linear tetrahedron on the DOS energy grid.
+   !> @details Per unit tetrahedron volume. Grid point j owns the bin [emin+(j-1.5)de, emin+(j-0.5)de]. Its weight for each
+   !>          corner is the change of that corner's integrated weight across the bin divided by de, so the weights telescope
+   !>          to the integrated weights and a tetrahedron with (nearly) equal corner energies is not sampled between grid
+   !>          points. blochl = .true.: App. B weights plus Eq. (22) of PRB 49, 16223, whose corner sum is n(E) of App. A;
+   !>          otherwise n(E)/4 for every corner, so that a tetrahedron-averaged character times the corner sum is the bin average
+   !>          of the character-weighted D_T.
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] blochl Include the Eq. (22) correction.
+   !> @param[in] emin Energy of the first grid point.
+   !> @param[in] de Grid spacing.
+   !> @param[in] jmin First grid point to fill.
+   !> @param[in] jmax Last grid point to fill.
+   !> @param[out] jlo First grid point holding a (possibly zero) weight; jlo > jhi if there is none.
+   !> @param[out] jhi Last grid point holding a (possibly zero) weight.
+   !> @param[inout] w Bin weights (4, grid point), set for jlo:jhi only.
+   module subroutine tetra_bin_weights(ecorn, blochl, emin, de, jmin, jmax, jlo, jhi, w)
+      real(rp), intent(in) :: ecorn(4), emin, de
+      logical, intent(in) :: blochl
+      integer, intent(in) :: jmin, jmax
+      integer, intent(out) :: jlo, jhi
+      real(rp), intent(inout) :: w(:, :)
 
-      integer :: i, i0(4), m
-      real(rp) :: ecorn(4), de, e1, e2, e3, e4, seg_tol
-      real(rp) :: c1, c2, c3, x
-      real(rp), parameter :: tol = 1.0e-12_rp
+      integer :: j
+      real(rp) :: cum_lo(4), cum_hi(4)
 
-      call sort4(ecorn_in, ecorn)
-      e1 = ecorn(1); e2 = ecorn(2); e3 = ecorn(3); e4 = ecorn(4)
-      if (e4 < emin .or. e1 > emax) return
-
-      de = (emax - emin) / real(npts - 1, rp)
-      if (de <= 0.0_rp) return
-      ! A band that is constant over a tetrahedron has a delta-function DOS,
-      ! while its cumulative contribution is a unit step.  Preserve that
-      ! state on the sampled DOS grid instead of dropping it when every
-      ! piecewise denominator is degenerate.
-      if (e4 - e1 <= max(1.0e-10_rp, 1.0e-6_rp*de)) then
-         i = max(1, min(npts, 2 + int((0.5_rp*(e1 + e4) - emin) / de - 1.0e-12_rp)))
-         if (i == 1 .or. i == npts) then
-            dos(i) = dos(i) + 2.0_rp*volwgt/de
-         else
-            dos(i) = dos(i) + volwgt/de
-         end if
-         return
-      end if
-      ! See tetra_add_nos for the justification: a segment narrower than the grid
-      ! resolution is treated as degenerate (its own boundary-value limit is zero),
-      ! rather than letting grid-index rounding evaluate the polynomial out of range.
-      seg_tol = max(1.0e-10_rp, 1.0e-6_rp*de)
-
-      do m = 1, 4
-         if (ecorn(m) < emin) then
-            i0(m) = 1
-         else if (ecorn(m) > emax) then
-            i0(m) = npts + 1
-         else
-            i0(m) = 2 + int((ecorn(m) - emin) / de - 1.0e-12_rp)
-         end if
+      ! One bin of margin on each side absorbs rounding of the index estimate; the extra bins hold exact zeros.
+      jlo = max(jmin, floor((minval(ecorn) - emin)/de + 1.5_rp) - 1)
+      jhi = min(jmax, floor((maxval(ecorn) - emin)/de + 1.5_rp) + 1)
+      if (jlo > jhi) return
+      call cumulative(emin + (real(jlo, rp) - 1.5_rp)*de, cum_lo)
+      do j = jlo, jhi
+         call cumulative(emin + (real(j, rp) - 0.5_rp)*de, cum_hi)
+         w(:, j) = (cum_hi - cum_lo)/de
+         cum_lo = cum_hi
       end do
 
-      if (i0(1) < i0(2) .and. (e2-e1) > seg_tol .and. abs((e2-e1)*(e3-e1)*(e4-e1)) > tol) then
-         c3 = volwgt*3.0_rp/((e2-e1)*(e3-e1)*(e4-e1))
-         do i = i0(1), i0(2) - 1
-            x = emin - e1 + real(i - 1, rp) * de
-            dos(i) = dos(i) + c3*x*x
-         end do
-      end if
-      if (i0(2) < i0(3) .and. (e3-e2) > seg_tol .and. abs((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2)) > tol) then
-         c3 = volwgt*3.0_rp*(e1+e2-e3-e4)/((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2))
-         c2 = volwgt*6.0_rp/((e3-e1)*(e4-e1))
-         c1 = c2*(e2-e1)*0.5_rp
-         do i = i0(2), i0(3) - 1
-            x = emin - e2 + real(i - 1, rp) * de
-            dos(i) = dos(i) + c1 + x*(c2 + x*c3)
-         end do
-      end if
-      if (i0(3) < i0(4) .and. (e4-e3) > seg_tol .and. abs((e4-e3)*(e4-e2)*(e4-e1)) > tol) then
-         c3 = volwgt*3.0_rp/((e4-e3)*(e4-e2)*(e4-e1))
-         do i = i0(3), i0(4) - 1
-            x = emin - e4 + real(i - 1, rp) * de
-            dos(i) = dos(i) + c3*x*x
-         end do
-      end if
-   end subroutine tetra_add_dos
+   contains
+
+      subroutine cumulative(energy, cum)
+         real(rp), intent(in) :: energy
+         real(rp), intent(out) :: cum(4)
+         real(rp) :: w_lin(4), w_corr(4)
+
+         call tetra_integrated_weights(ecorn, energy, w_lin, w_corr)
+         if (blochl) then
+            cum = w_lin + w_corr
+         else
+            cum = sum(w_lin)/4.0_rp
+         end if
+      end subroutine cumulative
+   end subroutine tetra_bin_weights
 
    !> @brief Per-corner DOS weights of one linear tetrahedron and the Bloechl curvature correction at one energy.
    !> @details Per unit tetrahedron volume (V_T/V_G = 1). w_lin is the energy derivative of the uncorrected integration

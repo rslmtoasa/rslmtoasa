@@ -616,6 +616,7 @@ module reciprocal_mod
    public :: fermi_dirac_entropy_term, fermi_dirac_entropy
    public :: tetra_corner_weights
    public :: tetra_integrated_weights
+   public :: tetra_bin_weights
    real(rp), parameter, public :: kB_Ry_per_K = 6.3336814e-6_rp
 
    interface
@@ -1503,18 +1504,23 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(inout) :: nos(npts)
    end subroutine tetra_add_nos
 
-   !> @brief Add one tetrahedron’s DOS contribution to a grid.
-   !> @param[in] volwgt Tetrahedron volume/weight factor.
-   !> @param[in] ecorn_in Tetrahedron corner energies.
-   !> @param[in] emin Lower grid energy.
-   !> @param[in] emax Upper grid energy.
-   !> @param[inout] dos DOS grid.
-   !> @param[in] npts Number of grid points.
-   module subroutine tetra_add_dos(volwgt, ecorn_in, emin, emax, dos, npts)
-      real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
-      integer, intent(in) :: npts
-      real(rp), intent(inout) :: dos(npts)
-   end subroutine tetra_add_dos
+   !> @brief Bin-averaged per-corner DOS weights of one linear tetrahedron on the DOS energy grid.
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] blochl Include the Eq. (22) correction.
+   !> @param[in] emin Energy of the first grid point.
+   !> @param[in] de Grid spacing.
+   !> @param[in] jmin First grid point to fill.
+   !> @param[in] jmax Last grid point to fill.
+   !> @param[out] jlo First grid point holding a weight.
+   !> @param[out] jhi Last grid point holding a weight.
+   !> @param[inout] w Bin weights (4, grid point), set for jlo:jhi only.
+   module subroutine tetra_bin_weights(ecorn, blochl, emin, de, jmin, jmax, jlo, jhi, w)
+      real(rp), intent(in) :: ecorn(4), emin, de
+      logical, intent(in) :: blochl
+      integer, intent(in) :: jmin, jmax
+      integer, intent(out) :: jlo, jhi
+      real(rp), intent(inout) :: w(:, :)
+   end subroutine tetra_bin_weights
 
    !> @brief Per-corner DOS weights of one linear tetrahedron and the Bloechl curvature correction at one energy.
    !> @details Per unit tetrahedron volume. w_lin is the energy derivative of the uncorrected weights of PRB 49, 16223

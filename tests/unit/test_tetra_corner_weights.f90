@@ -10,10 +10,13 @@
 !>      linear and corrected weights. The correction leaves the count unchanged (sum of corner corrections is zero);
 !>  (d) tetra_integrated_weights against (B1)-(B19) and (22) written out here, sum w = n (A), sum dw = 0, and sum_i w_i e_i
 !>      against the exact quadrature int^E e D_T(e) de of the linear band over the occupied part of one tetrahedron;
-!>  (e) the same free-electron meshes with the integrated weights evaluated directly at E_F (no energy quadrature).
+!>  (e) the same free-electron meshes with the integrated weights evaluated directly at E_F (no energy quadrature);
+!>  (f) tetra_bin_weights for tetrahedra whose corner energies differ by ~1e-9 Ry (grid spacing 0.04 Ry) against the bin
+!>      integral of D_T (C) as the difference of the closed-form count (A), with the bins summing to one state and each
+!>      corner to 1/4. Point sampling D_T at the grid points misses or inflates those spikes; that error is asserted too.
 program test_tetra_corner_weights
    use precision_mod, only: rp
-   use reciprocal_mod, only: tetra_corner_weights, tetra_integrated_weights
+   use reciprocal_mod, only: tetra_corner_weights, tetra_integrated_weights, tetra_bin_weights
    implicit none
 
    real(rp), parameter :: pi = 3.14159265358979323846_rp
@@ -55,6 +58,7 @@ program test_tetra_corner_weights
    if (.not. worst_int <= 1.0e-12_rp) error stop 'integrated weights differ from (B), (22), (A) or the linear-band quadrature'
 
    call check_mesh()
+   call check_bins()
    print '(a)', 'test_tetra_corner_weights: passed'
 
 contains
@@ -370,6 +374,60 @@ contains
          prev = abs(sums(4, 2) - ex(4))
       end do
    end subroutine check_mesh
+
+   !> Integral of D_T (C) over [a, b] as the difference of the closed-form count (A), sorted corner energies es.
+   function bin_closed(es, a, b) result(q)
+      real(rp), intent(in) :: es(4), a, b
+      real(rp) :: q
+      q = nos_closed(es, b) - nos_closed(es, a)
+   end function bin_closed
+
+   !> tetra_bin_weights against the bin integral of D_T for near-degenerate tetrahedra; both weight sets (with and without Eq. 22).
+   subroutine check_bins()
+      integer, parameter :: npts = 41
+      real(rp), parameter :: emin = -0.10_rp, de = 0.04_rp
+      real(rp) :: eb(4, 4), es(4), w(4, npts), tot(npts), worst_bin, worst_sum, worst_corner, worst_point, e0, point_sum
+      integer :: it, ib, j, jlo, jhi
+      logical :: blochl
+
+      eb(:, 1) = [0.2000_rp, 0.2000_rp + 3.0e-9_rp, 0.2000_rp + 7.0e-9_rp, 0.5500_rp]      ! e1, e2, e3 within 7e-9
+      eb(:, 2) = [0.3000_rp, 0.3000_rp + 2.0e-9_rp, 0.3000_rp + 5.0e-9_rp, 0.3000_rp + 9.0e-9_rp]   ! all four within 9e-9
+      eb(:, 3) = [0.0100_rp, 0.4000_rp, 0.4000_rp + 4.0e-9_rp, 0.4000_rp + 6.0e-9_rp]       ! e2, e3, e4 within 6e-9
+      eb(:, 4) = [0.0300_rp, 0.2100_rp, 0.4700_rp, 0.9100_rp]                              ! generic, partly outside the grid
+      worst_bin = 0.0_rp; worst_sum = 0.0_rp; worst_corner = 0.0_rp; worst_point = 0.0_rp
+      do it = 1, 4
+         call sorted(eb(:, it), es)
+         do ib = 1, 2
+            blochl = ib == 2
+            w = 0.0_rp
+            call tetra_bin_weights(eb(:, it), blochl, emin, de, 1, npts, jlo, jhi, w)
+            if (jlo > jhi) error stop 'tetra_bin_weights returned no bins for a tetrahedron inside the grid'
+            tot = 0.0_rp
+            do j = jlo, jhi
+               tot(j) = sum(w(:, j))
+               worst_bin = max(worst_bin, abs(tot(j) - bin_closed(es, emin + (real(j, rp) - 1.5_rp)*de, emin + (real(j, rp) - 0.5_rp)*de)/de))
+            end do
+            if (it < 4) then
+               worst_sum = max(worst_sum, abs(de*sum(tot) - 1.0_rp))
+               worst_corner = max(worst_corner, maxval(abs(de*sum(w(:, jlo:jhi), dim=2) - 0.25_rp)))
+            end if
+         end do
+         if (it < 4) then
+            point_sum = 0.0_rp
+            do j = 1, npts
+               e0 = emin + real(j - 1, rp)*de
+               point_sum = point_sum + de*dos_closed(es, e0)
+            end do
+            worst_point = max(worst_point, abs(point_sum - 1.0_rp))
+         end if
+      end do
+      print '(a,3es11.3,a,es11.3)', 'worst |bin - int D_T/de|, |sum bins - 1|, |corner sum - 1/4| :', worst_bin, worst_sum, worst_corner, &
+         '   point-sampled D_T error:', worst_point
+      if (.not. worst_bin <= 1.0e-8_rp) error stop 'bin weights differ from the bin integral of D_T'
+      if (.not. worst_sum <= 1.0e-12_rp) error stop 'bin weights do not sum to one state'
+      if (.not. worst_corner <= 1.0e-12_rp) error stop 'corner bin weights do not sum to 1/4'
+      if (.not. worst_point > 1.0e-2_rp) error stop 'point sampling is not off for near-degenerate tetrahedra: check not discriminating'
+   end subroutine check_bins
 
    subroutine gauss_legendre(n, x, w)
       integer, intent(in) :: n

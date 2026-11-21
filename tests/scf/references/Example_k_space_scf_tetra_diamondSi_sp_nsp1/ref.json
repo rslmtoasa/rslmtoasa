@@ -21,7 +21,7 @@
       },
       "200": {
         "1": -0.29085,
-        "2": 18.02163
+        "2": 18.02152
       },
       "380": {
         "1": 0.80939,
@@ -121,7 +121,7 @@
       "canonical_band_energy_last": -3.8349049,
       "k_weight_sum_it1": 1.0,
       "k_weight_sum_last": 1.0,
-      "dos_integral_last": 16.01516,
+      "dos_integral_last": 16.0,
       "dos_occupied_count_last": 8.0
     }
   }
