@@ -913,7 +913,6 @@ contains
       logical :: spinor_local, spinor_flag
       real(rp) :: m1_real, m1_imag
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
-      real(rp), allocatable :: pl_comm(:, :, :)
       integer :: lcount_ldm, max_flat_ldm, local_flat
       integer :: status_local, itype_local
       integer :: cluster_site_local
@@ -1439,22 +1438,6 @@ contains
       end do
       deallocate(ldm_comm)
       deallocate(ldm_comm_imag)
-
-      ! Synchronize PL explicitly: flatten_potential_lite does not include it.
-      allocate(pl_comm(this%lattice%nrec, lmax_basis + 1, 2))
-      pl_comm(:, :, :) = 0.0_rp
-      do na_glob = start_atom, end_atom
-         plusbulk = this%lattice%nbulk + na_glob
-         lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
-         pl_comm(na_glob, 1:lcount_ldm, 1:2) = this%symbolic_atom(plusbulk)%potential%pl(0:lcount_ldm - 1, 1:2)
-      end do
-      call MPI_ALLREDUCE(MPI_IN_PLACE, pl_comm, product(shape(pl_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      do na_glob = 1, this%lattice%nrec
-         plusbulk = this%lattice%nbulk + na_glob
-         lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
-         this%symbolic_atom(plusbulk)%potential%pl(0:lcount_ldm - 1, 1:2) = pl_comm(na_glob, 1:lcount_ldm, 1:2)
-      end do
-      deallocate(pl_comm)
 
       ! Use a rank-independent reference atom for buffer sizing so idle MPI
       ! ranks (numprocs > nrec) never dereference an invalid start_atom.
