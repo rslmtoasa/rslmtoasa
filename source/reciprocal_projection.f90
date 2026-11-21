@@ -33,11 +33,7 @@ module subroutine project_dos_orbitals_gaussian(this)
    integer :: lstart(4), lend(4)
    real(rp) :: weight, orbital_char, energy
    real(rp) :: gaussian_weight, sigma_squared, sigma_use
-   real(rp) :: norm_factor
    integer :: nbands
-   ! Additional locals for projected DOS integration/normalization
-   real(rp) :: proj_integral, e_low, e_high
-   integer :: iei
    ! Per-site orbital offsets for mixed atom types
    integer, dimension(:), allocatable :: site_orb_offset
    real(rp) :: mx_char, my_char, mz_char, local_char
@@ -209,32 +205,6 @@ module subroutine project_dos_orbitals_gaussian(this)
 
    call this%symmetrize_projected_dos()
 
-   ! Normalize projected DOS so integrated sum over projections equals nbands
-   call root_info('project_dos_orbitals_gaussian: Projection completed (raw)', __FILE__, __LINE__)
-   if (this%n_energy_points > 2) then
-      proj_integral = 0.0_rp
-      do iei = 1, this%n_energy_points - 1
-         e_low = this%dos_energy_grid(iei)
-         e_high = this%dos_energy_grid(iei+1)
-         proj_integral = proj_integral + 0.5_rp * ( sum(this%projected_dos(:, :, :, iei)) + sum(this%projected_dos(:, :, :, iei+1)) ) * (e_high - e_low)
-      end do
-
-      if (abs(proj_integral) > 1.0e-12_rp) then
-         norm_factor = 1.0_rp ! real(nbands, rp) / proj_integral
-         this%projected_dos = this%projected_dos * norm_factor
-         call root_info('project_dos_orbitals_gaussian: Normalized projected DOS by factor ' // trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
-      else
-         call g_logger%warning('project_dos_orbitals_gaussian: projected DOS integral is zero, skipping normalization', __FILE__, __LINE__)
-      end if
-
-      ! Diagnostic: check mid-energy ratio after normalization
-      ie = this%n_energy_points / 2
-      if (abs(this%total_dos(ie)) > 1.0e-12_rp) then
-         call root_info('project_dos_orbitals_gaussian: At mid-energy, proj/total ratio (post-norm) = ' // &
-            trim(real2str(sum(this%projected_dos(:, :, :, ie)) / this%total_dos(ie), '(F10.6)')), __FILE__, __LINE__)
-      end if
-   end if
-
    deallocate(site_orb_offset)
 end subroutine project_dos_orbitals_gaussian
 
@@ -379,10 +349,9 @@ end subroutine project_dos_orbitals_gaussian
       integer :: i_energy, i_tet, i_corner, i_band, iorb, isite
       integer :: i_start, i_end
       integer :: n_orb_per_spin, site_orb_start, ik, n_orb_site
-      integer :: ie, nbands
+      integer :: nbands
       integer :: e_start, e_end, e_count
       real(rp) :: dos_contrib, orbital_char_avg, orbital_char, de
-      real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
       integer :: lstart(4), lend(4)
@@ -677,41 +646,6 @@ end subroutine project_dos_orbitals_gaussian
       deallocate(site_axes)
 
       call this%symmetrize_projected_dos()
-
-      ! Normalize projected DOS to match total DOS normalization
-      ! When using Blöchl or standard tetrahedron method, the raw DOS needs normalization
-      ! to integrate to the correct number of states. We must apply the same normalization
-      ! to projected DOS for consistency.
-      if (allocated(this%total_dos) .and. this%n_energy_points > 2) then
-         nbands = size(this%eigenvalues, 1)
-         total_dos_integral = 0.0_rp
-         do ie = 1, this%n_energy_points - 1
-            total_dos_integral = total_dos_integral + &
-               0.5_rp * (this%total_dos(ie) + this%total_dos(ie+1)) * &
-               (this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie))
-         end do
-         
-         ! The total_dos is already normalized, so total_dos_integral ≈ nbands
-         ! Calculate integral of projected DOS (raw, unnormalized)
-         proj_dos_integral = 0.0_rp
-         do ie = 1, this%n_energy_points - 1
-            ! Sum over all sites, orbitals, and spins
-            proj_dos_integral = proj_dos_integral + &
-               0.5_rp * (sum(this%projected_dos(:,:,:,ie)) + sum(this%projected_dos(:,:,:,ie+1))) * &
-               (this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie))
-         end do
-         
-         ! Normalize projected DOS by the same factor
-         if (abs(proj_dos_integral) > 1.0e-10_rp) then
-            norm_factor = total_dos_integral / proj_dos_integral
-            this%projected_dos = this%projected_dos * norm_factor
-            this%dos_mx_tot = this%dos_mx_tot * norm_factor
-            this%dos_my_tot = this%dos_my_tot * norm_factor
-            this%dos_mz_tot = this%dos_mz_tot * norm_factor
-            call root_info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
-                              trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
-         end if
-      end if
 
       call root_info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
    end subroutine project_dos_orbitals_tetrahedron
