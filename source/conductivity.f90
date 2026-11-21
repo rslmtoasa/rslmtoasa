@@ -363,15 +363,14 @@ contains
    !> 
    !> @param[out] gamma_nm      Gamma_nm array (dimension: energy_grid, recursion_level, recursion_level).
    !*************************************************************************
-   subroutine calculate_gamma_nm(this, use_factorized)
+   subroutine calculate_gamma_nm(this)
       class(conductivity), intent(inout) :: this
-      logical, optional, intent(in) :: use_factorized
 
       ! Local variables
       integer :: n, m, ne, order
       real(rp) :: a, b
       logical :: factorized
-      real(rp), dimension(:), allocatable :: g_kernel(:)       ! Jackson kernel
+      real(rp), dimension(:), allocatable :: g_kernel(:)       ! Lorentz kernel
       real(rp), dimension(:), allocatable :: weights(:)        ! Weight factors
       real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
       real(rp), dimension(:, :), allocatable :: chebyshev_poly
@@ -389,7 +388,7 @@ contains
 
       ! The opt-in CPU FP32 route computes Gamma in single precision and
       ! leaves only the reduced conductivity result in the canonical FP64
-      ! host representation.  The default route below remains unchanged.
+      ! host representation.
       if (trim(this%control%cheb_backend) == 'fast' .and. &
           trim(this%control%cpu_reconstruction_precision) == 'fp32') then
          call calculate_gamma_nm_fp32(this)
@@ -400,8 +399,7 @@ contains
       
       ne = this%en%channels_ldos + 10
       order = this%control%cond_ll
-      factorized = .false.
-      if (present(use_factorized)) factorized = use_factorized
+      factorized = allocated(this%recursion%mu_nm_diag)
       allocate(acos_x(ne), sqrt_term(ne), wscale(ne), chebyshev_poly(ne, order))
       allocate(cn(ne, order), g_kernel(order), weights(order))
       if (.not. factorized) allocate(cm(ne, order))
@@ -417,10 +415,8 @@ contains
       acos_x(:) = acos(wscale(:))
       sqrt_term(:) = sqrt(1.0_rp - wscale(:)**2)
 
-      ! Calculating the Jackson Kernel
-      !call jackson_kernel((this%control%cond_ll), g_kernel)
+      ! Calculate the historical Lorentz kernel and end weight.
       call lorentz_kernel(this%control%cond_ll, g_kernel, 6.0d0)
-      ! Calculate weights
       weights(:) = 1.0d0
       weights(1) = 0.5d0
 
@@ -538,9 +534,8 @@ contains
       integer :: i, l2, ntype, loop_over, ne, m_cond, k_cond
       complex(rp), dimension(:, :, :), allocatable :: integrand
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
-      complex(rp), allocatable, target :: mu_diag(:, :)
+      complex(rp), allocatable :: mu_diag(:, :)
       complex(rp), allocatable :: gamma_mu(:, :), gamma_work(:, :)
-      complex(rp), contiguous, pointer :: mu_matrices(:, :, :)
       complex(rp), dimension(:, :, :), allocatable :: gpu_reconstruction
       complex(real32), dimension(:, :), allocatable :: gamma_sp, mu_diag_sp, gamma_mu_sp
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
@@ -627,15 +622,14 @@ contains
          ! Only the diagonal orbital blocks enter Gamma*mu.  These two
          ! workspaces are allocated once per conductivity call and reused for
          ! every trace.
-         allocate(mu_diag(k_cond, nb), gamma_mu(ne, nb))
+         allocate(gamma_mu(ne, nb))
          if (allocated(this%gamma_poly)) then
             allocate(gamma_work(ne, m_cond))
-            mu_matrices(1:m_cond, 1:m_cond, 1:nb) => mu_diag
-            call g_kpm_profile%set_reconstruction_bytes(0_int64, &
-               size(mu_diag, kind=int64)*int(storage_size(mu_diag)/8, int64), &
+            call g_kpm_profile%set_reconstruction_bytes(0_int64, 0_int64, &
                factor_bytes=(size(this%gamma_poly, kind=int64) + size(this%gamma_phase, kind=int64) + &
                              size(gamma_work, kind=int64))*int(storage_size(gamma_work)/8, int64))
          else
+            allocate(mu_diag(k_cond, nb))
             call g_kpm_profile%set_reconstruction_bytes( &
                size(this%gamma_nm, kind=int64)*int(storage_size(this%gamma_nm)/8, int64), &
                size(mu_diag, kind=int64)*int(storage_size(mu_diag)/8, int64))
@@ -685,9 +679,11 @@ contains
       else
       call g_kpm_profile%start('P_reconstruction_total')
       do ntype = 1, loop_over
-         call g_kpm_profile%start('D_mu_pack')
-         call pack_gamma_mu_diagonal(this%recursion%mu_nm_stochastic(:, :, :, :, ntype), mu_diag)
-         call g_kpm_profile%stop('D_mu_pack')
+         if (allocated(mu_diag)) then
+            call g_kpm_profile%start('D_mu_pack')
+            call pack_gamma_mu_diagonal(this%recursion%mu_nm_stochastic(:, :, :, :, ntype), mu_diag)
+            call g_kpm_profile%stop('D_mu_pack')
+         end if
 
          ! Do not wrap this call in an outer OpenMP region.  BLAS owns the
          ! parallelism for this dense reconstruction, avoiding nested
@@ -698,7 +694,8 @@ contains
             call gamma_mu_cblas(gamma_sp, mu_diag_sp, real(factor, real32), gamma_mu_sp)
             gamma_mu = cmplx(gamma_mu_sp, kind=rp)
          else if (allocated(this%gamma_poly)) then
-            call gamma_mu_factorized(this%gamma_poly, this%gamma_phase, mu_matrices, factor, gamma_work, gamma_mu)
+            call gamma_mu_factorized(this%gamma_poly, this%gamma_phase, this%recursion%mu_nm_diag(:, :, :, ntype), &
+                                     factor, gamma_work, gamma_mu)
          else
             call gamma_mu_blas(this%gamma_nm, mu_diag, factor, gamma_mu)
          end if
@@ -840,7 +837,8 @@ contains
       if (allocated(integrated_type_real)) deallocate(integrated_type_real, integrated_type_im, &
          integrated_type_l_real, integrated_type_l_im, output_type, output_type_orb_real, output_type_orb_im)
       if (allocated(gpu_reconstruction)) deallocate(gpu_reconstruction)
-      if (allocated(mu_diag)) deallocate(mu_diag, gamma_mu)
+      if (allocated(mu_diag)) deallocate(mu_diag)
+      if (allocated(gamma_mu)) deallocate(gamma_mu)
       if (allocated(gamma_work)) deallocate(gamma_work)
       if (allocated(gamma_sp)) deallocate(gamma_sp, mu_diag_sp, gamma_mu_sp)
    end subroutine calculate_conductivity_tensor

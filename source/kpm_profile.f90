@@ -98,6 +98,7 @@ module kpm_profile_mod
       integer(int64) :: bytes_mu_pack = 0_int64
       integer(int64) :: bytes_resident_moments = 0_int64
       integer(int64) :: bytes_host_full_moments = 0_int64
+      integer(int64) :: bytes_host_compact_moments = 0_int64
       integer(int64) :: bytes_full_moment_d2h = 0_int64
       integer(int64) :: bytes_result_d2h = 0_int64
       integer :: gpu_energy_block = 0
@@ -160,6 +161,7 @@ contains
       this%bytes_mu_pack = 0_int64
       this%bytes_resident_moments = 0_int64
       this%bytes_host_full_moments = 0_int64
+      this%bytes_host_compact_moments = 0_int64
       this%bytes_full_moment_d2h = 0_int64
       this%bytes_result_d2h = 0_int64
       this%gpu_energy_block = 0
@@ -365,12 +367,15 @@ contains
       end if
    end subroutine kpm_profile_set_reconstruction_bytes
 
-   subroutine kpm_profile_set_moment_memory(this, resident_bytes, host_full_bytes)
+   subroutine kpm_profile_set_moment_memory(this, resident_bytes, host_full_bytes, host_compact_bytes)
       class(kpm_profile), intent(inout) :: this
       integer(int64), intent(in) :: resident_bytes, host_full_bytes
+      integer(int64), intent(in), optional :: host_compact_bytes
 
       this%bytes_resident_moments = max(0_int64, resident_bytes)
       this%bytes_host_full_moments = max(0_int64, host_full_bytes)
+      this%bytes_host_compact_moments = 0_int64
+      if (present(host_compact_bytes)) this%bytes_host_compact_moments = max(0_int64, host_compact_bytes)
    end subroutine kpm_profile_set_moment_memory
 
    subroutine kpm_profile_note_trace_batch(this, width)
@@ -447,6 +452,7 @@ contains
          'gamma_factor_workspace_bytes= ', this%bytes_gamma_factors, &
          'resident_device_moment_bytes= ', this%bytes_resident_moments, &
          'host_full_moment_bytes= ', this%bytes_host_full_moments, &
+         'host_compact_moment_bytes= ', this%bytes_host_compact_moments, &
          'full_moment_d2h_bytes= ', this%bytes_full_moment_d2h, &
          'reduced_result_d2h_bytes= ', this%bytes_result_d2h, &
          'gpu_energy_block= ', this%gpu_energy_block, &

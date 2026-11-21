@@ -921,31 +921,47 @@ contains
       end do
    end subroutine kernel_operator_blocks
 
+   ! Each reference column still visits every propagated orbital and site.
+   module subroutine transport_moment_diagonal(left, right, diagonal)
+      complex(rp), contiguous, intent(in) :: left(:, :, :), right(:, :, :)
+      complex(rp), intent(out) :: diagonal(:)
+      integer :: site, l
+
+      diagonal = czero
+      do site = 1, size(left, 3)
+         do l = 1, size(diagonal)
+            ! For complex arguments DOT_PRODUCT conjugates the left state.
+            diagonal(l) = diagonal(l) + dot_product(left(:, l, site), right(:, l, site))
+         end do
+      end do
+   end subroutine transport_moment_diagonal
+
    !> @brief Compute two-index stochastic Chebyshev moments for transport.
    !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
    !>          spin, orbital, accumulation, and torque conductivity routes. The
    !>          starting states are either representative atom types or random
    !>          vectors, selected by control%cond_calctype.
-   !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
+   !> @param[inout] this Recursion object; fills compact or full transport moments.
    !> @note control%transport_backend selects the matrix-free loops ('legacy') or the single-precision kernel ('fast_sp'); the
    !>       kernel falls back to the loops, with a warning, for setups it does not cover. 'gpu' is fatal.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, m, n, hblocksize, nat, loop_over, lmax
+      integer :: i, j, k, m, n, hblocksize, nat, loop_over, order
       integer :: seed_size, seed_i, seed_status, seed_ios, random_seed_value, seed_length
       integer, allocatable :: seed_values(:)
       integer(int64) :: matrix_dimension, nnz, host_moment_bytes
       complex(rp), dimension(nb, nb) :: dum
+      complex(rp) :: diagonal(nb)
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
       complex(rp), dimension(:, :, :, :), allocatable :: left_vec, work
       complex(rp), dimension(:, :, :, :), allocatable :: kernel_v_a, kernel_v_b, kernel_vo_a, kernel_vo_b
       real(rp) :: a, b, rng, emin_win, emax_win
-      logical :: deterministic_random_seed, use_fast
+      logical :: deterministic_random_seed, use_fast, compact
       character(len=64) :: obstacle
       character(len=64) :: random_seed_text
 
-      lmax = lmax_basis
+      order = this%control%cond_ll
       hblocksize = nb
       nat = this%lattice%kk
 
@@ -991,27 +1007,25 @@ contains
          end if
       end if
 
+      ! Only the FP64 matrix-free legacy route uses the compact layout.
+      compact = trim(this%control%transport_backend) == 'legacy' .and. &
+         .not. (trim(this%control%cheb_backend) == 'fast' .and. &
+                trim(this%control%cpu_reconstruction_precision) == 'fp32')
+      if (allocated(this%mu_nm_diag)) deallocate(this%mu_nm_diag)
+      if (allocated(this%mu_nm_stochastic)) deallocate(this%mu_nm_stochastic)
+      if (compact) then
 #ifdef USE_SAFE_ALLOC
-      select case(this%control%cond_calctype)
-      case('per_type')
-         call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, &
-            (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%cond_ll, this%control%cond_ll, this%lattice%ntype/))
-      case('random_vec')
-         call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, &
-            (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%cond_ll, this%control%cond_ll, this%control%random_vec_num/))
-      end select
+         call g_safe_alloc%allocate('recursion.mu_nm_diag', this%mu_nm_diag, [order, order, nb, loop_over])
 #else
-      select case(this%control%cond_calctype)
-      case('per_type')
-         allocate(this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%cond_ll, &
-            this%control%cond_ll, this%lattice%ntype))
-      case('random_vec')
-         allocate(this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%cond_ll, &
-            this%control%cond_ll, this%control%random_vec_num))
-      end select
+         allocate(this%mu_nm_diag(order, order, nb, loop_over))
 #endif
-      host_moment_bytes = int(size(this%mu_nm_stochastic), int64)*int(storage_size(this%mu_nm_stochastic)/8, int64)
-      call g_kpm_profile%set_moment_memory(0_int64, host_moment_bytes)
+         host_moment_bytes = size(this%mu_nm_diag, kind=int64)*int(storage_size(this%mu_nm_diag)/8, int64)
+         call g_kpm_profile%set_moment_memory(0_int64, 0_int64, host_compact_bytes=host_moment_bytes)
+      else
+         allocate(this%mu_nm_stochastic(nb, nb, order, order, loop_over))
+         host_moment_bytes = size(this%mu_nm_stochastic, kind=int64)*int(storage_size(this%mu_nm_stochastic)/8, int64)
+         call g_kpm_profile%set_moment_memory(0_int64, host_moment_bytes)
+      end if
 
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), &
          left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
@@ -1069,7 +1083,6 @@ contains
          w2(:, :, :) = (0.0d0, 0.0d0)
          right_vec(:, :, :) = (0.0d0, 0.0d0)
          left_vec(:, :, :, :) = (0.0d0, 0.0d0)
-         dum(:, :) = (0.0d0, 0.0d0)
 
          select case(this%control%cond_calctype)
          case('per_type')
@@ -1166,13 +1179,18 @@ contains
             ! Multiply with the output operator (slot a). Its output map belongs to
             ! right_vec; keep izero for the next Chebyshev step of v1.
             call this%apply_kubo_operator('a', v1, right_vec, work)
-            !$omp parallel do default(shared) private(m, dum, k) schedule(dynamic)
+            !$omp parallel do default(shared) private(m, dum, k, diagonal) schedule(dynamic)
             do m=1, this%control%cond_ll
-               dum(:, :) = (0.0d0, 0.0d0)
-               do k=1, this%lattice%kk
-                  call zgemm('c', 'n', nb, nb, nb, cone, left_vec(:, :, k, m), nb, right_vec(:, :, k), nb, cone, dum(:, :), nb)
-               end do
-               this%mu_nm_stochastic(:, :, n, m, i) = dum(:, :)
+               if (compact) then
+                  call transport_moment_diagonal(left_vec(:, :, :, m), right_vec, diagonal)
+                  this%mu_nm_diag(n, m, :, i) = diagonal
+               else
+                  dum(:, :) = czero
+                  do k = 1, nat
+                     call zgemm('c', 'n', nb, nb, nb, cone, left_vec(:, :, k, m), nb, right_vec(:, :, k), nb, cone, dum, nb)
+                  end do
+                  this%mu_nm_stochastic(:, :, n, m, i) = dum
+               end if
             end do
             !$omp end parallel do
          end do

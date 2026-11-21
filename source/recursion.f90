@@ -47,6 +47,7 @@ module recursion_mod
    implicit none
 
    private
+   public :: transport_moment_diagonal
 
    !> Module´s main structure
    type, public :: recursion
@@ -87,6 +88,9 @@ module recursion_mod
       !> Linear prediction of the Chebyshev moments
       type(cheb_lp) :: lp
       complex(rp), dimension(:, :, :, :, :), allocatable :: mu_nm_stochastic
+      ! Diagonal in the reference spin-orbital only: (n, m, spin-orbital, trace).
+      ! Each Chebyshev matrix is contiguous for reconstruction.
+      complex(rp), allocatable :: mu_nm_diag(:, :, :, :)
       complex(rp), allocatable :: cheb_mom_temp(:,:)
       !> Variable to save H|psi>
       complex(rp), dimension(:, :), allocatable :: v
@@ -455,12 +459,17 @@ module recursion_mod
       character(len=*), intent(in) :: op_type, slot
    end subroutine set_kubo_operator_slot
 
+   module subroutine transport_moment_diagonal(left, right, diagonal)
+      complex(rp), contiguous, intent(in) :: left(:, :, :), right(:, :, :)
+      complex(rp), intent(out) :: diagonal(:)
+   end subroutine transport_moment_diagonal
+
    !> @brief Compute two-index stochastic Chebyshev moments for transport.
    !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
    !>          spin, orbital, accumulation, and torque conductivity routes. The
    !>          starting states are either representative atom types or random
    !>          vectors, selected by control%cond_calctype.
-   !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
+   !> @param[inout] this Recursion object; fills compact or full transport moments.
    !> @note The operators are applied matrix-free (setup_kubo_operators); GPU requests are fatal until the kernels return.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this

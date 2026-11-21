@@ -13,7 +13,7 @@ program test_kpm_transport
    use basis_mod, only: basis_init, nb, spin_off
    use control_mod, only: control
    use energy_mod, only: energy
-   use recursion_mod, only: recursion
+   use recursion_mod, only: recursion, transport_moment_diagonal
    use charge_mod, only: charge
    use hamiltonian_mod, only: hamiltonian, select_spin_operator, select_orbital_operator
    use lattice_mod, only: lattice
@@ -46,6 +46,7 @@ program test_kpm_transport
    call test_spin_operator()
    call test_orbital_operator()
    call test_transport_moments()
+   call test_compact_diagonal_moments()
    call test_s_only_orbital_symmetry()
    call test_gamma_mu_layout()
    call test_factorized_gamma(2)
@@ -240,6 +241,59 @@ contains
       call require(max_error < tolerance, trim(name)//' KPM/eigenpair moment agreement')
    end subroutine compare_direct_chebyshev
 
+   ! Catches loss of a propagated orbital/site, a transposed Chebyshev pair,
+   ! or a missing conjugation. Use spin-orbit-mixed Chebyshev states and two
+   ! independent initial site blocks with distinct complex phases.
+   subroutine test_compact_diagonal_moments()
+      complex(rp) :: hk(nsite*nb, nsite*nb), tmat(nsite*nb, nsite*nb, ll)
+      complex(rp) :: va(nsite*nb, nsite*nb), vb(nsite*nb, nsite*nb)
+      complex(rp) :: ref(nsite*nb, nb), left(nsite*nb, nb), right(nsite*nb, nb), full(nb, nb)
+      complex(rp) :: left_sites(nb, nb, nsite), right_sites(nb, nb, nsite), diagonal(nb), expected(nb)
+      complex(rp) :: spin(nb, nb), orbital(nb, nb), soc(nb, nb), hop(nb, nb)
+      real(rp) :: max_error, relative_error, scale
+      integer :: n, m, l, site, nmat
+
+      nmat = nsite*nb
+      hk = make_hamiltonian()
+      call select_spin_operator('y', spin)
+      call select_orbital_operator('x', orbital)
+      soc = 0.12_rp*matmul(spin, orbital)
+      hk(1:nb, 1:nb) = hk(1:nb, 1:nb) + soc
+      hk(nb+1:nmat, nb+1:nmat) = hk(nb+1:nmat, nb+1:nmat) - 0.7_rp*soc
+      hop = ham%v_a(:, :, 2, 1) + cmplx(0.03_rp, 0.09_rp, rp)*orbital
+      va = make_full_operator(hop)
+      vb = make_full_operator(ham%v_b(:, :, 2, 1) + cmplx(-0.02_rp, 0.04_rp, rp)*spin)
+      call matrix_chebyshev(hk, cheb_scale, cheb_shift, tmat)
+      max_error = 0.0_rp
+      relative_error = 0.0_rp
+      scale = 0.0_rp
+      do site = 1, nsite
+         ref = (0.0_rp, 0.0_rp)
+         do l = 1, nb
+            ref((site - 1)*nb + l, l) = exp(i_unit*real(site*l, rp))
+         end do
+         do m = 1, ll
+            left = matmul(tmat(:, :, m), ref)
+            left_sites = reshape(left, shape(left_sites), order=[1, 3, 2])
+            do n = 1, ll
+               right = matmul(va, matmul(tmat(:, :, n), matmul(vb, ref)))
+               right_sites = reshape(right, shape(right_sites), order=[1, 3, 2])
+               full = matmul(conjg(transpose(left)), right)
+               expected = [(full(l, l), l=1,nb)]
+               call transport_moment_diagonal(left_sites, right_sites, diagonal)
+               scale = max(scale, maxval(abs(expected)))
+               max_error = max(max_error, maxval(abs(diagonal - expected)))
+               relative_error = max(relative_error, &
+                  maxval(abs(diagonal - expected)/max(1.0e-8_rp, abs(expected)), mask=abs(expected) >= 1.0e-8_rp))
+            end do
+         end do
+      end do
+      write (*, '(2(a,es12.4))') 'Compact moment max absolute error=', max_error, ' relative error=', relative_error
+      call require(scale > 1.0e-8_rp, 'compact moment oracle is nontrivial')
+      call require(max_error <= 1.0e-12_rp*max(1.0_rp, scale) .and. relative_error <= 1.0e-12_rp, &
+         'compact moment diagonal agrees with full spin-orbit-mixed Chebyshev contractions')
+   end subroutine test_compact_diagonal_moments
+
    subroutine test_s_only_orbital_symmetry()
       complex(rp), dimension(nb, nb) :: q_orbital
 
@@ -311,7 +365,8 @@ contains
       energy_obj%energy_max = 0.85_rp
       energy_obj%channels_ldos = ne - 10
       energy_obj%ene = [(-0.975_rp + 1.94_rp*(e-1)/(ne-1), e=1,ne)]
-      call transport%calculate_gamma_nm(.true.)
+      allocate(recursion_obj%mu_nm_diag(order, order, nl, 1))
+      call transport%calculate_gamma_nm()
       call require(.not. allocated(transport%gamma_nm), 'factorized route does not allocate full Gamma')
 
       call random_seed(size=seed_size)
