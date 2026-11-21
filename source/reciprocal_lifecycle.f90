@@ -151,7 +151,6 @@ contains
       this%use_time_reversal = .true.
       this%strict_symmetry_checks = .false.
       this%dump_symmetry_kmap = .false.
-      this%tetra_symmetry_mode = 'irreducible_native'
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orbs = nb
@@ -319,7 +318,6 @@ contains
       use_time_reversal = this%use_time_reversal
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
-      tetra_symmetry_mode = this%tetra_symmetry_mode
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
       dos_energy_max = this%dos_energy_range(2)
@@ -374,12 +372,6 @@ contains
       this%use_time_reversal = use_time_reversal
       this%strict_symmetry_checks = strict_symmetry_checks
       this%dump_symmetry_kmap = dump_symmetry_kmap
-      this%tetra_symmetry_mode = lower(trim(tetra_symmetry_mode))
-      if (this%tetra_symmetry_mode /= 'full_expand_ref' .and. &
-          this%tetra_symmetry_mode /= 'irreducible_native') then
-         call g_logger%fatal("reciprocal%build_from_file: tetra_symmetry_mode='"//trim(this%tetra_symmetry_mode)// &
-                             "' is invalid; use 'full_expand_ref' or 'irreducible_native'.", __FILE__, __LINE__)
-      end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
       this%gaussian_sigma = gaussian_sigma
@@ -473,7 +465,6 @@ contains
       else
          call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
-      call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
