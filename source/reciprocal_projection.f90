@@ -267,6 +267,20 @@ end subroutine project_dos_orbitals_gaussian
       if (present(b)) b = reshape(cmplx(buf(2*na + 1::2), buf(2*na + 2::2), rp), shape(b))
    end subroutine chain_complex
 
+   !> Occupation of one band: its Bloechl tetrahedron weight when occ_t is allocated (dos_method = 'blochl'), else Fermi-Dirac.
+   pure function band_occupation(occ_t, ib, ik_global, energy, fermi_level, kT) result(occ)
+      real(rp), allocatable, intent(in) :: occ_t(:, :)
+      integer, intent(in) :: ib, ik_global
+      real(rp), intent(in) :: energy, fermi_level, kT
+      real(rp) :: occ
+
+      if (allocated(occ_t)) then
+         occ = occ_t(ib, ik_global)
+      else
+         occ = fermi_dirac_occupation(energy, fermi_level, kT)
+      end if
+   end function band_occupation
+
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
    !> @param[in] this Reciprocal object containing eigenvectors.
    !> @param[in] ik k-point index.
@@ -981,10 +995,8 @@ end subroutine calculate_band_moments
             
             ! Accumulate contributions from all occupied bands at this k-point
             do ib = 1, nbands
-               if (blochl) then
-                  fermi_occ = occ_t(ib, ik_global)
-               else if (use_complex_projector .or. m1_only_use) then
-                  fermi_occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
+               if (blochl .or. use_complex_projector .or. m1_only_use) then
+                  fermi_occ = band_occupation(occ_t, ib, ik_global, this%eigenvalues(ib, ik), this%fermi_level, kT)
                else
                   if (this%eigenvalues(ib, ik) > this%fermi_level) cycle
                   fermi_occ = 1.0_rp
@@ -997,11 +1009,7 @@ end subroutine calculate_band_moments
                   do beta = 1, n_orb_site
                      psi_b = this%eigenvectors(site_offset + beta, ib, ik)
                      if (present(m1_out)) then
-                        if (blochl) then
-                           fermi_occ_m1 = occ_t(ib, ik_global)
-                        else
-                           fermi_occ_m1 = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
-                        end if
+                        fermi_occ_m1 = band_occupation(occ_t, ib, ik_global, this%eigenvalues(ib, ik), this%fermi_level, kT)
                         DM_m1(alpha, beta) = DM_m1(alpha, beta) + &
                            hubbard_projector_element(psi_a, psi_b) * fermi_occ_m1 * kweight * this%eigenvalues(ib, ik)
                      end if
@@ -1164,11 +1172,7 @@ end subroutine calculate_band_moments
          do isite = 1, nsites
             site_offset = (isite - 1)*n_orb_site
             do ib = 1, size(this%eigenvalues, 1)
-               if (blochl) then
-                  occ = occ_t(ib, ik_global)*kweight
-               else
-                  occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
-               end if
+               occ = band_occupation(occ_t, ib, ik_global, this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
                do s = 1, 2
                   do t = 1, 2
                      do i = 1, 5
