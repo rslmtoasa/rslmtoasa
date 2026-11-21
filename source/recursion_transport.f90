@@ -1007,26 +1007,6 @@ contains
          end if
       end if
 
-      ! Only the FP64 matrix-free legacy route uses the compact layout.
-      compact = trim(this%control%transport_backend) == 'legacy' .and. &
-         .not. (trim(this%control%cheb_backend) == 'fast' .and. &
-                trim(this%control%cpu_reconstruction_precision) == 'fp32')
-      if (allocated(this%mu_nm_diag)) deallocate(this%mu_nm_diag)
-      if (allocated(this%mu_nm_stochastic)) deallocate(this%mu_nm_stochastic)
-      if (compact) then
-#ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%allocate('recursion.mu_nm_diag', this%mu_nm_diag, [order, order, nb, loop_over])
-#else
-         allocate(this%mu_nm_diag(order, order, nb, loop_over))
-#endif
-         host_moment_bytes = size(this%mu_nm_diag, kind=int64)*int(storage_size(this%mu_nm_diag)/8, int64)
-         call g_kpm_profile%set_moment_memory(0_int64, 0_int64, host_compact_bytes=host_moment_bytes)
-      else
-         allocate(this%mu_nm_stochastic(nb, nb, order, order, loop_over))
-         host_moment_bytes = size(this%mu_nm_stochastic, kind=int64)*int(storage_size(this%mu_nm_stochastic)/8, int64)
-         call g_kpm_profile%set_moment_memory(0_int64, host_moment_bytes)
-      end if
-
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), &
          left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), &
@@ -1068,6 +1048,27 @@ contains
          end if
       end if
       call g_kpm_profile%stop('P_operator_setup')
+
+      ! The fast-SP fallback runs the same FP64 loops as explicit legacy.
+      ! A selected fast kernel or an FP32 reconstruction needs full moments.
+      compact = .not. use_fast .and. &
+         .not. (trim(this%control%cheb_backend) == 'fast' .and. &
+                trim(this%control%cpu_reconstruction_precision) == 'fp32')
+      if (allocated(this%mu_nm_diag)) deallocate(this%mu_nm_diag)
+      if (allocated(this%mu_nm_stochastic)) deallocate(this%mu_nm_stochastic)
+      if (compact) then
+#ifdef USE_SAFE_ALLOC
+         call g_safe_alloc%allocate('recursion.mu_nm_diag', this%mu_nm_diag, [order, order, nb, loop_over])
+#else
+         allocate(this%mu_nm_diag(order, order, nb, loop_over))
+#endif
+         host_moment_bytes = size(this%mu_nm_diag, kind=int64)*int(storage_size(this%mu_nm_diag)/8, int64)
+         call g_kpm_profile%set_moment_memory(0_int64, 0_int64, host_compact_bytes=host_moment_bytes)
+      else
+         allocate(this%mu_nm_stochastic(nb, nb, order, order, loop_over))
+         host_moment_bytes = size(this%mu_nm_stochastic, kind=int64)*int(storage_size(this%mu_nm_stochastic)/8, int64)
+         call g_kpm_profile%set_moment_memory(0_int64, host_moment_bytes)
+      end if
 
       do i = 1, loop_over
          call g_kpm_profile%start('P_trace_setup')

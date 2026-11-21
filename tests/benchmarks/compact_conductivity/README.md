@@ -48,3 +48,11 @@ variant uses frozen Fe and Co potentials with a two-type B2 unit cell. Its
 legacy total is the type average and the physical-unit total is the sum of
 the normalized type contributions. The `lehmann_charge` and `dyson_charge`
 variants exercise the unchanged full-moment reciprocal reconstruction.
+
+Numeric parity uses each output column's maximum reference magnitude and the
+(5\times10^{-6}) printed-output tolerance. A reference channel at or below
+(10^{-10}) in raw units uses a (10^{-12}) absolute tolerance in those
+units. The CSV also retains the discrepancy in the units of each file.
+The `orbital_pair` variant uses orbital polarization in both operator slots
+to exercise a finite local-operator response alongside the symmetry-null
+charge-driven accumulation in Pt.

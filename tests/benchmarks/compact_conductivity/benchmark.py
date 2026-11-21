@@ -19,8 +19,10 @@ import numpy as np
 
 PBC = dict.fromkeys(('pbc', 'b1', 'b2', 'b3'), True)
 TOL = 5e-6
+RAW_ZERO_SCALE = 1e-10
+RAW_ZERO_TOL = 1e-12
 VARIANTS = ('spin', 'orbital', 'charge', 'hoh_spin', 'hoh_orbital', 'hoh_charge',
-            'accumulation', 'random_spin', 'multitype', 'lehmann_charge', 'dyson_charge')
+            'accumulation', 'orbital_pair', 'random_spin', 'multitype', 'lehmann_charge', 'dyson_charge')
 ENV = dict(OMP_DYNAMIC='FALSE', MKL_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1',
            BLIS_NUM_THREADS='1', RSLMTO_KPM_RANDOM_SEED='917', LC_ALL='C')
 
@@ -46,9 +48,12 @@ def prepare(fixture, directory, size, order, channels, variant):
         observable = 'charge'
         nml['calculation']['gf_route'] = route
         nml['reciprocal'] = dict(nk1=size, nk2=size, nk3=size, use_symmetry_reduction=False)
-    observable = {'accumulation': 'orbital_accumulation', 'multitype': 'charge'}.get(observable, observable)
+    observable = {'accumulation': 'orbital_accumulation', 'orbital_pair': 'orbital_accumulation',
+                  'multitype': 'charge'}.get(observable, observable)
     nml['control'].update(cond_ll=order, cheb_backend='legacy', transport_backend='legacy',
                           linear_in='charge', linear_out=observable, cond_calctype='per_type')
+    if variant == 'orbital_pair':
+        nml['control']['linear_in'] = 'orbital_accumulation'
     nml['hamiltonian']['hoh'] = variant.startswith('hoh_')
     if observable == 'charge':
         nml['hamiltonian']['v_alpha'] = [1, 0, 0]
@@ -117,12 +122,27 @@ def compare(base, feature):
         raise ValueError(f'Output sets differ: {base} and {feature}')
     if sha(base / 'response_units.txt') != sha(feature / 'response_units.txt'):
         raise ValueError(f'Response unit metadata differs: {base} and {feature}')
+    meta = (base / 'response_units.txt').read_text()
+    conversion = float(re.search(r'^output conversion =\s*(\S+)', meta, re.MULTILINE)[1])
+    weights = np.fromstring(re.search(r'^trace weights =\s*(.+)', meta, re.MULTILINE)[1], sep=' ')
+    labels = f90nml.read(base / 'input.nml')['atoms']['label']
+    symbols = [f90nml.read(base / f'{label}.nml')['element']['symbol'] for label in labels]
+    type_weight = dict(zip(symbols, weights))
     for name in sorted(outputs(base)):
         before, after = (np.loadtxt(path / name, ndmin=2) for path in (base, feature))
         if before.shape != after.shape or not np.array_equal(before[:, 0], after[:, 0]):
             raise ValueError(f'Energy grid or array shape differs: {name}')
         if not np.isfinite(before).all() or not np.isfinite(after).all():
             raise ValueError(f'Nonfinite response: {name}')
+        # Identify symmetry-null channels in raw units so that a large unit
+        # conversion alone (e.g. ~10^18 for orbital density) cannot make
+        # roundoff look like a nonzero response. Keep the printed-output
+        # tolerance for nonzero channels and use an FP64 absolute test at zero.
+        unit_scale = 1.0
+        if name.startswith('response_'):
+            unit_scale = abs(conversion) * np.sum(np.abs(weights))
+        elif name.endswith('_response.out'):
+            unit_scale = abs(conversion * type_weight[name.removesuffix('_response.out')])
         diff = after[:, 1:] - before[:, 1:]
         fermi = np.argmin(np.abs(before[:, 0]))
         orbital_imag = name.endswith(('_orb_im.out', '_imag.out'))
@@ -141,15 +161,21 @@ def compare(base, feature):
                 real_scale, optimized_real_scale = baseline_real[j], optimized_real[j]
             else:
                 real_scale = optimized_real_scale = None
+            raw_scale = scale / unit_scale
+            near_zero = raw_scale <= RAW_ZERO_SCALE
+            normalized = absolute / unit_scale if near_zero else absolute / max(1, scale)
+            threshold = RAW_ZERO_TOL if near_zero else TOL
             yield dict(file=name, column=j + 2, max_abs=absolute, reference_scale=scale,
-                       normalized=absolute / max(1, scale), rms=np.sqrt(np.mean(diff[:, j]**2)),
+                       raw_scale=raw_scale, normalized=normalized, tolerance=threshold,
+                       comparison='absolute_raw' if near_zero else 'scaled_output',
+                       scaled_difference=absolute / max(1, scale), rms=np.sqrt(np.mean(diff[:, j]**2)),
                        fermi_energy=before[fermi, 0], baseline_fermi=before[fermi, j + 1],
                        optimized_fermi=after[fermi, j + 1],
                        baseline_max_imag=scale if is_imag else '',
                        optimized_max_imag=np.max(np.abs(after[:, j + 1])) if is_imag else '',
                        baseline_imag_ratio=scale / real_scale if real_scale else '',
                        optimized_imag_ratio=np.max(np.abs(after[:, j + 1])) / optimized_real_scale if optimized_real_scale else '',
-                       passed=absolute / max(1, scale) <= TOL)
+                       passed=normalized <= threshold)
 
 
 def check_traces(directory, variant):
