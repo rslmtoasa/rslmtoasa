@@ -271,7 +271,7 @@ contains
       ! It is used when the count there is within 1e-10*N of N (physically negligible, below the 1e-9 convergence check).
       gap_below = maxval(packed(1:nbands, :), mask=packed(1:nbands, :) <= fermi_level)
       gap_above = minval(packed(1:nbands, :), mask=packed(1:nbands, :) > fermi_level)
-      if (gap_below > -huge(1.0_rp) .and. gap_above < huge(1.0_rp) .and. gap_above > gap_below) then
+      if (gap_below > -huge(1.0_rp) .and. gap_above < huge(1.0_rp)) then
          call occupation_sums(this, packed, 0.5_rp*(gap_below + gap_above), kT, sums, tet, mult)
          electron_count = sums(2)/sums(1)
          if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_below + gap_above)
