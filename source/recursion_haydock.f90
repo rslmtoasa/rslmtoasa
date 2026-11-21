@@ -142,7 +142,7 @@ contains
          end if
       end do
 
-      !$omp parallel do default(shared) private(i) reduction(+:SUMM) schedule(dynamic, 100)
+      !$omp parallel do default(shared) private(i) reduction(+:SUMM) schedule(static)
       do i = 1, this%irnum
          ! H = h - hoh + e_nu + l.s
          this%hpsi(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%hohpsi(:, :, this%irlist(i)) + this%enupsi(:, :, this%irlist(i)) + this%socpsi(:, :, this%irlist(i))
@@ -251,7 +251,7 @@ contains
          end if
       end do
 
-      !$omp parallel do default(shared) private(i) reduction(+:SUMM) schedule(dynamic, 100)
+      !$omp parallel do default(shared) private(i) reduction(+:SUMM) schedule(static)
       do i = 1, this%irnum
          !do i=1, this%lattice%kk
          this%pmn_b(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%pmn_b(:, :, this%irlist(i))
