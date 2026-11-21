@@ -60,10 +60,6 @@ contains
       complex(rp) :: blk(2, 2)
       logical :: blochl
       real(rp), allocatable :: occ_t(:, :)
-#ifdef USE_MPI
-      real(rp), allocatable :: rho_comm(:)
-      integer :: nflat
-#endif
 
       if (.not. allocated(this%eigenvectors) .or. .not. allocated(this%eigenvalues)) then
          call g_logger%fatal('reciprocal%accumulate_spin_density_kspace: no eigensystem; ' // &
@@ -90,18 +86,7 @@ contains
       lend = [1, 4, 9, 16]
       kT = this%temperature*kB_Ry_per_K
 
-#ifdef USE_MPI
-      if (this%k_mesh_distributed_active) then
-         nflat = 2*size(this%rf_density%rho)
-         allocate (rho_comm(nflat))
-         rho_comm(1:nflat:2) = real(reshape(this%rf_density%rho, [size(this%rf_density%rho)]), rp)
-         rho_comm(2:nflat:2) = aimag(reshape(this%rf_density%rho, [size(this%rf_density%rho)]))
-         call chain_recv(rho_comm, nflat)
-         this%rf_density%rho = reshape(cmplx(rho_comm(1:nflat:2), rho_comm(2:nflat:2), rp), &
-                                       shape(this%rf_density%rho))
-         deallocate (rho_comm)
-      end if
-#endif
+      if (this%k_mesh_distributed_active) call chain_complex(this%rf_density%rho, size(this%rf_density%rho), .true.)
 
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
@@ -142,18 +127,7 @@ contains
          end do
       end do
 
-#ifdef USE_MPI
-      if (this%k_mesh_distributed_active) then
-         nflat = 2*size(this%rf_density%rho)
-         allocate (rho_comm(nflat))
-         rho_comm(1:nflat:2) = real(reshape(this%rf_density%rho, [size(this%rf_density%rho)]), rp)
-         rho_comm(2:nflat:2) = aimag(reshape(this%rf_density%rho, [size(this%rf_density%rho)]))
-         call chain_send_bcast(rho_comm, nflat)
-         this%rf_density%rho = reshape(cmplx(rho_comm(1:nflat:2), rho_comm(2:nflat:2), rp), &
-                                       shape(this%rf_density%rho))
-         deallocate (rho_comm)
-      end if
-#endif
+      if (this%k_mesh_distributed_active) call chain_complex(this%rf_density%rho, size(this%rf_density%rho), .false.)
       call this%symmetrize_spin_density()
    end subroutine accumulate_spin_density_kspace
 

@@ -49,7 +49,7 @@ module reciprocal_mod
    use basis_mod, only: lmax_basis, nb, norb, spin_off
    use spin_density_mod, only: spin_density
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context, get_cuda_device_override, &
-                      chain_recv, chain_send_bcast
+                      chain_recv, chain_send_bcast, chain_complex
    use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset
 #ifdef USE_MPI
    use mpi
