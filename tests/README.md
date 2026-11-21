@@ -59,6 +59,15 @@ Every new test states the bug it would catch (docstring or header comment) and h
   --update "reason"` store the reason, binary hash and date. A reference is never rewritten to make a check pass.
 - Each manifest reference directory holds `ref.json` and a four-key `meta.json` (`name`, `generation_command`, `git_sha`,
   `provenance`; `unknown` where it was not recorded). `meta.json` is written by `--gen-ref` and read by no test.
+- A manifest case with `"reference": "<case name>"` compares against that case's reference directory and has none of its own
+  (the sym-on twins in `scf/cases.json`). `--gen-ref` refuses such a case; both generators skip it.
+- A manifest case with `"extends": "<case name>"` is that case overridden by its own keys (`resolve_extends` in
+  `tests/manifest_defaults.py`): dicts merge recursively, every other value (lists such as `labels` included) replaces the
+  parent's, and `extends` is dropped. A cycle or a missing parent is an error. Every reader of a manifest calls
+  `resolve_extends`; at configure time `tests/expand_manifest.py` writes the resolved `scf` and `postproc` manifests to
+  `<build>/Testing/manifests/`, which CMake reads and passes to `run_test.py` with `--cases-dir`. Edit `cases.json`, then
+  re-run `cmake` (the resolved copy is not refreshed by `ctest` alone). The regression manifests are read by CMake as
+  written, so their cases cannot use `extends` for CMake-read keys (name, tier, labels, timeout, strux backend).
 - Native-platform reference variants (`ref.<platform>.json`) hold last-digit differences of BLAS and compiler builds, not different physics.
 - The spin-response reference `.nml` files are not committed: `tests/spin_response/with_oracles.py` regenerates them from the
   generators in `tests/spin_response/oracles/` at test time (about 3 s).

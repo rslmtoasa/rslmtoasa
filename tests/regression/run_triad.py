@@ -32,7 +32,7 @@ from pathlib import Path
 import f90nml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manifest_defaults import apply_manifest_defaults
+from manifest_defaults import apply_manifest_defaults, resolve_extends
 
 ROUTE_PATCH = {
     "recursion": {"calculation": {"gf_route": "recursion"}},
@@ -44,7 +44,7 @@ _JIJ_RE = re.compile(r"Jij between pair\s+(\d+)\s+and\s+(\d+)\s+is\s+([-\dEe.+]+
 
 
 def load_case(cases_json: Path, case_name: str) -> dict:
-    data = json.loads(cases_json.read_text())
+    data = resolve_extends(json.loads(cases_json.read_text()))
     for case in data["cases"]:
         if case["name"] == case_name:
             return apply_manifest_defaults(data, case)
