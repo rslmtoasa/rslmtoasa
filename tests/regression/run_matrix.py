@@ -12,12 +12,12 @@ from pathlib import Path
 import f90nml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manifest_defaults import apply_manifest_defaults
+from manifest_defaults import apply_manifest_defaults, resolve_extends
 
 
 def load_case(cases_json: Path, case_name: str) -> dict:
     with cases_json.open() as fh:
-        data = json.load(fh)
+        data = resolve_extends(json.load(fh))
     for case in data["cases"]:
         if case["name"] == case_name:
             return apply_manifest_defaults(data, case)

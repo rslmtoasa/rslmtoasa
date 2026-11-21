@@ -75,7 +75,7 @@ import sys
 
 import f90nml
 
-from manifest_defaults import apply_manifest_defaults
+from manifest_defaults import apply_manifest_defaults, resolve_extends
 
 
 # DOS text files are written by the Fortran code with five digits after the
@@ -92,7 +92,7 @@ DOS_TEXT_ABS_TOL = 1.1e-5
 
 def load_case(cases_json: str, case_name: str) -> dict:
     with open(cases_json) as fh:
-        data = json.load(fh)
+        data = resolve_extends(json.load(fh))
     for case in data["cases"]:
         if case["name"] == case_name:
             return apply_manifest_defaults(data, case)
@@ -658,6 +658,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run one RSLMTO example test case.")
     parser.add_argument("--binary", required=True, help="Path to rslmto.x binary")
     parser.add_argument("--cases-json", required=True, help="Path to cases.json manifest")
+    parser.add_argument("--cases-dir", default=None,
+                        help="Directory of case decks (defaults to cases/ next to --cases-json)")
     parser.add_argument("--case-name", required=True, help="Name of the case to run")
     parser.add_argument("--scratch-root", required=True, help="Root directory for scratch runs")
     parser.add_argument("--scratch-name", default=None,
@@ -687,7 +689,7 @@ def main() -> None:
     if args.gpu_plugin:
         case.setdefault("namelists", {}).setdefault("control", {})["gpu_plugin"] = True
     binary = os.path.abspath(args.binary)
-    cases_dir = os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
+    cases_dir = args.cases_dir or os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
     case_dir = os.path.join(cases_dir, case["case"])
     scratch_name = args.scratch_name or args.case_name
     if args.gen_ref and "reference" in case:

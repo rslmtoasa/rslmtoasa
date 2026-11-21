@@ -17,6 +17,33 @@ def _merge_dicts(defaults: Mapping, overrides: Mapping) -> dict:
     return merged
 
 
+def resolve_extends(manifest: Mapping) -> dict:
+    """Return the manifest with every case's "extends" parent merged in.
+
+    A case with "extends": "<parent name>" is the parent (itself resolved first) overridden by the
+    case's own keys: dicts merge recursively, every other value (lists included) replaces the
+    parent's. The "extends" key is dropped. Cycles and missing parents raise ValueError; a
+    manifest without "extends" comes back equal to the input.
+    """
+    cases = {case["name"]: case for case in manifest.get("cases", [])}
+
+    def resolve(name: str, child: str | None, chain: tuple[str, ...]) -> dict:
+        if name not in cases:
+            raise ValueError(f"case {child!r} extends missing case {name!r}")
+        if name in chain:
+            raise ValueError("extends cycle: " + " -> ".join(chain + (name,)))
+        case = cases[name]
+        if "extends" not in case:
+            return deepcopy(dict(case))
+        own = {key: value for key, value in case.items() if key != "extends"}
+        return _merge_dicts(resolve(case["extends"], name, chain + (name,)), own)
+
+    resolved = dict(manifest)
+    if "cases" in manifest:
+        resolved["cases"] = [resolve(case["name"], None, ()) for case in manifest["cases"]]
+    return resolved
+
+
 def apply_manifest_defaults(manifest: Mapping, case: Mapping) -> dict:
     """Return a case whose namelists include optional manifest-level defaults."""
     defaults = manifest.get("defaults", {})

@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import sys
 
+from manifest_defaults import resolve_extends
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CI_SERIAL_OMP_THREADS = 2
@@ -200,7 +202,7 @@ def main() -> None:
         ci_env["RSLMTO_MPI_LAUNCHER"] = resolve_mpi_launcher(ci_env)
     ci_env["RSLMTO_OMP_THREADS_SERIAL"] = str(CI_SERIAL_OMP_THREADS)
     effective_compiler = cache.get("CMAKE_Fortran_COMPILER", "unknown")
-    manifest = json.loads(cases_json.read_text())
+    manifest = resolve_extends(json.loads(cases_json.read_text()))
     available_cases = {
         case["name"]: case for case in manifest.get("cases", [])
     }

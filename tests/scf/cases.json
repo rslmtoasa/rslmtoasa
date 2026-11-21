@@ -1680,7 +1680,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp1_symon",
+      "extends": "Example_k_space_scf_tetra_bccFe_nsp1",
       "reference": "Example_k_space_scf_tetra_bccFe_nsp1",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "labels": [
         "functional",
         "scf",
@@ -1692,8 +1694,6 @@
         "strux",
         "mpi"
       ],
-      "case": "k_space_scf/bccFe",
-      "timeout": 300,
       "launch_modes": [
         "serial",
         "mpi"
@@ -1702,154 +1702,13 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 3,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 10,
-          "nk2": 10,
-          "nk3": 10,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 1,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp1_blochl",
@@ -2188,7 +2047,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_hcpFe2_nsp4_symon",
+      "extends": "Example_k_space_scf_tetra_hcpFe2_nsp4",
       "reference": "Example_k_space_scf_tetra_hcpFe2_nsp4",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_hcpFe2_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "labels": [
         "functional",
         "scf",
@@ -2200,8 +2061,6 @@
         "strux",
         "mpi"
       ],
-      "case": "k_space_scf/hcpFe",
-      "timeout": 300,
       "launch_modes": [
         "serial",
         "mpi"
@@ -2210,163 +2069,11 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_hcpFe2_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 1,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 4,
-          "nk2": 4,
-          "nk3": 4,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 4,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
       "abs_tol": 1e-08,
       "rel_tol": 1e-08,
-      "potentials": {
-        "Fe.nml": {
-          "par": {
-            "mom": [
-              1.0,
-              0.0,
-              0.0
-            ]
-          }
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
         }
       }
     },
@@ -2540,19 +2247,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_diamondSi_sp_nsp1_symon",
+      "extends": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
       "reference": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
-      "labels": [
-        "functional",
-        "scf",
-        "kspace",
-        "dos",
-        "tetrahedron",
-        "basis_sp",
-        "nonmagnetic",
-        "strux"
-      ],
-      "case": "bulk/diamondSi",
-      "timeout": 300,
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_diamondSi_sp_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "launch_modes": [
         "serial",
         "mpi"
@@ -2561,161 +2258,13 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_diamondSi_sp_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 3,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 6,
-          "nk2": 6,
-          "nk3": 6,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -1.5,
-          "energy_max": 1.0
-        },
-        "control": {
-          "nsp": 1,
-          "lmax": 1,
-          "recur": "block",
-          "lld": 12
-        },
-        "hamiltonian": {
-          "hoh": false
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Si1_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ]
-          },
-          {
-            "file": "Si2_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ]
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              40,
-              200,
-              380
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18,
-              19,
-              20,
-              21,
-              22,
-              23,
-              24,
-              25,
-              26
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "assertions": [
-          {
-            "file": "testrun.log",
-            "pattern": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-            "value": 8.0,
-            "abs_tol": 1e-10
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp2",
@@ -2880,167 +2429,16 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp2_symon",
+      "extends": "Example_k_space_scf_tetra_bccFe_nsp2",
       "reference": "Example_k_space_scf_tetra_bccFe_nsp2",
-      "labels": [
-        "functional",
-        "scf",
-        "kspace",
-        "dos",
-        "tetrahedron",
-        "basis_spd",
-        "magnetic",
-        "strux"
-      ],
-      "case": "k_space_scf/bccFe",
-      "timeout": 300,
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp2: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 3,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 4,
-          "nk2": 4,
-          "nk3": 4,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 2,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp4",
@@ -3222,7 +2620,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp4_symon",
+      "extends": "Example_k_space_scf_tetra_bccFe_nsp4",
       "reference": "Example_k_space_scf_tetra_bccFe_nsp4",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "labels": [
         "functional",
         "scf",
@@ -3234,8 +2634,6 @@
         "strux",
         "mpi"
       ],
-      "case": "k_space_scf/bccFe",
-      "timeout": 300,
       "launch_modes": [
         "serial",
         "mpi"
@@ -3244,171 +2642,13 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 3,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 4,
-          "nk2": 4,
-          "nk3": 4,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 4,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_x_it1": "Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_mom_y_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_x_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_mom_y_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
-      "potentials": {
-        "Fe.nml": {
-          "par": {
-            "mom": [
-              0.5773502691896258,
-              0.5773502691896258,
-              0.5773502691896258
-            ]
-          }
-        }
-      },
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_gaussian_bccFe_nsp4_symon",
@@ -3773,180 +3013,16 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp1_symon",
+      "extends": "Example_k_space_scf_tetra_bccFe_u_nsp1",
       "reference": "Example_k_space_scf_tetra_bccFe_u_nsp1",
-      "labels": [
-        "functional",
-        "scf",
-        "kspace",
-        "dos",
-        "tetrahedron",
-        "basis_spd",
-        "collinear",
-        "strux"
-      ],
-      "case": "k_space_scf/bccFe",
-      "timeout": 300,
       "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 2,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 10,
-          "nk2": 10,
-          "nk3": 10,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 1,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        },
-        "hamiltonian": {
-          "hubbard_u_general": [
-            [
-              null
-            ],
-            [
-              null
-            ],
-            [
-              2.0
-            ]
-          ]
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp4",
@@ -4141,7 +3217,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp4_symon",
+      "extends": "Example_k_space_scf_tetra_bccFe_u_nsp4",
       "reference": "Example_k_space_scf_tetra_bccFe_u_nsp4",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "labels": [
         "functional",
         "scf",
@@ -4153,8 +3231,6 @@
         "strux",
         "mpi"
       ],
-      "case": "k_space_scf/bccFe",
-      "timeout": 300,
       "launch_modes": [
         "serial",
         "mpi"
@@ -4163,184 +3239,13 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_u_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 2,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 4,
-          "nk2": 4,
-          "nk3": 4,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 4,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        },
-        "hamiltonian": {
-          "hubbard_u_general": [
-            [
-              null
-            ],
-            [
-              null
-            ],
-            [
-              2.0
-            ]
-          ]
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_x_it1": "Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_mom_y_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_x_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_mom_y_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
-      "potentials": {
-        "Fe.nml": {
-          "par": {
-            "mom": [
-              1.0,
-              0.0,
-              0.0
-            ]
-          }
-        }
-      },
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4",
@@ -4533,7 +3438,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4_symon",
+      "extends": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4",
       "reference": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_lmax3_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "labels": [
         "functional",
         "scf",
@@ -4545,8 +3452,6 @@
         "strux",
         "mpi"
       ],
-      "case": "k_space_scf/bccFe",
-      "timeout": 300,
       "launch_modes": [
         "serial",
         "mpi"
@@ -4555,182 +3460,13 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFe_lmax3_nsp4: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "self": {
-          "nstep": 2,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 4,
-          "nk2": 4,
-          "nk3": 4,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        },
-        "control": {
-          "nsp": 4,
-          "lmax": 3,
-          "recur": "block",
-          "lld": 12
-        },
-        "hamiltonian": {
-          "hubbard_spinor_dm_diagnostic": true
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "fermi_level_it1": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "fermi_level_last": "(?s).*Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_it1": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_electron_count_last": "(?s).*Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_it1": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy_last": "(?s).*Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_it1": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "k_weight_sum_last": "(?s).*Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
-              "dos_integral_last": "(?s).*calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_occupied_count_last": "(?s).*calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
-              "site_spin_moment_it1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_last": "(?s).*Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_it1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_last": "(?s).*Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_it1": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_charge_transfer_z_last": "(?s).*Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_x_it1": "Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_mom_y_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_it1": "Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_x_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_mom_y_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "site_mom_z_last": "(?s).*Spin moment projections of atom\\s+1 is\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)",
-              "spinor_dm_trace_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_trace_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?trace=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_eig_min_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_eig_min_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_min=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_eig_max_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_eig_max_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?eig_max=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_max_up_dn_it1": "HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)",
-              "spinor_dm_max_up_dn_last": "(?s).*HUBBARD_SPINOR_DM backend=ks atom=1 .*?max_up_dn=\\s*([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 10
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "standard",
-      "potentials": {
-        "Fe.nml": {
-          "par": {
-            "mom": [
-              1.0,
-              0.0,
-              0.0
-            ]
-          }
-        }
-      },
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     },
     {
       "name": "Example_k_space_scf_tetra_bccFeSkew3_nsp1",
@@ -4887,7 +3623,9 @@
     },
     {
       "name": "Example_k_space_scf_tetra_bccFeSkew3_nsp1_symon",
+      "extends": "Example_k_space_scf_tetra_bccFeSkew3_nsp1",
       "reference": "Example_k_space_scf_tetra_bccFeSkew3_nsp1",
+      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFeSkew3_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
       "labels": [
         "functional",
         "scf",
@@ -4899,8 +3637,6 @@
         "strux",
         "mpi"
       ],
-      "case": "k_space_scf/bccFeSkew3",
-      "timeout": 300,
       "launch_modes": [
         "serial",
         "mpi"
@@ -4909,146 +3645,13 @@
       "mpi_rank_counts": [
         2
       ],
-      "_note": "Sym-on twin of Example_k_space_scf_tetra_bccFeSkew3_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "namelists": {
-        "lattice": {
-          "strux_backend": "strux_lib"
-        },
-        "control": {
-          "cheb_backend": "legacy",
-          "nsp": 1,
-          "lmax": 2,
-          "recur": "block",
-          "lld": 12
-        },
-        "self": {
-          "nstep": 1,
-          "use_kspace": true
-        },
-        "reciprocal": {
-          "nk1": 4,
-          "nk2": 4,
-          "nk3": 4,
-          "use_symmetry_reduction": true,
-          "use_time_reversal": true,
-          "n_energy_points": 400,
-          "dos_method": "tetrahedron",
-          "gaussian_sigma": 0.01
-        },
-        "energy": {
-          "channels_ldos": 400,
-          "energy_min": -2.0,
-          "energy_max": 2.0
-        }
-      },
-      "checks": {
-        "nml": [
-          {
-            "file": "Fe_out.nml",
-            "scalars": [
-              "lmax",
-              "etot",
-              "ws_r",
-              "vmad"
-            ],
-            "arrays": {
-              "mom": [
-                3
-              ],
-              "lmom": [
-                3
-              ]
-            }
-          }
-        ],
-        "text": [
-          {
-            "file": "totaldos.out",
-            "rows": [
-              120,
-              200,
-              280
-            ],
-            "cols": [
-              1,
-              2
-            ]
-          },
-          {
-            "file": "band_moments.dat",
-            "rows": [
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17,
-              18
-            ],
-            "cols": [
-              4,
-              5,
-              6
-            ]
-          }
-        ],
-        "finite": [
-          {
-            "file": "totaldos.out",
-            "cols": [
-              1,
-              2
-            ]
-          }
-        ],
-        "log": [
-          {
-            "file": "testrun.log",
-            "patterns": {
-              "site_spin_moment_1": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_2": "Spin moment of atom\\s+2 is\\s+([-+0-9.EeDd]+)",
-              "site_spin_moment_3": "Spin moment of atom\\s+3 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_1": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
-              "site_valence_3": "Valence at atom\\s+3 is\\s+([-+0-9.EeDd]+)",
-              "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
-              "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)"
-            }
-          },
-          {
-            "file": "report.out",
-            "patterns": {
-              "site_occupation_1": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
-              "site_occupation_3": "Occupation at atom\\s+3:\\s*([-+0-9.EeDd]+)"
-            }
-          }
-        ]
-      },
-      "outputs": [
-        {
-          "file": "totaldos.out",
-          "min_lines": 400
-        },
-        {
-          "file": "magneticdos.out",
-          "min_lines": 401
-        },
-        {
-          "file": "report.out",
-          "min_lines": 3
-        },
-        {
-          "file": "minfo.out",
-          "min_lines": 1
-        },
-        {
-          "file": "linfo.out",
-          "min_lines": 1
-        }
-      ],
-      "tier": "quick",
       "abs_tol": 1e-08,
-      "rel_tol": 1e-08
+      "rel_tol": 1e-08,
+      "namelists": {
+        "reciprocal": {
+          "use_symmetry_reduction": true
+        }
+      }
     }
   ]
 }

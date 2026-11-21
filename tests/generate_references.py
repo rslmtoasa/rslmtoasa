@@ -28,10 +28,12 @@ import subprocess
 import sys
 import tempfile
 
+from manifest_defaults import resolve_extends
+
 
 def load_cases(cases_json: str, selected: list[str]) -> list[dict]:
     with open(cases_json) as fh:
-        data = json.load(fh)
+        data = resolve_extends(json.load(fh))
     cases = data["cases"]
     if selected:
         cases = [c for c in cases if c["name"] in selected]
