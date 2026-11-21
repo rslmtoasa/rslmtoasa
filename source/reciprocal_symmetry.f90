@@ -13,12 +13,11 @@ contains
    !> @param[inout] this Reciprocal object receiving the n_sym_ops, sym_* group arrays.
    module subroutine setup_magnetic_symmetry(this)
       class(reciprocal), intent(inout) :: this
-      real(rp), parameter :: pos_tol = 1.0e-4_rp
       real(rp), allocatable :: frac(:, :), moments(:, :)
-      real(rp) :: x(3), d(3)
+      real(rp) :: x(3), d(3), dist, best
       logical, allocatable :: hit(:)
       integer, allocatable :: src(:)
-      integer :: nsp, n, i, j, k
+      integer :: nsp, n, i, j, k, nearest
 
       nsp = 1
       if (associated(this%control)) nsp = this%control%nsp
@@ -33,38 +32,37 @@ contains
 
       this%n_sym_ops = this%symmetry_analysis%spglib%get_magnetic_symmetry(frac, this%lattice%iz(1:n), moments, &
                           nsp == 2 .or. nsp == 4, this%sym_rotations, this%sym_translations, this%sym_spin_flips)
-      if (this%n_sym_ops == 0) call g_logger%fatal('setup_magnetic_symmetry: spglib returned no symmetry operations', __FILE__, __LINE__)
+      if (this%n_sym_ops == 0) then
+         if (.not. this%symmetry_analysis%spglib%is_available()) &
+            call g_logger%fatal('setup_magnetic_symmetry: spglib is not compiled in', __FILE__, __LINE__)
+         call g_logger%fatal('setup_magnetic_symmetry: spglib returned no symmetry operations', __FILE__, __LINE__)
+      end if
 
       if (allocated(this%sym_atom_perm)) deallocate(this%sym_atom_perm)
       allocate(this%sym_atom_perm(n, this%n_sym_ops))
-      this%sym_atom_perm = 0
       if (allocated(this%sym_atom_inv)) deallocate(this%sym_atom_inv)
       allocate(this%sym_atom_inv(n, this%n_sym_ops))
-      do k = 1, this%n_sym_ops
-         do i = 1, n
-            x = matmul(this%sym_rotations(:, :, k), frac(:, i)) + this%sym_translations(:, k)
-            do j = 1, n
-               d = x - frac(:, j)
-               if (maxval(abs(d - nint(d))) < pos_tol) then
-                  if (this%sym_atom_perm(i, k) /= 0) call g_logger%fatal('setup_magnetic_symmetry: sites ' // &
-                     trim(int2str(this%sym_atom_perm(i, k))) // ' and ' // trim(int2str(j)) // ' coincide modulo a lattice vector; check that ' // &
-                     'a(:,i) holds lattice vector i and that no two basis positions differ by a lattice vector', __FILE__, __LINE__)
-                  this%sym_atom_perm(i, k) = j
-               end if
-            end do
-         end do
-      end do
-      if (any(this%sym_atom_perm == 0)) call g_logger%fatal('setup_magnetic_symmetry: operation does not map the sites onto themselves', __FILE__, __LINE__)
       allocate(hit(n), src(n))
       do k = 1, this%n_sym_ops
          hit = .false.
          do i = 1, n
-            j = this%sym_atom_perm(i, k)
-            if (hit(j)) call g_logger%fatal('setup_magnetic_symmetry: sites ' // trim(int2str(src(j))) // ' and ' // trim(int2str(i)) // &
-               ' map onto the same site; the site map of an operation is not one-to-one', __FILE__, __LINE__)
-            hit(j) = .true.
-            src(j) = i
-            this%sym_atom_inv(j, k) = i
+            x = matmul(this%sym_rotations(:, :, k), frac(:, i)) + this%sym_translations(:, k)
+            best = huge(1.0_rp)
+            nearest = 1
+            do j = 1, n
+               d = x - frac(:, j)
+               dist = maxval(abs(d - nint(d)))
+               if (dist < best) then
+                  best = dist
+                  nearest = j
+               end if
+            end do
+            this%sym_atom_perm(i, k) = nearest
+            if (hit(nearest)) call g_logger%fatal('setup_magnetic_symmetry: sites ' // trim(int2str(src(nearest))) // ' and ' // &
+               trim(int2str(i)) // ' map onto the same site; the site map of an operation is not one-to-one', __FILE__, __LINE__)
+            hit(nearest) = .true.
+            src(nearest) = i
+            this%sym_atom_inv(nearest, k) = i
          end do
       end do
 
@@ -182,12 +180,8 @@ contains
       integer :: shift(3), kf, ki, o, itr, nk_full
       logical :: found, tr_only
 
-      nk_full = product(this%nk_mesh)
-      if (this%n_sym_ops == 0 .or. size(this%full_to_irred_k) /= nk_full) &
-         call g_logger%fatal('full_mesh_operations: no symmetry group or full_to_irred_k size mismatch', __FILE__, __LINE__)
       shift = merge(1, 0, abs(this%k_offset) > 1.0e-12_rp)
-      if (this%symmetry_analysis%spglib%get_full_kpoint_mesh_with_points(this%nk_mesh, shift, kfull) /= nk_full) &
-         call g_logger%fatal('full_mesh_operations: full mesh unavailable', __FILE__, __LINE__)
+      nk_full = this%symmetry_analysis%spglib%get_full_kpoint_mesh_with_points(this%nk_mesh, shift, kfull)
       tr_only = this%use_time_reversal
       if (associated(this%control)) tr_only = tr_only .and. this%control%nsp == 1
       allocate(op(nk_full), rit(3, 3, this%n_sym_ops))
@@ -306,7 +300,6 @@ contains
       integer :: i, s, t
 
       if (this%n_sym_ops == 0) return
-      if (size(rho, 1) /= nb .or. size(rho, 2) /= nb) call g_logger%fatal('symmetrize_site_dm: matrix size is not nb', __FILE__, __LINE__)
       do i = 1, size(rho, 3)
          do s = 1, 2
             do t = 1, 2
