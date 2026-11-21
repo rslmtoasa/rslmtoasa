@@ -57,6 +57,8 @@ contains
                   nearest = j
                end if
             end do
+            if (best > 1.0e-4_rp) call g_logger%fatal('setup_magnetic_symmetry: an operation maps site ' // &
+               trim(int2str(i)) // ' to no site', __FILE__, __LINE__)
             this%sym_atom_perm(i, k) = nearest
             if (hit(nearest)) call g_logger%fatal('setup_magnetic_symmetry: sites ' // trim(int2str(src(nearest))) // ' and ' // &
                trim(int2str(i)) // ' map onto the same site; the site map of an operation is not one-to-one', __FILE__, __LINE__)
