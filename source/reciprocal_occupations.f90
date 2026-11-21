@@ -63,15 +63,10 @@ contains
       integer :: nbands, nk_loc
       real(rp), allocatable :: packed_local(:, :)
 
-      if (.not. allocated(this%eigenvalues)) then
-         call g_logger%fatal('gather_occupation_inputs: eigenvalues are not available', __FILE__, __LINE__)
-      end if
-      if (.not. allocated(this%k_workset%weights)) then
-         call g_logger%fatal('gather_occupation_inputs: k-point weights are not available', __FILE__, __LINE__)
-      end if
-      if (trim(this%dos_method) == 'blochl' .and. (allocated(this%k_path) .or. .not. allocated(this%occ_tetra))) then
-         call g_logger%fatal("dos_method='blochl' occupations need a uniform k mesh with its tetrahedra, not a k-path", &
-                             __FILE__, __LINE__)
+      if (.not. allocated(this%eigenvalues) .or. .not. allocated(this%k_workset%weights) .or. &
+          (trim(this%dos_method) == 'blochl' .and. (allocated(this%k_path) .or. .not. allocated(this%occ_tetra)))) then
+         call g_logger%fatal("gather_occupation_inputs: needs eigenvalues, k-point weights and, for dos_method='blochl', " // &
+                             'a uniform k mesh with its tetrahedra (not a k-path)', __FILE__, __LINE__)
       end if
       nbands = size(this%eigenvalues, 1)
       nk_loc = size(this%eigenvalues, 2)
@@ -145,9 +140,6 @@ contains
       sums = 0.0_rp
       do ik = 1, size(packed, 2)
          wk = packed(nbands + 1, ik)
-         if (wk < 0.0_rp) then
-            call g_logger%fatal('occupation_sums: negative k-point weight', __FILE__, __LINE__)
-         end if
          sums(1) = sums(1) + wk
          do ib = 1, nbands
             if (blochl) then
@@ -160,8 +152,8 @@ contains
          end do
       end do
 
-      if (sums(1) <= tiny(1.0_rp)) then
-         call g_logger%fatal('occupation_sums: global k-point weight sum is zero', __FILE__, __LINE__)
+      if (sums(1) <= tiny(1.0_rp) .or. minval(packed(nbands + 1, :)) < 0.0_rp) then
+         call g_logger%fatal('occupation_sums: k-point weights must be non-negative with a positive sum', __FILE__, __LINE__)
       end if
    end subroutine occupation_sums
 

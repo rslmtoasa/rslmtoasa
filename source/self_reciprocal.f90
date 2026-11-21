@@ -67,12 +67,6 @@ contains
    !=========================================================================
    !      WRITE k-SPACE SCF DOS OUTPUTS IN LEGACY-COMPATIBLE FILE FORMAT
    !=========================================================================
-   module subroutine update_kspace_gbt_constraint(this)
-      class(self), intent(inout) :: this
-
-      call update_gbt_constraint_field(this)
-   end subroutine update_kspace_gbt_constraint
-
    !> @brief Evaluate and write the DOS once, after the k-space SCF loop.
    module subroutine write_kspace_scf_final_dos(this)
       class(self), intent(inout) :: this
@@ -218,7 +212,7 @@ contains
    !> site at the potential and field of this iteration; it is measured again when the residual sum_a |B_a||m_a_perp| has grown
    !> for two consecutive iterations. alpha and the probe field are internal constants. The orientation potential%mom that
    !> apply_constraints overwrote is restored from the copy taken before the first assembly.
-   subroutine update_gbt_constraint_field(this)
+   module subroutine update_gbt_constraint_field(this)
       class(self), intent(inout) :: this
       real(rp), parameter :: alpha = 0.5_rp, b_probe = 1.0e-4_rp
       integer :: nrec, ia, ja, idir

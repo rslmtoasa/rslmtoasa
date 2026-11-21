@@ -781,18 +781,11 @@ contains
 
       primitive_basis_label = 0
       ! For strux_lib mapping, primitive labels must be species labels.
-      ! Use iz (species label per cluster atom, indexed like ia) first: izp
-      ! is indexed by the pre-cut bravais list, so izp(ia) is the wrong label
-      ! for most cluster atoms.  lattice%no may encode prototype classes
-      ! (not species IDs).
+      ! Use iz (species label per cluster atom, indexed like ia) first.
+      ! lattice%no may encode prototype classes (not species IDs).
       if (allocated(this%iz)) then
          if (ia >= 1 .and. ia <= size(this%iz)) then
             primitive_basis_label = this%iz(ia)
-         end if
-      end if
-      if (primitive_basis_label <= 0 .and. allocated(this%izp)) then
-         if (ia >= 1 .and. ia <= size(this%izp)) then
-            primitive_basis_label = this%izp(ia)
          end if
       end if
       if (primitive_basis_label <= 0 .and. allocated(this%no)) then

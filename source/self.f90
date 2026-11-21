@@ -428,7 +428,7 @@ module self_mod
       !> implies no SCF context and grants no access to `self`’s state.
       !> @endnote
       procedure :: potpar
-      procedure, private :: update_kspace_gbt_constraint
+      procedure, private :: update_gbt_constraint_field
       procedure, private :: write_kspace_scf_final_dos
       !> Occupied-state site moments used by the optional k-space SCF branch.
       procedure :: compute_kspace_spin_moments_spinor
@@ -437,9 +437,9 @@ module self_mod
 
    interface
 
-      module subroutine update_kspace_gbt_constraint(this)
+      module subroutine update_gbt_constraint_field(this)
          class(self), intent(inout) :: this
-      end subroutine update_kspace_gbt_constraint
+      end subroutine update_gbt_constraint_field
 
       module subroutine write_kspace_scf_final_dos(this)
          class(self), intent(inout) :: this
@@ -2664,7 +2664,7 @@ contains
          end if
          if (this%control%nsp >= 2 .and. (this%hamiltonian%hubbard_spinor_dm_diagnostic .or. &
              this%hamiltonian%hubbard_u_general_check)) call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
-         call this%update_kspace_gbt_constraint()
+         call this%update_gbt_constraint_field()
 
          ! Canonical k-space EBAND is the projection-free occupied-eigenvalue
          ! sum computed with the same occupations that set EF/electron count.
