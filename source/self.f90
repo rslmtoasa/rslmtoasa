@@ -447,7 +447,7 @@ module self_mod
 
       module subroutine compute_kspace_spin_moments_spinor(this, reciprocal_obj, site_mom)
          class(self), intent(in) :: this
-         type(reciprocal), intent(inout) :: reciprocal_obj
+         type(reciprocal), intent(in) :: reciprocal_obj
          real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
       end subroutine compute_kspace_spin_moments_spinor
 

@@ -69,6 +69,10 @@ contains
       if (.not. allocated(this%k_workset%weights)) then
          call g_logger%fatal('gather_occupation_inputs: k-point weights are not available', __FILE__, __LINE__)
       end if
+      if (trim(this%dos_method) == 'blochl' .and. (allocated(this%k_path) .or. .not. allocated(this%occ_tetra))) then
+         call g_logger%fatal("dos_method='blochl' occupations need a uniform k mesh with its tetrahedra, not a k-path", &
+                             __FILE__, __LINE__)
+      end if
       nbands = size(this%eigenvalues, 1)
       nk_loc = size(this%eigenvalues, 2)
       allocate(packed_local(nbands + 1, nk_loc), packed(nbands + 1, this%k_workset%nk_global))
@@ -77,39 +81,12 @@ contains
       call this%gather_k_columns(nbands + 1, packed_local, packed)
    end subroutine gather_occupation_inputs
 
-   !> @brief Irreducible tetrahedra of the mesh when dos_method='blochl'; left unallocated otherwise (Fermi-Dirac).
-   !> @details Built once per mesh and symmetry map and kept on the reciprocal object.
-   subroutine blochl_tetrahedra(this, tet, mult)
-      class(reciprocal), intent(inout) :: this
-      integer, allocatable, intent(out) :: tet(:, :), mult(:)
-      integer :: n_tet
-      integer, allocatable :: key(:)
-
-      if (trim(this%dos_method) /= 'blochl') return
-      if (allocated(this%k_path)) then
-         call g_logger%fatal("dos_method='blochl' occupations need a uniform k mesh, not a k-path", __FILE__, __LINE__)
-      end if
-      key = [this%nk_mesh, this%full_to_irred_k]
-      if (allocated(this%occ_tetra_key)) then
-         if (size(this%occ_tetra_key) /= size(key)) deallocate(this%occ_tetra_key)
-      end if
-      if (allocated(this%occ_tetra_key)) then
-         if (any(this%occ_tetra_key /= key)) deallocate(this%occ_tetra_key)
-      end if
-      if (.not. allocated(this%occ_tetra_key)) then
-         call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
-         call move_alloc(key, this%occ_tetra_key)
-      end if
-      tet = this%occ_tetra
-      mult = this%occ_tetra_mult
-   end subroutine blochl_tetrahedra
-
    !> @brief Bloechl-corrected tetrahedron occupations of the packed global mesh at T=0 (PRB 49, 16223 Eqs. 4, 22).
    !> @details occ(ib, ik) is defined so that k_weight(ik)*occ(ib, ik)/sum(k_weight) is the integration weight of band ib
    !>          at irreducible point ik: the corner weights of every full-mesh tetrahedron (irreducible class with
    !>          multiplicity) folded onto the irreducible corners. Corrected weights are not clipped. Points of zero weight get 0.
-   subroutine tetra_occupations(this, packed, fermi_level, tet, mult, occ)
-      class(reciprocal), intent(in) :: this
+   subroutine tetra_occupations(nk_mesh, packed, fermi_level, tet, mult, occ)
+      integer, intent(in) :: nk_mesh(3)
       real(rp), intent(in) :: packed(:, :), fermi_level
       integer, intent(in) :: tet(:, :), mult(:)
       real(rp), allocatable, intent(out) :: occ(:, :)
@@ -122,7 +99,7 @@ contains
       occ = 0.0_rp
       wsum = sum(packed(nbands + 1, :))
       do it = 1, size(tet, 2)
-         vol = wsum*real(mult(it), rp)/(6.0_rp*real(product(this%nk_mesh), rp))
+         vol = wsum*real(mult(it), rp)/(6.0_rp*real(product(nk_mesh), rp))
          do ib = 1, nbands
             call tetra_integrated_weights(packed(ib, tet(:, it)), fermi_level, w, dw)
             do ic = 1, 4
@@ -142,29 +119,27 @@ contains
    !> @brief Occupations of the current eigensystem at this%fermi_level for the density consumers (dos_method='blochl').
    !> @details Every rank gathers the whole mesh and computes the same weights; a consumer reads its own k columns.
    module subroutine blochl_occupations(this, occ)
-      class(reciprocal), intent(inout) :: this
+      class(reciprocal), intent(in) :: this
       real(rp), allocatable, intent(out) :: occ(:, :)
       real(rp), allocatable :: packed(:, :)
-      integer, allocatable :: tet(:, :), mult(:)
 
       call gather_occupation_inputs(this, packed)
-      call blochl_tetrahedra(this, tet, mult)
-      call tetra_occupations(this, packed, this%fermi_level, tet, mult, occ)
+      call tetra_occupations(this%nk_mesh, packed, this%fermi_level, this%occ_tetra, this%occ_tetra_mult, occ)
    end subroutine blochl_occupations
 
    !> @brief Sums of weight, weight*occupation and weight*occupation*eigenvalue over the packed global mesh.
-   !> @details With tet/mult present (dos_method='blochl') the occupations are the tetrahedron weights, otherwise Fermi-Dirac.
-   subroutine occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)
+   !> @details With blochl (dos_method='blochl') the occupations are the tetrahedron weights, otherwise Fermi-Dirac.
+   subroutine occupation_sums(this, packed, fermi_level, kT, blochl, sums)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: packed(:, :), fermi_level, kT
+      logical, intent(in) :: blochl
       real(rp), intent(out) :: sums(3)
-      integer, intent(in), optional :: tet(:, :), mult(:)
 
       integer :: ik, ib, nbands
       real(rp) :: wk, occupation
       real(rp), allocatable :: occ_t(:, :)
 
-      if (present(tet)) call tetra_occupations(this, packed, fermi_level, tet, mult, occ_t)
+      if (blochl) call tetra_occupations(this%nk_mesh, packed, fermi_level, this%occ_tetra, this%occ_tetra_mult, occ_t)
 
       nbands = size(packed, 1) - 1
       sums = 0.0_rp
@@ -175,7 +150,7 @@ contains
          end if
          sums(1) = sums(1) + wk
          do ib = 1, nbands
-            if (present(tet)) then
+            if (blochl) then
                occupation = occ_t(ib, ik)
             else
                occupation = fermi_dirac_occupation(packed(ib, ik), fermi_level, kT)
@@ -195,19 +170,17 @@ contains
    !>          Both observables are divided by the global raw weight sum.  The sums run over the gathered
    !>          global mesh in global k order (one all-gather on a distributed mesh).
    module subroutine evaluate_eigenvalue_occupations(this, fermi_level, electron_count, band_energy, weight_sum)
-      class(reciprocal), intent(inout) :: this
+      class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: fermi_level
       real(rp), intent(out) :: electron_count, band_energy
       real(rp), intent(out), optional :: weight_sum
 
       real(rp) :: kT, sums(3)
       real(rp), allocatable :: packed(:, :)
-      integer, allocatable :: tet(:, :), mult(:)
 
       call gather_occupation_inputs(this, packed)
-      call blochl_tetrahedra(this, tet, mult)
       kT = max(this%temperature*kB_Ry_per_K, occupation_kT_floor)
-      call occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)
+      call occupation_sums(this, packed, fermi_level, kT, trim(this%dos_method) == 'blochl', sums)
 
       electron_count = sums(2)/sums(1)
       band_energy = sums(3)/sums(1)
@@ -217,18 +190,18 @@ contains
    !> @brief Solve the projection-free Fermi-level equation N(EF)=N_target.
    !> @details The eigenvalues are gathered once; bisection and the final sums use the local full copy.
    module function find_fermi_level_from_eigenvalues(this, total_electrons) result(fermi_level)
-      class(reciprocal), intent(inout) :: this
+      class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: total_electrons
       real(rp) :: fermi_level
 
       integer :: iteration, nbands
+      logical :: blochl
       real(rp) :: e_min, e_max, e_mid, electron_count, kT, margin, count_tolerance, snap_tolerance
       real(rp) :: sums(3), extrema(2), gap_below, gap_above
       real(rp), allocatable :: packed(:, :)
-      integer, allocatable :: tet(:, :), mult(:)
 
       call gather_occupation_inputs(this, packed)
-      call blochl_tetrahedra(this, tet, mult)
+      blochl = trim(this%dos_method) == 'blochl'
       nbands = size(packed, 1) - 1
       if (total_electrons < -1.0e-12_rp .or. total_electrons > real(nbands, rp) + 1.0e-12_rp) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: target electron count is outside [0, nbands]', &
@@ -255,7 +228,7 @@ contains
 
       do iteration = 1, 256
          e_mid = 0.5_rp*(e_min + e_max)
-         call occupation_sums(this, packed, e_mid, kT, sums, tet, mult)
+         call occupation_sums(this, packed, e_mid, kT, blochl, sums)
          electron_count = sums(2)/sums(1)
          if (abs(electron_count - total_electrons) <= count_tolerance) exit
          if (e_mid <= e_min .or. e_mid >= e_max) exit
@@ -272,12 +245,12 @@ contains
       gap_below = maxval(packed(1:nbands, :), mask=packed(1:nbands, :) <= fermi_level)
       gap_above = minval(packed(1:nbands, :), mask=packed(1:nbands, :) > fermi_level)
       if (gap_below > -huge(1.0_rp) .and. gap_above < huge(1.0_rp)) then
-         call occupation_sums(this, packed, 0.5_rp*(gap_below + gap_above), kT, sums, tet, mult)
+         call occupation_sums(this, packed, 0.5_rp*(gap_below + gap_above), kT, blochl, sums)
          electron_count = sums(2)/sums(1)
          if (abs(electron_count - total_electrons) <= snap_tolerance) fermi_level = 0.5_rp*(gap_below + gap_above)
       end if
 
-      call occupation_sums(this, packed, fermi_level, kT, sums, tet, mult)
+      call occupation_sums(this, packed, fermi_level, kT, blochl, sums)
       electron_count = sums(2)/sums(1)
       if (abs(electron_count - total_electrons) > 1.0e-9_rp*max(1.0_rp, total_electrons)) then
          call g_logger%fatal('find_fermi_level_from_eigenvalues: electron-number bisection did not converge', &
