@@ -345,7 +345,7 @@ end subroutine project_dos_orbitals_gaussian
       integer :: n_orb_per_spin, ik, n_orb_site
       integer :: nbands
       integer :: e_start, e_end, e_count
-      real(rp) :: dos_contrib, orbital_char_avg, de
+      real(rp) :: orbital_char_avg, de, mx_eff, my_eff, mz_eff
       real(rp), dimension(4) :: e_corners, orbital_chars
       real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
       real(rp) :: tet_weight, corner_char
@@ -427,7 +427,7 @@ end subroutine project_dos_orbitals_gaussian
       !$OMP SHARED(this, proj_irr, eig_irr, op, n_orb_per_spin, &
       !$OMP        e_start, e_end, de, use_blochl) &
       !$OMP PRIVATE(i_tet, i_band, i_corner, ik, proj, e_corners, i_start, i_end, &
-      !$OMP         i_energy, dos_contrib, tet_weight, isite, axis, iorb, &
+      !$OMP         i_energy, tet_weight, isite, axis, iorb, mx_eff, my_eff, mz_eff, &
       !$OMP         orbital_char_avg, orbital_chars, &
       !$OMP         mx_chars, my_chars, mz_chars, local_char, local_projected_dos, &
       !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, &
@@ -473,26 +473,27 @@ end subroutine project_dos_orbitals_gaussian
                   end if
                   if (abs(orbital_char_avg) < 1.0e-14_rp) cycle
 
-                  ! Each corner's own weight multiplies its own character (n/4 per corner without the Bloechl correction).
+                  ! Each corner's own weight multiplies its own character (n/4 per corner without the Bloechl correction);
+                  ! the corner sum is formed first so each accumulator is updated once per energy.
                   do i_energy = i_start, i_end
-                     do i_corner = 1, 4
-                        corner_char = orbital_chars(i_corner)
-                        local_char = axis(1)*mx_chars(i_corner) + axis(2)*my_chars(i_corner) + axis(3)*mz_chars(i_corner)
-                        dos_contrib = tet_weight*corner_w(i_corner, i_energy)
-                        local_projected_dos(isite, iorb, 1, i_energy) = local_projected_dos(isite, iorb, 1, i_energy) + &
-                                                                         0.5_rp*(corner_char + local_char)*dos_contrib
-                        local_projected_dos(isite, iorb, 2, i_energy) = local_projected_dos(isite, iorb, 2, i_energy) + &
-                                                                         0.5_rp*(corner_char - local_char)*dos_contrib
-                        local_projected_dos_moments(isite, iorb, 1, 1, i_energy) = &
-                           local_projected_dos_moments(isite, iorb, 1, 1, i_energy) + mx_chars(i_corner)*dos_contrib
-                        local_projected_dos_moments(isite, iorb, 1, 2, i_energy) = &
-                           local_projected_dos_moments(isite, iorb, 1, 2, i_energy) + my_chars(i_corner)*dos_contrib
-                        local_projected_dos_moments(isite, iorb, 1, 3, i_energy) = &
-                           local_projected_dos_moments(isite, iorb, 1, 3, i_energy) + mz_chars(i_corner)*dos_contrib
-                        local_dos_mx(i_energy) = local_dos_mx(i_energy) + mx_chars(i_corner)*dos_contrib
-                        local_dos_my(i_energy) = local_dos_my(i_energy) + my_chars(i_corner)*dos_contrib
-                        local_dos_mz(i_energy) = local_dos_mz(i_energy) + mz_chars(i_corner)*dos_contrib
-                     end do
+                     corner_char = tet_weight*dot_product(corner_w(:, i_energy), orbital_chars)
+                     mx_eff = tet_weight*dot_product(corner_w(:, i_energy), mx_chars)
+                     my_eff = tet_weight*dot_product(corner_w(:, i_energy), my_chars)
+                     mz_eff = tet_weight*dot_product(corner_w(:, i_energy), mz_chars)
+                     local_char = axis(1)*mx_eff + axis(2)*my_eff + axis(3)*mz_eff
+                     local_projected_dos(isite, iorb, 1, i_energy) = local_projected_dos(isite, iorb, 1, i_energy) + &
+                                                                      0.5_rp*(corner_char + local_char)
+                     local_projected_dos(isite, iorb, 2, i_energy) = local_projected_dos(isite, iorb, 2, i_energy) + &
+                                                                      0.5_rp*(corner_char - local_char)
+                     local_projected_dos_moments(isite, iorb, 1, 1, i_energy) = &
+                        local_projected_dos_moments(isite, iorb, 1, 1, i_energy) + mx_eff
+                     local_projected_dos_moments(isite, iorb, 1, 2, i_energy) = &
+                        local_projected_dos_moments(isite, iorb, 1, 2, i_energy) + my_eff
+                     local_projected_dos_moments(isite, iorb, 1, 3, i_energy) = &
+                        local_projected_dos_moments(isite, iorb, 1, 3, i_energy) + mz_eff
+                     local_dos_mx(i_energy) = local_dos_mx(i_energy) + mx_eff
+                     local_dos_my(i_energy) = local_dos_my(i_energy) + my_eff
+                     local_dos_mz(i_energy) = local_dos_mz(i_energy) + mz_eff
                   end do
                end do
             end do
