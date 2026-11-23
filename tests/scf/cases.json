@@ -892,8 +892,6 @@
       ],
       "mpi_procs": 2,
       "mpi_rank_counts": [
-        1,
-        2,
         4
       ],
       "namelists": {
@@ -1007,14 +1005,6 @@
       ],
       "case": "bulk/diamondSi",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "TEST-09: canonical diamond-Si sp k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses the shared Si/sp physical fixture, a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
       "namelists": {
         "lattice": {
@@ -1319,7 +1309,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick"
+      "tier": "standard"
     },
     {
       "name": "Example_k_space_scf_bccFe_spd_magnetic",
@@ -1334,14 +1324,6 @@
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "TEST-09: canonical bcc-Fe spd collinear-magnetic k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
       "namelists": {
         "lattice": {
@@ -1676,7 +1658,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick"
+      "tier": "standard"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp1_symon",
@@ -1694,21 +1676,14 @@
         "strux",
         "mpi"
       ],
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "abs_tol": 1e-08,
       "rel_tol": 1e-08,
       "namelists": {
         "reciprocal": {
           "use_symmetry_reduction": true
         }
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp1_blochl",
@@ -2032,7 +2007,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick",
+      "tier": "standard",
       "potentials": {
         "Fe.nml": {
           "par": {
@@ -2061,21 +2036,14 @@
         "strux",
         "mpi"
       ],
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "abs_tol": 1e-08,
       "rel_tol": 1e-08,
       "namelists": {
         "reciprocal": {
           "use_symmetry_reduction": true
         }
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
@@ -2243,28 +2211,21 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick"
+      "tier": "standard"
     },
     {
       "name": "Example_k_space_scf_tetra_diamondSi_sp_nsp1_symon",
       "extends": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
       "reference": "Example_k_space_scf_tetra_diamondSi_sp_nsp1",
       "_note": "Sym-on twin of Example_k_space_scf_tetra_diamondSi_sp_nsp1: same deck with use_symmetry_reduction=.true.; it compares against the sym-off reference at abs/rel 1e-8.",
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "abs_tol": 1e-08,
       "rel_tol": 1e-08,
       "namelists": {
         "reciprocal": {
           "use_symmetry_reduction": true
         }
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp2",
@@ -2605,7 +2566,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick",
+      "tier": "standard",
       "potentials": {
         "Fe.nml": {
           "par": {
@@ -2648,7 +2609,8 @@
         "reciprocal": {
           "use_symmetry_reduction": true
         }
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_gaussian_bccFe_nsp4_symon",
@@ -2664,14 +2626,6 @@
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "_note": "Gaussian DOS (sigma=0.01 Ry), nsp=4, moment along x, use_symmetry_reduction=.true., 4x4x4 mesh, 2 SCF steps: exercises the spin rotation in the symmetry-reduced Gaussian projection. Serial/MPI agreement is checked by Example_k_space_scf_mpi_serial_agreement.",
       "namelists": {
         "lattice": {
@@ -3009,7 +2963,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick"
+      "tier": "standard"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp1_symon",
@@ -3022,7 +2976,8 @@
         "reciprocal": {
           "use_symmetry_reduction": true
         }
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_u_nsp4",
@@ -3202,7 +3157,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick",
+      "tier": "standard",
       "potentials": {
         "Fe.nml": {
           "par": {
@@ -3231,21 +3186,14 @@
         "strux",
         "mpi"
       ],
-      "launch_modes": [
-        "serial",
-        "mpi"
-      ],
-      "mpi_procs": 2,
-      "mpi_rank_counts": [
-        2
-      ],
       "abs_tol": 1e-08,
       "rel_tol": 1e-08,
       "namelists": {
         "reciprocal": {
           "use_symmetry_reduction": true
         }
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_lmax3_nsp4",
@@ -3619,7 +3567,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick"
+      "tier": "standard"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFeSkew3_nsp1_symon",
