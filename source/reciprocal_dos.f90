@@ -560,7 +560,10 @@ contains
          full(1:ld*this%nk_local) = local(1:ld*this%nk_local)
          return
       end if
-#ifdef USE_MPI
+#ifndef USE_MPI
+      ! Without MPI a distributed mesh is a single rank owning every k point.
+      full(1:ld*this%nk_local) = local(1:ld*this%nk_local)
+#else
       allocate(counts(0:numprocs - 1), displs(0:numprocs - 1))
       do irank = 0, numprocs - 1
          call get_mpi_range(irank, this%k_workset%nk_global, k_first, k_last, k_count)
