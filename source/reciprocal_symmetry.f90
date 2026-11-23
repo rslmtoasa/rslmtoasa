@@ -30,13 +30,14 @@ contains
          if (this%lattice%symbolic_atoms(this%lattice%nbulk + i)%force_nonmagnetic) moments(:, i) = 0.0_rp
       end do
 
+#ifdef USE_SPGLIB
       this%n_sym_ops = this%symmetry_analysis%spglib%get_magnetic_symmetry(frac, this%lattice%iz(1:n), moments, &
                           nsp == 2 .or. nsp == 4, this%sym_rotations, this%sym_translations, this%sym_spin_flips)
-      if (this%n_sym_ops == 0) then
-         if (.not. this%symmetry_analysis%spglib%is_available()) &
-            call g_logger%fatal('setup_magnetic_symmetry: spglib is not compiled in', __FILE__, __LINE__)
+      if (this%n_sym_ops == 0) &
          call g_logger%fatal('setup_magnetic_symmetry: spglib returned no symmetry operations', __FILE__, __LINE__)
-      end if
+#else
+      call g_logger%fatal('setup_magnetic_symmetry: spglib is not compiled in', __FILE__, __LINE__)
+#endif
 
       if (allocated(this%sym_atom_perm)) deallocate(this%sym_atom_perm)
       allocate(this%sym_atom_perm(n, this%n_sym_ops))
@@ -183,7 +184,12 @@ contains
       logical :: found, tr_only
 
       shift = merge(1, 0, abs(this%k_offset) > 1.0e-12_rp)
+#ifdef USE_SPGLIB
       nk_full = this%symmetry_analysis%spglib%get_full_kpoint_mesh_with_points(this%nk_mesh, shift, kfull)
+#else
+      nk_full = 0
+      call g_logger%fatal('full_mesh_operations: spglib is not compiled in', __FILE__, __LINE__)
+#endif
       tr_only = this%use_time_reversal
       if (associated(this%control)) tr_only = tr_only .and. this%control%nsp == 1
       allocate(op(nk_full), rit(3, 3, this%n_sym_ops))
