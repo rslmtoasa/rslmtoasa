@@ -2425,7 +2425,7 @@
           "min_lines": 1
         }
       ],
-      "tier": "quick"
+      "tier": "validation"
     },
     {
       "name": "Example_k_space_scf_tetra_bccFe_nsp2_symon",

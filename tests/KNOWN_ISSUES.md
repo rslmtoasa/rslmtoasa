@@ -100,6 +100,19 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
 - **2026-11-16:** `Val04LdaUPhysics` is no longer registered and `val04_lda_u.py` is not in the tree; Val12 was not re-run.
 
+### bccFe nsp=2 tetrahedron DOS differs on CI; tier `validation` — 2026-11-23
+- **Verified (GitHub Actions, ubuntu gfortran 15.2 / OpenBLAS 0.3.32 / spglib 2.7.0 and macos-15 arm64 gfortran 16.2):** `Example_k_space_scf_tetra_bccFe_nsp2`
+  and `_symon` give, identically on both runners, `totaldos.out` row 200 10.45724 (ref 10.48684), row 280 12.51692 (ref 12.55108),
+  `dos_occupied_count_last` 8.042396 (ref 8.042534). EF, moments and band energies are within tolerance. Both cases moved from `quick` to `validation`.
+- **Verified (cloud container, x86_64):** the reference is reproduced to the printed digit by gfortran 13.3 and 14.2 (`totaldos.out` byte-identical),
+  -O0 and -O3, spglib 2.3.1, 2.6.0 and 2.7.0, and a Debug build with `-finit-real=snan -ffpe-trap=invalid,zero,overflow -fcheck=all` (no trap; output
+  byte-identical to an `-finit-real=inf` build).
+- **Verified:** the nsp=4 twin (`Example_k_space_scf_tetra_bccFe_nsp4`, m along z) passes on CI. Its reference rows are 10.44767 / 12.51165 / 8.042372;
+  the CI nsp=2 values lie closer to these than the nsp=2 reference does (row 200: 0.0096 against 0.039).
+- **Suspected, not diagnosed:** the tetrahedron total DOS uses eigenvalues only, so the nsp=2 H(k) differs by about 1e-4 Ry between platforms; an
+  nsp=2-only step before the k-space assembly (potential or real-space Hamiltonian setup) is the candidate. Not tested: gfortran 15/16 locally,
+  OpenBLAS 0.3.32, an nsp=2 against nsp=4 eigenvalue diff.
+
 ### The lmax=3 symmetry twins do not exercise the f block of symmetrize_site_dm — 2026-11-20
 - **Verified:** both twins check the HUBBARD_SPINOR_DM log line (8 values). With `symmetrize_site_dm` damaged locally (not committed), zeroing the d rows/columns of the orbital rotation (`d(5:9,:)`, `d(:,5:9)`) makes `_symon` fail on all 8; zeroing the f rows/columns (`d(10:16,:)`, `d(:,10:16)`) still passes at 1e-8.
 - **Why (verified for the spinor path, inferred for the rest):** the spinor DM embeds the d block only, and no checked quantity at U = 0 depends on the f block (reached through `calculate_ldm_from_eigenvectors`). **Not tested:** the f block stays uncovered until a case with U at lmax = 3 exists (`validate_fixed_u_scope` aborts it).
