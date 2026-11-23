@@ -209,10 +209,10 @@ Example_impurity_B2FeCo_block_hoh,keep,quick,impurity
 Example_bulk_Pt2MnGa_block,keep,standard,multi-sublattice bulk
 Example_bulk_Pt2MnGa_chebyshev_hoh,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
 Example_bulk_Pt2MnGa_chebyshev,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
-Example_k_space_scf_bccFe,keep,quick,k-space SCF magnetic sp
+Example_k_space_scf_bccFe_nsp1,keep,quick,k-space SCF nsp=1 spd (collinear scalar-relativistic)
 Example_k_space_scf_diamondSi_sp,keep,quick,k-space SCF nonmagnetic
 Example_k_space_scf_diamondSi_sp_tetrahedron,keep,quick,k-space tetrahedron
-Example_k_space_scf_bccFe_spd_magnetic,keep,quick,k-space SCF spd
+Example_k_space_scf_bccFe_nsp2,keep,quick,k-space SCF nsp=2 spd (collinear with SOC)
 Example_bulk_fccCu_chebyshev,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
 Example_impurity_B2FeCo_sd_smoke,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
 Example_impurity_fccCu_chebyshev,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)

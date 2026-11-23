@@ -20,7 +20,8 @@
         "magnetic",
         "basis_spd",
         "block",
-        "hoh"
+        "hoh",
+        "collinear"
       ],
       "case": "bulk/bccFe",
       "timeout": 300,
@@ -79,7 +80,8 @@
         "sd",
         "magnetic",
         "basis_spd",
-        "block"
+        "block",
+        "collinear"
       ],
       "case": "bulk/bccFe",
       "timeout": 300,
@@ -121,7 +123,8 @@
         "magnetic",
         "basis_spd",
         "chebyshev",
-        "hubbard"
+        "hubbard",
+        "collinear"
       ],
       "case": "surface/fccNi001_uhost_guard",
       "timeout": 300,
@@ -245,7 +248,8 @@
         "basis_spd",
         "block",
         "hubbard",
-        "legacy_strux"
+        "legacy_strux",
+        "collinear"
       ],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
@@ -329,7 +333,8 @@
         "magnetic",
         "basis_spd",
         "block",
-        "hubbard"
+        "hubbard",
+        "collinear"
       ],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
@@ -598,7 +603,8 @@
         "magnetic",
         "basis_spd",
         "block",
-        "export"
+        "export",
+        "collinear"
       ],
       "case": "bulk/bccFe",
       "timeout": 300,
@@ -642,7 +648,8 @@
         "magnetic",
         "basis_spd",
         "block",
-        "export"
+        "export",
+        "collinear"
       ],
       "case": "bulk/bccFe",
       "timeout": 300,
@@ -743,7 +750,8 @@
         "basis_spd",
         "block",
         "hoh",
-        "legacy_strux"
+        "legacy_strux",
+        "collinear"
       ],
       "case": "impurity/B2FeCo",
       "timeout": 300,
@@ -809,7 +817,8 @@
         "multi_sublattice",
         "basis_spd",
         "block",
-        "legacy_strux"
+        "legacy_strux",
+        "collinear"
       ],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
@@ -875,14 +884,15 @@
       "tier": "standard"
     },
     {
-      "name": "Example_k_space_scf_bccFe",
+      "name": "Example_k_space_scf_bccFe_nsp1",
       "labels": [
         "functional",
         "scf",
         "kspace",
         "magnetic",
         "basis_spd",
-        "strux"
+        "strux",
+        "collinear"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
@@ -1312,7 +1322,7 @@
       "tier": "standard"
     },
     {
-      "name": "Example_k_space_scf_bccFe_spd_magnetic",
+      "name": "Example_k_space_scf_bccFe_nsp2",
       "labels": [
         "functional",
         "scf",
@@ -1320,11 +1330,12 @@
         "basis_spd",
         "magnetic",
         "strux",
-        "mpi"
+        "mpi",
+        "collinear"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "_note": "TEST-09: canonical bcc-Fe spd collinear-magnetic k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
+      "_note": "TEST-09: canonical bcc-Fe spd collinear spin-polarised with SOC (nsp=2) k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
       "namelists": {
         "lattice": {
           "strux_backend": "strux_lib"
@@ -1509,7 +1520,8 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux"
+        "strux",
+        "magnetic"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
@@ -1674,7 +1686,8 @@
         "basis_spd",
         "collinear",
         "strux",
-        "mpi"
+        "mpi",
+        "magnetic"
       ],
       "abs_tol": 1e-08,
       "rel_tol": 1e-08,
@@ -1695,7 +1708,8 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux"
+        "strux",
+        "magnetic"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
@@ -2237,7 +2251,8 @@
         "tetrahedron",
         "basis_spd",
         "magnetic",
-        "strux"
+        "strux",
+        "collinear"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
@@ -2801,7 +2816,8 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux"
+        "strux",
+        "magnetic"
       ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
@@ -3426,7 +3442,8 @@
         "tetrahedron",
         "basis_spd",
         "collinear",
-        "strux"
+        "strux",
+        "magnetic"
       ],
       "case": "k_space_scf/bccFeSkew3",
       "timeout": 300,
@@ -3583,7 +3600,8 @@
         "basis_spd",
         "collinear",
         "strux",
-        "mpi"
+        "mpi",
+        "magnetic"
       ],
       "launch_modes": [
         "serial",

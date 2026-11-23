@@ -1,6 +1,0 @@
-{
-  "name": "Example_k_space_scf_bccFe",
-  "generation_command": "tests/generate_ci_references.py --build-dir BUILD --cases-json tests/scf/cases.json --references-dir tests/scf/references --case Example_k_space_scf_bccFe",
-  "git_sha": "4c58bef61727957fe3e72b79b0d11413ce6502c4",
-  "provenance": "gfortran 13.4.0, Release, MPI OFF, march_native OFF, macOS arm64, profile runner-native"
-}

@@ -88,7 +88,7 @@ are not tracked here; see `docs/DECISIONS.md`.
   use, and the l=3 value, is not decided.
 - **Suspected, from code reading only:** `ccor_2c` also reads `potential%screening_alpha` (`source/hamiltonian_ccor.f90:496-499`), so a legacy-backend
   `ccor_2c` deck changed at `2cae269`.
-- **Related, not diagnosed:** the k-space SCF reference `Example_k_space_scf_bccFe/ref.json` is 7.047e-6 Ry above the current etot; the step localizes
+- **Related, not diagnosed:** the k-space SCF reference `Example_k_space_scf_bccFe_nsp1/ref.json` is 7.047e-6 Ry above the current etot; the step localizes
   to the commit "Reconcile legacy LDA XC kernels against fixed-density references" (mechanism inferred from the title only).
 
 ### Four validation scripts fail in the CI full run — 2026-10-04
@@ -523,7 +523,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Proposal:** use the current Hubbard keys or remove the example.
 
 ### Quick-tier k-space and DOS examples fail with `ENABLE_SPGLIB=OFF` — 2026-11-15
-- **Measured:** Release, MPI ON, `-DENABLE_SPGLIB=OFF`: 13 quick tests fail (`Example_k_space_scf_*`, `Example_density_of_states_bccFe*`), for example `Example_k_space_scf_bccFe`: 9 of 18 values out of tolerance. Same 13 failures and counts at `origin/main_rc` (8d68cafb).
+- **Measured:** Release, MPI ON, `-DENABLE_SPGLIB=OFF`: 13 quick tests fail (`Example_k_space_scf_*`, `Example_density_of_states_bccFe*`), for example `Example_k_space_scf_bccFe_nsp1`: 9 of 18 values out of tolerance. Same 13 failures and counts at `origin/main_rc` (8d68cafb).
 - **Not checked:** whether the difference is only the k-mesh reduction without spglib (references were made with spglib) or a defect.
 - **Proposal:** decide whether these tests require spglib (skip them when it is off) or need spglib-off references; the developer owns that choice.
 

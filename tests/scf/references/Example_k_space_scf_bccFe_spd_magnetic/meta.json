@@ -1,6 +1,0 @@
-{
-  "name": "Example_k_space_scf_bccFe_spd_magnetic",
-  "generation_command": "tests/generate_ci_references.py --build-dir BUILD --cases-json tests/scf/cases.json --references-dir tests/scf/references --case Example_k_space_scf_bccFe_spd_magnetic",
-  "git_sha": "85126e2dc14cb05d6960d0aa141005ec6b282d22",
-  "provenance": "gfortran 13.3.0, Release, MPI OFF, march_native ON, Linux x86_64, profile linux-ci-equivalent"
-}
