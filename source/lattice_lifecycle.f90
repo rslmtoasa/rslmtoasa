@@ -832,11 +832,11 @@ contains
             this%celldm = 1.633d0
          end if
          a(:, 1) = [1.00000000, 0.00000000, 0.00000000]
-         a(:, 2) = [-.50000000, 0.86602500, 0.00000000]
+         a(:, 2) = [-0.5d0, 0.5d0*sqrt(3.0d0), 0.0d0]
          a(:, 3) = [0.00000000, 0.00000000, 0.00000000]
          a(3, 3) = this%celldm
          this%crd(:, 1) = [0.0, 0.0, 0.0]
-         this%crd(:, 2) = [0.0, 0.577350000, 0.00000000]
+         this%crd(:, 2) = [0.0d0, 1.0d0/sqrt(3.0d0), 0.0d0]
          this%crd(3, 2) = (0.5d0)*this%celldm
          this%nbulk_bulk = 2
          this%ntot = 2
@@ -988,6 +988,7 @@ contains
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
+      real(rp) :: dfrac(3), a_inv(3, 3)
 
       call g_timer%start('bravais')
 
@@ -999,6 +1000,20 @@ contains
       end if
 
       n = this%ntot
+      ! Bulk (calctype 'B'): two basis sites differing by a lattice vector are one site; check that a(:,i) holds lattice
+      ! vector i. Skipped when det(a) is below 1e-8 (slab decks with a(:,3) = 0 have no inverse).
+      if (this%control%calctype == 'B' .and. abs(determinant(this%a)) > 1.0e-8_rp) then
+         a_inv = inverse_3x3(this%a)
+         do i = 1, n - 1
+            do k = i + 1, n
+               dfrac = matmul(a_inv, this%crd(:, i) - this%crd(:, k))
+               if (maxval(abs(dfrac - nint(dfrac))) < 1.0e-4_rp) call g_logger%fatal('lattice%bravais: basis sites ' // &
+                  trim(int2str(i)) // ' and ' // trim(int2str(k)) // ' differ by a lattice vector (fractional tolerance 1e-4); ' // &
+                  'check that a(:,i) holds lattice vector i and that no two basis positions differ by a lattice vector', &
+                  __FILE__, __LINE__)
+            end do
+         end do
+      end if
       ! Defining a size-like parameter for the clust before the cut
       npe = this%npe
       ndim = this%ndim

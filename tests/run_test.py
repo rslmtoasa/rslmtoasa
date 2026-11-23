@@ -75,7 +75,7 @@ import sys
 
 import f90nml
 
-from manifest_defaults import apply_manifest_defaults
+from manifest_defaults import apply_manifest_defaults, resolve_extends
 
 
 # DOS text files are written by the Fortran code with five digits after the
@@ -92,7 +92,7 @@ DOS_TEXT_ABS_TOL = 1.1e-5
 
 def load_case(cases_json: str, case_name: str) -> dict:
     with open(cases_json) as fh:
-        data = json.load(fh)
+        data = resolve_extends(json.load(fh))
     for case in data["cases"]:
         if case["name"] == case_name:
             return apply_manifest_defaults(data, case)
@@ -383,6 +383,22 @@ def extract_log_values(workdir: str, log_check: dict) -> dict:
     return result
 
 
+def extract_log_units(workdir: str, log_check: dict) -> dict:
+    """Last-digit unit of each log value as printed (10**(exponent - decimals)); integers and unmatched keys are omitted."""
+    with open(os.path.join(workdir, log_check["file"])) as fh:
+        content = fh.read()
+
+    units: dict = {}
+    for key, pattern in log_check.get("patterns", {}).items():
+        match = re.search(pattern, content)
+        if match is None:
+            continue
+        number = re.fullmatch(r"[-+]?\d*\.(\d*)(?:[EeDd]([-+]?\d+))?", match.group(1))
+        if number:
+            units[key] = 10.0 ** (int(number.group(2) or 0) - len(number.group(1)))
+    return units
+
+
 def build_ref_data(workdir: str, checks: dict) -> dict:
     """Build a complete reference data dict from the workdir outputs."""
     ref: dict = {}
@@ -592,10 +608,13 @@ def compare_ref(
     for filename, ref_vals in ref_data.get("log", {}).items():
         run_vals = run_data.get("log", {}).get(filename, {})
         log_check = _check_for_file(checks, "log", filename)
+        units = extract_log_units(workdir, log_check) if log_check else {}
         for key, ref_v in ref_vals.items():
             check_abs_tol, check_rel_tol = _check_tolerances(
                 log_check, key, abs_tol, rel_tol
             )
+            # A printed value is known only to its last digit: adjacent roundings differ by one unit.
+            check_abs_tol = max(check_abs_tol, 1.1 * units.get(key, 0.0))
             _check_value(
                 failures, f"{filename}:{key}", run_vals.get(key), ref_v,
                 check_abs_tol, check_rel_tol,
@@ -623,11 +642,13 @@ def save_ref(workdir: str, case_name: str, ref_dir: str, case: dict) -> None:
     ref_data = build_ref_data(workdir, checks)
     with open(os.path.join(dest_dir, "ref.json"), "w") as fh:
         json.dump(ref_data, fh, indent=2)
-    meta = dict(case)
+    meta = {"name": case_name, "generation_command": "unknown", "git_sha": "unknown",
+            "provenance": "unknown"}
     provenance = os.environ.get("RSLMTO_REFERENCE_PROVENANCE")
     if provenance:
         try:
-            meta["reference_provenance"] = json.loads(provenance)
+            meta.update(json.loads(provenance))
+            meta["generation_command"] += f" --case {case_name}"
         except json.JSONDecodeError as exc:
             raise ValueError("RSLMTO_REFERENCE_PROVENANCE must contain valid JSON") from exc
     with open(os.path.join(dest_dir, "meta.json"), "w") as fh:
@@ -656,6 +677,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run one RSLMTO example test case.")
     parser.add_argument("--binary", required=True, help="Path to rslmto.x binary")
     parser.add_argument("--cases-json", required=True, help="Path to cases.json manifest")
+    parser.add_argument("--cases-dir", default=None,
+                        help="Directory of case decks (defaults to cases/ next to --cases-json)")
     parser.add_argument("--case-name", required=True, help="Name of the case to run")
     parser.add_argument("--scratch-root", required=True, help="Root directory for scratch runs")
     parser.add_argument("--scratch-name", default=None,
@@ -685,10 +708,13 @@ def main() -> None:
     if args.gpu_plugin:
         case.setdefault("namelists", {}).setdefault("control", {})["gpu_plugin"] = True
     binary = os.path.abspath(args.binary)
-    cases_dir = os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
+    cases_dir = args.cases_dir or os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
     case_dir = os.path.join(cases_dir, case["case"])
     scratch_name = args.scratch_name or args.case_name
-    ref_name = args.ref_name or args.case_name
+    if args.gen_ref and "reference" in case:
+        parser.error(f"case {args.case_name!r} uses the reference of {case['reference']!r}; "
+                     "generate that case's reference instead")
+    ref_name = case.get("reference", args.ref_name or args.case_name)
     workdir = os.path.join(args.scratch_root, scratch_name)
 
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))

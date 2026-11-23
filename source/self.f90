@@ -428,7 +428,8 @@ module self_mod
       !> implies no SCF context and grants no access to `self`’s state.
       !> @endnote
       procedure :: potpar
-      procedure, private :: write_kspace_scf_dos_outputs
+      procedure, private :: update_gbt_constraint_field
+      procedure, private :: write_kspace_scf_final_dos
       !> Occupied-state site moments used by the optional k-space SCF branch.
       procedure :: compute_kspace_spin_moments_spinor
       final :: destructor
@@ -436,10 +437,13 @@ module self_mod
 
    interface
 
-      module subroutine write_kspace_scf_dos_outputs(this, reciprocal_obj)
+      module subroutine update_gbt_constraint_field(this)
          class(self), intent(inout) :: this
-         type(reciprocal), intent(in) :: reciprocal_obj
-      end subroutine write_kspace_scf_dos_outputs
+      end subroutine update_gbt_constraint_field
+
+      module subroutine write_kspace_scf_final_dos(this)
+         class(self), intent(inout) :: this
+      end subroutine write_kspace_scf_final_dos
 
       module subroutine compute_kspace_spin_moments_spinor(this, reciprocal_obj, site_mom)
          class(self), intent(in) :: this
@@ -2201,6 +2205,7 @@ contains
             niter = niter + 1
          end if
       end do
+      call this%write_kspace_scf_final_dos()
    end subroutine run
 
    !> @brief Perform one constraint-controller update without an SCF potential update.
@@ -2422,6 +2427,7 @@ contains
          if (.not. allocated(this%reciprocal_scf_cache)) then
             allocate(this%reciprocal_scf_cache)
             this%reciprocal_scf_cache = reciprocal(this%hamiltonian)
+            this%reciprocal_scf_cache%distribute_k_mesh = .true.
          end if
          if (rank == 0) then
             call g_logger%info('k-space SCF mesh: ' // &
@@ -2445,12 +2451,13 @@ contains
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
          call g_timer%stop('diagonalization')
          call g_timer%start('calculation-of-DOS')
-         call this%reciprocal_scf_cache%calculate_density_of_states( &
+         call this%reciprocal_scf_cache%prepare_density_of_states( &
             this%hamiltonian, &
             n_energy_points=this%en%channels_ldos + 10, &
             energy_range=[this%en%energy_min, this%en%energy_max], &
             fermi_level=this%en%fermi, &
             auto_find_fermi=.true.)
+         call this%reciprocal_scf_cache%calculate_band_moments()
          ! Capture the same eigenpairs after the canonical Fermi level has
          ! been updated for this spectrum; Hamiltonian capture remains above.
          call this%write_fixed_u_kspace_trace(.true.)
@@ -2657,7 +2664,7 @@ contains
          end if
          if (this%control%nsp >= 2 .and. (this%hamiltonian%hubbard_spinor_dm_diagnostic .or. &
              this%hamiltonian%hubbard_u_general_check)) call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
-         call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
+         call this%update_gbt_constraint_field()
 
          ! Canonical k-space EBAND is the projection-free occupied-eigenvalue
          ! sum computed with the same occupations that set EF/electron count.

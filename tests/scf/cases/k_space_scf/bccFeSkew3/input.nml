@@ -1,0 +1,51 @@
+! bcc Fe, 3-site cell with a non-symmetric lattice matrix a: a1 = (1,0,0), a2 = (0,1,0), a3 = (1/2,1/2,3/2) alat.
+! Three labels with identical potentials. Regression for the k-space symmetry reduction on a cell whose a differs from its transpose.
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 080
+alat = 2.86120
+crystal_sym = 'file'
+strux_backend = 'strux_lib'
+wav = 1.40880
+ntype = 3
+ct(:) = 3*4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'Fe1'
+label(2) = 'Fe2'
+label(3) = 'Fe3'
+/
+&self
+nstep = 1
+use_kspace = .true.
+/
+&energy
+fermi = -0.069170
+energy_min = -2.0
+energy_max = 2.0
+channels_ldos = 400
+/
+&reciprocal
+nk1 = 4
+nk2 = 4
+nk3 = 4
+use_symmetry_reduction = .false.
+use_time_reversal = .true.
+dos_method = 'tetrahedron'
+n_energy_points = 400
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 12
+recur = 'block'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/

@@ -28,6 +28,12 @@ contains
       obj%lattice => hamiltonian_obj%lattice
       obj%control => hamiltonian_obj%lattice%control
 
+      ! k-space sees nrec sites per cell, so fewer recursion classes than basis sites would describe another crystal.
+      if (obj%control%calctype == 'B' .and. obj%lattice%nrec < obj%lattice%ntot) then
+         call g_logger%fatal('k-space needs every basis site to be its own recursion class (nrec = '// &
+                             trim(int2str(obj%lattice%nrec))//' < ntot = '//trim(int2str(obj%lattice%ntot))//').', __FILE__, __LINE__)
+      end if
+
       call obj%restore_to_default()
       call obj%build_from_file()  ! Read parameters from input.nml
       call obj%generate_reciprocal_vectors()
@@ -136,6 +142,7 @@ contains
       this%k_start = 1
       this%k_end = 0
       this%k_mesh_distributed_active = .false.
+      this%distribute_k_mesh = .false.
       call this%k_workset%restore_to_default()
       this%fs_nk1 = 0
       this%fs_nk2 = 0
@@ -144,7 +151,6 @@ contains
       this%use_time_reversal = .true.
       this%strict_symmetry_checks = .false.
       this%dump_symmetry_kmap = .false.
-      this%tetra_symmetry_mode = 'irreducible_native'
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orbs = nb
@@ -312,7 +318,6 @@ contains
       use_time_reversal = this%use_time_reversal
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
-      tetra_symmetry_mode = this%tetra_symmetry_mode
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
       dos_energy_max = this%dos_energy_range(2)
@@ -367,17 +372,16 @@ contains
       this%use_time_reversal = use_time_reversal
       this%strict_symmetry_checks = strict_symmetry_checks
       this%dump_symmetry_kmap = dump_symmetry_kmap
-      this%tetra_symmetry_mode = lower(trim(tetra_symmetry_mode))
-      if (this%tetra_symmetry_mode /= 'full_expand_ref' .and. &
-          this%tetra_symmetry_mode /= 'irreducible_native') then
-         call g_logger%fatal("reciprocal%build_from_file: tetra_symmetry_mode='"//trim(this%tetra_symmetry_mode)// &
-                             "' is invalid; use 'full_expand_ref' or 'irreducible_native'.", __FILE__, __LINE__)
-      end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
       this%gaussian_sigma = gaussian_sigma
       this%temperature = temperature
       this%dos_method = dos_method
+      if (trim(this%dos_method) == 'blochl') then
+         call root_info("reciprocal%build_from_file: dos_method='blochl' uses T=0 tetrahedron occupations; deck temperature " // &
+                        trim(real2str(this%temperature, '(F10.2)')) // ' K overridden to 0', __FILE__, __LINE__)
+         this%temperature = 0.0_rp
+      end if
       this%auto_find_fermi = auto_find_fermi
       this%suppress_internal_logs = suppress_internal_logs
       this%reciprocal_mode = lower(trim(reciprocal_mode))
@@ -461,7 +465,6 @@ contains
       else
          call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
-      call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
@@ -559,8 +562,8 @@ contains
       real(rp) :: det
       integer :: i
 
-      ! Get real-space lattice vectors from lattice%a
-      real_vectors = this%lattice%a
+      ! lattice%a(:, i) is primitive vector i; real_vectors(i, :) holds it as a row below
+      real_vectors = transpose(this%lattice%a)
 
       ! Calculate determinant (volume of unit cell)
       det = real_vectors(1, 1) * (real_vectors(2, 2) * real_vectors(3, 3) - real_vectors(2, 3) * real_vectors(3, 2)) &
@@ -610,10 +613,12 @@ contains
       integer :: ik, ix, iy, iz
       real(rp) :: kx, ky, kz
       real(rp), parameter :: tol = 1.0e-8_rp
-      integer :: shift(3), nfull
+      integer :: shift(3), nfull, n_tet
       real(rp), allocatable :: kpoints_full(:,:)
 
       this%nk_total = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      ! A full mesh carries no symmetry group; drop one left from an earlier reduced mesh
+      this%n_sym_ops = 0
 
       ! Allocate k-point arrays
 #ifdef USE_SAFE_ALLOC
@@ -647,6 +652,7 @@ contains
             end do
             deallocate(kpoints_full)
             call setup_k_mesh_distribution(this, this%nk_total, .false.)
+            if (trim(this%dos_method) == 'blochl') call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
             call g_logger%info('reciprocal%generate_mp_mesh: Generated full mesh via spglib grid convention (' // &
                                trim(int2str(this%nk_total)) // ' k-points)', __FILE__, __LINE__)
             return
@@ -675,6 +681,7 @@ contains
       end do
 
       call setup_k_mesh_distribution(this, this%nk_total, .false.)
+      if (trim(this%dos_method) == 'blochl') call this%build_irreducible_tetrahedra(this%occ_tetra, this%occ_tetra_mult, n_tet)
       call root_info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
    end subroutine generate_mp_mesh
 

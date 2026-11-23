@@ -55,19 +55,19 @@ contains
       integer :: nbands, n_orb_site, n_orb_per_spin, site_orb_start
       integer :: iorder
       integer :: lstart(4), lend(4)
-      real(rp) :: wk, occ, e, kT, farg, epow
+      real(rp) :: wk, occ, e, kT, epow
       complex(rp) :: u, d
       complex(rp) :: blk(2, 2)
-#ifdef USE_MPI
-      real(rp), allocatable :: rho_comm(:)
-      integer :: nflat
-#endif
+      logical :: blochl
+      real(rp), allocatable :: occ_t(:, :)
 
       if (.not. allocated(this%eigenvectors) .or. .not. allocated(this%eigenvalues)) then
          call g_logger%fatal('reciprocal%accumulate_spin_density_kspace: no eigensystem; ' // &
             'build_kspace_hamiltonian/diagonalize_hamiltonian must run first.', __FILE__, __LINE__)
       end if
 
+      blochl = trim(this%dos_method) == 'blochl'
+      if (blochl) call this%blochl_occupations(occ_t)   ! collective: before the rank chain below
       this%n_sites = this%lattice%nrec
       this%n_orb_types = 4
       this%n_spin_components = 2
@@ -86,24 +86,19 @@ contains
       lend = [1, 4, 9, 16]
       kT = this%temperature*kB_Ry_per_K
 
+      if (this%k_mesh_distributed_active) call chain_complex(this%rf_density%rho, size(this%rf_density%rho), .true.)
+
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
          wk = this%k_weights(ik_global)
          do ib = 1, nbands
             e = this%eigenvalues(ib, ik)
-            if (kT > 1.0e-12_rp) then
-               farg = (e - this%fermi_level)/kT
-               if (farg > 50.0_rp) then
-                  occ = 0.0_rp
-               else if (farg < -50.0_rp) then
-                  occ = 1.0_rp
-               else
-                  occ = 1.0_rp/(exp(farg) + 1.0_rp)
-               end if
+            if (blochl) then
+               occ = occ_t(ib, ik_global)
             else
-               occ = merge(1.0_rp, 0.0_rp, e <= this%fermi_level)
+               occ = fermi_dirac_occupation(e, this%fermi_level, kT)
             end if
-            if (occ <= 1.0e-14_rp) cycle
+            if (abs(occ) <= 1.0e-14_rp) cycle
 
             do isite = 1, this%n_sites
                site_orb_start = (isite - 1)*n_orb_site
@@ -132,18 +127,8 @@ contains
          end do
       end do
 
-#ifdef USE_MPI
-      if (this%k_mesh_distributed_active) then
-         nflat = 2*size(this%rf_density%rho)
-         allocate (rho_comm(nflat))
-         rho_comm(1:nflat:2) = real(reshape(this%rf_density%rho, [size(this%rf_density%rho)]), rp)
-         rho_comm(2:nflat:2) = aimag(reshape(this%rf_density%rho, [size(this%rf_density%rho)]))
-         call MPI_ALLREDUCE(MPI_IN_PLACE, rho_comm, nflat, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         this%rf_density%rho = reshape(cmplx(rho_comm(1:nflat:2), rho_comm(2:nflat:2), rp), &
-                                       shape(this%rf_density%rho))
-         deallocate (rho_comm)
-      end if
-#endif
+      if (this%k_mesh_distributed_active) call chain_complex(this%rf_density%rho, size(this%rf_density%rho), .false.)
+      call this%symmetrize_spin_density()
    end subroutine accumulate_spin_density_kspace
 
    !> @brief Fill `band_moments` by projecting the accumulated density.
@@ -190,14 +175,14 @@ contains
          ! Same per-site policy report the real-space route emits, so the two
          ! routes can be diffed line for line.
          if (trim(this%rf_density%policy) == sd_constrained_spiral) then
-            call g_logger%info('DENSITY_POLICY constrained_spiral atom'//fmt('i4', isite)// &
+            call root_info('DENSITY_POLICY constrained_spiral atom'//fmt('i4', isite)// &
                                ' m_long='//fmt('f10.6', m_long)// &
                                ' |m_transverse|='//fmt('f10.6', sqrt(sum(m_transverse(:)**2)))// &
                                ' torque=('//fmt('f10.6', torque(1))//','// &
                                fmt('f10.6', torque(2))//','//fmt('f10.6', torque(3))//')', &
                                __FILE__, __LINE__)
          else
-            call g_logger%info('DENSITY_POLICY relaxed_reference atom'//fmt('i4', isite)// &
+            call root_info('DENSITY_POLICY relaxed_reference atom'//fmt('i4', isite)// &
                                ' |m|='//fmt('f10.6', m_long)// &
                                ' axis=('//fmt('f10.6', axis(1))//','// &
                                fmt('f10.6', axis(2))//','//fmt('f10.6', axis(3))//')', &
@@ -230,7 +215,7 @@ contains
          end do
       end do
 
-      call g_logger%info('reciprocal%fill_band_moments_from_spin_density: band moments ' // &
+      call root_info('reciprocal%fill_band_moments_from_spin_density: band moments ' // &
          'projected from the shared rotating-frame density (policy "'//trim(policy)// &
          '", electron count '//trim(real2str(this%rf_density%electron_count(), '(F12.6)'))//').', &
          __FILE__, __LINE__)

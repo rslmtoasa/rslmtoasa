@@ -55,6 +55,7 @@ contains
          call g_logger%fatal('self%finalize_kspace_scf_state: unsupported calculation type.', __FILE__, __LINE__)
       end select
 
+      this%reciprocal_scf_cache%distribute_k_mesh = .false.
       call this%reciprocal_scf_cache%build_kspace_hamiltonian()
       call this%reciprocal_scf_cache%diagonalize_hamiltonian()
       this%reciprocal_scf_cache%auto_find_fermi = .true.
@@ -66,23 +67,26 @@ contains
    !=========================================================================
    !      WRITE k-SPACE SCF DOS OUTPUTS IN LEGACY-COMPATIBLE FILE FORMAT
    !=========================================================================
-   module subroutine write_kspace_scf_dos_outputs(this, reciprocal_obj)
+   !> @brief Evaluate and write the DOS once, after the k-space SCF loop.
+   module subroutine write_kspace_scf_final_dos(this)
       class(self), intent(inout) :: this
-      type(reciprocal), intent(in) :: reciprocal_obj
       integer :: i, isite, iorb
       real(rp), allocatable :: dos_up_tot(:), dos_dw_tot(:), dos_mx_tot(:), dos_my_tot(:), dos_mz_tot(:), dos_nmag_tot(:)
 
-      call update_gbt_constraint_field(this)
+      if (.not. this%use_kspace) return
+      if (.not. allocated(this%reciprocal_scf_cache)) return
+      if (.not. allocated(this%reciprocal_scf_cache%eigenvalues)) return
+      call this%reciprocal_scf_cache%calculate_dos_output()
       if (rank /= 0) return
-      if (.not. allocated(reciprocal_obj%total_dos)) return
-      if (.not. allocated(reciprocal_obj%dos_energy_grid)) return
+      if (.not. allocated(this%reciprocal_scf_cache%total_dos)) return
+      if (.not. allocated(this%reciprocal_scf_cache%dos_energy_grid)) return
 
-      allocate(dos_up_tot(reciprocal_obj%n_energy_points))
-      allocate(dos_dw_tot(reciprocal_obj%n_energy_points))
-      allocate(dos_mx_tot(reciprocal_obj%n_energy_points))
-      allocate(dos_my_tot(reciprocal_obj%n_energy_points))
-      allocate(dos_mz_tot(reciprocal_obj%n_energy_points))
-      allocate(dos_nmag_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_up_tot(this%reciprocal_scf_cache%n_energy_points))
+      allocate(dos_dw_tot(this%reciprocal_scf_cache%n_energy_points))
+      allocate(dos_mx_tot(this%reciprocal_scf_cache%n_energy_points))
+      allocate(dos_my_tot(this%reciprocal_scf_cache%n_energy_points))
+      allocate(dos_mz_tot(this%reciprocal_scf_cache%n_energy_points))
+      allocate(dos_nmag_tot(this%reciprocal_scf_cache%n_energy_points))
       dos_up_tot = 0.0_rp
       dos_dw_tot = 0.0_rp
       dos_mx_tot = 0.0_rp
@@ -90,43 +94,51 @@ contains
       dos_mz_tot = 0.0_rp
       dos_nmag_tot = 0.0_rp
 
-      if (allocated(reciprocal_obj%projected_dos)) then
-         do i = 1, reciprocal_obj%n_energy_points
-            do isite = 1, reciprocal_obj%n_sites
-               do iorb = 1, reciprocal_obj%n_orb_types
-                  dos_up_tot(i) = dos_up_tot(i) + reciprocal_obj%projected_dos(isite, iorb, 1, i)
-                  dos_dw_tot(i) = dos_dw_tot(i) + reciprocal_obj%projected_dos(isite, iorb, 2, i)
+      if (allocated(this%reciprocal_scf_cache%projected_dos)) then
+         do i = 1, this%reciprocal_scf_cache%n_energy_points
+            do isite = 1, this%reciprocal_scf_cache%n_sites
+               do iorb = 1, this%reciprocal_scf_cache%n_orb_types
+                  dos_up_tot(i) = dos_up_tot(i) + this%reciprocal_scf_cache%projected_dos(isite, iorb, 1, i)
+                  dos_dw_tot(i) = dos_dw_tot(i) + this%reciprocal_scf_cache%projected_dos(isite, iorb, 2, i)
                end do
             end do
          end do
       else
-         dos_up_tot = 0.5_rp*reciprocal_obj%total_dos
-         dos_dw_tot = 0.5_rp*reciprocal_obj%total_dos
+         dos_up_tot = 0.5_rp*this%reciprocal_scf_cache%total_dos
+         dos_dw_tot = 0.5_rp*this%reciprocal_scf_cache%total_dos
       end if
 
-      dos_mz_tot = dos_up_tot - dos_dw_tot
-      dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
-
-      if (allocated(reciprocal_obj%dos_mx_tot)) dos_mx_tot = reciprocal_obj%dos_mx_tot
-      if (allocated(reciprocal_obj%dos_my_tot)) dos_my_tot = reciprocal_obj%dos_my_tot
-      if (allocated(reciprocal_obj%dos_mz_tot)) dos_mz_tot = reciprocal_obj%dos_mz_tot
+      ! Global-frame convention of bands%calculate_fermi: up/dw = (n +- <sigma_z>)/2, m = <sigma>/2.
+      ! The per-site projected_dos is along local axes, so its sums are not these.
+      if (allocated(this%reciprocal_scf_cache%dos_mx_tot)) dos_mx_tot = 0.5_rp*this%reciprocal_scf_cache%dos_mx_tot
+      if (allocated(this%reciprocal_scf_cache%dos_my_tot)) dos_my_tot = 0.5_rp*this%reciprocal_scf_cache%dos_my_tot
+      if (allocated(this%reciprocal_scf_cache%dos_mz_tot)) then
+         dos_mz_tot = 0.5_rp*this%reciprocal_scf_cache%dos_mz_tot
+         dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
+         ! |<sigma_z>| <= n per state; the clamp only removes rounding below zero
+         dos_up_tot = max(0.0_rp, dos_nmag_tot + dos_mz_tot)
+         dos_dw_tot = max(0.0_rp, dos_nmag_tot - dos_mz_tot)
+      else
+         dos_mz_tot = 0.5_rp*(dos_up_tot - dos_dw_tot)
+         dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
+      end if
 
       open(unit=125, file='totaldos.out', status='replace', action='write')
-      do i = 1, reciprocal_obj%n_energy_points
-         write(125, '(2f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, reciprocal_obj%total_dos(i)
+      do i = 1, this%reciprocal_scf_cache%n_energy_points
+         write(125, '(2f16.5)') this%reciprocal_scf_cache%dos_energy_grid(i) - this%reciprocal_scf_cache%fermi_level, this%reciprocal_scf_cache%total_dos(i)
       end do
       close(125)
 
       open(unit=126, file='magneticdos.out', status='replace', action='write')
       write(126, '(a)') '# energy_minus_fermi dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
-      do i = 1, reciprocal_obj%n_energy_points
-         write(126, '(7f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, &
+      do i = 1, this%reciprocal_scf_cache%n_energy_points
+         write(126, '(7f16.5)') this%reciprocal_scf_cache%dos_energy_grid(i) - this%reciprocal_scf_cache%fermi_level, &
             dos_up_tot(i), dos_dw_tot(i), dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
       end do
       close(126)
 
       deallocate(dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot)
-   end subroutine write_kspace_scf_dos_outputs
+   end subroutine write_kspace_scf_final_dos
 
    !=========================================================================
    !  SPINOR-RIGOROUS SITE MOMENTS FROM k-SPACE EIGENVECTORS (nsp=2/SOC path)
@@ -141,12 +153,17 @@ contains
       type(reciprocal), intent(in) :: reciprocal_obj
       real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
       integer :: ik, ik_global, ib, ia, io, iup, idn, site_offset
-      real(rp) :: wk, occ, e, kT, farg
+      real(rp) :: wk, occ, e, kT
       complex(rp) :: u, d, ud
       real(rp) :: mxs, mys, mzs
+      logical :: blochl
+      real(rp), allocatable :: occ_t(:, :)
 
       site_mom(:, :) = 0.0_rp
       kT = reciprocal_obj%temperature*kB_Ry_per_K
+      blochl = trim(reciprocal_obj%dos_method) == 'blochl'
+      if (blochl) call reciprocal_obj%blochl_occupations(occ_t)
+      if (reciprocal_obj%k_mesh_distributed_active) call chain_recv(site_mom, size(site_mom))
 
       do ik = 1, size(reciprocal_obj%eigenvalues, 2)
          ik_global = ik
@@ -156,19 +173,12 @@ contains
          wk = reciprocal_obj%k_weights(ik_global)
          do ib = 1, size(reciprocal_obj%eigenvalues, 1)
             e = reciprocal_obj%eigenvalues(ib, ik)
-            if (kT > 1.0e-12_rp) then
-               farg = (e - reciprocal_obj%fermi_level)/kT
-               if (farg > 50.0_rp) then
-                  occ = 0.0_rp
-               else if (farg < -50.0_rp) then
-                  occ = 1.0_rp
-               else
-                  occ = 1.0_rp/(exp(farg) + 1.0_rp)
-               end if
+            if (blochl) then
+               occ = occ_t(ib, ik_global)
             else
-               occ = merge(1.0_rp, 0.0_rp, e <= reciprocal_obj%fermi_level)
+               occ = fermi_dirac_occupation(e, reciprocal_obj%fermi_level, kT)
             end if
-            if (occ <= 1.0e-14_rp) cycle
+            if (abs(occ) <= 1.0e-14_rp) cycle
 
             do ia = 1, this%lattice%nrec
                site_offset = (ia - 1)*nb
@@ -192,11 +202,8 @@ contains
             end do
          end do
       end do
-#ifdef USE_MPI
-      if (reciprocal_obj%k_mesh_distributed_active) then
-         call MPI_ALLREDUCE(MPI_IN_PLACE, site_mom, product(shape(site_mom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-      end if
-#endif
+      if (reciprocal_obj%k_mesh_distributed_active) call chain_send_bcast(site_mom, size(site_mom))
+      call reciprocal_obj%symmetrize_site_moments(site_mom)
    end subroutine compute_kspace_spin_moments_spinor
 
    !> Field update of the k-space GBT constrained spiral, replacing the lambda controller of apply_constraints on this path
@@ -205,7 +212,7 @@ contains
    !> site at the potential and field of this iteration; it is measured again when the residual sum_a |B_a||m_a_perp| has grown
    !> for two consecutive iterations. alpha and the probe field are internal constants. The orientation potential%mom that
    !> apply_constraints overwrote is restored from the copy taken before the first assembly.
-   subroutine update_gbt_constraint_field(this)
+   module subroutine update_gbt_constraint_field(this)
       class(self), intent(inout) :: this
       real(rp), parameter :: alpha = 0.5_rp, b_probe = 1.0e-4_rp
       integer :: nrec, ia, ja, idir

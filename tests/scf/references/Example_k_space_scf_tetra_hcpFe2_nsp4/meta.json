@@ -1,0 +1,6 @@
+{
+  "name": "Example_k_space_scf_tetra_hcpFe2_nsp4",
+  "generation_command": "tests/generate_ci_references.py --build-dir BUILD --cases-json tests/scf/cases.json --references-dir tests/scf/references --case Example_k_space_scf_tetra_hcpFe2_nsp4",
+  "git_sha": "f7cf94779698de55e3232e3c74d9bcf50b8d2851",
+  "provenance": "gfortran 13.3.0, Release, MPI ON, march_native OFF, Linux x86_64, profile runner-native"
+}

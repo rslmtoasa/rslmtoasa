@@ -48,7 +48,8 @@ module reciprocal_mod
    use symmetry_mod, only: symmetry
    use basis_mod, only: lmax_basis, nb, norb, spin_off
    use spin_density_mod, only: spin_density
-   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context, get_cuda_device_override
+   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context, get_cuda_device_override, &
+                      chain_recv, chain_send_bcast, chain_complex
    use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset
 #ifdef USE_MPI
    use mpi
@@ -312,6 +313,8 @@ module reciprocal_mod
       integer, dimension(:), allocatable :: k_l2g_map
       integer, dimension(:), allocatable :: k_g2l_map
       logical :: k_mesh_distributed_active
+      !> Distribute a tetrahedron/Blochl mesh over MPI ranks (set by the k-space SCF cache only)
+      logical :: distribute_k_mesh
       !> Include time-reversal symmetry in k-point generation
       logical :: use_time_reversal
       !> Offset for k-point mesh (for shifted grids)
@@ -402,6 +405,23 @@ module reciprocal_mod
       ! Symmetry analysis object
       type(symmetry) :: symmetry_analysis
 
+      ! Magnetic symmetry group behind the reduced k mesh (see setup_magnetic_symmetry)
+      !> Number of operations
+      integer :: n_sym_ops = 0
+      !> R(i,j) on fractional coordinates, f' = R f + t [3,3,n_sym_ops]
+      integer, dimension(:, :, :), allocatable :: sym_rotations
+      real(rp), dimension(:, :), allocatable :: sym_translations
+      !> -1 for time-reversal-combined operations (k -> -R k), +1 otherwise
+      integer, dimension(:), allocatable :: sym_spin_flips
+      !> Site i is mapped onto site sym_atom_perm(i, op) by operation op [nrec, n_sym_ops]
+      integer, dimension(:, :), allocatable :: sym_atom_perm
+      !> Site sym_atom_inv(j, op) is mapped onto site j by operation op, the inverse of sym_atom_perm [nrec, n_sym_ops]
+      integer, dimension(:, :), allocatable :: sym_atom_inv
+      !> Cartesian action of each operation on a spin vector, see sym_spin_matrices [3,3,n_sym_ops]
+      real(rp), dimension(:, :, :), allocatable :: sym_spin_w
+      !> Transformation of a site density matrix by each operation, see sym_dm_transformations [nb,nb,n_sym_ops]
+      complex(rp), dimension(:, :, :), allocatable :: sym_dm_u
+
       ! Density of states variables
       !> Energy grid for DOS calculation [n_energy_points]
       real(rp), dimension(:), allocatable :: dos_energy_grid
@@ -443,6 +463,8 @@ module reciprocal_mod
       real(rp) :: canonical_electron_count
       !> Projection-free occupied-eigenvalue band energy for the current spectrum.
       real(rp) :: canonical_band_energy
+      !> Per-site spin axes used by the DOS projections, stored by prepare_density_of_states.
+      real(rp), allocatable :: dos_site_axes(:, :)
       !> Global raw k-weight sum used by the canonical normalization contract.
       real(rp) :: canonical_weight_sum
       !> True only after the current eigensystem has been evaluated canonically.
@@ -463,6 +485,9 @@ module reciprocal_mod
       real(rp), dimension(:), allocatable :: tetrahedron_volumes
       !> Number of tetrahedra
       integer :: n_tetrahedra
+      !> Irreducible tetrahedra and multiplicities of the dos_method='blochl' occupations, built with the k mesh
+      integer, dimension(:, :), allocatable :: occ_tetra
+      integer, dimension(:), allocatable :: occ_tetra_mult
 
       ! K-path (band structure) control variables
       !> Automatic k-path generation enabled
@@ -475,8 +500,6 @@ module reciprocal_mod
       logical :: strict_symmetry_checks
       !> Dump symmetry k-point mapping diagnostics to file
       logical :: dump_symmetry_kmap
-      !> Tetra symmetry backend: ’irreducible_native’ for scalar DOS or ’full_expand_ref’
-      character(len=32) :: tetra_symmetry_mode
       !> Full-mesh to irreducible-k mapping (size = nk1*nk2*nk3)
       integer, dimension(:), allocatable :: full_to_irred_k
       !> Irreducible-k representative indices in full mesh
@@ -522,6 +545,7 @@ module reciprocal_mod
       procedure :: make_execution_backend
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: require_replicated_k_workset
+      procedure :: gather_k_columns
       procedure :: set_basis_sizes
       procedure :: check_multisite_hamiltonian_diagonal
       procedure :: build_kspace_overlap
@@ -535,6 +559,8 @@ module reciprocal_mod
       procedure :: diagonalize_hall_experimental
       procedure :: calculate_band_structure
       procedure :: calculate_density_of_states
+      procedure :: prepare_density_of_states
+      procedure :: calculate_dos_output
       procedure :: calculate_dos_tetrahedron
       procedure :: calculate_dos_gaussian
       procedure :: calculate_dos_blochl
@@ -562,11 +588,17 @@ module reciprocal_mod
       procedure :: invalidate_if_operator_changed
       procedure :: build_from_file
       procedure :: generate_reduced_kpoint_mesh
+      procedure :: setup_magnetic_symmetry
+      procedure :: symmetrize_spin_density
+      procedure :: symmetrize_site_moments
+      procedure :: symmetrize_projected_dos
+      procedure :: symmetrize_site_dm
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
-      procedure :: ensure_tetra_symmetry_backend
-      procedure :: ensure_full_mesh_for_spinor_integrations
+      procedure :: full_mesh_operations
+      procedure :: full_mesh_projection
       procedure :: build_irreducible_tetrahedra
+      procedure :: blochl_occupations
       ! k-space Green’s-function engine (milestone B2)
       procedure :: fill_green
       procedure :: fill_moments
@@ -582,6 +614,9 @@ module reciprocal_mod
 
    public :: fermi_dirac_occupation
    public :: fermi_dirac_entropy_term, fermi_dirac_entropy
+   public :: tetra_corner_weights
+   public :: tetra_integrated_weights
+   public :: tetra_bin_weights
    real(rp), parameter, public :: kB_Ry_per_K = 6.3336814e-6_rp
 
    interface
@@ -1113,6 +1148,17 @@ module reciprocal_mod
       character(len=*), intent(in) :: consumer
    end subroutine require_replicated_k_workset
 
+   !> Collect per-k columns of a k-distributed array into the full mesh on every rank (plain copy if not distributed).
+   !> @param[in] ld Number of values per k point.
+   !> @param[in] local Local columns, ld x nk_local, any rank.
+   !> @param[inout] full Full mesh, ld x nk_global, any rank.
+   module subroutine gather_k_columns(this, ld, local, full)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ld
+      real(rp), intent(in) :: local(*)
+      real(rp), intent(inout) :: full(*)
+   end subroutine gather_k_columns
+
    !> @brief Configure MPI ownership for a k-point set.
    !> @param[inout] this Reciprocal object receiving local/global k maps.
    !> @param[in] nk_global Number of global k-points.
@@ -1260,6 +1306,30 @@ end subroutine check_multisite_hamiltonian_diagonal
       logical, intent(in), optional :: use_shift
    end subroutine generate_reduced_kpoint_mesh
 
+   !> @brief Build and store the symmetry group of the current site moments.
+   !> @details The group is fixed from the moments at the time of the call; call again to rebuild it if the
+   !>          moments rotate away from it.
+   module subroutine setup_magnetic_symmetry(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine setup_magnetic_symmetry
+
+   !> @brief Average this%rf_density over the symmetry group (no-op without a group).
+   module subroutine symmetrize_spin_density(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine symmetrize_spin_density
+
+   !> @brief Average one spin vector per site over the symmetry group (no-op without a group).
+   module subroutine symmetrize_site_moments(this, v)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(inout) :: v(:, :)
+   end subroutine symmetrize_site_moments
+
+   !> @brief Average per-site density matrices over the symmetry group (no-op without a group).
+   module subroutine symmetrize_site_dm(this, rho)
+      class(reciprocal), intent(in) :: this
+      complex(rp), intent(inout) :: rho(:, :, :)
+   end subroutine symmetrize_site_dm
+
    !> @brief Calculate reciprocal-space density of states.
    !> @details Configures the energy grid and DOS method, ensures eigenvalues are
    !>          available, evaluates total/projected DOS, moments, and writes output.
@@ -1287,6 +1357,25 @@ end subroutine check_multisite_hamiltonian_diagonal
       logical, intent(in), optional :: auto_find_fermi
       character(len=*), intent(in), optional :: output_file
    end subroutine calculate_density_of_states
+
+   module subroutine prepare_density_of_states(this, ham, n_energy_points, energy_range, method, gaussian_sigma, temperature, fermi_level, total_electrons, auto_find_fermi)
+      class(reciprocal), intent(inout) :: this
+      class(hamiltonian), intent(in) :: ham
+      integer, intent(in), optional :: n_energy_points
+      real(rp), dimension(2), intent(in), optional :: energy_range
+      character(len=*), intent(in), optional :: method
+      real(rp), intent(in), optional :: gaussian_sigma
+      real(rp), intent(in), optional :: temperature
+      real(rp), intent(in), optional :: fermi_level
+      real(rp), intent(in), optional :: total_electrons
+      logical, intent(in), optional :: auto_find_fermi
+   end subroutine prepare_density_of_states
+
+   module subroutine calculate_dos_output(this, output_file, with_moments)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in), optional :: output_file
+      logical, intent(in), optional :: with_moments
+   end subroutine calculate_dos_output
 
    !> @brief Invalidate eigensystem, DOS, projection, and canonical-energy state.
    !> @details K-point geometry and weights are retained so a frozen-potential
@@ -1321,21 +1410,38 @@ end subroutine check_multisite_hamiltonian_diagonal
       character(len=*), intent(in) :: filename
    end subroutine write_symmetry_kmap_dump
 
-   !> @brief Ensure the configured tetrahedron symmetry backend is usable.
-   !> @details Expands or preserves the k-mesh as needed for scalar tetrahedron
-   !>          DOS versus spinor/projection integrations.
-   !> @param[inout] this Reciprocal object whose mesh/backend state may be updated.
-   module subroutine ensure_tetra_symmetry_backend(this)
+   !> @brief Average the per-site, per-l projected DOS curves over the symmetry group (no-op without a group).
+   !> @details The charge curve n is permuted over sites, the spin-vector curves projected_dos_moments are also acted on by
+   !>          sym_spin_w. projected_dos (along dos_site_axes) and the totals dos_mx/my/mz_tot are rebuilt from them.
+   module subroutine symmetrize_projected_dos(this)
       class(reciprocal), intent(inout) :: this
-   end subroutine ensure_tetra_symmetry_backend
+   end subroutine symmetrize_projected_dos
 
-   !> @brief Ensure spinor integrations operate on a full k-mesh.
-   !> @param[inout] this Reciprocal object whose eigenvalues/eigenvectors may be expanded.
-   !> @param[in] context_tag Diagnostic label for the caller/context.
-   module subroutine ensure_full_mesh_for_spinor_integrations(this, context_tag)
-      class(reciprocal), intent(inout) :: this
-      character(len=*), intent(in) :: context_tag
-   end subroutine ensure_full_mesh_for_spinor_integrations
+   !> @brief Operation that maps the irreducible point of each full-mesh point onto it.
+   !> @details Searches the stored group, with time reversal for nsp = 1 (the sign is sym_spin_flips(op)); stops if none
+   !>          maps the irreducible point onto the full-mesh point.
+   !> @param[out] op Operation index of each full-mesh point [nk_full].
+   module subroutine full_mesh_operations(this, op)
+      class(reciprocal), intent(in) :: this
+      integer, allocatable, intent(out) :: op(:)
+   end subroutine full_mesh_operations
+
+   !> @brief Band projections of one full-mesh point from the irreducible mesh.
+   !> @details The irreducible point of kf is rotated by the operation that maps it onto kf: the site is permuted, the spin
+   !>          vector is acted on by sym_spin_w. An empty op means the mesh is not reduced and kf is irreducible.
+   !> @param[in] proj_irr Projections (total, mx, my, mz; l; site; band; irreducible k).
+   !> @param[in] op Operation index of each full-mesh point, from full_mesh_operations.
+   !> @param[in] kf Full-mesh point.
+   !> @param[in] l Orbital type.
+   !> @param[in] isite Site on the full mesh.
+   !> @param[in] ib Band.
+   !> @return (total, mx, my, mz) projection.
+   module function full_mesh_projection(this, proj_irr, op, kf, l, isite, ib) result(p)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: proj_irr(:, :, :, :, :)
+      integer, intent(in) :: op(:), kf, l, isite, ib
+      real(rp) :: p(4)
+   end function full_mesh_projection
 
    !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
    !> @param[inout] this Reciprocal object containing symmetry maps and mesh dimensions.
@@ -1343,11 +1449,17 @@ end subroutine check_multisite_hamiltonian_diagonal
    !> @param[out] tet_mult Multiplicity of each irreducible tetrahedron.
    !> @param[out] n_tet_ir Number of irreducible tetrahedra.
    module subroutine build_irreducible_tetrahedra(this, tet_ir, tet_mult, n_tet_ir)
-      class(reciprocal), intent(inout) :: this
+      class(reciprocal), intent(in) :: this
       integer, allocatable, intent(out) :: tet_ir(:, :)
       integer, allocatable, intent(out) :: tet_mult(:)
       integer, intent(out) :: n_tet_ir
    end subroutine build_irreducible_tetrahedra
+
+   !> @brief Bloechl-corrected tetrahedron occupations at the current Fermi level, occ(band, global k); dos_method='blochl' only.
+   module subroutine blochl_occupations(this, occ)
+      class(reciprocal), intent(in) :: this
+      real(rp), allocatable, intent(out) :: occ(:, :)
+   end subroutine blochl_occupations
 
    !> @brief Select tetrahedron corner offsets for the current mesh geometry.
    !> @param[in] this Reciprocal object providing reciprocal lattice geometry.
@@ -1392,18 +1504,45 @@ end subroutine check_multisite_hamiltonian_diagonal
       real(rp), intent(inout) :: nos(npts)
    end subroutine tetra_add_nos
 
-   !> @brief Add one tetrahedron’s DOS contribution to a grid.
-   !> @param[in] volwgt Tetrahedron volume/weight factor.
-   !> @param[in] ecorn_in Tetrahedron corner energies.
-   !> @param[in] emin Lower grid energy.
-   !> @param[in] emax Upper grid energy.
-   !> @param[inout] dos DOS grid.
-   !> @param[in] npts Number of grid points.
-   module subroutine tetra_add_dos(volwgt, ecorn_in, emin, emax, dos, npts)
-      real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
-      integer, intent(in) :: npts
-      real(rp), intent(inout) :: dos(npts)
-   end subroutine tetra_add_dos
+   !> @brief Bin-averaged per-corner DOS weights of one linear tetrahedron on the DOS energy grid.
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] blochl Include the Eq. (22) correction.
+   !> @param[in] emin Energy of the first grid point.
+   !> @param[in] de Grid spacing.
+   !> @param[in] jmin First grid point to fill.
+   !> @param[in] jmax Last grid point to fill.
+   !> @param[out] jlo First grid point holding a weight.
+   !> @param[out] jhi Last grid point holding a weight.
+   !> @param[inout] w Bin weights (4, grid point), set for jlo:jhi only.
+   module subroutine tetra_bin_weights(ecorn, blochl, emin, de, jmin, jmax, jlo, jhi, w)
+      real(rp), intent(in) :: ecorn(4), emin, de
+      logical, intent(in) :: blochl
+      integer, intent(in) :: jmin, jmax
+      integer, intent(out) :: jlo, jhi
+      real(rp), intent(inout) :: w(:, :)
+   end subroutine tetra_bin_weights
+
+   !> @brief Per-corner DOS weights of one linear tetrahedron and the Bloechl curvature correction at one energy.
+   !> @details Per unit tetrahedron volume. w_lin is the energy derivative of the uncorrected weights of PRB 49, 16223
+   !>          App. B; dw_corr is the energy derivative of the correction Eq. (22).
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] energy Energy at which the weights are evaluated.
+   !> @param[out] w_lin Linear-tetrahedron corner weights in caller order.
+   !> @param[out] dw_corr Curvature-correction corner weights in caller order.
+   module subroutine tetra_corner_weights(ecorn, energy, w_lin, dw_corr)
+      real(rp), intent(in) :: ecorn(4), energy
+      real(rp), intent(out) :: w_lin(4), dw_corr(4)
+   end subroutine tetra_corner_weights
+
+   !> @brief Integrated corner weights (PRB 49, 16223 App. B) and the Eq. (22) correction of one tetrahedron at one energy.
+   !> @param[in] ecorn Corner energies in caller order.
+   !> @param[in] energy Energy at which the weights are evaluated.
+   !> @param[out] w_lin Linear-tetrahedron integration weights in caller order.
+   !> @param[out] w_corr Curvature-correction weights in caller order.
+   module subroutine tetra_integrated_weights(ecorn, energy, w_lin, w_corr)
+      real(rp), intent(in) :: ecorn(4), energy
+      real(rp), intent(out) :: w_lin(4), w_corr(4)
+   end subroutine tetra_integrated_weights
 
 !> @brief Calculate total DOS with Gaussian broadening.
 !> @details Smears all eigenvalues over the DOS energy grid using the configured
@@ -1471,13 +1610,6 @@ end subroutine project_dos_orbitals_gaussian
       integer, intent(in) :: isite
       real(rp), intent(out) :: axis(3)
    end subroutine get_site_spin_axis
-
-   !> @brief Synchronize lattice local-density-matrix data across MPI ranks.
-   !> @param[inout] lattice_obj Lattice object whose ldm-like storage is synchronized.
-   module subroutine sync_lattice_ldm(lattice_obj)
-      use lattice_mod
-      type(lattice), intent(inout) :: lattice_obj
-   end subroutine sync_lattice_ldm
 
    !> @brief Project one spinor eigenvector block onto scalar and vector weights.
    !> @param[in] this Reciprocal object containing eigenvectors.

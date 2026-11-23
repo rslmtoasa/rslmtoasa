@@ -41,7 +41,7 @@ def ks_af(binary: Path, base: Path, name: str, nsp: int, hoh: bool, radial: str 
     log = re.sub(r"\x1b\[[0-9;]*m", "", log)
     if status != 0:
         return f"{name}: run failed\n{log[-1200:]}"
-    ef = [float(x) for x in re.findall(r"N\(E_F=\s*(-?\d+\.\d+)", log)]
+    ef = [float(x) for x in re.findall(r"Canonical k-space occupations: EF=\s*(\S+)", log)]
     m = [[float(x) for x in re.findall(rf"Spin moment of atom\s+{a} is\s+(\S+)", log)] for a in (1, 2)]
     return ef + m[0] + m[1] if len(ef) == len(m[0]) == len(m[1]) == NSTEP else f"{name}: expected {NSTEP} steps, got {len(ef)}, {len(m[0])}, {len(m[1])}"
 

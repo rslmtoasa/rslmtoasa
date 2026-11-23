@@ -430,6 +430,12 @@ contains
       bounds_scaling = this%bounds%scaling
       export = this%export
 
+      ! The bulk SCF loops index symbolic_atom by nbulk + recursion class, so ntype must equal nbulk + nrec.
+      if (this%lattice%control%calctype == 'B' .and. this%lattice%ntype < this%lattice%nbulk + this%lattice%nrec) then
+         call g_logger%fatal('bulk run needs one &atoms type per recursion class: ntype = '//fmt('I0', this%lattice%ntype)// &
+                             ' but nbulk + nrec = '//fmt('I0', this%lattice%nbulk + this%lattice%nrec)//'.', __FILE__, __LINE__)
+      end if
+
       ! Robust namelist buffers: pre-allocate allocatable inputs so namelist
       ! read does not depend on compiler-specific auto-allocation behavior.
       ntype_nml = max(1, this%lattice%ntype)

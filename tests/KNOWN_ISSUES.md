@@ -88,7 +88,7 @@ are not tracked here; see `docs/DECISIONS.md`.
   use, and the l=3 value, is not decided.
 - **Suspected, from code reading only:** `ccor_2c` also reads `potential%screening_alpha` (`source/hamiltonian_ccor.f90:496-499`), so a legacy-backend
   `ccor_2c` deck changed at `2cae269`.
-- **Related, not diagnosed:** the k-space SCF reference `Example_k_space_scf_bccFe/ref.json` is 7.047e-6 Ry above the current etot; the step localizes
+- **Related, not diagnosed:** the k-space SCF reference `Example_k_space_scf_bccFe_nsp1/ref.json` is 7.047e-6 Ry above the current etot; the step localizes
   to the commit "Reconcile legacy LDA XC kernels against fixed-density references" (mechanism inferred from the title only).
 
 ### Four validation scripts fail in the CI full run — 2026-10-04
@@ -99,6 +99,23 @@ are not tracked here; see `docs/DECISIONS.md`.
   1e-8`, and sin^2(theta) spread 10.39% against 5%). A later cone-angle remeasurement gives a 1.49% spread, so the Val17 status is not reconciled.
 - **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
 - **2026-11-16:** `Val04LdaUPhysics` is no longer registered and `val04_lda_u.py` is not in the tree; Val12 was not re-run.
+
+### bccFe nsp=2 tetrahedron DOS differs on CI; tier `validation` — 2026-11-23
+- **Verified (GitHub Actions, ubuntu gfortran 15.2 / OpenBLAS 0.3.32 / spglib 2.7.0 and macos-15 arm64 gfortran 16.2):** `Example_k_space_scf_tetra_bccFe_nsp2`
+  and `_symon` give, identically on both runners, `totaldos.out` row 200 10.45724 (ref 10.48684), row 280 12.51692 (ref 12.55108),
+  `dos_occupied_count_last` 8.042396 (ref 8.042534). EF, moments and band energies are within tolerance. Both cases moved from `quick` to `validation`.
+- **Verified (cloud container, x86_64):** the reference is reproduced to the printed digit by gfortran 13.3 and 14.2 (`totaldos.out` byte-identical),
+  -O0 and -O3, spglib 2.3.1, 2.6.0 and 2.7.0, and a Debug build with `-finit-real=snan -ffpe-trap=invalid,zero,overflow -fcheck=all` (no trap; output
+  byte-identical to an `-finit-real=inf` build).
+- **Verified:** the nsp=4 twin (`Example_k_space_scf_tetra_bccFe_nsp4`, m along z) passes on CI. Its reference rows are 10.44767 / 12.51165 / 8.042372;
+  the CI nsp=2 values lie closer to these than the nsp=2 reference does (row 200: 0.0096 against 0.039).
+- **Suspected, not diagnosed:** the tetrahedron total DOS uses eigenvalues only, so the nsp=2 H(k) differs by about 1e-4 Ry between platforms; an
+  nsp=2-only step before the k-space assembly (potential or real-space Hamiltonian setup) is the candidate. Not tested: gfortran 15/16 locally,
+  OpenBLAS 0.3.32, an nsp=2 against nsp=4 eigenvalue diff.
+
+### The lmax=3 symmetry twins do not exercise the f block of symmetrize_site_dm — 2026-11-20
+- **Verified:** both twins check the HUBBARD_SPINOR_DM log line (8 values). With `symmetrize_site_dm` damaged locally (not committed), zeroing the d rows/columns of the orbital rotation (`d(5:9,:)`, `d(:,5:9)`) makes `_symon` fail on all 8; zeroing the f rows/columns (`d(10:16,:)`, `d(:,10:16)`) still passes at 1e-8.
+- **Why (verified for the spinor path, inferred for the rest):** the spinor DM embeds the d block only, and no checked quantity at U = 0 depends on the f block (reached through `calculate_ldm_from_eigenvectors`). **Not tested:** the f block stays uncovered until a case with U at lmax = 3 exists (`validate_fixed_u_scope` aborts it).
 
 ## Fixed-potential and frozen-magnon (GBT) findings
 
@@ -506,7 +523,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Proposal:** use the current Hubbard keys or remove the example.
 
 ### Quick-tier k-space and DOS examples fail with `ENABLE_SPGLIB=OFF` — 2026-11-15
-- **Measured:** Release, MPI ON, `-DENABLE_SPGLIB=OFF`: 13 quick tests fail (`Example_k_space_scf_*`, `Example_density_of_states_bccFe*`), for example `Example_k_space_scf_bccFe`: 9 of 18 values out of tolerance. Same 13 failures and counts at `origin/main_rc` (8d68cafb).
+- **Measured:** Release, MPI ON, `-DENABLE_SPGLIB=OFF`: 13 quick tests fail (`Example_k_space_scf_*`, `Example_density_of_states_bccFe*`), for example `Example_k_space_scf_bccFe_nsp1`: 9 of 18 values out of tolerance. Same 13 failures and counts at `origin/main_rc` (8d68cafb).
 - **Not checked:** whether the difference is only the k-mesh reduction without spglib (references were made with spglib) or a defect.
 - **Proposal:** decide whether these tests require spglib (skip them when it is off) or need spglib-off references; the developer owns that choice.
 
@@ -530,3 +547,47 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 ### Conductivity comments name the Jackson kernel; the code uses Lorentz (lambda = 6) — 2026-11-16
 - **Read:** `source/conductivity.f90` about lines 327-339 describe a Jackson kernel; line 391 (`jackson_kernel`) is commented out and line 392 calls `lorentz_kernel(..., 6.0d0)`.
 - **Proposal:** correct the comments (or restore Jackson if Lorentz was a debugging change); developer decision.
+
+### Stale PL on the k-space route under MPI (fixed) — 2026-11-19
+- Fixed in 101c8985 (`bands%calculate_pl` now shares `potential%pl`; Fermi level differed between serial and 2 or 3 ranks on diamond Si, nstep = 3).
+- **Open, read not run:** `replay_fixed_u_m0_moments` (rank 0 only, fixed-U trace) calls `calculate_pl`, which now contains a collective (MPI_ALLREDUCE of PL); with the trace enabled and more than one rank it would hang.
+
+### Fixed-U k-space trace writes only rank 0's k slice under a distributed mesh — 2026-11-20
+- **Read, not run:** `source/ldau_diagnostics.f90` `write_fixed_u_kspace_trace` (about lines 1634-1769) returns on `rank /= 0` and loops over the local k points only (`k_global_index(ik)` maps them to global indices), so with the distributed tetrahedron/Blochl mesh the trace would hold rank 0's slice. Not checked with more than one rank. **Proposal:** gather the per-k data on rank 0 (`gather_k_columns`) or document the trace as serial-only; developer decision.
+
+### Spglib structure and reciprocal basis read `lattice%a` by rows, `lattice%cr` as fractional (fixed) — 2026-11-20
+- Symptom: wrong magnetic group and reciprocal vectors for non-symmetric `a` (2-atom hcp P1 instead of P-6m2 #187; bcc supercells stopped in the B1 capacity guard); fixed in 21ac899b, 7b1bacbb, 9aee418e, c5b1017a (tests `UnitSymmetryInit`, `UnitReciprocalVectors`, case `bccFeSkew3`).
+
+### LdaURefKsBulkNsp2SocUTilted: max |delta| 6.71e-10 against tolerance 1e-10, also with the unchanged main binary — 2026-11-19
+- **Measured:** `reference_rows.py ks_soc_u2_x` gives 6.71e-10 with main and with this branch (the row sets `use_symmetry_reduction = .false.`); the stored reference is not from this platform. **Not checked:** a `ks_soc_u2_x.linux-x86_64.json` variant (not written).
+
+### lmax_basis = 3: L_d, L_f, `hcpx` n = 16 and the strux `cy` table were wrong (fixed in part) — 2026-11-19
+- Fixed in 9e38c42b, 59d55f9d, 260827e5 (L matrices, `hcpx`, `cy`, k-space symmetry at lmax = 3; checks `UnitOrbitalRotation`, `UnitStruxLmax3PairBlocks`).
+- **Open:** f-f SOC prefactor is 0 in `build_lsham`; the `norb == 16` debug dump is its own entry above; no quick-tier deck runs lmax = 3 through U (`validate_fixed_u_scope` aborts it).
+
+### dos_method = 'blochl': corner weights and Bloechl correction implemented, formula awaits developer check — 2026-11-20
+- Implemented in e066cd6b, 079e5770, c29d5450 (paper PRB 49, 16223 Eqs. B, C, 22; test `UnitTetraCornerWeights`); the developer has not signed off.
+- **Measured, not diagnosed:** bcc Fe 4x4x4, 1 step: the projected-DOS normalisation factor printed by `project_dos_orbitals_tetrahedron` is 1.804459 (nsp 1) and 2.343681 (nsp 4, moment along x) for `'tetrahedron'`, 1.000000 for `'blochl'`. Suspect (unverified): the `'tetrahedron'` branch skips tetrahedra with two equal corner energies (`abs(e_i - e_j) < TOL` cycle), `'blochl'` keeps them.
+
+### Projected-DOS group average cannot remove the tetrahedron noise of antiferromagnetic nsp = 3 decks — 2026-11-20
+- **Measured** (scratch decks, tetrahedron 8x8x8, symmetry on): AF Fe2, moments +-z or +-x, nsp = 3: 48 operations, 0 time-reversal-combined; `magneticdos.out` global m along the moment axis peaks at 4.1 and 4.7 states/Ry (up peak about 50) and is not changed by `symmetrize_projected_dos`. With nsp = 4 (16 operations, 8 time-reversal-combined) total m is 0.00000 in every row.
+- **Read, not run:** the stored group (nsp = 1, 3) keeps only operations that map a site onto a site with the same moment vector, so no sublattice-exchanging operation (translation combined with time reversal) is in it. **Proposal (not started):** return that operation from `setup_magnetic_symmetry`; size not estimated.
+
+### Per-atom atomic SCF amplifies input changes of 1e-14 to 1e-12..1e-7 in the next step — 2026-11-20
+- **Measured** (hcp and bcc scratch decks, same binary): a 1e-14 change in `ql` after step 1 gives 1e-12 to 1e-11 in `c`, `vl`, `ppar` and 6e-8 to 8e-7 relative in `*_out.nml` after step 2 (5.5e-2 for a 1e-13 change on bcc). `atomsc` stops at ITER = 56 with DRHO about 9.2e-7 just under TOL = 1e-6 (`self.f90` about line 3200); TOL = 1e-8 reaches the iteration cap and the noise remains. Path: `run_scf` -> `lmtst` -> `atomsc` + `POTPAR`. The cause inside them is not diagnosed.
+- **Consequence:** sym-on against sym-off and serial against MPI comparisons beyond step 1 are meaningful only if the step-1 inputs are bitwise equal.
+
+### hcp preset (`crystal_sym = 'hcp'`, k-space): site occupations differ and non-Hermitian H(k) (fixed) — 2026-11-20
+- Fixed in 1aebcd47 (`primitive_basis_label` read `izp` instead of `iz`) and 35d78311 (truncated `a(:,2)`, `crd(:,2)` constants); `hcpFe` is the physical deck (alat 2.47 A, 1 step).
+- **Open:** 2-step sym-on against sym-off residual 9.3e-8 absolute in `Fe_out.nml` (attributed, not separated, to the atomic-solver amplifier above), so the twins run 1 step. The former `hcpFe2_nsp1` pair was removed: with `symmetrize_spin_density`, the orbital rotation in `symmetrize_site_dm` or `symmetrize_projected_dos` made a no-op, both cases still passed; `hcpFe2_nsp4` covers hcp symmetry.
+
+### hcpFe2 nsp = 4 twin: `magneticdos.out` differs between symmetry on and off (not compared by the case) — 2026-11-20
+- **Measured** (be80d5c7, `Example_k_space_scf_tetra_hcpFe2_nsp4` vs `_nsp4_symon`, moment along x, 1 step): `Fe_out.nml`, `totaldos.out`, `projected_dos.dat`, `band_moments.dat` agree (1.6e-9 absolute or identical), printed `magneticdos.out` values differ by up to 2.4e-2 (symmetry-off up/dw split and `dos_my` about 1.6e-4 where symmetry-on prints 0.00000); the cases check it only through `min_lines`.
+- **Not diagnosed.** Suspect (guess): tetrahedron-split noise in the symmetry-off magnetic DOS that the group average of the final per-site DOS (abd78639) removes.
+
+### Example_bulk_bccFe_nsp2_block_hoh: output differs between identical runs of the same binary — 2026-11-21
+- **Measured** (coordinator): same binary, fresh scratch dir, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `--force-serial`: `Fe_out.nml`, `Fe_scf.nml`, `totaldos.out`, `magneticdos.out`, `Fe_dos.out`, `Fe_orbital_dos.out`, `Fe_orbene.out`, `Fe_orbquadene.out`, `Fe_1_spinene.out`, `report.out` differ. On this branch etot -2541.98228230631 vs ...62041, `ql` differs by about 1e-14; on main (adc3318) etot differs by up to 4.9e-10 absolute.
+- **Correction (measured):** the harness is not single-threaded: `run_test.py` passes the case's `omp_threads` (2 here, also `sd_smoke`) to `run_binary.sh`, which overrides `OMP_NUM_THREADS`. With `omp_threads` = 1, 3 runs are byte-identical (timing files `testrun.log`, `str.out`, `report.out` excluded). Cases without `omp_threads` (nsp3/nsp4 bccFe, fccCu001 hoh, B2FeCo hoh, Pt2MnGa) and the chebyshev case are identical in 2 runs.
+- **Cause (measured):** `reduction(+:SUMM)` with `schedule(dynamic, 100)` in `hop_b_hoh` and `hop_b` (`recursion_haydock.f90`): iteration-to-thread assignment, hence partial-sum order, varies between runs. With `schedule(static)` the 2-thread case and `sd_smoke` (no hoh, 2 threads) are byte-identical over 5 and 4 runs; the 2-thread result differs from the 1-thread result.
+- **Open (measured, not fixed):** at 4 threads, 4 runs still differ (3 reductions, incl. `crecal_b`, combine thread partials in arrival order). A fixed-order reduction would be needed; not started.
+- **Consequence:** byte-compare baselines must use `omp_threads` = 1 for these cases, or exclude them.

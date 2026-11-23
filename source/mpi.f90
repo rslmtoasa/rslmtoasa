@@ -7,6 +7,7 @@
 !> after MPI_Init (or deterministically serial when MPI is unavailable).
 module mpi_mod
    use logger_mod, only: g_logger
+   use precision_mod, only: rp
 #ifdef USE_MPI
    use mpi
 #endif
@@ -49,6 +50,7 @@ module mpi_mod
 
    public :: get_mpi_range, get_mpi_variables, get_mpi_mapping
    public :: split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
+   public :: chain_recv, chain_send_bcast, chain_complex
 
 contains
 
@@ -250,6 +252,59 @@ contains
       numprocs = context%size
       ierr = 0
    end subroutine synchronize_compatibility_globals
+
+   !> @brief Ordered k-sum, step 1: receive the running accumulator from rank-1 (rank 0 keeps its own start value).
+   subroutine chain_recv(buf, n)
+      integer, intent(in) :: n
+      real(rp), intent(inout) :: buf(n)
+#ifdef USE_MPI
+      integer :: status(MPI_STATUS_SIZE)
+      if (numprocs > 1 .and. rank > 0) &
+         call MPI_RECV(buf, n, MPI_DOUBLE_PRECISION, rank - 1, 4711, MPI_COMM_WORLD, status, ierr)
+#endif
+   end subroutine chain_recv
+
+   !> @brief Ordered k-sum, step 2: pass the accumulator to rank+1; the last rank broadcasts the finished sum.
+   subroutine chain_send_bcast(buf, n)
+      integer, intent(in) :: n
+      real(rp), intent(inout) :: buf(n)
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         if (rank < numprocs - 1) call MPI_SEND(buf, n, MPI_DOUBLE_PRECISION, rank + 1, 4711, MPI_COMM_WORLD, ierr)
+         call MPI_BCAST(buf, n, MPI_DOUBLE_PRECISION, numprocs - 1, MPI_COMM_WORLD, ierr)
+      end if
+#endif
+   end subroutine chain_send_bcast
+
+   !> @brief Ordered k-sum of complex arrays a(na) and optional b(nb), sent as one message.
+   !> @details Before the k loop (start = .true.) take the running sums from rank-1, after it pass them on and receive the
+   !>          final ones.
+   subroutine chain_complex(a, na, start, b, nb)
+      integer, intent(in) :: na
+      complex(rp), intent(inout) :: a(na)
+      logical, intent(in) :: start
+      complex(rp), intent(inout), optional :: b(*)
+      integer, intent(in), optional :: nb
+      real(rp), allocatable :: buf(:)
+      integer :: nbb
+
+      nbb = 0
+      if (present(b)) nbb = nb
+      allocate (buf(2*(na + nbb)))
+      buf(1:2*na:2) = real(a, rp)
+      buf(2:2*na:2) = aimag(a)
+      if (present(b)) then
+         buf(2*na + 1::2) = real(b(1:nbb), rp)
+         buf(2*na + 2::2) = aimag(b(1:nbb))
+      end if
+      if (start) then
+         call chain_recv(buf, size(buf))
+      else
+         call chain_send_bcast(buf, size(buf))
+      end if
+      a = cmplx(buf(1:2*na:2), buf(2:2*na:2), rp)
+      if (present(b)) b(1:nbb) = cmplx(buf(2*na + 1::2), buf(2*na + 2::2), rp)
+   end subroutine chain_complex
 
    subroutine get_mpi_range(rank_in, n_items, start_idx, end_idx, items_per_process, l2g_map_out, g2l_map_out, region_tag)
       integer, intent(in) :: rank_in, n_items

@@ -1,0 +1,6 @@
+{
+  "name": "Example_k_space_scf_gaussian_bccFe_nsp4_symon",
+  "generation_command": "tests/generate_ci_references.py --build-dir BUILD --cases-json tests/scf/cases.json --references-dir tests/scf/references --case Example_k_space_scf_gaussian_bccFe_nsp4_symon",
+  "git_sha": "93ca9e37151ff50c94e8fb9112fe6fe7f64e1df8",
+  "provenance": "gfortran 13.3.0, Release, MPI ON, march_native OFF, Linux x86_64, profile runner-native"
+}

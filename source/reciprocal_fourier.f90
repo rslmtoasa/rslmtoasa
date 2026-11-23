@@ -5,6 +5,14 @@ submodule (reciprocal_mod) reciprocal_fourier
 
 contains
 
+   !> The k mesh (never a k-path) is split over ranks for the gaussian DOS or when distribute_k_mesh is set.
+   logical function distributes_k_mesh(this, using_kpath)
+      class(reciprocal), intent(in) :: this
+      logical, intent(in) :: using_kpath
+
+      distributes_k_mesh = (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian' .or. this%distribute_k_mesh)
+   end function distributes_k_mesh
+
    module subroutine reciprocal_workspace_ensure_capacity(this, nmat, tile_length, generalized, operator_generation, nnmax, ntype)
       class(reciprocal_workspace), intent(inout) :: this
       integer, intent(in) :: nmat, tile_length, operator_generation, nnmax, ntype
@@ -722,7 +730,7 @@ contains
       ! Local variables
       integer :: ik, nk, ntype, tile_first, tile_last, tile_length
       character(len=200) :: debug_msg
-      logical :: using_kpath, distribute_mesh, backend_assembly_available
+      logical :: using_kpath, backend_assembly_available
       integer :: i, j
       type(reciprocal_execution_request) :: request
       type(reciprocal_execution_result) :: result
@@ -770,8 +778,7 @@ contains
                                         ' k-points and ', this%lattice%ntype, ' atom types'
       call root_info(trim(debug_msg), __FILE__, __LINE__)
 
-      distribute_mesh = (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian')
-      call setup_k_mesh_distribution(this, nk, distribute_mesh)
+      call setup_k_mesh_distribution(this, nk, distributes_k_mesh(this, using_kpath))
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
       call this%build_neighbor_vectors()
@@ -1085,7 +1092,7 @@ contains
          return
       end if
 
-      call setup_k_mesh_distribution(this, nk, (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian'))
+      call setup_k_mesh_distribution(this, nk, distributes_k_mesh(this, using_kpath))
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local])

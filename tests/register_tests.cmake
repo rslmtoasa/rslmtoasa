@@ -269,6 +269,12 @@ if(RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitSimpsonFTemperature quick SOURCES ${TestDIR}/unit/test_simpson_f_temperature.f90)
   add_fortran_unit_test(UnitKspaceGFValidation quick SOURCES ${TestDIR}/unit/test_kspace_gf_validation.f90 LABELS green kspace)
   add_fortran_unit_test(UnitFermiDiracEntropy quick SOURCES ${TestDIR}/unit/test_fermi_dirac_entropy.f90 LABELS thermodynamics)
+  add_fortran_unit_test(UnitTetraCornerWeights quick SOURCES ${TestDIR}/unit/test_tetra_corner_weights.f90 LABELS reciprocal tetrahedron)
+  if(ENABLE_SPGLIB AND SPGLIB_FOUND)
+    add_fortran_unit_test(UnitMagneticSymmetry quick SOURCES ${TestDIR}/unit/test_magnetic_symmetry.f90 LABELS kspace)
+    add_fortran_unit_test(UnitOrbitalRotation quick SOURCES ${TestDIR}/unit/test_orbital_rotation.f90 LABELS kspace)
+    add_fortran_unit_test(UnitSymmetryInit quick SOURCES ${TestDIR}/unit/test_symmetry_init.f90 LABELS kspace)
+  endif()
   add_fortran_unit_test(UnitChebyshevGFOracle quick SOURCES ${TestDIR}/unit/test_chebyshev_gf_oracle.f90 LABELS green chebyshev)
   add_fortran_unit_test(UnitChebyshevGreenPrecision quick SOURCES ${TestDIR}/unit/test_chebyshev_green_precision.f90 LABELS green chebyshev)
   add_fortran_unit_test(UnitChebyshevSpectralPositivity quick SOURCES ${TestDIR}/unit/test_chebyshev_spectral_positivity.f90 LABELS green chebyshev)
@@ -296,12 +302,14 @@ if(RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitKpointWorkset quick SOURCES ${TestDIR}/unit/test_kpoint_workset.f90 LABELS reciprocal)
   add_fortran_unit_test(UnitKpointWorksetReducedReject quick SOURCES ${TestDIR}/unit/test_kpoint_workset_reduced_rejection.f90
     LABELS reciprocal PROPERTIES WILL_FAIL TRUE)
+  add_fortran_unit_test(UnitReciprocalVectors quick SOURCES ${TestDIR}/unit/test_reciprocal_vectors.f90 LABELS reciprocal)
   add_fortran_unit_test(UnitArbitraryKEigenpairs quick SOURCES ${TestDIR}/unit/test_arbitrary_k_eigenpairs.f90 LABELS reciprocal)
   add_fortran_unit_test(UnitStructureConstantsBackends quick SOURCES ${TestDIR}/unit/test_structure_constants_backends.f90
     LABELS strux WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
   target_compile_definitions(UnitStructureConstantsBackends PRIVATE
     TEST_STRUCTURE_CONSTANT_DATABASE="${CMAKE_SOURCE_DIR}/tests/scf/cases/bulk/bccFe")
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
+  add_fortran_unit_test(UnitStruxLmax3PairBlocks quick SOURCES ${TestDIR}/unit/test_strux_lmax3_pair_blocks.f90 LABELS strux)
   add_fortran_unit_test(UnitAbspinlibIntegrators quick SOURCES ${TestDIR}/validation/test_abspinlib_integrators.f90 LABELS spin_integrators)
   add_fortran_unit_test(UnitConstrainingField quick SOURCES ${TestDIR}/unit/test_constraining_field.f90 LABELS constraints)
 
@@ -538,7 +546,16 @@ if(RUN_EXAMPLE_TESTS)
   # Register one CTest entry per case of a cases.json manifest.
   # Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
   function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
-    file(READ "${CASES_JSON}" _json)
+    # Cases with "extends" are resolved into a copy in the build tree, which is what is read and passed on.
+    get_filename_component(_cases_dir "${CASES_JSON}" DIRECTORY)
+    set(_resolved_json "${CMAKE_BINARY_DIR}/Testing/manifests/${SUITE}.json")
+    execute_process(COMMAND "${PY}" "${TestDIR}/expand_manifest.py" "${CASES_JSON}" "${_resolved_json}"
+      RESULT_VARIABLE _expand_rc ERROR_VARIABLE _expand_err)
+    if(NOT _expand_rc EQUAL 0)
+      message(FATAL_ERROR "expanding ${CASES_JSON} failed:\n${_expand_err}")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CASES_JSON}")
+    file(READ "${_resolved_json}" _json)
     string(JSON _n LENGTH "${_json}" "cases")
     math(EXPR _last "${_n} - 1")
     foreach(_i RANGE ${_last})
@@ -561,8 +578,8 @@ if(RUN_EXAMPLE_TESTS)
       elseif(_case_strux_backend STREQUAL "legacy")
         list(APPEND _case_labels "legacy_strux")
       endif()
-      set(_cmd "${PY}" "${TestDIR}/run_test.py" "--binary" "${TestBinary}" "--cases-json" "${CASES_JSON}"
-        "--case-name" "${_name}" "--scratch-root" "${SCRATCH_ROOT}" "--compare-ref" "${REFS_DIR}"
+      set(_cmd "${PY}" "${TestDIR}/run_test.py" "--binary" "${TestBinary}" "--cases-json" "${_resolved_json}"
+        "--cases-dir" "${_cases_dir}/cases" "--case-name" "${_name}" "--scratch-root" "${SCRATCH_ROOT}" "--compare-ref" "${REFS_DIR}"
         "--abs-tol" "${EXAMPLE_REF_ABS_TOL}" "--rel-tol" "${EXAMPLE_REF_REL_TOL}")
       # Cases listing "launch_modes" register a serial/MPI pair that shares one reference.
       string(JSON _n_modes ERROR_VARIABLE _modes_err LENGTH "${_json}" "cases" ${_i} "launch_modes")
@@ -632,6 +649,13 @@ if(RUN_EXAMPLE_TESTS)
     LABELS functional example scf equivalence rs kspace chebyshev
     COMMAND "${PY}" "${TestDIR}/scf/test_si_dos_equivalence.py" --binary "${TestBinary}"
       --case-root "${TestDIR}/scf/cases/bulk/diamondSi" --scratch-root "${CMAKE_BINARY_DIR}/Testing/scf/si_dos_equivalence")
+  if(ENABLE_MPI)
+    rslmto_add_test(NAME Example_k_space_scf_mpi_serial_agreement TIER standard TIMEOUT 300
+      LABELS functional example scf kspace mpi launch_mpi
+      COMMAND "${PY}" "${TestDIR}/scf/test_mpi_serial_agreement.py" --binary "${TestBinary}"
+        --cases-json "${TestDIR}/scf/cases.json" --scratch-root "${CMAKE_BINARY_DIR}/Testing/scf/mpi_serial_agreement"
+        PROPERTIES PROCESSORS 3)
+  endif()
   if(ENABLE_LIBXC)
     rslmto_add_test(NAME Val03LibxcScfEquivalence TIER validation LABELS validation functional scf libxc equivalence
       COMMAND "${PY}" "${TestDIR}/validation/val03_libxc_scf.py" --binary "${TestBinary}"

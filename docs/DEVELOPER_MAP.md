@@ -137,6 +137,7 @@ post_processing_{band_structure,density_of_states,bsf,fermi_surface,kspace_green
        -> reciprocal_projection.f90: orbital-projected DOS, band moments
        -> reciprocal_occupations.f90: Fermi level, Fermi-Dirac occupations,
           electron count, band energy
+          (dos_method='blochl': T=0 Bloechl-corrected tetrahedron weights, EF from n_T(E), temperature forced to 0)
        -> reciprocal_green.f90: B2 Green-function engine (fill_green,
           backends 'lehmann' (E) and 'dyson' (D))
        -> reciprocal_bsf.f90, reciprocal_moments.f90 (KPM conductivity

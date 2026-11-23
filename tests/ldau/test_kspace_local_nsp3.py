@@ -38,7 +38,7 @@ def numbers(binary: Path, scratch: Path, name: str, *, nsp: int, mode: str, af: 
     log = re.sub(r"\x1b\[[0-9;]*m", "", log)
     if status != 0:
         return f"run failed\n{log[-1200:]}"
-    ef = [float(x) for x in re.findall(r"N\(E_F=\s*(-?\d+\.\d+)", log)]
+    ef = [float(x) for x in re.findall(r"Canonical k-space occupations: EF=\s*(\S+)", log)]
     m = {a: [float(x) for x in re.findall(rf"Spin moment of atom\s+{a} is\s+(\S+)", log)] for a in (1, 2)}
     return ef, m[1], m[2]
 

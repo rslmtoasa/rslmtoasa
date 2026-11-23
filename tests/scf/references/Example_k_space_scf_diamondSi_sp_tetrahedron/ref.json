@@ -2,13 +2,13 @@
   "nml": {
     "Si1_out.nml": {
       "lmax": 1.0,
-      "etot": -578.4112377210607,
+      "etot": -578.4112377234046,
       "ws_r": 2.827551,
       "vmad": 0.15298430755768044
     },
     "Si2_out.nml": {
       "lmax": 1.0,
-      "etot": -578.4112377210547,
+      "etot": -578.4112377234023,
       "ws_r": 2.827551,
       "vmad": 0.15298430755767706
     }
@@ -16,31 +16,31 @@
   "text": {
     "totaldos.out": {
       "100": {
-        "1": -1.37826,
+        "1": -1.38058,
         "2": 0.0
       },
       "1000": {
-        "1": -0.2583,
-        "2": 17.41353
+        "1": -0.26062,
+        "2": 17.41341
       },
       "1900": {
-        "1": 0.86166,
+        "1": 0.85934,
         "2": 0.0
       }
     }
   },
   "log": {
     "testrun.log": {
-      "fermi_level": 0.00145623965,
+      "fermi_level": 0.00377495665,
       "canonical_electron_count": 8.0,
-      "canonical_band_energy": -4.10447239,
+      "canonical_band_energy": -4.10447394,
       "k_weight_sum": 1.0,
-      "dos_integral": 15.998235,
+      "dos_integral": 16.0,
       "dos_state_count": 16.0,
       "represented_band_count": 16.0,
       "dos_occupied_count": 8.0,
-      "dos_electron_count": 8.00001472,
-      "dos_electron_residual": 1.4724e-05
+      "dos_electron_count": 8.0,
+      "dos_electron_residual": -1.7764e-15
     }
   }
 }
