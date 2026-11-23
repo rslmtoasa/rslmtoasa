@@ -868,13 +868,9 @@ contains
       call g_kpm_profile%reset()
       call g_kpm_profile%start('T_transport_total')
 
-      ! Route the Chebyshev transport moments (mu_nm_stochastic) through the
-      ! selected producer (B5.1 dispatch). ’recursion’ (default) fills them
-      ! stochastically inside the prepared stack -- the bit-identical legacy
-      ! path. ’lehmann’/’dyson’ fill the SAME array EXACTLY from the k-space
-      ! eigenpairs (reciprocal%fill_moments), so calculate_conductivity_tensor
-      ! runs unchanged. exact-vs-recursion on the same crystal is the direct KPM
-      ! error bound (see docs/validation/route_agnostic_estimators.md).
+      ! The real-space producer selects compact or full moments for its backend.
+      ! Reciprocal Lehmann/Dyson routes produce full moments from k-space eigenpairs.
+      ! Reconstruction selects the matching layout.
       rec_moments = (trim(this%gf_route) == 'recursion')
       call g_kpm_profile%start('P_stack_setup')
       call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, &
