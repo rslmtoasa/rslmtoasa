@@ -107,7 +107,7 @@ module calculation_mod
       !> ´dyson´               : k-space direct Dyson inversion (Sigma via provider)
       !> The k-space routes read their mesh/eta from the &reciprocal namelist and
       !> override its green_backend with this key.
-      character(len=sl) :: gf_route
+      character(len=sl) :: gf_route, exchange_delta
 
       !> Gilbert-damping switch for the exchange post-processing (B5.3).
       !> When .true., `post_processing_exchange` also evaluates the on-site
@@ -300,6 +300,7 @@ contains
       processing = this%processing(:len(processing))
       post_processing = this%post_processing(:len(post_processing))
       gf_route = this%gf_route(:len(gf_route))
+      exchange_delta = this%exchange_delta
       do_damping = this%do_damping
       do_inertia = this%do_inertia
 
@@ -337,7 +338,12 @@ contains
       this%pre_processing = pre_processing
       this%processing = processing
       this%post_processing = post_processing
+      if (exchange_delta /= 'lmto' .and. exchange_delta /= 'onsite') &
+         call g_logger%fatal("exchange_delta must be 'lmto' or 'onsite'.", __FILE__, __LINE__)
+      if (exchange_delta == 'onsite' .and. post_processing /= 'exchange_import') &
+         call g_logger%fatal("exchange_delta='onsite' requires exchange_import.", __FILE__, __LINE__)
       this%gf_route = gf_route
+      this%exchange_delta = exchange_delta
       this%do_damping = do_damping
       this%do_inertia = do_inertia
 
@@ -376,13 +382,13 @@ contains
       select case (this%post_processing)
       case ('paoflow2rs')
          call this%post_processing_paoflow2rs()
-      case ('exchange')
+      case ('exchange', 'exchange_import')
          call this%post_processing_exchange()
       case ('exchange_p2rs')
          call this%post_processing_exchange_p2rs()
-      case ('conductivity_p2rs', 'conductivity_effective')
+      case ('conductivity_p2rs', 'conductivity_import', 'conductivity_effective')
          call this%post_processing_conductivity_imported()
-      case ('dos_frozen', 'dos_effective')
+      case ('dos_frozen', 'dos_import', 'dos_effective')
          call this%post_processing_dos_frozen()
       case ('hamiltonian_export')
          call this%post_processing_hamiltonian_export()
@@ -786,9 +792,15 @@ contains
                                          green_obj, bands_obj)
       exchange_obj = exchange(bands_obj)
 
-      do i = 1, lattice_obj%ntype
-         call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
-      end do
+      if (this%exchange_delta == 'onsite') then
+         if (control_obj%is_noncollinear()) &
+            call g_logger%fatal('Onsite exchange splitting requires collinear spin blocks.', __FILE__, __LINE__)
+         exchange_obj%use_onsite_delta = .true.
+      else
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
+         end do
+      end if
 
       ! Fill green%gij (+ the torque families) via the selected route (B2.5
       ! dispatch): the real-space recursion route (default, bit-identical legacy
@@ -1803,6 +1815,7 @@ contains
       this%processing = 'none'
       this%post_processing = 'none'
       this%gf_route = 'recursion'
+      this%exchange_delta = 'lmto'
       this%do_damping = .false.
       this%do_inertia = .false.
    end subroutine restore_to_default
@@ -1813,29 +1826,15 @@ contains
    !---------------------------------------------------------------------------
    subroutine check_post_processing(post_processing)
       character(len=*), intent(in) :: post_processing
-      if (post_processing /= 'none' &
-          .and. post_processing /= 'paoflow2rs' &
-          .and. post_processing /= 'exchange' &
-          .and. post_processing /= 'exchange_p2rs' &
-          .and. post_processing /= 'conductivity' &
-          .and. post_processing /= 'hamiltonian_export' &
-          .and. post_processing /= 'conductivity_effective' &
-          .and. post_processing /= 'dos_effective' &
-          .and. post_processing /= 'dos_frozen' &
-          .and. post_processing /= 'conductivity_p2rs' &
-          .and. post_processing /= 'orbital_modern' &
-          .and. post_processing /= 'band_structure' &
-          .and. post_processing /= 'bsf' &
-          .and. post_processing /= 'density_of_states' &
-          .and. post_processing /= 'fermi_surface' &
-          .and. post_processing /= 'spin_response' &
-          .and. post_processing /= 'kspace_green' &
-          .and. post_processing /= 'frozen_magnon') then
-         call g_logger%fatal('[calculation.check_post_processing]: '// &
-                             "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'hamiltonian_export', 'conductivity_effective', 'dos_frozen', 'dos_effective', 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
-      end if
+      select case (post_processing)
+      case ('none', 'paoflow2rs', 'exchange', 'exchange_import', 'exchange_p2rs', 'conductivity', &
+            'conductivity_import', 'conductivity_effective', 'conductivity_p2rs', 'hamiltonian_export', &
+            'dos_frozen', 'dos_import', 'dos_effective', 'orbital_modern', 'band_structure', 'bsf', &
+            'density_of_states', 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon')
+         return
+      case default
+         call g_logger%fatal('Unknown calculation%post_processing: '//post_processing, __FILE__, __LINE__)
+      end select
    end subroutine check_post_processing
 
    !---------------------------------------------------------------------------

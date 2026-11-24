@@ -247,11 +247,15 @@ Hamiltonian export and import
        textures, and reciprocal output for GBT single-q. Use explicit
        ``'cluster'`` to preserve an entirely open bulk cluster.
    * - ``effective_import``
-     - ``'canonical'``
-     - Input format for ``conductivity_effective`` and ``dos_effective``.
-       ``'canonical'`` reads ``rs_tb.tb``. ``'legacy'`` looks for ``paoham.dat``,
+     - ``'auto'``
+     - Input format for ``conductivity_import``, ``dos_import`` and
+       ``exchange_import``. ``'auto'`` uses ``rs_tb.tb`` when present
+       and otherwise reads a seven-column payload. ``'canonical'`` reads
+       ``rs_tb.tb``. ``'legacy'`` looks for ``paoham.dat``,
        ``rs2paoham.dat`` and ``rs_tb_paoham.dat`` in that order.
-       Both require the matching ``rs_tb.meta``.
+       Paired formats require the matching ``rs_tb.meta``. ``'external'`` uses
+       a seven-column file for the explicit input cluster and writes its
+       metadata if absent.
 
 See the :download:`Hamiltonian export and import manual <../../HAMILTONIAN_EXPORT.md>`
 for file conventions and worked examples.

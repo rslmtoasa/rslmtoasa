@@ -72,10 +72,12 @@ post_processing
      - Export the frozen native Hamiltonian
    * - ``'dos_frozen'``
      - Calculate frozen native real-space DOS
-   * - ``'dos_effective'``
-     - Calculate DOS from an effective real-space export
-   * - ``'conductivity_effective'``
-     - Calculate conductivity from an effective real-space export
+   * - ``'dos_import'``
+     - Calculate DOS from a real-space Hamiltonian export
+   * - ``'conductivity_import'``
+     - Run the Kubo linear response with an imported real-space Hamiltonian
+   * - ``'exchange_import'``
+     - Calculate pair exchange, DMI and tensors using an imported Hamiltonian and the native pair list
    * - ``'density_of_states'``
      - Calculate native reciprocal DOS
    * - ``'band_structure'``
@@ -112,8 +114,10 @@ and ``processing='none'``.
 ``post_processing='hamiltonian_export'`` builds the frozen native operator
 and applies the ``&hamiltonian`` export settings.
 ``'dos_frozen'`` evaluates its real-space DOS with Chebyshev or block recursion.
-``'dos_effective'`` and ``'conductivity_effective'`` use the exported
-real-space Hamiltonian and its metadata and require Chebyshev recursion.
+The three import routes read the exported real-space Hamiltonian and its
+metadata. Conductivity requires Chebyshev recursion. DOS and pair exchange
+also support block recursion. ``'dos_effective'`` and
+``'conductivity_effective'`` remain accepted aliases.
 ``'conductivity_p2rs'`` reads a standalone external ``paoham.dat``.
 See the :download:`Hamiltonian export and import manual <../../HAMILTONIAN_EXPORT.md>`
 for workflow selection and examples.
@@ -187,6 +191,15 @@ inversion :math:`[zS-H(k)-\Sigma]^{-1}`, B2 backend D)
   documented ``green_eta`` default, not identical to the recursion route).
 
 **Related code:** ``source/calculation.f90::check_gf_route()``
+
+exchange_delta
+~~~~~~~~~~~~~~
+
+Selects the exchange splitting for ``post_processing='exchange_import'``.
+``'lmto'`` (default) uses the energy-dependent LMTO potential matrix.
+``'onsite'`` uses the full real part of the onsite up-minus-down
+Hamiltonian block for a collinear ``spd`` model, following the PAOFLOW
+pair-exchange convention.
 
 do_damping
 ----------

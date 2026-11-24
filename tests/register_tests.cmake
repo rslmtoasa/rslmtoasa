@@ -553,6 +553,20 @@ if(RUN_EXAMPLE_TESTS)
               "${CMAKE_SOURCE_DIR}/example/conductivity/fccCu" "${CMAKE_BINARY_DIR}" "${_mode}")
   endforeach()
 
+  rslmto_add_test(NAME EffectiveHamiltonian-magnetic TIER standard TIMEOUT 180 LABELS hamiltonian_export postproc
+    COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_effective_workflow.py" "${TestBinary}"
+            "${TestDIR}/postproc/cases/exchange/bccFe" "${CMAKE_BINARY_DIR}" magnetic)
+
+  rslmto_add_test(NAME EffectiveHamiltonian-surface TIER standard TIMEOUT 120 LABELS hamiltonian_export postproc
+    COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_effective_workflow.py" "${TestBinary}"
+            "${CMAKE_SOURCE_DIR}/example/surface/fccCu001" "${CMAKE_BINARY_DIR}" surface)
+
+  if(TARGET HamiltonianActionProbe)
+    rslmto_add_test(NAME EffectiveHamiltonian-external TIER standard TIMEOUT 120 LABELS hamiltonian_export postproc
+      COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_external_tb.py" "${TestBinary}"
+              "$<TARGET_FILE:HamiltonianActionProbe>" "${CMAKE_SOURCE_DIR}/example/bulk/bccFeCo" "${CMAKE_BINARY_DIR}")
+  endif()
+
   # Register one CTest entry per case of a cases.json manifest.
   # Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
   function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)

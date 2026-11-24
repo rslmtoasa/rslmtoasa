@@ -1,4 +1,4 @@
-"""Run mixed-boundary export/import and frozen block DOS through the CLI."""
+"""Compare native and imported real-space post-processing through the CLI."""
 import math
 import os
 from pathlib import Path
@@ -96,6 +96,12 @@ def main(binary, fixture, root, mode):
             table = numbers(directory / "Cu_dos.out")
             assert table and all(math.isfinite(value) for row in table for value in row)
             assert any(row[1] > 0 for row in table)
+            base["hamiltonian"].update(export="none")
+            replay = setup("block-import", "dos_import")
+            for name in ("rs_tb.meta", "rs_tb_paoham.dat"):
+                shutil.copy2(work / "block" / name, replay)
+            run(binary, replay)
+            compare_tables(directory / "Cu_dos.out", replay / "Cu_dos.out")
             return
 
         base["hamiltonian"]["export"] = "rs2pao"
@@ -121,7 +127,7 @@ def main(binary, fixture, root, mode):
         assert has_wrapped_bond and count == int(fields["legacy_records"])
 
         base["hamiltonian"]["export"] = "none"
-        imported = setup("import", "conductivity_effective")
+        imported = setup("import", "conductivity_import")
         for name in ("rs_tb.meta", "rs_tb.tb"):
             shutil.copy2(exported / name, imported)
         run(binary, imported)
@@ -129,8 +135,7 @@ def main(binary, fixture, root, mode):
         for name in output_names:
             compare_tables(native / name, imported / name)
 
-        base["hamiltonian"]["effective_import"] = "legacy"
-        legacy = setup("seven-column", "conductivity_effective")
+        legacy = setup("seven-column", "conductivity_import")
         for name in ("rs_tb.meta", "rs2paoham.dat"):
             shutil.copy2(exported / name, legacy)
         run(binary, legacy)
@@ -163,5 +168,105 @@ def main(binary, fixture, root, mode):
         run(binary, imported, "payload does not match rs_tb.meta")
 
 
+def magnetic_round_trip(binary, fixture, root):
+    with tempfile.TemporaryDirectory(prefix="magnetic-", dir=root) as work:
+        work = Path(work)
+        base = f90nml.read(fixture / "input.nml")
+        base["calculation"].update(pre_processing="none", processing="none")
+        base["lattice"].update(rc=6)
+        base["control"].update(nsp=4, recur="chebyshev", lld=18, cond_ll=14,
+                               cond_calctype="per_type", cheb_backend="legacy", transport_backend="legacy")
+        base["energy"].update(energy_min=-3.5, energy_max=3.5, channels_ldos=400, fix_fermi=True)
+        base["hamiltonian"] = dict(hoh=True, export_scope="cluster")
+
+        def setup(name, post_processing, source=None):
+            directory = work / name
+            directory.mkdir()
+            shutil.copy2(fixture / "Fe.nml", directory)
+            base["calculation"]["post_processing"] = post_processing
+            base["hamiltonian"]["export"] = "rs2pao" if post_processing == "hamiltonian_export" else "none"
+            base.write(directory / "input.nml")
+            if source:
+                for name in ("rs_tb.meta", "rs2paoham.dat"):
+                    shutil.copy2(source / name, directory)
+            return directory
+
+        exported = setup("export", "hamiltonian_export")
+        run(binary, exported)
+        assert "onsite_soc_Ry " in (exported / "rs_tb.meta").read_text()
+        fields = metadata(exported)
+        assert int(fields["two_hop_paths"]) > int(fields["original_bond_records"])
+        sites = [line.split() for line in (exported / "clust").read_text().splitlines()[1:]]
+        # Select an offsite nearest neighbor and include an onsite pair.
+        distances = [sum(float(x)**2 for x in site[:3]) for site in sites]
+        neighbor = min((i for i, d in enumerate(distances) if d > 0), key=distances.__getitem__) + 1
+        base["lattice"].update(njij=2, ijpair=[[1, 1], [neighbor, 1]])
+        for recur in ("chebyshev", "block"):
+            base["control"]["recur"] = recur
+            native = setup(f"native-{recur}", "exchange")
+            replay = setup(f"replay-{recur}", "exchange_import", exported)
+            run(binary, native)
+            run(binary, replay)
+            for name in ("jij.out", "dij.out", "aij.out", "jijparts.out"):
+                compare_tables(native / name, replay / name)
+            pairs = numbers(replay / "jij.out")
+            assert len(pairs) == 2 and abs(pairs[1][-2]) > 1e-6
+
+        base["lattice"]["njij"] = 0
+        del base["lattice"]["ijpair"]
+        base["control"].update(recur="chebyshev", linear_in="spin_torque", linear_out="spin_soc_torque")
+        base["hamiltonian"].update(pol_alpha="x", pol_beta="x")
+        native = setup("native-torque", "conductivity")
+        replay = setup("replay-torque", "conductivity_import", exported)
+        run(binary, native)
+        run(binary, replay)
+        for name in ("response_total.out", "response_orbitals_real.out", "response_orbitals_imag.out"):
+            compare_tables(native / name, replay / name)
+
+
+def surface_round_trip(binary, fixture, root):
+    with tempfile.TemporaryDirectory(prefix="surface-", dir=root) as work:
+        work = Path(work)
+        base = f90nml.read(fixture / "input.nml")
+        base["calculation"].update(pre_processing="none", processing="none")
+        base["lattice"].update(rc=8, nlay=2, ntype=3, ct=[2.7]*3, r2=9.0, strux_backend="legacy")
+        base["atoms"]["label"] = ["Cu", "ES", "Cu-S"]
+        base["control"].update(recur="chebyshev", lld=16, cond_ll=12, cond_calctype="per_type",
+                               cheb_backend="legacy", transport_backend="legacy",
+                               linear_in="charge", linear_out="orbital_accumulation")
+        base["energy"].update(energy_min=-3.5, energy_max=3.5, channels_ldos=350, fix_fermi=True)
+        base["hamiltonian"] = dict(hoh=True, export_scope="cluster", pol_alpha="y", v_beta=[1.0, 0.0, 0.0])
+
+        def setup(route):
+            directory = work / route
+            directory.mkdir()
+            for label in base["atoms"]["label"]:
+                shutil.copy2(fixture / f"{label}.nml", directory)
+            base["calculation"]["post_processing"] = route
+            base["hamiltonian"]["export"] = "rs2pao" if route == "hamiltonian_export" else "none"
+            base.write(directory / "input.nml")
+            return directory
+
+        exported = setup("hamiltonian_export")
+        run(binary, exported)
+        fields = metadata(exported)
+        assert int(fields["effective_blocks"]) > int(fields["n_atoms"])
+        native = setup("conductivity")
+        replay = setup("conductivity_import")
+        for name in ("rs_tb.meta", "rs2paoham.dat"):
+            shutil.copy2(exported / name, replay)
+        run(binary, native)
+        run(binary, replay)
+        for name in ("response_total.out", "response_orbitals_real.out", "response_orbitals_imag.out"):
+            compare_tables(native / name, replay / name)
+        assert any(abs(value) > 1e-6 for row in numbers(replay / "response_total.out") for value in row[1:])
+
+
 if __name__ == "__main__":
-    main(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), sys.argv[4])
+    binary, fixture, root = (Path(arg).resolve() for arg in sys.argv[1:4])
+    if sys.argv[4] == "magnetic":
+        magnetic_round_trip(binary, fixture, root)
+    elif sys.argv[4] == "surface":
+        surface_round_trip(binary, fixture, root)
+    else:
+        main(binary, fixture, root, sys.argv[4])

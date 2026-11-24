@@ -52,7 +52,7 @@ shared Fortran state.
 | `post_processing` | `'exchange_q'` | — | **Removed in Stage 0b; the value stops at startup.** Campaign-era reciprocal q-resolved exchange; it `use`d `linear_response_mod`, so it was removed with it (tag `lr-campaign-archive-2026-10`). Not an LKAG oracle: use `'exchange'`. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
-| `post_processing` | `'conductivity_p2rs'`, `'conductivity_effective'` | `post_processing_conductivity_imported` | Same response driver with the external PAOFLOW or effective Hamiltonian reader. |
+| `post_processing` | `'conductivity_p2rs'`, `'conductivity_import'` | `post_processing_conductivity_imported` | Same response driver with the external PAOFLOW or effective Hamiltonian reader. |
 | `post_processing` | `'paoflow2rs'` | `post_processing_paoflow2rs` | Base PAOFLOW import path: builds the lattice normally but replaces `hamiltonian%build_bulkham()` with `hamiltonian%build_from_paoflow_opt()` (reads `paoham.dat`). |
 | `post_processing` | `'orbital_modern'` | `post_processing_orbital_modern` | Orbital moments via `recursion%chebyshev_orbital_mod()` — always Chebyshev, regardless of `control%recur`. Loops over *every* atom in the cluster (`this%lattice%kk`), so runtime scales with cluster size, not recursion depth. |
 | `post_processing` | `'band_structure'` / `'density_of_states'` | `post_processing_band_structure` / `_density_of_states` | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
@@ -203,7 +203,7 @@ general trajectories remain outside the scoped claim.
   for a standalone external `paoham.dat`, whose seven fields are three image
   indices, two global orbital indices and the complex hopping in eV.
 - `dos_frozen` feeds the built native Hamiltonian to the existing real-space
-  Chebyshev or block DOS kernels. `dos_effective` uses the imported operator
+  Chebyshev or block DOS kernels. `dos_import` uses the imported operator
   and the Chebyshev kernel.
 
 See [Hamiltonian export and import](HAMILTONIAN_EXPORT.md) for input and file conventions.

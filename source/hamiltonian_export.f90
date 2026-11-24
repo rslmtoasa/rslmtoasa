@@ -327,6 +327,18 @@ contains
          write(meta,'(a,i0,1x,*(es26.17e3,1x))',err=900) 'type_hubbard_J_Ry ',i,lat%symbolic_atoms(i)%potential%hubbard_j
          write(meta,'(a,i0,1x,es26.17e3)',err=900) 'type_velocity_scale ',i,this%velocity_scale(i)
       end do
+      ! Preserve the onsite SOC separately so replay can form both H-H_SOC
+      ! and H_SOC for the native spin and SOC torque operators.
+      write(meta,'(a,i0)',err=900) 'onsite_soc_types ',lat%ntype
+      do i = 1, lat%ntype
+         block = this%lsham(:,:,i)
+         do m = 1, nb
+            do l = 1, nb
+               if (block(l,m) == czero) cycle
+               write(meta,'(a,3(i0,1x),2(es26.17e3,1x))',err=900) 'onsite_soc_Ry ',i,l,m,block(l,m)
+            end do
+         end do
+      end do
       write(meta,'(a)',err=900) 'positions_cart'
       do i = 1, size(sites)
          j = sites(i)

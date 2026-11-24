@@ -174,7 +174,7 @@ module hamiltonian_mod
       !> Hamiltonian export format: 'none', 'rs2pao', 'python'
       character(len=16) :: export, export_scope, effective_import
       real(rp), allocatable :: effective_bond(:,:,:)
-      logical :: imported_effective = .false.
+      logical :: imported_effective = .false., effective_has_soc_split = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -1017,10 +1017,11 @@ module hamiltonian_mod
       character(len=*), optional, intent(in) :: fermi_provenance
    end subroutine export_rs_tb_all
 
-   module subroutine import_effective(this, fermi, mesh_fermi)
+   module subroutine import_effective(this, fermi, mesh_fermi, external_fermi)
       class(hamiltonian), intent(inout) :: this
       real(rp), intent(out) :: fermi
       real(rp), optional, intent(out) :: mesh_fermi
+      real(rp), optional, intent(in) :: external_fermi
    end subroutine import_effective
 
    module subroutine effective_graph(this, periodic, sites, keys)

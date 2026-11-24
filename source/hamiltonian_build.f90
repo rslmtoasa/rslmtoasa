@@ -532,7 +532,7 @@ contains
       if (len_trim(this%export) == 0) this%export = 'none'
       this%effective_import = lower(trim(effective_import))
       select case (this%effective_import)
-      case ('canonical', 'legacy')
+      case ('auto', 'canonical', 'legacy', 'external')
       case default
          call g_logger%fatal('Invalid effective_import format', __FILE__, __LINE__)
       end select
@@ -967,7 +967,7 @@ contains
       this%hubbard_v_check = .false.
       this%export = 'none'
       this%export_scope = 'auto'
-      this%effective_import = 'canonical'
+      this%effective_import = 'auto'
    end subroutine restore_to_default
 
    !> @brief Build charge velocity operators in real-space hopping layout.

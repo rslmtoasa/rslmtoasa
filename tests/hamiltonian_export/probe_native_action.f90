@@ -59,7 +59,11 @@ program probe_native_action
    en = energy(lat)
    ham = hamiltonian(ch)
    if (mode == 'import') then
-      call ham%import_effective(en%fermi)
+      block
+         real(rp) :: imported_fermi
+         call ham%import_effective(imported_fermi, external_fermi=en%fermi)
+         en%fermi = imported_fermi
+      end block
    else
       do i = 1, lat%ntype
          call lat%symbolic_atoms(i)%build_pot()

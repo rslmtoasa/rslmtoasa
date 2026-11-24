@@ -1,6 +1,6 @@
 # Effective Hamiltonian export and import
 
-Use this workflow to save the Hamiltonian built from a fixed set of RS-LMTO-ASA potentials, inspect it outside the code, or replay real-space DOS and conductivity from its hopping matrix. For a frozen run, copy an existing working deck into a separate directory. Keep the geometry, atom labels and potential database, the intended atom potentials, and any Hubbard density-matrix sidecars. Check the run log to confirm that the intended saved potentials and density matrices were loaded. Edit the existing namelists in place. The examples below list changes to those namelists.
+Use this workflow to save the Hamiltonian built from a fixed set of RS-LMTO-ASA potentials, inspect it outside the code, or replay real-space DOS, conductivity and pair exchange from its hopping matrix. For a frozen run, copy an existing working deck into a separate directory. Keep the geometry, atom labels and potential database, the intended atom potentials, and any Hubbard density-matrix sidecars. Check the run log to confirm that the intended saved potentials and density matrices were loaded. Edit the existing namelists in place. The examples below list changes to those namelists.
 
 ## 1. Choose the workflow
 
@@ -11,10 +11,11 @@ Use this workflow to save the Hamiltonian built from a fixed set of RS-LMTO-ASA 
 | `hamiltonian_export` | Builds the frozen native operator. | Writes the selected representation. Requires `export='rs2pao'` or `'python'`. Runs no SCF or recursion iterations. |
 | `conductivity` | Builds the frozen native operator. `gf_route='recursion'` selects native real-space transport. | Computes the native response. Use a separate `hamiltonian_export` job for matrix files. |
 | `dos_frozen` | Builds the frozen native real-space operator. | Computes site DOS with `recur='chebyshev'` or `'block'`. Use a separate frozen export for a hopping file. |
-| `conductivity_effective` | Loads a real-space export and its metadata. | Computes real-space conductivity for supported charge, spin and orbital channels. Requires `recur='chebyshev'`. |
-| `dos_effective` | Loads the same type of real-space export. | Computes site DOS with `recur='chebyshev'`. |
+| `conductivity_import` | Loads a real-space export and its metadata. | Runs `linear_in` and `linear_out` through native Kubo reconstruction. Requires `recur='chebyshev'`. |
+| `dos_import` | Loads the same type of real-space export. | Computes site DOS with `recur='chebyshev'` or `'block'`. |
+| `exchange_import` | Loads the same export and uses the frozen atomic potentials for the LMTO exchange vertices. | Computes native pair J, DMI and exchange tensors with `njij` and `ijpair`. Uses Chebyshev or block recursion and the native spd exchange kernel. |
 | `density_of_states` | Builds the native reciprocal operator. | Computes k-space DOS. |
-| `conductivity_p2rs` | Loads a standalone external PAOFLOW `paoham.dat` through the existing bulk reader. | Computes real-space conductivity. Shares the response driver with `conductivity_effective`. |
+| `conductivity_p2rs` | Loads a standalone external PAOFLOW `paoham.dat` through the existing bulk reader. | Computes real-space conductivity. Shares the response driver with `conductivity_import`. |
 
 An SCF run can also export its last built operator. Set `export` and `export_scope` in the normal SCF deck and leave `post_processing='none'` if that is the only output you want. To export from the potentials saved at the end of SCF, use a second, frozen job. In a combined SCF and conductivity run, any Hamiltonian export belongs to the SCF stage.
 
@@ -43,20 +44,82 @@ The two enabled values use the same matrix assembler and seven-column layout. Bo
 
 ## 3. Choose the input format for real-space replay
 
-Set `post_processing='conductivity_effective'` or `'dos_effective'`, leave `export='none'`, and set `&hamiltonian effective_import` as follows.
+Set `post_processing` to `'conductivity_import'`, `'dos_import'`, or `'exchange_import'`, and use `gf_route='recursion'`. The earlier `conductivity_effective` and `dos_effective` names are aliases. Use `export='none'` in the import deck and choose the input format with `&hamiltonian effective_import`.
 
 | `effective_import` | Files to copy |
 | --- | --- |
-| `canonical` (default) | `rs_tb.tb` and the matching `rs_tb.meta` |
+| `auto` (default) | The matching `rs_tb.meta` and either payload. Prefers `rs_tb.tb` when present. |
+| `canonical` | `rs_tb.tb` and the matching `rs_tb.meta` |
 | `legacy` | A matching seven-column file and `rs_tb.meta`. Lookup order is `paoham.dat`, `rs2paoham.dat`, `rs_tb_paoham.dat`. |
+| `external` | A seven-column file for the explicit cluster, using the same filename order. Read geometry and Fermi energy from the deck and generate `rs_tb.meta` if absent. |
 
-Use a clean run directory so a stray `paoham.dat` cannot take precedence. `export_scope` has no role in import. The metadata determines the representation and boundary flags. Match the basis size, `nsp`, geometry, atom labels and site ordering. Keep the atom files and any geometry inputs needed to construct the same calculation lattice. For compact periodic import, build a matching bulk replica with `pbc=.true.` and all three boundary flags true. For cluster import, match the exported cluster including its boundary flags and replica dimensions. Every nonzero effective shell is recovered from the file, including separate images of the same endpoint.
+Use a clean run directory so a stray `paoham.dat` cannot take precedence. `export_scope` has no role in import. For paired imports, the metadata determines the representation and boundary flags. Match the basis size, `nsp`, geometry, atom labels and site ordering. Keep the atom files and any geometry inputs needed to construct the same calculation lattice. For compact periodic import, build a matching bulk replica with `pbc=.true.` and all three boundary flags true. For cluster import, match the exported cluster including its boundary flags and replica dimensions. Every nonzero effective shell is recovered from the file, including separate images of the same endpoint.
 
-Effective replay uses the ordinary non-HOH tight-binding action and the existing displacement-times-hopping velocity. HOH, onsite SOC, Hubbard and CCOR terms already in the matrix are applied through its entries. The effective drivers select generic FP64 recursion with `cheb_backend='legacy'` and `transport_backend='legacy'` and disable the GPU plugin. They fix the Fermi energy from metadata. A frozen export records the input `fermi`. For a paired validation run, use the same `fermi` and `fix_fermi=.true.` in the native conductivity job. Match energy limits, grid size, recursion order, stochastic settings, velocity directions, normalization and response operators.
+Effective replay uses the ordinary non-HOH tight-binding action and the existing displacement-times-hopping velocity. HOH, onsite SOC, Hubbard and CCOR contributions come from the export. New exports store the onsite SOC decomposition in `rs_tb.meta` for the spin and SOC torque operators. The effective drivers select generic FP64 recursion with `cheb_backend='legacy'` and `transport_backend='legacy'` and disable the GPU plugin. They fix the Fermi energy from metadata. A frozen export records the input `fermi`. For a paired validation run, use the same `fermi` and `fix_fermi=.true.` in the native conductivity job. Match energy limits, grid size, recursion order, stochastic settings, velocity directions, normalization and response operators.
 
 For ordinary unweighted or uniformly weighted currents with CCOR off, the two-hop displacement is the sum of the leg displacements, so native HOH and effective velocities agree. Nonuniform per-type velocity weights act on each leg in the native HOH current and cannot in general be reconstructed from the final bond. With offsite CCOR, the imported current includes the position commutator of those hoppings, which is absent from the native real-space velocity. Matching Hamiltonians in either case does not establish conductivity equivalence.
 
-Effective replay supports DOS and the available ordinary conductivity channels. Native torque requires a decomposition the file does not carry. The real-space readers accept hopping data only. Use the existing native reciprocal drivers for k-space observables. The standalone `paoflow2rs`, `conductivity_p2rs` and `exchange_p2rs` workflows remain available for external files.
+The export evaluates each HOH path with the actual intermediate site's overlap block. Some native DOS and exchange recursion kernels use precomputed products from representative neighbor slots. In finite inhomogeneous systems those slots can have a different destination type. The imported DOS, exchange and conductivity routes all use the same exported matrix.
+
+`conductivity_import` uses the existing `linear_in` and `linear_out` selections, polarizations, and velocity directions. The local accumulations and torque operators use the same Kubo machinery. For spin torque or SOC torque on a spin-orbit-coupled Hamiltonian, use a new export with onsite SOC decomposition.
+
+`exchange_import` uses the native LMTO pair-exchange driver. With the default `&calculation exchange_delta='lmto'`, keep the same frozen atomic potential files, including any referenced sidecars, so the energy-dependent exchange vertices refer to the state from which H was exported. For a collinear `spd` TB model, choose `exchange_delta='onsite'` to use the full real orbital matrix `Re(H_upup - H_downdown)` from each site's zero-image onsite block, following the `exchange_p2rs` convention. This assumes the spin quantization axis is the supplied up/down axis. With SOC, the formula uses the full onsite block, including any spin-dependent diagonal SOC contributions. Set `njij` and each `ijpair(i,:)` in `&lattice` to the actual cluster indices in that replay, and use `njijk=0`. Pair selection can be changed after export. The standard `jij.out`, `dij.out`, `aij.out` and tensor/decomposition outputs are written. DOS and conductivity use the site layout independently of the pair list.
+
+Use the existing native reciprocal drivers for k-space observables. The standalone `paoflow2rs`, `conductivity_p2rs` and `exchange_p2rs` workflows remain available for external files.
+
+### Start from an external TB Hamiltonian
+
+Use a fresh run directory and the standard lattice and atom-type inputs.
+For custom geometry, set `&lattice crystal_sym='file'` in `input.nml` and
+supply the geometry in `lattice.nml`. The external matrix must describe the
+explicit cluster produced by that deck. In a closed direction, image
+translations are counted in **whole cluster-cell vectors**. A primitive-cell
+hopping file can be used directly when the generated cluster is that cell.
+Provide both directions of the Hermitian hopping and use an orthonormal,
+atom-centered basis with the same complete orbital shells per site.
+
+For example, these settings run a collinear pair-exchange calculation from
+`paoham.dat`. Keep the rest of the matching geometry and atom-type deck.
+Choose cluster site numbers for the pair and set the Fermi energy relative
+to the supplied matrix's energy zero.
+
+```fortran
+&calculation
+  post_processing = 'exchange_import'
+  exchange_delta = 'onsite'
+/
+&hamiltonian
+  effective_import = 'external'
+/
+&control
+  nsp = 1
+  lmax = 2
+  recur = 'chebyshev'
+/
+&energy
+  fermi = 0.0  ! Ry
+/
+```
+
+Set `njij=1` and, for example, `ijpair(1,:)=1,2` in `&lattice`. For DOS
+or conductivity, select `dos_import` or `conductivity_import` and omit
+`exchange_delta`. The external mode derives the site map from the cluster
+and writes `rs_tb.meta` when absent. In subsequent runs,
+`effective_import='legacy'` reads the generated sidecar and verifies its
+hopping checksum. External mode uses the current deck and leaves an existing
+sidecar in place. Use a fresh directory when changing the lattice or payload.
+
+The default flat indices follow spin, site, then the legacy Cartesian
+orbital order. For a different index permutation of those same orbitals,
+supply `rs_tb_orbital_map.dat` with one line per index in increasing
+external-index order. Each line has two one-based integers,
+`external_index rs_flat_index`. The map must cover all orbitals exactly
+once. The generated sidecar stores it for later replay.
+
+Conductivity constructs the velocity from the mapped atomic positions and
+the hopping images. Charge and compatible spin/orbital operators use the
+existing response code. A seven-column file alone carries no separate
+onsite SOC decomposition for the SOC torque operators.
 
 ## 4. File conventions
 
@@ -150,7 +213,7 @@ Run the export deck first. In a separate copy, set `post_processing='conductivit
 &calculation
   pre_processing = 'none'
   processing = 'none'
-  post_processing = 'conductivity_effective'
+  post_processing = 'conductivity_import'
 /
 &hamiltonian
   export = 'none'
@@ -164,7 +227,7 @@ Keep the original `v_alpha`, `v_beta` and other response settings in the namelis
 
 For native block DOS, use a fresh copy of the native Cu deck above. Set `post_processing='dos_frozen'`, `recur='block'`, and `export='none'`. The corresponding native Chebyshev run uses `recur='chebyshev'`.
 
-For effective DOS, use `post_processing='dos_effective'`, `recur='chebyshev'`, `export='none'` and `effective_import='canonical'`. Copy `rs_tb.meta` and `rs_tb.tb` from example B and preserve the cluster geometry and energy mesh settings. The result is `Cu_dos.out` in each job. To compare native and imported spectra numerically, first use the same Chebyshev method and matching Fermi references. A block versus Chebyshev comparison also tests the two spectral approximations.
+For imported DOS, use `post_processing='dos_import'`, `recur='chebyshev'` or `'block'`, `export='none'` and `effective_import='canonical'`. Copy `rs_tb.meta` and `rs_tb.tb` from example B and preserve the cluster geometry and energy mesh settings. The result is `Cu_dos.out` in each job. Use the same recursion method and Fermi reference when comparing native and imported spectra.
 
 ### D. Exact orthogonal bcc Fe in reciprocal space
 

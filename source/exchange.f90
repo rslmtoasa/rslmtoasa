@@ -65,6 +65,8 @@ module exchange_mod
       !> Control
       class(control), pointer :: control
 
+      logical :: use_onsite_delta = .false.
+
       !> General variables
       !> Heisenberg exchange
       real(rp) :: jij, jijcd, jijsd, jijcc, jijsc
@@ -740,6 +742,23 @@ contains
       class(exchange) :: this
    end subroutine
 
+   !> Use the real part of the zero-image onsite spin difference, as in exchange_p2rs.
+   function onsite_exchange_delta(this, site) result(delta)
+      class(exchange), intent(in) :: this
+      integer, intent(in) :: site
+      complex(rp) :: delta(9,9), onsite(18,18)
+      integer :: itype
+
+      itype = this%lattice%iz(site)
+      if (site <= this%lattice%nmax) then
+         onsite = this%hamiltonian%hall(:,:,1,site)
+      else
+         onsite = this%hamiltonian%ee(:,:,1,itype)
+      end if
+      onsite = onsite + this%hamiltonian%lsham(:,:,itype)
+      delta = real(onsite(:9,:9) - onsite(10:,10:), rp)
+   end function onsite_exchange_delta
+
    subroutine calculate_exchange_twoindex(this)
       use mpi_mod
       class(exchange) :: this
@@ -851,9 +870,15 @@ contains
          i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
          j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
 
+         if (this%use_onsite_delta) then
+            dmat1 = onsite_exchange_delta(this, i)
+            dmat2 = onsite_exchange_delta(this, j)
+         end if
          do nv = 1, this%en%channels_ldos + 10
-            call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, this%en%ene(nv))
-            call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, this%en%ene(nv))
+            if (.not. this%use_onsite_delta) then
+               call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, this%en%ene(nv))
+               call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, this%en%ene(nv))
+            end if
             !J
             ! Charge density part of Jij
             tmat1 = 0.0d0
@@ -1205,9 +1230,15 @@ contains
          i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
          j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
 
+         if (this%use_onsite_delta) then
+            dmat1 = onsite_exchange_delta(this, i)
+            dmat2 = onsite_exchange_delta(this, j)
+         end if
          do nv = 1, this%en%channels_ldos + 10
-            call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, this%en%ene(nv))
-            call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, this%en%ene(nv))
+            if (.not. this%use_onsite_delta) then
+               call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, this%en%ene(nv))
+               call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, this%en%ene(nv))
+            end if
             !J
             jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
             jtot(nv) = imtrace9(jmat)

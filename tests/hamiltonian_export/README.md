@@ -21,8 +21,15 @@ python3 tests/hamiltonian_export/install_feo.py 'feou4hoh (1).tar' feo-validatio
 The checker requires NumPy and SciPy. The FeO installer requires f90nml.
 
 The standard CTest cases `EffectiveHamiltonian-round-trip` and
-`EffectiveHamiltonian-block-dos` run the production CLI on a mixed-boundary Cu
-replica. They cover automatic scope selection, a fixed Fermi-level conductivity
-round trip using a separate export job, rejected metadata and mismatched hopping data, and native block
-DOS. They also compare the exported matrix bytes from block, scalar Lanczos and Chebyshev
-inputs. Configure with `-DRUN_EXAMPLE_TESTS=ON` to register these application tests.
+`EffectiveHamiltonian-block-dos` compare the native and imported results on
+a mixed-boundary Cu replica. They cover canonical and seven-column replay,
+fixed Fermi references, damaged payload and metadata rejection, open-boundary
+translations, and block DOS. They exercise export under block, scalar Lanczos
+and Chebyshev inputs and compare the resulting matrix bytes.
+
+`EffectiveHamiltonian-magnetic` compares bcc Fe exchange with onsite and
+nearest-neighbor pairs through native and imported Chebyshev and block
+recursion. The same HOH/SOC export is used for two Kubo operator slots with
+spin torque and SOC torque. `EffectiveHamiltonian-surface` compares orbital
+accumulation in a Cu surface with frozen and active atom types. Configure
+with `-DRUN_EXAMPLE_TESTS=ON` to register these CLI tests.

@@ -142,3 +142,56 @@ The native response and Cu DOS tables were byte-identical to those from
 `main` at `4916e16` with the same compiler and spglib 2.6.0. The independent
 seven-column export and replay agreed with native conductivity within
 7.13e-14 S/cm, and the native and replayed Cu DOS tables matched numerically.
+## Imported post-processing
+
+The production CLI tests compare the standard seven-column payload to the
+native drivers. The mixed-boundary Cu conductivity and block DOS tests pass.
+For bcc Fe, Chebyshev and block exchange reproduce two pair records
+including an onsite pair and a nearest neighbor. The test compares J, DMI,
+anisotropic exchange and the two-index J decomposition. The bcc Fe H includes
+nonzero onsite SOC and HOH terms. Replaying it also reproduces the Kubo response
+with spin torque and SOC torque in the two operator slots. A Cu(001)
+surface compares the orbital accumulation response to a charge current in
+a cluster with both frozen and active types. The DOS reconstruction partitions
+active recursion sites and the Kubo trace still includes all atom types.
+The CLI checks compare numeric values with 1e-9 absolute and relative
+tolerances in output units.
+
+Additional Chebyshev DOS round trips passed for compact periodic bcc Fe,
+a first-order Cu(001) surface with offsite hopping, a Cu(111) interface and
+the open FeCo impurity.
+Frozen bcc Fe DOS also passed for each of nsp=1–4 with HOH off and on,
+and for CCOR with both the first-order and HOH operators. These tests compare the site and orbital DOS files. The imported
+velocity uses the image-resolved effective hoppings. The documented difference
+in native offsite CCOR and nonuniform HOH velocity weights still applies.
+
+For the coupled HOH Cu(001) fixture, the largest native-versus-imported
+Chebyshev DOS difference was 0.00130 in the printed site DOS, about
+1.0e-4 of that site's peak. The native Chebyshev kernel uses a precomputed
+`eeo` indexed by the representative site's neighbor slots. The fixture
+contains 440 slots whose actual destination type differs from the
+representative slot type. The exporter and the native Kubo action use the
+actual intermediate site in the HOH product. The nonzero native and imported
+Kubo responses for this fixture agree within the automated comparison tolerance.
+
+## External seven-column TB import
+
+The external-TB regression starts from a seven-column Hamiltonian, a
+`lattice.nml` deck and standard atom-type inputs. It runs without a native
+Hamiltonian export or a pre-existing `rs_tb.meta`. The fixture assigns
+different onsite splittings to two sites and includes a real off-diagonal
+orbital term in the onsite spin difference.
+
+The action probe compares the Cartesian velocity applied to three complex
+vectors against the direct bond-displacement formula. It tests both the
+open bond and the periodic-image bond with an absolute tolerance of
+`1e-13` in internal units. The CLI test checks nonzero pair exchange and
+conductivity, an external orbital permutation, checksum-validated replay
+using the generated sidecar, and rejection of a non-bijective orbital map.
+The fully periodic one-cell fixture checks onsite exchange through both
+explicit and compact imports.
+
+The external mode generates metadata for an explicit cluster. Its orbital
+map reorders the supported atom-centered basis. The onsite exchange
+option uses the real part of the full zero-image up-minus-down block in
+the collinear `spd` basis. Native LMTO exchange remains the default.
