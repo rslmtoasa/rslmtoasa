@@ -91,3 +91,22 @@ nonzero site DOS. Effective DOS continues to use Chebyshev. In a separate
 fully closed 6³ Pt check, the v3 canonical and metadata-matched seven-column
 imports agreed within 4.3e-14 S/cm on the total and orbital-resolved responses.
 The standalone external `conductivity_p2rs` regression also passed.
+
+## Cluster seven-column output and spglib check
+
+Both real-space scopes now write the seven-column Cartesian view alongside
+the canonical payload and matching metadata. The cluster view uses actual
+site-orbital indices and records translations of the replica along closed
+directions only. The mixed-boundary Cu test reimports `rs2paoham.dat` directly
+and reproduces native total and orbital-resolved conductivity and DOS. The
+fully open Cu replica has zero translation columns. The open HOH B2 FeCo
+impurity round trip through this file agrees with native actions at
+7.62e-16 relative error for H and at most 6.17e-16 for the three velocities.
+
+The feature and baseline build both failed to link against upstream
+spglib 1.6.3 (commit `cfd19b2`), which lacks
+`spgms_get_symmetry_with_site_tensors`. No runtime tests ran with that
+library. With spglib 2.6.0, GNU Fortran 14.2.0, system BLAS/LAPACK,
+OpenMP enabled and MPI disabled, the CPU quick suite passed 88/88 on
+the feature and 87/87 on main `4916e16`. All 14 reciprocal tests
+that failed in the spglib-disabled run passed with spglib enabled.
