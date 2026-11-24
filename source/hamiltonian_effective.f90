@@ -5,7 +5,7 @@ module hamiltonian_effective_mod
    use precision_mod, only: rp
    implicit none
    private
-   public :: effective_row, resolve_translation
+   public :: effective_row, resolve_translation, hopping_checksum
 
    type :: effective_row
       integer :: count = 0
@@ -19,6 +19,37 @@ module hamiltonian_effective_mod
    end type effective_row
 
 contains
+
+   !> @brief Fingerprint the exact serialized hopping payload.
+   !> @details FNV-1a over the file bytes, with a wide intermediate to avoid
+   !>          signed overflow. The fixed output width is part of the v3
+   !>          metadata contract. A blank result signals an I/O failure.
+   function hopping_checksum(filename) result(signature)
+      character(len=*), intent(in) :: filename
+      character(len=8) :: signature
+      character(len=16384) :: chunk
+      integer :: u, ios, n, i
+      integer(int64) :: remaining, hash
+
+      signature = ''
+      open(newunit=u,file=filename,status='old',access='stream',form='unformatted',action='read',iostat=ios)
+      if (ios /= 0) return
+      remaining = -1
+      inquire(unit=u,size=remaining,iostat=ios)
+      hash = 2166136261_int64
+      do while (ios == 0 .and. remaining > 0)
+         n = int(min(remaining,int(len(chunk),int64)))
+         read(u,iostat=ios) chunk(:n)
+         if (ios /= 0) exit
+         do i = 1, n
+            hash = iand(ieor(hash,int(iachar(chunk(i:i)),int64))*16777619_int64,4294967295_int64)
+         end do
+         remaining = remaining - n
+      end do
+      if (ios == 0 .and. remaining == 0) write(signature,'(z8.8)') hash
+      close(u,iostat=ios)
+      if (ios /= 0) signature = ''
+   end function hopping_checksum
 
    ! A key contains the column site followed by its three image indices.
    subroutine reset(this, n)

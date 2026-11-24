@@ -1829,9 +1829,10 @@ end function integrate_dos_up_to_energy
    !>          and imaginary float64 arrays in Fortran column-major order.
    !> @param[inout] this Reciprocal object containing the eigensystem.
    !> @param[in] scf_iteration Optional source SCF iteration recorded in metadata.
-   module subroutine write_kspace_matrices(this, fermi)
+   module subroutine write_kspace_matrices(this, fermi, fermi_provenance)
       class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: fermi
+      character(len=*), optional, intent(in) :: fermi_provenance
    end subroutine write_kspace_matrices
 
    module subroutine write_kspace_eigenpairs(this, scf_iteration)

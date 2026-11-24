@@ -1013,14 +1013,17 @@ module hamiltonian_mod
    !> @param[in] tol Optional threshold for skipping tiny records.
    !> @param[in] include_lsham Optional flag to include onsite SOC blocks.
    !> @param[in] transform_sph2cart Optional flag to transform orbital basis.
-   module subroutine export_rs_tb_all(this, fermi)
+   module subroutine export_rs_tb_all(this, fermi, fermi_provenance, mesh_fermi)
       class(hamiltonian), intent(in) :: this
       real(rp), optional, intent(in) :: fermi
+      character(len=*), optional, intent(in) :: fermi_provenance
+      real(rp), optional, intent(in) :: mesh_fermi
    end subroutine export_rs_tb_all
 
-   module subroutine import_effective(this, fermi)
+   module subroutine import_effective(this, fermi, mesh_fermi)
       class(hamiltonian), intent(inout) :: this
       real(rp), intent(out) :: fermi
+      real(rp), optional, intent(out) :: mesh_fermi
    end subroutine import_effective
 
    module subroutine effective_graph(this, periodic, sites, keys)

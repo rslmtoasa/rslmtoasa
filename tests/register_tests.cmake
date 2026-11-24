@@ -546,6 +546,13 @@ endif()
 # Example (application) tests
 ##############################################################################################
 if(RUN_EXAMPLE_TESTS)
+  # Run the production CLI on a small mixed-boundary Cu replica.
+  foreach(_mode IN ITEMS round-trip block-dos)
+    rslmto_add_test(NAME EffectiveHamiltonian-${_mode} TIER standard TIMEOUT 120 LABELS hamiltonian_export postproc
+      COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_effective_workflow.py" "${TestBinary}"
+              "${CMAKE_SOURCE_DIR}/example/conductivity/fccCu" "${CMAKE_BINARY_DIR}" "${_mode}")
+  endforeach()
+
   # Register one CTest entry per case of a cases.json manifest.
   # Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
   function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)

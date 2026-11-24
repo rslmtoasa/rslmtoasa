@@ -105,7 +105,7 @@ post_processing
 For fixed Hamiltonian workflows, set ``pre_processing='none'``.
 ``post_processing='hamiltonian_export'`` builds the frozen native operator
 and applies the ``&hamiltonian`` export settings.
-``'dos_frozen'`` evaluates its real-space Chebyshev DOS.
+``'dos_frozen'`` evaluates its real-space DOS with Chebyshev or block recursion.
 ``'dos_effective'`` and ``'conductivity_effective'`` use the exported
 real-space Hamiltonian with an unchanged cluster geometry.
 

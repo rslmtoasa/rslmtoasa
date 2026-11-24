@@ -149,7 +149,7 @@ module calculation_mod
       procedure, private :: post_processing_exchange_p2rs
       procedure, private :: post_processing_hamiltonian_export
       procedure, private :: post_processing_dos_frozen
-      procedure, private :: post_processing_conductivity_p2rs
+      procedure, private :: post_processing_conductivity_imported
       procedure, private :: post_processing_conductivity
       procedure, private :: post_processing_orbital_modern
       procedure, private :: post_processing_band_structure
@@ -221,9 +221,11 @@ module calculation_mod
          logical, intent(out) :: handled
       end subroutine frozen_magnon_kspace
 
-      module subroutine dispatch_hamiltonian_export(ham, en)
+      module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance, mesh_fermi)
          type(hamiltonian), target, intent(inout) :: ham
          type(energy), intent(in) :: en
+         character(len=*), optional, intent(in) :: fermi_provenance
+         real(rp), optional, intent(in) :: mesh_fermi
       end subroutine dispatch_hamiltonian_export
 
       module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, &
@@ -380,7 +382,7 @@ contains
       case ('exchange_p2rs')
          call this%post_processing_exchange_p2rs()
       case ('conductivity_p2rs', 'conductivity_effective')
-         call this%post_processing_conductivity_p2rs()
+         call this%post_processing_conductivity_imported()
       case ('dos_frozen', 'dos_effective')
          call this%post_processing_dos_frozen()
       case ('hamiltonian_export')
@@ -701,7 +703,7 @@ contains
    !> @details The routine calls green%chebyshev_dos_dispatch to turn the
    !>          Chebyshev transport moments into a Green’s function. It then
    !>          calls bands%calculate_fermi. Both conductivity drivers
-   !>          (post_processing_conductivity and post_processing_conductivity_p2rs)
+   !>          (post_processing_conductivity and post_processing_conductivity_imported)
    !>          call this routine right before they build the conductivity tensor.
    !> @param[inout] green_obj Green object. The Chebyshev DOS dispatch fills its
    !>               Green’s-function arrays.
@@ -875,7 +877,7 @@ contains
       type(conductivity), target :: conductivity_obj
       type(reciprocal), target :: reciprocal_obj
       logical :: rec_moments
-      real(rp) :: emin_win, emax_win, a_scale, b_scale
+      real(rp) :: emin_win, emax_win, a_scale, b_scale, mesh_fermi
 
       call g_kpm_profile%reset()
       call g_kpm_profile%start('T_transport_total')
@@ -889,7 +891,7 @@ contains
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
-      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
+      mesh_fermi = energy_obj%fermi
       if (rec_moments) call recursion_obj%compute_moments_stochastic()
       if (.not. rec_moments) then
          ! Exact k-space moments on the SAME Chebyshev window the recursion route
@@ -913,6 +915,8 @@ contains
       call g_kpm_profile%start('P_moment_finalize')
       call finish_conductivity_moments(green_obj, bands_obj)
       call g_kpm_profile%stop('P_moment_finalize')
+      ! Export at the Fermi level that the response reconstruction will use.
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj, 'conductivity_resolved', mesh_fermi)
       conductivity_obj = conductivity(self_obj)
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
@@ -921,14 +925,10 @@ contains
    end subroutine post_processing_conductivity
 
 
-   !> @brief Conductivity-tensor post-processing for a PAOFLOW-imported
-   !>        Hamiltonian.
-   !> @details The routine builds the post-processing stack with a PAOFLOW
-   !>          Hamiltonian and always runs the real-space stochastic moment
-   !>          generator. There is no gf_route dispatch here: a PAOFLOW
-   !>          Hamiltonian has no k-space reciprocal build.
-   !> @param[in] this Calculation object. fname selects the namelist input.
-   subroutine post_processing_conductivity_p2rs(this)
+   !> @brief Run real-space conductivity with a loaded Hamiltonian.
+   !> @details The public keyword selects the external PAOFLOW or metadata-aware
+   !> effective reader. Both feed the same moment and response routines.
+   subroutine post_processing_conductivity_imported(this)
       class(calculation), intent(in) :: this
 
       type(control), target :: control_obj
@@ -962,9 +962,11 @@ contains
       call conductivity_obj%calculate_conductivity_tensor()
       call g_kpm_profile%stop('T_transport_total')
       call g_kpm_profile%emit()
-   end subroutine post_processing_conductivity_p2rs
+   end subroutine post_processing_conductivity_imported
 
 
+   !> @brief Evaluate the DOS of a frozen native or imported real-space operator.
+   !> @details Use the production recursion and Green-function sequence without SCF.
    subroutine post_processing_dos_frozen(this)
       class(calculation), intent(in) :: this
       type(control), target :: control_obj
@@ -981,13 +983,21 @@ contains
       call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj, 'frozen')
-      if (control_obj%recur /= 'chebyshev') &
-         call g_logger%fatal('Frozen real-space DOS requires recur=chebyshev.', __FILE__, __LINE__)
-      call recursion_obj%chebyshev_recur()
-      call green_obj%chebyshev_dos_dispatch()
+      select case (control_obj%recur)
+      case ('chebyshev')
+         call recursion_obj%chebyshev_recur()
+         call green_obj%chebyshev_dos_dispatch()
+      case ('block')
+         call recursion_obj%recur_b()
+         call recursion_obj%zsqr()
+         call green_obj%block_green()
+      case default
+         call g_logger%fatal('Frozen real-space DOS requires recur=chebyshev or block.', __FILE__, __LINE__)
+      end select
       call bands_obj%calculate_fermi()
    end subroutine post_processing_dos_frozen
 
+   !> @brief Build and write the frozen operator without running a recursion.
    subroutine post_processing_hamiltonian_export(this)
       class(calculation), intent(in) :: this
       type(control), target :: control_obj
@@ -1005,7 +1015,7 @@ contains
                                          green_obj, bands_obj, 'frozen')
       if (hamiltonian_obj%export == 'none') &
          call g_logger%fatal('Frozen Hamiltonian export requires export=python or rs2pao.', __FILE__, __LINE__)
-      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj, 'frozen_input')
    end subroutine post_processing_hamiltonian_export
 
 

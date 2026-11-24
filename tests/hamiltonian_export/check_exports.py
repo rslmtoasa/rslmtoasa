@@ -10,7 +10,7 @@ from scipy.linalg import eigh
 
 def metadata(path):
     lines = path.read_text().splitlines()
-    if lines[0] != '# rs-tb-meta-v2':
+    if lines[0] not in ('# rs-tb-meta-v2', '# rs-tb-meta-v3'):
         raise ValueError('Unexpected metadata version')
     fields = dict(line.split(maxsplit=1) for line in lines if len(line.split()) == 2)
     n = int(fields['n_atoms'])

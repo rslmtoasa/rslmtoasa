@@ -1,15 +1,19 @@
 submodule(hamiltonian_mod) hamiltonian_effective_io
    use iso_fortran_env, only: int64, iostat_end
    use ieee_arithmetic, only: ieee_is_finite
-   use hamiltonian_effective_mod, only: resolve_translation
+   use hamiltonian_effective_mod, only: resolve_translation, hopping_checksum
    implicit none
    real(rp), parameter :: geometry_tol = 1.e-6_rp
 
    type :: effective_metadata
+      logical :: checked_payload = .false.
+      character(len=8) :: canonical_checksum = "", legacy_checksum = ""
       integer :: sites = 0, block_size = 0, nsp = 0, orbitals = 0
       integer(int64) :: records = -1, legacy_records = -1
       logical :: periodic = .false., boundary(3) = .false.
       real(rp) :: cell(3,3) = 0.0_rp, fermi = 0.0_rp, bounds(2) = 0.0_rp
+      real(rp) :: mesh_fermi = 0.0_rp
+      logical :: have_mesh_fermi = .false.
       logical :: had_hoh = .false., had_ccor = .false.
       real(rp) :: min_velocity_scale = huge(1.0_rp), max_velocity_scale = -huge(1.0_rp)
       real(rp), allocatable :: position(:,:)
@@ -19,9 +23,13 @@ submodule(hamiltonian_mod) hamiltonian_effective_io
 
 contains
 
-   module subroutine import_effective(this, fermi)
+   !> @brief Install a checked effective Hamiltonian before allocating recursion.
+   !> @details Replace lattice neighbor slots and ee/hall together, retain the
+   !>          actual endpoint image displacements, and return the stored E_F.
+   module subroutine import_effective(this, fermi, mesh_fermi)
       class(hamiltonian), intent(inout) :: this
       real(rp), intent(out) :: fermi
+      real(rp), optional, intent(out) :: mesh_fermi
       type(effective_metadata) :: meta
       type(effective_row), allocatable :: rows(:)
       class(lattice), pointer :: lat
@@ -167,6 +175,10 @@ contains
       end if
       this%operator_generation = 1
       fermi = meta%fermi
+      if (present(mesh_fermi)) then
+         mesh_fermi = fermi
+         if (meta%have_mesh_fermi) mesh_fermi = meta%mesh_fermi
+      end if
       if (rank == 0) then
          if (meta%had_ccor) call g_logger%info('Effective current includes offsite CCOR through the complete hopping.', &
                                               __FILE__, __LINE__)
@@ -177,6 +189,7 @@ contains
       end if
    end subroutine import_effective
 
+   !> @brief Read the file conventions and geometry required by the native reader.
    subroutine read_metadata(meta)
       type(effective_metadata), intent(out) :: meta
       character(len=512) :: line
@@ -185,7 +198,13 @@ contains
       real(rp) :: velocity_scale
       logical :: representation, scope, basis, energy, length, reference, frame, have_fermi, convention
       real(rp) :: conversion
+      logical :: orbital_order, flat_index, index_base, fourier_phase, have_boundary
 
+      orbital_order = .false.
+      flat_index = .false.
+      index_base = .false.
+      fourier_phase = .false.
+      have_boundary = .false.
       representation = .false.
       scope = .false.
       basis = .false.
@@ -199,7 +218,15 @@ contains
       open(newunit=u,file='rs_tb.meta',status='old',action='read',iostat=ios)
       if (ios /= 0) goto 900
       read(u,'(a)',iostat=ios) line
-      if (ios /= 0 .or. line /= '# rs-tb-meta-v2') goto 900
+      if (ios /= 0) goto 900
+      select case (line)
+      case ('# rs-tb-meta-v3')
+         meta%checked_payload = .true.
+      case ('# rs-tb-meta-v2')
+         if (rank == 0) call g_logger%warning('Reading v2 Hamiltonian metadata without a payload checksum.', __FILE__, __LINE__)
+      case default
+         goto 900
+      end select
       do
          read(u,'(a)',iostat=ios) line
          if (ios == iostat_end) exit
@@ -207,7 +234,8 @@ contains
          read(line,*,iostat=ios) keyword
          if (ios /= 0) goto 900
          select case (keyword)
-         case ('representation','scope','basis','energy_unit','length_unit','energy_reference','spin_frame','translation')
+         case ('representation','scope','basis','energy_unit','length_unit','energy_reference','spin_frame','translation', &
+               'orbital_order','flat_index','index_base','fourier_phase','canonical_fnv1a32','legacy_fnv1a32')
             read(line,*,iostat=ios) keyword,value
             if (ios /= 0) goto 900
             select case (keyword)
@@ -221,12 +249,20 @@ contains
             case ('energy_reference'); reference = value == 'unscaled_unshifted'
             case ('spin_frame'); frame = value == 'global'
             case ('translation'); convention = value == 'column_relative_to_row'
+            case ('orbital_order'); orbital_order = value == 'spin_then_l_then_m_increasing'
+            case ('flat_index'); flat_index = value == 'spin_then_site_then_orbital'
+            case ('index_base'); index_base = value == '1'
+            case ('fourier_phase'); fourier_phase = value == 'positive_k_dot_column_minus_row'
+            case ('canonical_fnv1a32'); meta%canonical_checksum = value
+            case ('legacy_fnv1a32'); meta%legacy_checksum = value
             end select
          case ('n_atoms'); read(line,*,iostat=ios) keyword,meta%sites
          case ('norb_scalar'); read(line,*,iostat=ios) keyword,meta%orbitals
          case ('block_size'); read(line,*,iostat=ios) keyword,meta%block_size
          case ('nsp'); read(line,*,iostat=ios) keyword,meta%nsp
-         case ('periodic'); read(line,*,iostat=ios) keyword,meta%boundary
+         case ('periodic')
+            read(line,*,iostat=ios) keyword,meta%boundary
+            have_boundary = ios == 0
          case ('ry_to_eV'); read(line,*,iostat=ios) keyword,conversion
          case ('chebyshev_bounds_Ry'); read(line,*,iostat=ios) keyword,meta%bounds
          case ('hoh_original'); read(line,*,iostat=ios) keyword,meta%had_hoh
@@ -240,6 +276,10 @@ contains
          case ('fermi_Ry')
             read(line,*,iostat=ios) keyword,meta%fermi
             have_fermi = ios == 0 .and. ieee_is_finite(meta%fermi)
+         case ('mesh_fermi_Ry')
+            read(line,*,iostat=ios) keyword,meta%mesh_fermi
+            if (ios /= 0 .or. .not. ieee_is_finite(meta%mesh_fermi)) goto 900
+            meta%have_mesh_fermi = .true.
          case ('lattice_vectors_cart')
             do i = 1, 3
                read(u,*,iostat=ios) meta%cell(:,i)
@@ -265,7 +305,9 @@ contains
       close(u,iostat=ios)
       if (ios /= 0 .or. meta%records < 1 .or. .not. allocated(meta%position)) goto 900
       if (.not. (representation .and. scope .and. basis .and. energy .and. length .and. reference .and. frame .and. &
-          have_fermi .and. convention)) goto 900
+          have_fermi .and. convention .and. orbital_order .and. flat_index .and. index_base .and. fourier_phase .and. &
+          have_boundary)) goto 900
+      if (meta%checked_payload .and. len_trim(meta%canonical_checksum) == 0) goto 900
       if (.not. ieee_is_finite(conversion) .or. conversion /= ry2ev) goto 900
       if (.not. all(ieee_is_finite(meta%bounds))) goto 900
       if (.not. all(ieee_is_finite(meta%cell)) .or. .not. all(ieee_is_finite(meta%position))) goto 900
@@ -273,12 +315,14 @@ contains
 900   call g_logger%fatal('Invalid or incomplete rs_tb.meta for effective real-space import.', __FILE__, __LINE__)
    end subroutine read_metadata
 
+   !> @brief Load scalar entries into sparse spherical-basis hopping rows.
    subroutine read_records(meta, legacy, rows)
       type(effective_metadata), intent(in) :: meta
       logical, intent(in) :: legacy
       type(effective_row), allocatable, intent(out) :: rows(:)
       character(len=512) :: line
       character(len=32) :: comment, label, unit_name
+      character(len=8) :: checksum, expected_checksum
       integer :: u, ios, i, j, p, q, k, rec, ip, jp, r(3), a, b
       integer(int64) :: read_count, end_count
       real(rp) :: re, im
@@ -293,6 +337,13 @@ contains
       read_count = 0
       unit_name = 'rs_tb.tb'
       if (legacy) unit_name = 'paoham.dat'
+      if (meta%checked_payload) then
+         expected_checksum = meta%canonical_checksum
+         if (legacy) expected_checksum = meta%legacy_checksum
+         checksum = hopping_checksum(trim(unit_name))
+         if (len_trim(checksum) == 0 .or. checksum /= expected_checksum) &
+            call g_logger%fatal('Effective Hamiltonian payload does not match rs_tb.meta: '//trim(unit_name), __FILE__, __LINE__)
+      end if
       open(newunit=u,file=unit_name,status='old',action='read',iostat=ios)
       if (ios /= 0) goto 900
       if (.not. legacy) then

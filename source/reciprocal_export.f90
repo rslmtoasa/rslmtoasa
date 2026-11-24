@@ -10,9 +10,10 @@ contains
 
    ! Stream one k-point at a time through the same assembler used by
    ! reciprocal eigensolutions. No spectral reconstruction enters the file.
-   module subroutine write_kspace_matrices(this, fermi)
+   module subroutine write_kspace_matrices(this, fermi, fermi_provenance)
       class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: fermi
+      character(len=*), optional, intent(in) :: fermi_provenance
       type(reciprocal_assembler) :: assembler
       type(reciprocal_workspace) :: workspace
       integer :: u, ios, ik, n, i, j, atom, t, slot, target
@@ -65,6 +66,11 @@ contains
          'magnetic_representation '//trim(this%hamiltonian%magnetic_representation)
       write(u,'(a,l1)',err=900) 'hoh_original ',this%hamiltonian%hoh,'soc_original ',this%control%has_soc(), &
          'ccor_original ',this%hamiltonian%ccor_2c,'hubbard_u_original ',this%hamiltonian%hubbard_u_general_check
+      if (present(fermi_provenance)) then
+         write(u,'(a)',err=900) 'fermi_provenance '//fermi_provenance
+      else
+         write(u,'(a)',err=900) 'fermi_provenance native_energy_object'
+      end if
       write(u,'(a,es26.17e3)',err=900) 'fermi_Ry ',fermi, 'alat_Angstrom ',this%lattice%alat
       write(u,'(a,3(1x,es26.17e3))',err=900) 'q_cartesian_2pi_over_alat', this%hamiltonian%q_ss
       write(u,'(a,es26.17e3)',err=900) 'theta_radians ', this%hamiltonian%theta_ss

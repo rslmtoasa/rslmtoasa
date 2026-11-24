@@ -72,3 +72,22 @@ Implementation review entry points
 - `source/recursion_transport.f90` for the imported displacement override in `setup_kubo_bonds`.
 - `source/reciprocal_export.f90` for bounded native H(k)/S(k) export.
 - `docs/HAMILTONIAN_EXPORT.md` and `tests/hamiltonian_export/README.md` for input examples and reproducible checks.
+
+## Review follow-up
+
+The mixed-boundary Cu CLI regression confirms that automatic scope selects
+the finite cluster, native and effective conductivity agree, invalid orbital
+order is rejected, and a payload changed without changing its record count
+fails the v3 checksum. The native conductivity metadata records the final
+response Fermi energy and the original mesh alignment separately. On this
+fixture the native free-Fermi path retained the input value. The regression
+also supplies distinct mesh and response references to exercise their
+independent treatment by the effective reader.
+
+The same frozen Cu Hamiltonian payload is byte-identical with
+`recur='chebyshev'`, `'block'` and `'lanczos'`. The new native block DOS
+case exercises the production block Green-function path and checks a finite
+nonzero site DOS. Effective DOS continues to use Chebyshev. In a separate
+fully closed 6³ Pt check, the v3 canonical and metadata-matched seven-column
+imports agreed within 4.3e-14 S/cm on the total and orbital-resolved responses.
+The standalone external `conductivity_p2rs` regression also passed.

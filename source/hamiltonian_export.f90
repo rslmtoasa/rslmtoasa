@@ -1,13 +1,16 @@
 submodule(hamiltonian_mod) hamiltonian_export
    use iso_fortran_env, only: int64
    use ieee_arithmetic, only: ieee_is_finite
-   use hamiltonian_effective_mod, only: resolve_translation
+   use hamiltonian_effective_mod, only: resolve_translation, hopping_checksum
    use magnetic_representation_mod, only: gbt_single_q, explicit_texture
    implicit none
    real(rp), parameter :: geometry_tol = 1.e-6_rp
 
 contains
 
+   !> @brief Map each directed native neighbor slot to an effective column key.
+   !> @details Keys are [column, image(1:3)]. The image counts primitive cells
+   !>          for compact output and whole replicas for finite-cluster output.
    module subroutine effective_graph(this, periodic, sites, keys)
       class(hamiltonian), intent(in) :: this
       logical, intent(in) :: periodic
@@ -82,6 +85,7 @@ contains
       end do
    end subroutine effective_graph
 
+   !> @brief Read the native bare block in the global spin frame.
    function bare_block(this, site, slot) result(block)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: site, slot
@@ -103,6 +107,9 @@ contains
       end if
    end function bare_block
 
+   !> @brief Assemble one row of the unscaled effective Hamiltonian.
+   !> @details Add native CCOR and onsite terms once. Only bare hoppings enter
+   !>          the HOH product. The two directed image indices add along a path.
    module subroutine assemble_effective_row(this, sites, keys, i, row)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: sites(:), keys(:,:,:), i
@@ -159,14 +166,20 @@ contains
       call row%add([i,0,0,0], term)
    end subroutine assemble_effective_row
 
-   module subroutine export_rs_tb_all(this, fermi)
+   !> @brief Write the canonical real-space matrix and optional PAOFLOW view.
+   !> @details Native HOH, SOC and Hubbard operands are read-only. The metadata
+   !>          file is published last and fingerprints each completed payload.
+   module subroutine export_rs_tb_all(this, fermi, fermi_provenance, mesh_fermi)
       class(hamiltonian), intent(in) :: this
       real(rp), optional, intent(in) :: fermi
+      character(len=*), optional, intent(in) :: fermi_provenance
+      real(rp), optional, intent(in) :: mesh_fermi
       type(effective_row) :: row
       integer, allocatable :: sites(:), keys(:,:,:), order(:)
       integer :: i, j, l, m, rec, k, r(3), ipao, jpao, u, meta, legacy, ios, a, b, onsite
       integer(int64) :: count, paths, legacy_count, unique_blocks, original_bonds
-      logical :: periodic, with_legacy, flags(3)
+      logical :: periodic, with_legacy, flags(3), mixed_boundaries
+      character(len=8) :: canonical_checksum, legacy_checksum
       complex(rp) :: block(nb,nb)
       real(rp) :: cell(3,3)
       character(len=32) :: scope, legacy_name
@@ -186,9 +199,11 @@ contains
          if (.not. allocated(this%eecc) .or. (lat%nmax > 0 .and. .not. allocated(this%hallcc))) &
             call g_logger%fatal('CCOR export requires the built CCOR blocks.', __FILE__, __LINE__)
       end if
+      flags = lat%pbc .and. [lat%b1,lat%b2,lat%b3]
+      mixed_boundaries = any(flags) .and. .not. all(flags)
       periodic = this%export_scope == 'periodic'
       if (this%export_scope == 'auto') periodic = lat%control%calctype == 'B' .and. lat%nmax == 0 .and. &
-                                                 this%magnetic_representation /= explicit_texture
+                                                 this%magnetic_representation /= explicit_texture .and. .not. mixed_boundaries
       scope = 'cluster'
       if (periodic) scope = 'periodic'
       with_legacy = periodic .and. nb == 2*norb
@@ -271,6 +286,12 @@ contains
          close(legacy,iostat=ios)
          if (ios /= 0) goto 900
       end if
+      canonical_checksum = hopping_checksum('rs_tb.tb.tmp')
+      if (len_trim(canonical_checksum) == 0) goto 900
+      if (with_legacy) then
+         legacy_checksum = hopping_checksum(trim(legacy_name)//'.tmp')
+         if (len_trim(legacy_checksum) == 0) goto 900
+      end if
       flags = [.true.,.true.,.true.]
       cell = lat%a*lat%alat
       if (.not. periodic) then
@@ -279,7 +300,7 @@ contains
          cell(:,2) = cell(:,2)*max(1,lat%n2)
          cell(:,3) = cell(:,3)*max(1,lat%n3)
       end if
-      write(meta,'(a)',err=900) '# rs-tb-meta-v2', 'representation effective', 'scope '//trim(scope), &
+      write(meta,'(a)',err=900) '# rs-tb-meta-v3', 'representation effective', 'scope '//trim(scope), &
          'energy_unit eV', 'length_unit Angstrom', 'basis native_spherical', 'spin_frame global', &
          'orbital_order spin_then_l_then_m_increasing', 'flat_index spin_then_site_then_orbital', &
          'energy_reference unscaled_unshifted', 'translation column_relative_to_row', &
@@ -296,10 +317,15 @@ contains
       write(meta,'(a,2(1x,es26.17e3))',err=900) 'chebyshev_bounds_Ry', this%bounds%e_min, this%bounds%e_max
       if (present(fermi)) then
          write(meta,'(a,es26.17e3)',err=900) 'fermi_Ry ',fermi
-         write(meta,'(a)',err=900) 'fermi_provenance native_energy_object'
+         if (present(fermi_provenance)) then
+            write(meta,'(a)',err=900) 'fermi_provenance '//fermi_provenance
+         else
+            write(meta,'(a)',err=900) 'fermi_provenance native_energy_object'
+         end if
       else
          write(meta,'(a)',err=900) 'fermi_provenance unavailable'
       end if
+      if (present(mesh_fermi)) write(meta,'(a,es26.17e3)',err=900) 'mesh_fermi_Ry ',mesh_fermi
       write(meta,'(a)',err=900) 'lattice_vectors_cart'
       do i = 1, 3
          write(meta,'(3(es26.17e3,1x))',err=900) cell(:,i)
@@ -315,6 +341,8 @@ contains
          write(meta,'(i0,1x,3(es26.17e3,1x),2(i0,1x),a)',err=900) &
             i,lat%cr(:,j)*lat%alat,j,lat%iz(j),trim(lat%symbolic_atoms(lat%iz(j))%element%symbol)
       end do
+      write(meta,'(a)',err=900) 'canonical_fnv1a32 '//canonical_checksum
+      if (with_legacy) write(meta,'(a)',err=900) 'legacy_fnv1a32 '//legacy_checksum
       write(meta,'(a,i0)',err=900) 'original_bond_records ',original_bonds,'effective_blocks ',unique_blocks, &
          'two_hop_paths ',paths,'legacy_records ',legacy_count,'end_records ',count
       close(meta,iostat=ios)

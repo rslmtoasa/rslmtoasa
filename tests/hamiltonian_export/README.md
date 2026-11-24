@@ -19,3 +19,10 @@ python3 tests/hamiltonian_export/install_feo.py 'feou4hoh (1).tar' feo-validatio
 ```
 
 The checker requires NumPy and SciPy. The FeO installer requires f90nml.
+
+The standard CTest cases `EffectiveHamiltonian-round-trip` and
+`EffectiveHamiltonian-block-dos` run the production CLI on a mixed-boundary Cu
+replica. They cover automatic scope selection, a free Fermi-level conductivity
+round trip, rejected metadata and mismatched hopping data, and native block
+DOS. They also compare the exported matrix bytes from block, scalar Lanczos and Chebyshev
+inputs. Configure with `-DRUN_EXAMPLE_TESTS=ON` to register these application tests.

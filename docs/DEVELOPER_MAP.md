@@ -52,7 +52,7 @@ shared Fortran state.
 | `post_processing` | `'exchange_q'` | — | **Removed in Stage 0b; the value stops at startup.** Campaign-era reciprocal q-resolved exchange; it `use`d `linear_response_mod`, so it was removed with it (tag `lr-campaign-archive-2026-10`). Not an LKAG oracle: use `'exchange'`. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
-| `post_processing` | `'conductivity_p2rs'` | `post_processing_conductivity_p2rs` | Same, PAOFLOW-imported Hamiltonian. |
+| `post_processing` | `'conductivity_p2rs'`, `'conductivity_effective'` | `post_processing_conductivity_imported` | Same response driver with the external PAOFLOW or effective Hamiltonian reader. |
 | `post_processing` | `'paoflow2rs'` | `post_processing_paoflow2rs` | Base PAOFLOW import path: builds the lattice normally but replaces `hamiltonian%build_bulkham()` with `hamiltonian%build_from_paoflow_opt()` (reads `paoham.dat`). |
 | `post_processing` | `'orbital_modern'` | `post_processing_orbital_modern` | Orbital moments via `recursion%chebyshev_orbital_mod()` — always Chebyshev, regardless of `control%recur`. Loops over *every* atom in the cluster (`this%lattice%kk`), so runtime scales with cluster size, not recursion depth. |
 | `post_processing` | `'band_structure'` / `'density_of_states'` | `post_processing_band_structure` / `_density_of_states` | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
@@ -190,19 +190,23 @@ Depondt evidence from [`VAL-11`](validation/VAL-11_ABSPINLIB_INTEGRATORS.md). Th
 impurity output path has a production smoke, but broader impurity physics and
 general trajectories remain outside the scoped claim.
 
-### PAOFLOW import
-```text
-hamiltonian%build_from_paoflow_opt()   [hamiltonian_paoflow_io.f90]
-  reads paoham.dat, format: "idxi idxj idxk global_orb_i global_orb_j Re[eV] Im[eV]"
-  (the "legacy7" record shape — see write_rs_tb_records)
-```
-The *export* side (`hamiltonian%export_rs_tb_all` / `rs2pao`, selected via
-`hamiltonian%export` in `calculation.f90`'s `pre_processing_bravais`,
-select-case near line 641) writes files in the same format
-`build_from_paoflow_opt` reads — `export='python'` produces
-`<base>_paoham.dat` in exactly the legacy7 layout. This is how
-`tests/postproc/cases/paoflow/*/paoham.dat` were generated (see
-`tests/postproc/README.md` at tag `archive/fable_v4b-2026-11-05` for provenance).
+### Hamiltonian export and import
+
+- `dispatch_hamiltonian_export` calls the real-space row assembler and writers
+  in `hamiltonian_export.f90` or the native reciprocal writer in
+  `reciprocal_export.f90`.
+- `import_effective` in `hamiltonian_effective_io.f90` validates the file pair
+  and installs the new neighbor map and effective `ee` or `hall` blocks
+  before recursion allocation. It supplies the position differences for
+  the existing velocity kernel through `setup_kubo_bonds`.
+- `build_from_paoflow_opt` in `hamiltonian_paoflow_io.f90` remains the reader
+  for a standalone external `paoham.dat`, whose seven fields are three image
+  indices, two global orbital indices and the complex hopping in eV.
+- `dos_frozen` feeds the built native Hamiltonian to the existing real-space
+  Chebyshev or block DOS kernels. `dos_effective` uses the imported operator
+  and the Chebyshev kernel.
+
+See [Hamiltonian export and import](HAMILTONIAN_EXPORT.md) for input and file conventions.
 
 ---
 

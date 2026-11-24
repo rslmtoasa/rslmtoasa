@@ -241,7 +241,7 @@ Hamiltonian export and import
      - ``'periodic'`` writes cell translations. ``'cluster'`` writes the exact
        finite graph and its periodic images. ``'kspace'`` writes native
        reciprocal matrices. Auto selects compact bulk for ordinary bulk
-       operators, cluster for surfaces, interfaces, impurities and explicit
+       operators, cluster for mixed-boundary bulk, surfaces, interfaces, impurities and explicit
        textures, and reciprocal output for GBT single-q.
    * - ``effective_import``
      - ``'canonical'``

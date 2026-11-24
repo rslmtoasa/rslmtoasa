@@ -5,9 +5,11 @@ submodule(calculation_mod) calculation_reciprocal
 
 contains
 
-   module subroutine dispatch_hamiltonian_export(ham, en)
+   module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance, mesh_fermi)
       type(hamiltonian), target, intent(inout) :: ham
       type(energy), intent(in) :: en
+      character(len=*), optional, intent(in) :: fermi_provenance
+      real(rp), optional, intent(in) :: mesh_fermi
       type(reciprocal) :: recip
 
       if (ham%export == 'none') return
@@ -16,9 +18,9 @@ contains
          if (ham%lattice%control%calctype /= 'B') &
             call g_logger%fatal('Reciprocal Hamiltonian export requires a periodic bulk basis.', __FILE__, __LINE__)
          recip = reciprocal(ham)
-         call recip%write_kspace_matrices(en%fermi)
+         call recip%write_kspace_matrices(en%fermi, fermi_provenance)
       else
-         call ham%export_rs_tb_all(en%fermi)
+         call ham%export_rs_tb_all(en%fermi, fermi_provenance, mesh_fermi)
       end if
    end subroutine dispatch_hamiltonian_export
 
@@ -45,22 +47,19 @@ contains
       character(len=sl) :: route
       integer :: i, j
       logical :: effective_input
+      real(rp) :: fixed_fermi, imported_mesh_fermi
 
       control_obj = control(this%fname)
       lattice_obj = lattice(control_obj)
       route = trim(control_obj%calctype)
       effective_input = this%post_processing == 'conductivity_effective' .or. this%post_processing == 'dos_effective'
-      if (effective_input .and. route == 'I') then
+      if ((effective_input .or. this%post_processing == 'hamiltonian_export' .or. &
+           this%post_processing == 'dos_frozen') .and. route == 'I') then
          route = 'I_bulk'
          if (lattice_obj%nlay > 0) route = 'I_surface'
       end if
       if (present(preprocessing_route)) then
          select case (trim(preprocessing_route))
-         case ('frozen')
-            if (route == 'I') then
-               route = 'I_bulk'
-               if (lattice_obj%nlay > 0) route = 'I_surface'
-            end if
          case ('bravais')
             route = 'B'
          case ('buildsurf')
@@ -114,8 +113,7 @@ contains
       call lattice_obj%atomlist()
 
       if (present(preprocessing_route) .or. this%post_processing == 'dos_effective') then
-         ! Spin dynamics consumes the active recursion atoms, matching the
-         ! normal preprocessing ownership and the original SD partition.
+         ! Site DOS and spin dynamics work on the active recursion atoms.
          call get_mpi_variables(rank, lattice_obj%nrec)
       else if (use_exchange_pairs) then
          call get_mpi_variables(rank, lattice_obj%njij)
@@ -157,16 +155,21 @@ contains
       if (effective_input) then
          if (control_obj%recur /= 'chebyshev') &
             call g_logger%fatal('Effective Hamiltonian post-processing requires recur=chebyshev.', __FILE__, __LINE__)
-         if (index(control_obj%linear_in,'torque') /= 0 .or. index(control_obj%linear_out,'torque') /= 0) &
-            call g_logger%fatal('Effective Hamiltonian transport cannot recover the native torque decomposition.', __FILE__, __LINE__)
+         if (this%post_processing == 'conductivity_effective') then
+            if (index(control_obj%linear_in,'torque') /= 0 .or. index(control_obj%linear_out,'torque') /= 0) &
+               call g_logger%fatal('Effective Hamiltonian transport cannot recover the native torque decomposition.', __FILE__, __LINE__)
+         end if
          if (control_obj%gpu_plugin .or. control_obj%cheb_backend /= 'legacy' .or. control_obj%transport_backend /= 'legacy') &
             call g_logger%info('Using generic FP64 legacy recursion for the effective Hamiltonian.', __FILE__, __LINE__)
          control_obj%gpu_plugin = .false.
          control_obj%cheb_backend = 'legacy'
          control_obj%transport_backend = 'legacy'
-         call hamiltonian_obj%import_effective(energy_obj%fermi)
-         energy_obj%fix_fermi = .true.
+         call hamiltonian_obj%import_effective(fixed_fermi, imported_mesh_fermi)
+         ! Reproduce the native DOS grid, which is aligned before E_F is solved.
+         energy_obj%fermi = imported_mesh_fermi
          call energy_obj%e_mesh()
+         energy_obj%fermi = fixed_fermi
+         energy_obj%fix_fermi = .true.
       else if (use_paoflow) then
          select case (control_obj%calctype)
          case ('B')
