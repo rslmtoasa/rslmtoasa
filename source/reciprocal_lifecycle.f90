@@ -761,6 +761,8 @@ contains
       do ntype = 1, this%lattice%ntype
          ia = this%lattice%atlist(ntype)
          nr = this%lattice%nn(ia, 1)
+         if (nr > size(this%ham_vec_type,2)) &
+            call g_logger%fatal('Native reciprocal neighbor row exceeds its slot table; enlarge the replica.', __FILE__, __LINE__)
          nn_max_loc = nr
 
          ! Use clusba directly - no need for lattice%sbarvec storage here
@@ -770,6 +772,8 @@ contains
 
          ! Update nr with actual number of neighbors found
          nr = nn_max_loc
+         if (nr > size(this%ham_vec_type,2)) &
+            call g_logger%fatal('Native reciprocal neighbor vectors exceed their slot table.', __FILE__, __LINE__)
 
          ! Convert to fractional coordinates for ham_vec_type_direct
          ! Note: ham_vec_type from clusba is already in absolute Cartesian units (cralat = cr * alat)

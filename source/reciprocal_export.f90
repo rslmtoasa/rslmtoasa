@@ -17,7 +17,7 @@ contains
       type(reciprocal_workspace) :: workspace
       integer :: u, ios, ik, n, i, j, atom, t, slot, target
       logical :: generalized, ambiguous
-      real(rp) :: hermiticity, bond(3)
+      real(rp) :: hermiticity, bond(3), reference_moment(3)
       real(rp), allocatable :: coordinates(:,:)
       character(len=32) :: frame
 
@@ -77,8 +77,10 @@ contains
       do i = 1, this%lattice%nrec
          t = this%lattice%ib(i)
          atom = this%lattice%atlist(t)
+         reference_moment = this%lattice%symbolic_atoms(t)%potential%mom
+         if (allocated(this%hamiltonian%gbt_ref_mom)) reference_moment = this%hamiltonian%gbt_ref_mom(:,t)
          write(u,'(a,2(i0,1x),6(es26.17e3,1x),a)',err=900) 'site ',i,t, &
-            this%lattice%cr(:,atom)*this%lattice%alat,this%lattice%symbolic_atoms(t)%potential%mom, &
+            this%lattice%cr(:,atom)*this%lattice%alat,reference_moment, &
             trim(this%lattice%symbolic_atoms(t)%element%symbol)
       end do
       hermiticity = 0.0_rp

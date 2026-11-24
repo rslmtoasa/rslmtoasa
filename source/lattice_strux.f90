@@ -1074,7 +1074,7 @@ contains
             if (cache) this%sbarvec(:,ii) = crd(:,nn)-crd(:,ia)
             if (present(sbarvec_out)) then
                if (ii <= size(sbarvec_out, 2)) then
-                  sbarvec_out(:, ii) = this%sbarvec(:, ii)
+                  sbarvec_out(:, ii) = crd(:,nn)-crd(:,ia)
                end if
             end if
          end if
