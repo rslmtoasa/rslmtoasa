@@ -9,16 +9,16 @@ Use this workflow to save the Hamiltonian built from a fixed set of RS-LMTO-ASA 
 | `post_processing` | Operator used | Result |
 | --- | --- | --- |
 | `hamiltonian_export` | Builds the frozen native operator. | Writes the selected representation. Requires `export='rs2pao'` or `'python'`. Runs no SCF or recursion iterations. |
-| `conductivity` | Builds the frozen native operator. `gf_route='recursion'` selects native real-space transport. | Computes the native response. A non-`none` export writes the selected representation with the resolved response Fermi energy. |
+| `conductivity` | Builds the frozen native operator. `gf_route='recursion'` selects native real-space transport. | Computes the native response. Use a separate `hamiltonian_export` job for matrix files. |
 | `dos_frozen` | Builds the frozen native real-space operator. | Computes site DOS with `recur='chebyshev'` or `'block'`. Use a separate frozen export for a hopping file. |
 | `conductivity_effective` | Loads a real-space export and its metadata. | Computes real-space conductivity for supported charge, spin and orbital channels. Requires `recur='chebyshev'`. |
 | `dos_effective` | Loads the same type of real-space export. | Computes site DOS with `recur='chebyshev'`. |
 | `density_of_states` | Builds the native reciprocal operator. | Computes k-space DOS. |
 | `conductivity_p2rs` | Loads a standalone external PAOFLOW `paoham.dat` through the existing bulk reader. | Computes real-space conductivity. Shares the response driver with `conductivity_effective`. |
 
-An SCF run can also export its last built operator. Set `export` and `export_scope` in the normal SCF deck and leave `post_processing='none'` if that is the only output you want. To export from the potentials saved at the end of SCF, use a second, frozen job. In a combined SCF and post-processing run, SCF runs first. If both stages export the same scope and filenames, the later stage replaces the earlier files.
+An SCF run can also export its last built operator. Set `export` and `export_scope` in the normal SCF deck and leave `post_processing='none'` if that is the only output you want. To export from the potentials saved at the end of SCF, use a second, frozen job. In a combined SCF and conductivity run, any Hamiltonian export belongs to the SCF stage.
 
-`gf_route` controls the native conductivity Green-function route. It does not select the export representation or change the effective import route. For a native-to-effective transport comparison, use `gf_route='recursion'` with a real-space export. For reciprocal conductivity (`gf_route='lehmann'` or `'dyson'`), use `export_scope='kspace'` if you want the reciprocal matrix. A real-space export made in that job would describe the real-space operator configured by `&hamiltonian`.
+`gf_route` controls the native conductivity Green-function route. For a native-to-effective transport comparison, use `gf_route='recursion'` in the native conductivity job and a real-space scope in the separate export job. Use a separate `export_scope='kspace'` job to inspect the reciprocal matrix.
 
 ## 2. Choose the export representation and filename
 
@@ -52,7 +52,7 @@ Set `post_processing='conductivity_effective'` or `'dos_effective'`, leave `expo
 
 Use a clean run directory so a stray `paoham.dat` cannot take precedence. `export_scope` has no role in import. The metadata determines the representation and boundary flags. Match the basis size, `nsp`, geometry, atom labels and site ordering. Keep the atom files and any geometry inputs needed to construct the same calculation lattice. For compact periodic import, build a matching bulk replica with `pbc=.true.` and all three boundary flags true. For cluster import, match the exported cluster including its boundary flags and replica dimensions. Every nonzero effective shell is recovered from the file, including separate images of the same endpoint.
 
-Effective replay uses the ordinary non-HOH tight-binding action and the existing displacement-times-hopping velocity. HOH, onsite SOC, Hubbard and CCOR terms already in the matrix are applied through its entries. Use generic FP64 recursion. The effective drivers select `cheb_backend='legacy'` and `transport_backend='legacy'` and disable the GPU plugin. They fix the Fermi energy from metadata. A conductivity export records both the final response Fermi energy and the initial DOS mesh reference. Match the native energy limits, grid size, recursion order, stochastic settings, velocity directions, normalization and response operators in a paired run.
+Effective replay uses the ordinary non-HOH tight-binding action and the existing displacement-times-hopping velocity. HOH, onsite SOC, Hubbard and CCOR terms already in the matrix are applied through its entries. The effective drivers select generic FP64 recursion with `cheb_backend='legacy'` and `transport_backend='legacy'` and disable the GPU plugin. They fix the Fermi energy from metadata. A frozen export records the input `fermi`. For a paired validation run, use the same `fermi` and `fix_fermi=.true.` in the native conductivity job. Match energy limits, grid size, recursion order, stochastic settings, velocity directions, normalization and response operators.
 
 For ordinary unweighted or uniformly weighted currents with CCOR off, the two-hop displacement is the sum of the leg displacements, so native HOH and effective velocities agree. Nonuniform per-type velocity weights act on each leg in the native HOH current and cannot in general be reconstructed from the final bond. With offsite CCOR, the imported current includes the position commutator of those hoppings, which is absent from the native real-space velocity. Matching Hamiltonians in either case does not establish conductivity equivalence.
 
@@ -107,8 +107,7 @@ Copy [the fcc Cu conductivity deck](../example/conductivity/fccCu). For this sma
 &calculation
   pre_processing = 'none'
   processing = 'none'
-  post_processing = 'conductivity'
-  gf_route = 'recursion'
+  post_processing = 'hamiltonian_export'
 /
 &lattice
   pbc = .true.
@@ -141,11 +140,11 @@ Copy [the fcc Cu conductivity deck](../example/conductivity/fccCu). For this sma
   energy_min = -2.0
   energy_max = 2.5
   channels_ldos = 400
-  fix_fermi = .false.
+  fix_fermi = .true.
 /
 ```
 
-Run the native deck first. In a second copy of the input and atom files, place `rs2paoham.dat` and `rs_tb.meta` from that run. Change only the workflow and file selection as follows.
+Run the export deck first. In a separate copy, set `post_processing='conductivity'`, `gf_route='recursion'` and `export='none'` to compute the native reference. In a third directory, copy the input and atom files and place `rs2paoham.dat` and `rs_tb.meta` from the export job there. For replay, change the workflow and file selection as follows.
 
 ```fortran
 &calculation
@@ -163,7 +162,7 @@ Keep the original `v_alpha`, `v_beta` and other response settings in the namelis
 
 ### C. DOS only on the same Cu geometry
 
-For native block DOS, use a fresh copy of the native Cu deck above. Set `post_processing='dos_frozen'`, `recur='block'`, `export='none'` and `fix_fermi=.true.` to keep the input reference. The corresponding native Chebyshev run uses `recur='chebyshev'`.
+For native block DOS, use a fresh copy of the native Cu deck above. Set `post_processing='dos_frozen'`, `recur='block'`, and `export='none'`. The corresponding native Chebyshev run uses `recur='chebyshev'`.
 
 For effective DOS, use `post_processing='dos_effective'`, `recur='chebyshev'`, `export='none'` and `effective_import='canonical'`. Copy `rs_tb.meta` and `rs_tb.tb` from example B and preserve the cluster geometry and energy mesh settings. The result is `Cu_dos.out` in each job. To compare native and imported spectra numerically, first use the same Chebyshev method and matching Fermi references. A block versus Chebyshev comparison also tests the two spectral approximations.
 

@@ -221,11 +221,10 @@ module calculation_mod
          logical, intent(out) :: handled
       end subroutine frozen_magnon_kspace
 
-      module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance, mesh_fermi)
+      module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance)
          type(hamiltonian), target, intent(inout) :: ham
          type(energy), intent(in) :: en
          character(len=*), optional, intent(in) :: fermi_provenance
-         real(rp), optional, intent(in) :: mesh_fermi
       end subroutine dispatch_hamiltonian_export
 
       module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, &
@@ -877,7 +876,7 @@ contains
       type(conductivity), target :: conductivity_obj
       type(reciprocal), target :: reciprocal_obj
       logical :: rec_moments
-      real(rp) :: emin_win, emax_win, a_scale, b_scale, mesh_fermi
+      real(rp) :: emin_win, emax_win, a_scale, b_scale
 
       call g_kpm_profile%reset()
       call g_kpm_profile%start('T_transport_total')
@@ -891,7 +890,6 @@ contains
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
-      mesh_fermi = energy_obj%fermi
       if (rec_moments) call recursion_obj%compute_moments_stochastic()
       if (.not. rec_moments) then
          ! Exact k-space moments on the SAME Chebyshev window the recursion route
@@ -915,8 +913,6 @@ contains
       call g_kpm_profile%start('P_moment_finalize')
       call finish_conductivity_moments(green_obj, bands_obj)
       call g_kpm_profile%stop('P_moment_finalize')
-      ! Export at the Fermi level that the response reconstruction will use.
-      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj, 'conductivity_resolved', mesh_fermi)
       conductivity_obj = conductivity(self_obj)
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()

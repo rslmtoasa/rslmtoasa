@@ -5,11 +5,10 @@ submodule(calculation_mod) calculation_reciprocal
 
 contains
 
-   module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance, mesh_fermi)
+   module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance)
       type(hamiltonian), target, intent(inout) :: ham
       type(energy), intent(in) :: en
       character(len=*), optional, intent(in) :: fermi_provenance
-      real(rp), optional, intent(in) :: mesh_fermi
       type(reciprocal) :: recip
 
       if (ham%export == 'none') return
@@ -20,7 +19,7 @@ contains
          recip = reciprocal(ham)
          call recip%write_kspace_matrices(en%fermi, fermi_provenance)
       else
-         call ham%export_rs_tb_all(en%fermi, fermi_provenance, mesh_fermi)
+         call ham%export_rs_tb_all(en%fermi, fermi_provenance)
       end if
    end subroutine dispatch_hamiltonian_export
 

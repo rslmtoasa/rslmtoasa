@@ -171,11 +171,10 @@ contains
    !>          file is published last and fingerprints each completed payload.
    !>          In the seven-column cluster view, indices refer to actual sites
    !>          and translations count whole replica cells, as in the metadata.
-   module subroutine export_rs_tb_all(this, fermi, fermi_provenance, mesh_fermi)
+   module subroutine export_rs_tb_all(this, fermi, fermi_provenance)
       class(hamiltonian), intent(in) :: this
       real(rp), optional, intent(in) :: fermi
       character(len=*), optional, intent(in) :: fermi_provenance
-      real(rp), optional, intent(in) :: mesh_fermi
       type(effective_row) :: row
       integer, allocatable :: sites(:), keys(:,:,:), order(:)
       integer :: i, j, l, m, rec, k, r(3), ipao, jpao, u, meta, legacy, ios, a, b, onsite
@@ -319,7 +318,6 @@ contains
       else
          write(meta,'(a)',err=900) 'fermi_provenance unavailable'
       end if
-      if (present(mesh_fermi)) write(meta,'(a,es26.17e3)',err=900) 'mesh_fermi_Ry ',mesh_fermi
       write(meta,'(a)',err=900) 'lattice_vectors_cart'
       do i = 1, 3
          write(meta,'(3(es26.17e3,1x))',err=900) cell(:,i)

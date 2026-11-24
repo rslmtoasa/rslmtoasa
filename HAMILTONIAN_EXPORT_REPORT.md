@@ -78,11 +78,9 @@ Implementation review entry points
 The mixed-boundary Cu CLI regression confirms that automatic scope selects
 the finite cluster, native and effective conductivity agree, invalid orbital
 order is rejected, and a payload changed without changing its record count
-fails the v3 checksum. The native conductivity metadata records the final
-response Fermi energy and the original mesh alignment separately. On this
-fixture the native free-Fermi path retained the input value. The regression
-also supplies distinct mesh and response references to exercise their
-independent treatment by the effective reader.
+fails the v3 checksum. The effective reader also accepts older files with separate
+response and mesh Fermi references. The regression supplies distinct values to
+exercise that compatibility path.
 
 The same frozen Cu Hamiltonian payload is byte-identical with
 `recur='chebyshev'`, `'block'` and `'lanczos'`. The new native block DOS
@@ -117,8 +115,7 @@ that failed in the spglib-disabled run passed with spglib enabled.
 | --- | --- |
 | `kspace_ham_order='second'` with HOH off can label a first-order matrix as second order. | Confirmed on frozen bcc Fe. The first- and second-order requests produced identical 2,592 H records on a 2×2×2 mesh, while the header reported different requested orders. The writer should reject this combination or report the resolved order separately. The manual requires a built HOH operator for this example. |
 | Fully open bulk can resolve to compact periodic output under `auto`. | Confirmed on bcc Fe with `source_boundary F F F`. This retains the existing compact-bulk behavior. Use explicit `cluster` for finite-graph fidelity. Reporting the resolved scope at the console would make this easier to detect. |
-| `gf_route` and `export_scope` are independent in native conductivity. | For comparisons, pair native real-space recursion with periodic or cluster data and use `kspace` for native reciprocal matrices. An explicit target diagnostic would distinguish an intentional export of a different representation from paired replay. |
-| A combined SCF and conductivity or frozen export can write the same output twice. | The later stage takes precedence for the same filenames. Use separate jobs or document which stage owns the output. A single-dispatch change would need to preserve the existing SCF checkpoint workflow. |
+| Conductivity previously had an optional writer call. | Native conductivity now runs the original driver from `main`. The CLI test supplies an enabled export flag to native conductivity and checks that it writes no Hamiltonian files. A separate frozen export supplies the replay data. |
 | `export='python'` and `'rs2pao'` share assembly and Cartesian serialization. | The two values preserve historical basenames. Both also write the spherical canonical view, which makes the basis and graph directly auditable. Either enabled value triggers the same reciprocal writer. |
 | `conductivity_p2rs` and `conductivity_effective` share the response driver. | Keep both entry points. The former reads standalone external bulk PAOFLOW files, and the latter validates a matched RS-LMTO-ASA export and rebuilds all image-resolved shells. The two DOS entry points share the recursion and Green-function driver. |
 
@@ -128,4 +125,20 @@ difference across the native and seven-column replay response tables was
 7.13e-14 S/cm and the DOS tables matched numerically. The focused CTest
 selection passed 7/7, including keyword documentation coverage, both legacy
 writer names, external PAOFLOW conductivity, the effective algebra unit and
-both effective CLI tests. This review updated the documentation only.
+both effective CLI tests. These figures are for the pre-separation review.
+
+## Native conductivity and export separation
+
+The native conductivity driver now matches `main` byte for byte in source.
+The original DOS reconstruction, Fermi determination, Kubo moments and
+response reconstruction stay in the native response workflow. A separate
+`hamiltonian_export` job writes the frozen operator and its input Fermi
+reference. The importer retains support for the optional mesh reference in
+earlier files.
+
+On the mixed-boundary Cu fixture with a common fixed Fermi reference, native
+conductivity wrote no Hamiltonian files even with `export='rs2pao'` selected.
+The native response and Cu DOS tables were byte-identical to those from
+`main` at `4916e16` with the same compiler and spglib 2.6.0. The independent
+seven-column export and replay agreed with native conductivity within
+7.13e-14 S/cm, and the native and replayed Cu DOS tables matched numerically.

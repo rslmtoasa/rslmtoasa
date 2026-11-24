@@ -55,7 +55,7 @@ def main(binary, fixture, root, mode):
                                linear_in="charge", linear_out="charge",
                                cheb_backend="legacy", transport_backend="legacy")
         base["energy"].update(fermi=-0.3, energy_min=-2.0, energy_max=2.5, channels_ldos=400,
-                              fix_fermi=False)
+                              fix_fermi=True)
 
         def setup(name, post_processing, recur=None):
             directory = work / name
@@ -100,15 +100,18 @@ def main(binary, fixture, root, mode):
 
         base["hamiltonian"]["export"] = "rs2pao"
         native = setup("native", "conductivity")
-        log = run(binary, native)
-        fields = metadata(native)
+        run(binary, native)
+        # Export settings cannot trigger a writer in native conductivity.
+        for name in ("rs_tb.meta", "rs_tb.tb", "rs2paoham.dat", "rs_tb.kspace"):
+            assert not (native / name).exists()
+
+        exported = setup("export", "hamiltonian_export")
+        run(binary, exported)
+        fields = metadata(exported)
         assert fields["scope"] == "cluster" and fields["periodic"].split() == ["T", "T", "F"]
-        assert fields["fermi_provenance"] == "conductivity_resolved"
-        reported = next(float(line.split("Free Fermi energy:")[1])
-                        for line in log.splitlines() if "Free Fermi energy:" in line)
-        assert abs(float(fields["fermi_Ry"]) - reported) <= 5.1e-7
-        assert float(fields["mesh_fermi_Ry"]) == base["energy"]["fermi"]
-        with (native / "rs2paoham.dat").open() as payload:
+        assert fields["fermi_provenance"] == "frozen_input"
+        assert float(fields["fermi_Ry"]) == base["energy"]["fermi"]
+        with (exported / "rs2paoham.dat").open() as payload:
             has_wrapped_bond = False
             count = 0
             for count, line in enumerate(payload, 1):
@@ -120,7 +123,7 @@ def main(binary, fixture, root, mode):
         base["hamiltonian"]["export"] = "none"
         imported = setup("import", "conductivity_effective")
         for name in ("rs_tb.meta", "rs_tb.tb"):
-            shutil.copy2(native / name, imported)
+            shutil.copy2(exported / name, imported)
         run(binary, imported)
         output_names = ("response_total.out", "response_orbitals_real.out", "response_orbitals_imag.out", "Cu_dos.out")
         for name in output_names:
@@ -129,19 +132,19 @@ def main(binary, fixture, root, mode):
         base["hamiltonian"]["effective_import"] = "legacy"
         legacy = setup("seven-column", "conductivity_effective")
         for name in ("rs_tb.meta", "rs2paoham.dat"):
-            shutil.copy2(native / name, legacy)
+            shutil.copy2(exported / name, legacy)
         run(binary, legacy)
         for name in output_names:
             compare_tables(native / name, legacy / name)
 
         meta = imported / "rs_tb.meta"
         original = meta.read_text()
-        # The small native conductivity fixture can retain the input Fermi
-        # level. Force distinct values in metadata to check independent mesh
-        # alignment and response energies on the effective route.
+        # Older paired files can specify a separate DOS mesh reference.
         fermi = float(fields["fermi_Ry"])
         delta = 0.075
-        meta.write_text(original.replace(fields["fermi_Ry"] + "\n", f"{fermi + delta:.17e}\n", 1))
+        fermi_line = next(line for line in original.splitlines() if line.startswith("fermi_Ry "))
+        meta.write_text(original.replace(fermi_line + "\n",
+                                         f"fermi_Ry {fermi + delta:.17e}\nmesh_fermi_Ry {fermi:.17e}\n", 1))
         run(binary, imported)
         old_dos = numbers(native / "Cu_dos.out")
         new_dos = numbers(imported / "Cu_dos.out")
