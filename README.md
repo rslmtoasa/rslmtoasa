@@ -98,6 +98,26 @@ For Intel oneAPI, load the compiler, MPI, and math-library environment first, an
 
 Use a separate build directory when changing compilers or MPI implementations.
 
+### Intel oneAPI with MPI (Linux)
+
+Load the matching compiler, Intel MPI and MKL environment, then configure a
+fresh build directory. Select LP64 MKL; global eight-byte integer builds are
+not supported by this configuration. MPI remains optional (OFF by default).
+
+```sh
+source /opt/intel/oneapi/setvars.sh
+cmake -S . -B build-ifx-mpi \
+  -DCMAKE_Fortran_COMPILER=ifx \
+  -DMPI_Fortran_COMPILER=mpiifx \
+  -DENABLE_MPI=ON -DENABLE_OPENMP=ON \
+  -DBLA_VENDOR=Intel10_64lp -DCMAKE_BUILD_TYPE=Release
+cmake --build build-ifx-mpi --parallel
+```
+
+Alternatively, select `-DCMAKE_Fortran_COMPILER=mpiifx` in a fresh build
+folder. Do not set `I_MPI_F90` to `mpiifx` itself. Keep the oneAPI environment
+loaded when running so the MPI and MKL shared libraries can be found.
+
 ### Build options
 
 | Option | Default | Description |
@@ -165,7 +185,7 @@ Run the executable **inside the calculation directory**, where its atom files an
 
 The bcc Fe example sets `pre_processing = 'bravais'`, block recursion, and up to 100 SCF steps. It also includes saved atom states, making it useful for checking a build with an existing electronic-structure starting point.
 
-Inspect `run.log`, `report.out`, and the resulting atom files. Reaching the end of a run does not by itself establish SCF convergence: check the reported convergence behavior and your chosen tolerances.
+Inspect `run.log`, `report.out`, and the resulting atom files. The exit code is 0 also when SCF did not converge: `run.log` shows `Converged!` only if it did. [`docs/AGENT_RUNBOOK.md`](docs/AGENT_RUNBOOK.md) lists the checks step by step. Reaching the end of a run does not by itself establish SCF convergence: check the reported convergence behavior and your chosen tolerances.
 
 ## Inputs and calculation modes
 
@@ -206,10 +226,16 @@ Common `&calculation` selectors are:
 | `pre_processing = 'newclubulk'` | General bulk/cluster setup and SCF |
 | `pre_processing = 'buildsurf'` | Surface construction and SCF |
 | `pre_processing = 'newclusurf'` | Surface/cluster setup and SCF |
+| `pre_processing = 'buildinterface'` | Two-sided interface (layered) setup and SCF |
 | `post_processing = 'exchange'` | Magnetic interaction calculations |
 | `post_processing = 'conductivity'` | Conductivity calculations |
+| `post_processing = 'band_structure'`, `'density_of_states'`, `'bsf'`, `'fermi_surface'` | k-space band structure, DOS, Bloch spectral function, Fermi surface |
+| `post_processing = 'frozen_magnon'` | Spin spirals and frozen-magnon energies |
+| `post_processing = 'spin_response'` | Transverse spin response, being rebuilt as roadmap item B11; the earlier implementation is at tag `lr-campaign-archive-2026-10` |
 
-In `&control`, `calctype = 'B'`, `'S'`, and `'I'` select bulk, surface, and impurity treatments, respectively. Geometry and workflow selectors must be consistent with the supporting input files.
+The complete list of values is in [`docs/DEVELOPER_MAP.md`](docs/DEVELOPER_MAP.md#1-execution-skeleton).
+
+In `&control`, `calctype = 'B'`, `'S'`, `'I'`, and `'L'` select bulk, surface, impurity, and layered (interface) treatments, respectively. Geometry and workflow selectors must be consistent with the supporting input files.
 
 For exchange calculations, the supplied example defines `njij` and `ijpair` in `&lattice`. Pair indices refer to the generated real-space cluster; verify them after changing the structure.
 
@@ -229,6 +255,12 @@ The `nsp` parameter in `&control` selects the magnetic and relativistic treatmen
 ### Numerical convergence
 
 Check convergence with respect to the real-space environment, recursion depth, energy range and sampling, and SCF mixing. For Chebyshev calculations, the energy interval must cover the relevant Hamiltonian spectrum. Transport and exchange observables can require stricter convergence than total energies or local moments.
+
+### Orbital octupole operators
+
+See [octupole response inputs and conventions](docs/octupole_response.md) for
+pure rank-three accumulation/current components, migration from mixed cubic
+operators, Hall-response input fragments, and current validation limitations.
 
 ## Outputs and restarts
 
@@ -288,7 +320,10 @@ The second example requests 10 MPI processes with 4 threads each, requiring 40 a
 | Directory | Examples |
 | --- | --- |
 | [`example/bulk/`](example/bulk/) | bcc Fe, Si, graphene, and Mn₃Sn |
-| [`example/surface/`](example/surface/) | Cu(001) surface |
+| [`example/surface/`](example/surface/) | Cu(001) and Ni(001) surfaces |
+| [`example/interface/`](example/interface/) | Cu(111) interfaces |
+| [`example/k_space_scf/`](example/k_space_scf/), [`example/band_structure/`](example/band_structure/), [`example/density_of_states/`](example/density_of_states/) | k-space SCF, bands and DOS for bcc Fe |
+| [`example/k_space_spiral/`](example/k_space_spiral/) | Spin spirals in bcc Fe and fcc Ni |
 | [`example/impurity/`](example/impurity/) | B2 FeCo impurity setup |
 | [`example/exchange/`](example/exchange/) | Exchange calculations for bcc Fe |
 | [`example/conductivity/`](example/conductivity/) | Charge, spin, and orbital transport setups for Fe, Cu, Pt, and PtSe₂ |
@@ -345,31 +380,3 @@ For an up-to-date citation recommendation, contact the maintainers through the r
 ## License
 
 RS-LMTO-ASA is distributed under the **GNU General Public License, version 3**. See [`LICENSE`](LICENSE) for the full terms.
-
-### Orbital octupole operators
-
-See [octupole response inputs and conventions](docs/octupole_response.md) for
-pure rank-three accumulation/current components, migration from mixed cubic
-operators, Hall-response input fragments, and current validation limitations.
-
-### Intel oneAPI with MPI (Linux)
-
-Load the matching compiler, Intel MPI and MKL environment, then configure a
-fresh build directory. Select LP64 MKL; global eight-byte integer builds are
-not supported by this configuration. MPI remains optional (OFF by default).
-
-```sh
-source /opt/intel/oneapi/setvars.sh
-cmake -S . -B build-ifx-mpi \
-  -DCMAKE_Fortran_COMPILER=ifx \
-  -DMPI_Fortran_COMPILER=mpiifx \
-  -DENABLE_MPI=ON -DENABLE_OPENMP=ON \
-  -DBLA_VENDOR=Intel10_64lp -DCMAKE_BUILD_TYPE=Release
-cmake --build build-ifx-mpi --parallel
-```
-
-Alternatively, select `-DCMAKE_Fortran_COMPILER=mpiifx` in a fresh build
-folder. Do not set `I_MPI_F90` to `mpiifx` itself. Keep the oneAPI environment
-loaded when running so the MPI and MKL shared libraries can be found.
-
-Transverse spin response (magnons) is being rebuilt on `fable_v4b` as roadmap item B11. The previous linear-response implementation is preserved at tag `lr-campaign-archive-2026-10`.

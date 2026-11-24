@@ -40,40 +40,34 @@ Clone the Repository
    git clone https://github.com/rslmtoasa/rslmtoasa.git
    cd rslmtoasa
 
-Create a Build Directory
-------------------------
-
-.. code-block:: bash
-
-   mkdir build
-   cd build
-
 Configure with CMake
 --------------------
+
+Run these commands from the repository root.
 
 **Default configuration (OpenMP enabled, MPI disabled):**
 
 .. code-block:: bash
 
-   cmake ..
+   cmake -S . -B build
 
 **With MPI support:**
 
 .. code-block:: bash
 
-   cmake -DENABLE_MPI=ON ..
+   cmake -S . -B build -DENABLE_MPI=ON
 
 **With custom compiler:**
 
 .. code-block:: bash
 
-   cmake -DCMAKE_Fortran_COMPILER=ifort ..
+   cmake -S . -B build -DCMAKE_Fortran_COMPILER=ifort
 
 **View available CMake options:**
 
 .. code-block:: bash
 
-   cmake -LAH ..
+   cmake -LAH -S . -B build
 
 Key CMake Options
 ~~~~~~~~~~~~~~~~~
@@ -129,7 +123,7 @@ uses compute capability 8.9:
 
 .. code-block:: bash
 
-   cmake -DENABLE_CUDA_PLUGIN=ON -DCMAKE_CUDA_ARCHITECTURES=89 ..
+   cmake -S . -B build -DENABLE_CUDA_PLUGIN=ON -DCMAKE_CUDA_ARCHITECTURES=89
 
 Use a semicolon-separated list for a multi-architecture binary (quote it to
 prevent shell interpretation), for example ``-DCMAKE_CUDA_ARCHITECTURES="75;89"``.
@@ -142,7 +136,7 @@ Compile
 
 .. code-block:: bash
 
-   make -j 4
+   cmake --build build --parallel
 
 The executable will be created at ``build/bin/rslmto.x``.
 
@@ -182,30 +176,36 @@ specify a different input filename as the first argument.
 Example Calculation
 -------------------
 
-Navigate to an example directory. It already contains an ``input.nml`` (the files ``Si1.nml`` and
+Copy an example directory out of ``example/`` and run it there; the run writes its output files
+into the current directory. The directory contains an ``input.nml`` (the files ``Si1.nml`` and
 ``Si2.nml`` are the per-atom parameter files read through ``&atoms``):
 
 .. code-block:: bash
 
-   cd example/bulk/Si
+   mkdir -p runs
+   cp -r example/bulk/Si runs/Si
+   cd runs/Si
 
 Run the calculation:
 
 .. code-block:: bash
 
-   ../../../build/bin/rslmto.x
+   ../../build/bin/rslmto.x > run.log 2>&1
 
 With OpenMP parallelization:
 
 .. code-block:: bash
 
-   OMP_NUM_THREADS=4 ../../../build/bin/rslmto.x
+   OMP_NUM_THREADS=4 ../../build/bin/rslmto.x > run.log 2>&1
 
 With MPI (if compiled with MPI support):
 
 .. code-block:: bash
 
-   mpirun -np 4 ../../../build/bin/rslmto.x
+   mpirun -np 4 ../../build/bin/rslmto.x > run.log 2>&1
+
+The exit code is 0 also when the SCF did not converge. ``run.log`` contains a ``Converged!`` line
+only if it did; each unconverged iteration prints ``Not converged! Diff=``.
 
 Input and Output
 ================
@@ -260,9 +260,8 @@ This usually indicates a build directory issue. Try cleaning and rebuilding:
 .. code-block:: bash
 
    rm -rf build
-   mkdir build && cd build
-   cmake .. -DCMAKE_Fortran_COMPILER=gfortran
-   make -j 4
+   cmake -S . -B build -DCMAKE_Fortran_COMPILER=gfortran
+   cmake --build build --parallel
 
 **Executable crashes with MPI**
 
@@ -270,7 +269,7 @@ Ensure MPI libraries are linked correctly:
 
 .. code-block:: bash
 
-   cmake -DENABLE_MPI=ON -DMPI_Fortran_COMPILER=mpif90 ..
+   cmake -S . -B build -DENABLE_MPI=ON -DMPI_Fortran_COMPILER=mpif90
 
 **Performance issues with OpenMP**
 

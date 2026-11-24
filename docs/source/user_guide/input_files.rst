@@ -92,30 +92,32 @@ Essential Parameters
 Running a Calculation
 =====================
 
+Run in a directory that holds the input files; the executable path below is a placeholder.
+
 **Basic command:**
 
 .. code-block:: bash
 
-   ./rslmto.x
+   /path/to/rslmto.x
 
 **With output redirection:**
 
 .. code-block:: bash
 
-   ./rslmto.x > output.log 2>&1
+   /path/to/rslmto.x > run.log 2>&1
 
 **Parallel execution (OpenMP):**
 
 .. code-block:: bash
 
    export OMP_NUM_THREADS=4
-   ./rslmto.x
+   /path/to/rslmto.x
 
 **Parallel execution (MPI):**
 
 .. code-block:: bash
 
-   mpirun -np 8 ./rslmto.x
+   mpirun -np 8 /path/to/rslmto.x
 
 Example Input Files
 ===================
@@ -134,8 +136,8 @@ per-label parameter files of the two Si sites)
 
 .. code-block:: bash
 
-   cd example/bulk/Si
-   ../../../build/bin/rslmto.x
+   mkdir -p runs && cp -r example/bulk/Si runs/Si && cd runs/Si
+   ../../build/bin/rslmto.x > run.log 2>&1
 
 **Bulk bcc Fe (magnetic):**
 

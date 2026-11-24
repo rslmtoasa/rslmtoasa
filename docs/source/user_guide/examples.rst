@@ -37,10 +37,14 @@ All examples assume you have compiled the code as described in :doc:`../getting_
 
 .. code-block:: bash
 
-   cd example/<category>/<system>
-   ../../../build/bin/rslmto.x    # Reads input.nml by default
+   mkdir -p runs
+   cp -r example/<category>/<system> runs/<system>
+   cd runs/<system>
+   ../../build/bin/rslmto.x > run.log 2>&1    # Reads input.nml by default
 
-The code reads ``input.nml`` from the current directory and writes output files with ``_out.nml`` suffix.
+Run a copy, not the directory in ``example/``: the code writes its output files (``report.out``,
+``<label>_out.nml``, ...) into the current directory, and a ``<label>_out.nml`` left there is read
+instead of ``<label>.nml`` by the next run (see ``fresh_start`` in ``&control``).
 
 Input File Structure
 ====================
@@ -49,7 +53,7 @@ Each example uses three types of input files:
 
 1. **input.nml** - Main calculation parameters (lattice, energy, convergence, etc.)
 2. **lattice.nml** - Crystal structure (user-provided; read when ``crystal_sym = 'file'``)
-3. **atom.nml** - Tight-binding parameters for each atom type (e.g., ``Fe.nml``, ``Si1.nml``)
+3. **<label>.nml** - ``&element`` and ``&par`` for each label in ``&atoms`` (e.g., ``Fe.nml``, ``Si1.nml``)
 
 The following sections explain each example in detail.
 
