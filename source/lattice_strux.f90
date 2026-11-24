@@ -1028,7 +1028,7 @@ contains
    !> @param[in] ndi Leading dimension/capacity of crd.
    !> @param[inout] n Number of vectors found.
    !> @param[inout] sbarvec_out Optional output neighbor-vector storage.
-   module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out)
+   module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out, cache_vectors)
       implicit none
       class(lattice), intent(inout) :: this
       ! Inputs
@@ -1038,11 +1038,16 @@ contains
       ! Output
       integer, intent(inout) :: n
       real(rp), dimension(:, :), intent(inout), optional :: sbarvec_out
+      logical, optional, intent(in) :: cache_vectors
       ! Local variables
       integer :: i, ii, k, nn
       real(rp) :: s1
       real(rp), dimension(3) :: dum
 
+      logical :: cache
+      cache = .true.
+      if (present(cache_vectors)) cache = cache_vectors
+      if (cache) then
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
@@ -1052,12 +1057,10 @@ contains
 #endif
 
       this%sbarvec(:, :) = 0.0d0
+      end if
       if (present(sbarvec_out)) sbarvec_out(:, :) = 0.0d0
 
       ii = 1
-      do k = 1, 3
-         this%sbarvec(k, 1) = 0.0d0
-      end do
       if (present(sbarvec_out)) sbarvec_out(:, 1) = 0.0d0
 
       do nn = 1, nat
@@ -1068,9 +1071,7 @@ contains
          end do
          if (s1 < r2 .and. s1 > 0.0001) then
             ii = ii + 1
-            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            if (cache) this%sbarvec(:,ii) = crd(:,nn)-crd(:,ia)
             if (present(sbarvec_out)) then
                if (ii <= size(sbarvec_out, 2)) then
                   sbarvec_out(:, ii) = this%sbarvec(:, ii)

@@ -78,6 +78,7 @@ contains
       call g_timer%stop('self-consistency')
 
       call save_state(lattice_obj%symbolic_atoms)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
 
       call self_obj%report()
    end subroutine pre_processing_newclubulk
@@ -159,6 +160,7 @@ contains
       call g_timer%stop('self-consistency')
 
       call save_state(lattice_obj%symbolic_atoms)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
 
       call self_obj%report()
    end subroutine pre_processing_newclusurf
@@ -237,6 +239,7 @@ contains
       call g_timer%stop('self-consistency')
 
       call save_state(lattice_obj%symbolic_atoms)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
 
       call self_obj%report()
    end subroutine pre_processing_buildsurf
@@ -315,13 +318,8 @@ contains
       call self_obj%report()
 
       call save_state(lattice_obj%symbolic_atoms)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
 
-      select case (trim(hamiltonian_obj%export))
-      case ('rs2pao')
-         call hamiltonian_obj%rs2pao()
-      case ('python')
-         call hamiltonian_obj%export_rs_tb_all()
-      end select
       if (self_obj%use_kspace) then
          if (rank == 0) call g_logger%warning( &
             'Skipping orbital quadrupoles: the real-space Green-function diagnostic is unavailable in k-space mode.', &

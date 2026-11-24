@@ -147,6 +147,8 @@ module calculation_mod
       procedure, private :: post_processing_paoflow2rs
       procedure, private :: post_processing_exchange
       procedure, private :: post_processing_exchange_p2rs
+      procedure, private :: post_processing_hamiltonian_export
+      procedure, private :: post_processing_dos_frozen
       procedure, private :: post_processing_conductivity_p2rs
       procedure, private :: post_processing_conductivity
       procedure, private :: post_processing_orbital_modern
@@ -218,6 +220,11 @@ module calculation_mod
          type(self), target, intent(inout) :: self_obj
          logical, intent(out) :: handled
       end subroutine frozen_magnon_kspace
+
+      module subroutine dispatch_hamiltonian_export(ham, en)
+         type(hamiltonian), target, intent(inout) :: ham
+         type(energy), intent(in) :: en
+      end subroutine dispatch_hamiltonian_export
 
       module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, &
                                                        energy_mesh_before_hamiltonian, &
@@ -372,8 +379,12 @@ contains
          call this%post_processing_exchange()
       case ('exchange_p2rs')
          call this%post_processing_exchange_p2rs()
-      case ('conductivity_p2rs')
+      case ('conductivity_p2rs', 'conductivity_effective')
          call this%post_processing_conductivity_p2rs()
+      case ('dos_frozen', 'dos_effective')
+         call this%post_processing_dos_frozen()
+      case ('hamiltonian_export')
+         call this%post_processing_hamiltonian_export()
       case ('conductivity')
          call this%post_processing_conductivity()
       case ('orbital_modern')
@@ -560,6 +571,7 @@ contains
       call g_timer%stop('self-consistency')
 
       call save_state(lattice_obj%symbolic_atoms)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
 
       call self_obj%report()
    end subroutine pre_processing_buildinterface
@@ -877,6 +889,7 @@ contains
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
       if (rec_moments) call recursion_obj%compute_moments_stochastic()
       if (.not. rec_moments) then
          ! Exact k-space moments on the SAME Chebyshev window the recursion route
@@ -935,7 +948,7 @@ contains
       call g_kpm_profile%start('T_transport_total')
 
       call g_kpm_profile%start('P_stack_setup')
-      call prepare_post_processing_stack(this, .true., .false., .true., control_obj, lattice_obj, &
+      call prepare_post_processing_stack(this, this%post_processing == 'conductivity_p2rs', .false., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
@@ -950,6 +963,50 @@ contains
       call g_kpm_profile%stop('T_transport_total')
       call g_kpm_profile%emit()
    end subroutine post_processing_conductivity_p2rs
+
+
+   subroutine post_processing_dos_frozen(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(energy), target :: energy_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+
+      call prepare_post_processing_stack(this, .false., .false., .true., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj, 'frozen')
+      if (control_obj%recur /= 'chebyshev') &
+         call g_logger%fatal('Frozen real-space DOS requires recur=chebyshev.', __FILE__, __LINE__)
+      call recursion_obj%chebyshev_recur()
+      call green_obj%chebyshev_dos_dispatch()
+      call bands_obj%calculate_fermi()
+   end subroutine post_processing_dos_frozen
+
+   subroutine post_processing_hamiltonian_export(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(energy), target :: energy_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      call prepare_post_processing_stack(this, .false., .false., .false., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj, 'frozen')
+      if (hamiltonian_obj%export == 'none') &
+         call g_logger%fatal('Frozen Hamiltonian export requires export=python or rs2pao.', __FILE__, __LINE__)
+      call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
+   end subroutine post_processing_hamiltonian_export
 
 
    !> @brief Orbital-moment post-processing entry point.
@@ -1755,6 +1812,10 @@ contains
           .and. post_processing /= 'exchange' &
           .and. post_processing /= 'exchange_p2rs' &
           .and. post_processing /= 'conductivity' &
+          .and. post_processing /= 'hamiltonian_export' &
+          .and. post_processing /= 'conductivity_effective' &
+          .and. post_processing /= 'dos_effective' &
+          .and. post_processing /= 'dos_frozen' &
           .and. post_processing /= 'conductivity_p2rs' &
           .and. post_processing /= 'orbital_modern' &
           .and. post_processing /= 'band_structure' &
@@ -1766,7 +1827,7 @@ contains
           .and. post_processing /= 'frozen_magnon') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
+                             " 'hamiltonian_export', 'conductivity_effective', 'dos_frozen', 'dos_effective', 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
                              " 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing

@@ -37,6 +37,7 @@ module hamiltonian_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use hamiltonian_effective_mod, only: effective_row
    use basis_mod, only: nb, norb, spin_off, lmax_basis
    use magnetic_representation_mod, only: magnetic_representation_len
    implicit none
@@ -171,7 +172,9 @@ module hamiltonian_mod
       !> Spectrum bounds for Chebyshev scaling
       type(bounds) :: bounds
       !> Hamiltonian export format: 'none', 'rs2pao', 'python'
-      character(len=16) :: export
+      character(len=16) :: export, export_scope, effective_import
+      real(rp), allocatable :: effective_bond(:,:,:)
+      logical :: imported_effective = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -192,6 +195,9 @@ module hamiltonian_mod
       procedure :: torque_operator_collinear
       procedure :: rs2pao
       procedure :: export_rs_tb_all
+      procedure :: assemble_effective_row
+      procedure :: effective_graph
+      procedure :: import_effective
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
@@ -1007,119 +1013,27 @@ module hamiltonian_mod
    !> @param[in] tol Optional threshold for skipping tiny records.
    !> @param[in] include_lsham Optional flag to include onsite SOC blocks.
    !> @param[in] transform_sph2cart Optional flag to transform orbital basis.
-   module subroutine export_rs_tb_all(this, basename, tol, include_lsham, transform_sph2cart)
-      implicit none
+   module subroutine export_rs_tb_all(this, fermi)
       class(hamiltonian), intent(in) :: this
-      character(len=*), intent(in), optional :: basename
-      real(rp), intent(in), optional :: tol
-      logical, intent(in), optional :: include_lsham, transform_sph2cart
-   
-      character(len=512) :: base
-      real(rp) :: eps
-      logical :: add_lsham, do_sph2cart
-   
+      real(rp), optional, intent(in) :: fermi
    end subroutine export_rs_tb_all
 
-   !> @brief Write metadata for real-space tight-binding exports.
-   !> @details Records atom/orbital layout information needed to interpret the
-   !>          exported hopping records.
-   !> @param[in] this Hamiltonian object containing lattice and basis metadata.
-   !> @param[in] filename Metadata output path.
-   module subroutine export_rs_tb_metadata(this, filename)
-      implicit none
-      class(hamiltonian), intent(in) :: this
-      character(len=*), intent(in) :: filename
-   
-      integer :: u, i, ios, n_atoms, max_orbital
-   
-   end subroutine export_rs_tb_metadata
+   module subroutine import_effective(this, fermi)
+      class(hamiltonian), intent(inout) :: this
+      real(rp), intent(out) :: fermi
+   end subroutine import_effective
 
-   !> @brief Write PAOFLOW legacy-format hopping records.
-   !> @details Emits the seven-column record layout read by build_from_paoflow_opt:
-   !>          cell index, global orbital indices, and complex hopping value.
-   !> @param[in] this Hamiltonian object containing built hopping blocks.
-   !> @param[in] filename Output path.
-   !> @param[in] tol Threshold for skipping tiny records.
-   !> @param[in] include_lsham Include onsite SOC blocks in the output.
-   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
-   module subroutine export_rs_paoflow_legacy(this, filename, tol, include_lsham, transform_sph2cart)
-      implicit none
+   module subroutine effective_graph(this, periodic, sites, keys)
       class(hamiltonian), intent(in) :: this
-      character(len=*), intent(in) :: filename
-      real(rp), intent(in) :: tol
-      logical, intent(in) :: include_lsham, transform_sph2cart
-   
-      integer :: u, ios
-   
-   end subroutine export_rs_paoflow_legacy
+      logical, intent(in) :: periodic
+      integer, allocatable, intent(out) :: sites(:), keys(:,:,:)
+   end subroutine effective_graph
 
-   !> @brief Write Python-friendly real-space hopping records.
-   !> @details Emits hopping records plus metadata conventions intended for direct
-   !>          parsing by scripts and post-processing tools.
-   !> @param[in] this Hamiltonian object containing built hopping blocks.
-   !> @param[in] filename Output path.
-   !> @param[in] tol Threshold for skipping tiny records.
-   !> @param[in] include_lsham Include onsite SOC blocks in the output.
-   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
-   module subroutine export_rs_tb_hoppings(this, filename, tol, include_lsham, transform_sph2cart)
-      implicit none
+   module subroutine assemble_effective_row(this, sites, keys, i, row)
       class(hamiltonian), intent(in) :: this
-      character(len=*), intent(in) :: filename
-      real(rp), intent(in) :: tol
-      logical, intent(in) :: include_lsham, transform_sph2cart
-   
-      integer :: u, ios
-   
-   end subroutine export_rs_tb_hoppings
-
-   !> @brief Write real-space hopping records to an open unit.
-   !> @details Shared implementation for legacy PAOFLOW and Python export modes,
-   !>          walking local/bulk neighbor blocks and optionally transforming basis
-   !>          or adding onsite spin-orbit terms.
-   !> @param[in] this Hamiltonian object containing built hopping blocks.
-   !> @param[in] u Open output unit.
-   !> @param[in] mode Record format selector.
-   !> @param[in] tol Threshold for skipping tiny records.
-   !> @param[in] include_lsham Include onsite SOC blocks in the output.
-   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
-   module subroutine write_rs_tb_records(this, u, mode, tol, include_lsham, transform_sph2cart)
-      implicit none
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: u
-      character(len=*), intent(in) :: mode
-      real(rp), intent(in) :: tol
-      logical, intent(in) :: include_lsham, transform_sph2cart
-   
-      integer :: ntype, ia, nr, k, jj, jbasis
-      integer :: i, j, ipao, jpao, n_atoms, max_orbital
-      integer :: idx(3)
-      logical :: found
-      complex(rp) :: hblock(nb, nb)
-   
-   end subroutine write_rs_tb_records
-
-   !> @brief Resolve a neighbor into integer lattice-cell indices.
-   !> @details Matches a real-space neighbor displacement against lattice
-   !>          translations so exported hopping records can carry PAOFLOW-style
-   !>          integer cell offsets.
-   !> @param[in] this Hamiltonian object containing lattice vectors and coordinates.
-   !> @param[in] ia Source atom index.
-   !> @param[in] jj Neighbor-list entry.
-   !> @param[out] idx Integer lattice-cell offset.
-   !> @param[out] found True when a matching offset was found within tolerance.
-   !> @param[in] tol Matching tolerance.
-   module subroutine rs_neighbor_lattice_index(this, ia, jj, idx, found, tol)
-      implicit none
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia, jj
-      integer, intent(out) :: idx(3)
-      logical, intent(out) :: found
-      real(rp), intent(in) :: tol
-   
-      integer :: idxi, idxj, idxk, jbasis
-      real(rp) :: rij(3), rijtest(3), err, best_err
-   
-   end subroutine rs_neighbor_lattice_index
+      integer, intent(in) :: sites(:), keys(:,:,:), i
+      type(effective_row), intent(inout) :: row
+   end subroutine assemble_effective_row
 
 
    !> @brief Select the spin operator S_x, S_y or S_z from a polarization label.

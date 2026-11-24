@@ -349,6 +349,13 @@ INCLUDE(${LOCAL_MODULE_PATH}/git-watcher.cmake)
 # The response driver writes the same build identifier into production output
 # provenance.  The global definition above is evaluated after the library
 # target is created, so apply it explicitly to the library as well.
+execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE RSLMTO_SOURCE_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT RSLMTO_SOURCE_COMMIT)
+  set(RSLMTO_SOURCE_COMMIT "unknown")
+endif()
+target_compile_definitions(${PROJECT_NAME} PRIVATE RSLMTO_SOURCE_COMMIT="${RSLMTO_SOURCE_COMMIT}")
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${gitlabel})
 message(STATUS "Git version info : ${gitversion}.")
 # Set package properties

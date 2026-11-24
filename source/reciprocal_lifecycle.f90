@@ -715,10 +715,12 @@ contains
    !> @details Converts lattice neighbor geometry into Cartesian and direct
    !>          per-type R-vector tables aligned with Hamiltonian neighbor slots.
    !> @param[inout] this Reciprocal object receiving ham_vec_type arrays.
-   module subroutine build_neighbor_vectors(this)
+   module subroutine build_neighbor_vectors(this, read_only)
       class(reciprocal), intent(inout) :: this
+      logical, optional, intent(in) :: read_only
       ! Local variables
       integer :: ntype, ia, nr, nn_max_loc, kk
+      logical :: cache_vectors
       real(rp) :: r2
       real(rp), dimension(3, this%lattice%kk) :: cralat
 
@@ -732,6 +734,8 @@ contains
 
       call root_info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
 
+      cache_vectors = .true.
+      if (present(read_only)) cache_vectors = .not. read_only
       r2 = this%lattice%r2
       kk = this%lattice%kk
       cralat(1:3, 1:kk) = this%lattice%cr(1:3, 1:kk) * this%lattice%alat
@@ -762,7 +766,7 @@ contains
          ! Use clusba directly - no need for lattice%sbarvec storage here
          ! We’re building type-specific ham_vec_type arrays instead
          call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, &
-                                  this%ham_vec_type(:, 1:nr, ntype))
+                                  this%ham_vec_type(:, 1:nr, ntype), cache_vectors)
 
          ! Update nr with actual number of neighbors found
          nr = nn_max_loc

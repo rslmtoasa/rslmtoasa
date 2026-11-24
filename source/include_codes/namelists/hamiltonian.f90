@@ -34,9 +34,9 @@ character(len=16) :: hubbard_u_potential_form
 ! Omitted input uses an internal auto sentinel, resolved after backend selection.
 character(len=16) :: hubbard_radial_moments
 real(rp) :: bounds_scaling
-character(len=16) :: export
+character(len=16) :: export, export_scope, effective_import
 
 namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, pol_alpha, pol_beta, velocity_scale, q_ss, theta_ss, magnetic_representation, ccor_2c, ccor_elin, &
         ccor_vmt_mode, ccor_debug, ccor_strict, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
         hubbard_u_sc, hubbard_u_impurity, hubbard_j_impurity, hubbard_u_general, hubbard_j_general, bounds_algorithm, bounds_scaling, &
-        hubbard_experimental, hubbard_log_level, hubbard_spinor_dm_diagnostic, hubbard_soc_experimental, hubbard_u_potential_form, hubbard_radial_moments, export
+        hubbard_experimental, hubbard_log_level, hubbard_spinor_dm_diagnostic, hubbard_soc_experimental, hubbard_u_potential_form, hubbard_radial_moments, export, export_scope, effective_import

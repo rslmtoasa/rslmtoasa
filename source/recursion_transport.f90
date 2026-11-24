@@ -698,6 +698,10 @@ contains
       integer :: k, ineigh, j
       logical :: ambiguous
 
+      if (allocated(this%hamiltonian%effective_bond)) then
+         this%transport_bond = this%hamiltonian%effective_bond
+         return
+      end if
       if (allocated(this%transport_bond)) deallocate(this%transport_bond)
       allocate(this%transport_bond(3, size(this%lattice%nn, 2), this%lattice%kk))
       this%transport_bond = 0.0_rp
