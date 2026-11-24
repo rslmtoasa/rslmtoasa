@@ -245,6 +245,9 @@ if(RUN_UNIT_TESTS)
 
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
+  add_fortran_unit_test(UnitEffectiveHamiltonian quick SOURCES ${TestDIR}/unit/test_effective_hamiltonian.f90 LABELS hamiltonian_export)
+  add_executable(HamiltonianActionProbe ${TestDIR}/hamiltonian_export/probe_native_action.f90)
+  target_link_libraries(HamiltonianActionProbe PRIVATE ${PROJECT_NAME})
   foreach(_b1 IN ITEMS
       "UnitScfB1GuardCapacityRequiresFatal|capacity|B1 occupation-capacity fatal.*site=3.*channel=d.*iteration=17.*q0="
       "UnitScfB1GuardWarningBoundary|warning|B1 occupation-capacity warning.*site=3.*channel=d.*iteration=17.*q0="

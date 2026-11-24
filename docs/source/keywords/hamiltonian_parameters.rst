@@ -223,6 +223,35 @@ Spectral bounds and velocity scaling
      - Scale factor of the velocity operators per atom type; a bond uses the larger of
        its two types.
 
+Hamiltonian export and import
+=============================
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Default
+     - Meaning
+   * - ``export``
+     - ``'none'``
+     - ``'python'`` or ``'rs2pao'`` writes the built Hamiltonian. Periodic output
+       includes an eV seven-column PAOFLOW-compatible file.
+   * - ``export_scope``
+     - ``'auto'``
+     - ``'periodic'`` writes cell translations. ``'cluster'`` writes the exact
+       finite graph and its periodic images. ``'kspace'`` writes native
+       reciprocal matrices. Auto selects compact bulk for ordinary bulk
+       operators, cluster for surfaces, interfaces, impurities and explicit
+       textures, and reciprocal output for GBT single-q.
+   * - ``effective_import``
+     - ``'canonical'``
+     - Selects ``rs_tb.tb`` for ``'canonical'`` or seven-column ``paoham.dat``
+       for ``'legacy'`` on ``conductivity_effective`` and ``dos_effective``.
+       Both require the matching ``rs_tb.meta``.
+
+See the repository guide ``docs/HAMILTONIAN_EXPORT.md`` for file conventions
+and examples.
+
 See Also
 ========
 
