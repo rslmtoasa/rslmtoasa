@@ -40,6 +40,7 @@ add_library(${PROJECT_NAME} STATIC
     alsda_radial.f90
     hamiltonian.f90
     hamiltonian_build.f90
+    hamiltonian_effective.f90
     hamiltonian_ccor.f90
     hamiltonian_paoflow_io.f90
     hamiltonian_hubbard.f90
