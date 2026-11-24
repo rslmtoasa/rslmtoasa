@@ -46,8 +46,8 @@ contains
       if (meta%block_size /= nb .or. meta%orbitals /= norb .or. meta%nsp /= this%control%nsp) &
          call g_logger%fatal('Effective Hamiltonian orbital or spin basis differs from input.', __FILE__, __LINE__)
       legacy = this%effective_import == 'legacy'
-      if (legacy .and. (.not. meta%periodic .or. nb /= 2*norb)) &
-         call g_logger%fatal('Effective seven-column import needs a periodic two-spin-block cell.', __FILE__, __LINE__)
+      if (legacy .and. nb /= 2*norb) &
+         call g_logger%fatal('Effective seven-column import needs a two-spin-block basis.', __FILE__, __LINE__)
       cell = lat%a*lat%alat
       nperiod = [lat%n1,lat%n2,lat%n3]
       if (any(meta%boundary .neqv. (lat%pbc .and. [lat%b1,lat%b2,lat%b3]))) &
@@ -325,6 +325,7 @@ contains
       character(len=8) :: checksum, expected_checksum
       integer :: u, ios, i, j, p, q, k, rec, ip, jp, r(3), a, b
       integer(int64) :: read_count, end_count
+      logical :: exists
       real(rp) :: re, im
       complex(rp) :: empty(nb,nb), value, block(nb,nb)
 
@@ -336,7 +337,17 @@ contains
       end_count = -1
       read_count = 0
       unit_name = 'rs_tb.tb'
-      if (legacy) unit_name = 'paoham.dat'
+      if (legacy) then
+         ! Keep the existing paired import name and also accept the files
+         ! directly in an export directory.
+         unit_name = 'paoham.dat'
+         inquire(file=unit_name, exist=exists)
+         if (.not. exists) then
+            unit_name = 'rs2paoham.dat'
+            inquire(file=unit_name, exist=exists)
+            if (.not. exists) unit_name = 'rs_tb_paoham.dat'
+         end if
+      end if
       if (meta%checked_payload) then
          expected_checksum = meta%canonical_checksum
          if (legacy) expected_checksum = meta%legacy_checksum

@@ -166,9 +166,11 @@ contains
       call row%add([i,0,0,0], term)
    end subroutine assemble_effective_row
 
-   !> @brief Write the canonical real-space matrix and optional PAOFLOW view.
+   !> @brief Write both real-space views of the assembled effective matrix.
    !> @details Native HOH, SOC and Hubbard operands are read-only. The metadata
    !>          file is published last and fingerprints each completed payload.
+   !>          In the seven-column cluster view, indices refer to actual sites
+   !>          and translations count whole replica cells, as in the metadata.
    module subroutine export_rs_tb_all(this, fermi, fermi_provenance, mesh_fermi)
       class(hamiltonian), intent(in) :: this
       real(rp), optional, intent(in) :: fermi
@@ -178,7 +180,7 @@ contains
       integer, allocatable :: sites(:), keys(:,:,:), order(:)
       integer :: i, j, l, m, rec, k, r(3), ipao, jpao, u, meta, legacy, ios, a, b, onsite
       integer(int64) :: count, paths, legacy_count, unique_blocks, original_bonds
-      logical :: periodic, with_legacy, flags(3), mixed_boundaries
+      logical :: periodic, flags(3), mixed_boundaries
       character(len=8) :: canonical_checksum, legacy_checksum
       complex(rp) :: block(nb,nb)
       real(rp) :: cell(3,3)
@@ -206,9 +208,8 @@ contains
                                                  this%magnetic_representation /= explicit_texture .and. .not. mixed_boundaries
       scope = 'cluster'
       if (periodic) scope = 'periodic'
-      with_legacy = periodic .and. nb == 2*norb
-      if (.not. with_legacy) call g_logger%warning('Legacy PAOFLOW output requires a periodic two-spin-block cell; writing canonical data.', &
-                                                   __FILE__, __LINE__)
+      if (nb /= 2*norb) &
+         call g_logger%fatal('Seven-column export requires a two-spin-block basis.', __FILE__, __LINE__)
       call this%effective_graph(periodic, sites, keys)
       if (nb > huge(0)/size(sites)) call g_logger%fatal('Hamiltonian export exceeds orbital index capacity.', __FILE__, __LINE__)
       count = 0_int64
@@ -220,12 +221,10 @@ contains
       if (ios /= 0) goto 900
       open(newunit=meta,file='rs_tb.meta.tmp',status='replace',action='write',iostat=ios)
       if (ios /= 0) goto 900
-      if (with_legacy) then
-         legacy_name = 'rs_tb_paoham.dat'
-         if (this%export == 'rs2pao') legacy_name = 'rs2paoham.dat'
-         open(newunit=legacy,file=trim(legacy_name)//'.tmp',status='replace',action='write',iostat=ios)
-         if (ios /= 0) goto 900
-      end if
+      legacy_name = 'rs_tb_paoham.dat'
+      if (this%export == 'rs2pao') legacy_name = 'rs2paoham.dat'
+      open(newunit=legacy,file=trim(legacy_name)//'.tmp',status='replace',action='write',iostat=ios)
+      if (ios /= 0) goto 900
       write(u,'(a)',err=900) '# rs-tb-hoppings-v2', &
          '# R1 R2 R3 ia jbasis effective_record i_local j_local ipao jpao real_eV imag_eV'
       do i = 1, size(sites)
@@ -261,7 +260,6 @@ contains
                   count = count + 1
                end do
             end do
-            if (.not. with_legacy) cycle
             do b = 1, nb, norb
                do a = 1, nb, norb
                   call hcpx(block(a:a+norb-1,b:b+norb-1),'sph2cart')
@@ -282,16 +280,12 @@ contains
       write(u,'(a,i0)',err=900) '# end records ', count
       close(u,iostat=ios)
       if (ios /= 0) goto 900
-      if (with_legacy) then
-         close(legacy,iostat=ios)
-         if (ios /= 0) goto 900
-      end if
+      close(legacy,iostat=ios)
+      if (ios /= 0) goto 900
       canonical_checksum = hopping_checksum('rs_tb.tb.tmp')
       if (len_trim(canonical_checksum) == 0) goto 900
-      if (with_legacy) then
-         legacy_checksum = hopping_checksum(trim(legacy_name)//'.tmp')
-         if (len_trim(legacy_checksum) == 0) goto 900
-      end if
+      legacy_checksum = hopping_checksum(trim(legacy_name)//'.tmp')
+      if (len_trim(legacy_checksum) == 0) goto 900
       flags = [.true.,.true.,.true.]
       cell = lat%a*lat%alat
       if (.not. periodic) then
@@ -342,17 +336,15 @@ contains
             i,lat%cr(:,j)*lat%alat,j,lat%iz(j),trim(lat%symbolic_atoms(lat%iz(j))%element%symbol)
       end do
       write(meta,'(a)',err=900) 'canonical_fnv1a32 '//canonical_checksum
-      if (with_legacy) write(meta,'(a)',err=900) 'legacy_fnv1a32 '//legacy_checksum
+      write(meta,'(a)',err=900) 'legacy_fnv1a32 '//legacy_checksum
       write(meta,'(a,i0)',err=900) 'original_bond_records ',original_bonds,'effective_blocks ',unique_blocks, &
          'two_hop_paths ',paths,'legacy_records ',legacy_count,'end_records ',count
       close(meta,iostat=ios)
       if (ios /= 0) goto 900
       call rename('rs_tb.tb.tmp','rs_tb.tb',ios)
       if (ios /= 0) goto 900
-      if (with_legacy) then
-         call rename(trim(legacy_name)//'.tmp',trim(legacy_name),ios)
-         if (ios /= 0) goto 900
-      end if
+      call rename(trim(legacy_name)//'.tmp',trim(legacy_name),ios)
+      if (ios /= 0) goto 900
       call rename('rs_tb.meta.tmp','rs_tb.meta',ios)
       if (ios == 0) return
 900   call g_logger%fatal('I/O error writing effective Hamiltonian export.', __FILE__, __LINE__)

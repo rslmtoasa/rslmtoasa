@@ -76,6 +76,20 @@ def main(binary, fixture, root, mode):
             for recur in ("block", "lanczos"):
                 assert (work / recur / "rs_tb.tb").read_bytes() == reference
             assert metadata(work / "block")["fermi_provenance"] == "frozen_input"
+            assert (work / "block/rs_tb_paoham.dat").is_file()
+            base["hamiltonian"].update(export="rs2pao", export_scope="cluster")
+            base["lattice"].update(b1=False, b2=False, b3=False)
+            directory = setup("open", "hamiltonian_export")
+            run(binary, directory)
+            fields = metadata(directory)
+            assert fields["scope"] == "cluster" and fields["periodic"].split() == ["F", "F", "F"]
+            assert int(fields["n_atoms"]) > 1
+            with (directory / "rs2paoham.dat").open() as payload:
+                first = next(payload).split()
+                assert len(first) == 7 and first[:3] == ["0", "0", "0"]
+                assert all(line.split(maxsplit=3)[:3] == ["0", "0", "0"] for line in payload)
+            base["hamiltonian"].update(export="python", export_scope="auto")
+            base["lattice"].update(b1=True, b2=True)
             directory = setup("dos", "dos_frozen", "block")
             log = run(binary, directory)
             assert "Block recursion on progress" in log
@@ -84,6 +98,7 @@ def main(binary, fixture, root, mode):
             assert any(row[1] > 0 for row in table)
             return
 
+        base["hamiltonian"]["export"] = "rs2pao"
         native = setup("native", "conductivity")
         log = run(binary, native)
         fields = metadata(native)
@@ -93,14 +108,31 @@ def main(binary, fixture, root, mode):
                         for line in log.splitlines() if "Free Fermi energy:" in line)
         assert abs(float(fields["fermi_Ry"]) - reported) <= 5.1e-7
         assert float(fields["mesh_fermi_Ry"]) == base["energy"]["fermi"]
+        with (native / "rs2paoham.dat").open() as payload:
+            has_wrapped_bond = False
+            count = 0
+            for count, line in enumerate(payload, 1):
+                record = line.split()
+                assert len(record) == 7 and int(record[2]) == 0
+                has_wrapped_bond |= int(record[0]) != 0 or int(record[1]) != 0
+        assert has_wrapped_bond and count == int(fields["legacy_records"])
 
         base["hamiltonian"]["export"] = "none"
         imported = setup("import", "conductivity_effective")
         for name in ("rs_tb.meta", "rs_tb.tb"):
             shutil.copy2(native / name, imported)
         run(binary, imported)
-        for name in ("response_total.out", "response_orbitals_real.out", "response_orbitals_imag.out", "Cu_dos.out"):
+        output_names = ("response_total.out", "response_orbitals_real.out", "response_orbitals_imag.out", "Cu_dos.out")
+        for name in output_names:
             compare_tables(native / name, imported / name)
+
+        base["hamiltonian"]["effective_import"] = "legacy"
+        legacy = setup("seven-column", "conductivity_effective")
+        for name in ("rs_tb.meta", "rs2paoham.dat"):
+            shutil.copy2(native / name, legacy)
+        run(binary, legacy)
+        for name in output_names:
+            compare_tables(native / name, legacy / name)
 
         meta = imported / "rs_tb.meta"
         original = meta.read_text()

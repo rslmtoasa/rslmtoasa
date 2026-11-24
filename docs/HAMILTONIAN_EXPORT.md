@@ -9,7 +9,7 @@ Use a frozen `*_out.nml` potential or an initial `*.nml` deck with the same nati
 /
 &hamiltonian
   hoh = .true.
-  export = 'python'
+  export = 'rs2pao'
   export_scope = 'cluster'
 /
 ```
@@ -19,7 +19,7 @@ The export options also work at the end of the standard SCF preprocessing routes
 | `export_scope` | Output | Interpretation |
 |---|---|---|
 | `periodic` | `rs_tb.meta`, `rs_tb.tb`, seven-column file | Bulk cell with one recursion class per basis site. Exact integer column-image translations. |
-| `cluster` | `rs_tb.meta`, `rs_tb.tb` | Actual finite bulk, surface, interface or impurity graph, including wrapped images. Use this for open or mixed boundaries and explicit textures. |
+| `cluster` | `rs_tb.meta`, `rs_tb.tb`, seven-column file | Actual finite bulk, surface, interface or impurity graph, including wrapped images. Use this for open or mixed boundaries and explicit textures. |
 | `kspace` | `rs_tb.kspace` | Native complex matrices on the full reciprocal mesh. Includes S(k) in `generalized_overlap_proxy`. Honors `kspace_ham_order` and native restrictions on GBT and orthogonal assembly. |
 | `auto` | Varies | Compact periodic for ordinary bulk, cluster for mixed-boundary bulk, surface, interface, impurity and explicit texture, reciprocal for GBT single-q. Select `kspace` explicitly for orthogonal and overlap modes. |
 
@@ -37,7 +37,9 @@ R1 R2 R3 row_site column_site record_index row_orb col_orb flat_row flat_col rea
 
 The record index starts with the zero-image onsite block, followed by lexicographically sorted column and image keys. Exact-zero scalar elements are omitted, so some indices may be absent. The canonical basis uses native spherical harmonics in increasing l and m with a contiguous block per spin. Flattened indices list all sites in the first spin block before the second.
 
-For periodic output, `export='rs2pao'` writes `rs2paoham.dat` and `export='python'` writes `rs_tb_paoham.dat`. Both seven-column files use the existing Cartesian orbital basis and spin-major global numbering. The canonical file always uses native spherical orbitals. Export uses one MPI writer. Use a separate working directory for each run.
+In either real-space scope, `export='rs2pao'` writes `rs2paoham.dat` and `export='python'` writes `rs_tb_paoham.dat`. The format is `R1 R2 R3 i j real_eV imag_eV` in the existing Cartesian orbital basis with spin-major global numbering. With `periodic`, the indices refer to compact-cell orbitals and R counts compact-cell translations. With `cluster`, the indices refer to orbitals on individual cluster sites and R counts whole replica-cell translations along closed directions. The open-direction components of R are zero. Keep the matching `rs_tb.meta` to preserve geometry, boundary flags and file provenance. External readers must interpret those boundaries explicitly for cluster data. The canonical file uses native spherical orbitals. Export uses one MPI writer. Use a separate working directory for each run.
+
+Reciprocal export stores matrices indexed by k in `rs_tb.kspace`, with the overlap metric where required. The seven-column layout describes real-space hoppings and has no fields for a k mesh, spin-spiral gauge or overlap metric.
 
 ## Import as ordinary tight binding
 
@@ -58,7 +60,7 @@ Use the same basis, `nsp`, lattice, atom labels and site ordering. For a compact
 /
 ```
 
-Select `dos_effective` for real-space DOS. The matching native fixed-potential DOS route is `dos_frozen`, which supports `recur='chebyshev'` and `recur='block'`. The imported DOS route currently uses Chebyshev. For an explicit seven-column round trip, put the periodic Cartesian file at `paoham.dat`, retain its matching `rs_tb.meta` and set `effective_import='legacy'`. The existing `paoflow2rs`, `conductivity_p2rs` and `exchange_p2rs` routes keep their external-file workflow.
+Select `dos_effective` for real-space DOS. The matching native fixed-potential DOS route is `dos_frozen`, which supports `recur='chebyshev'` and `recur='block'`. The imported DOS route currently uses Chebyshev. For a seven-column round trip, set `effective_import='legacy'` and keep the Cartesian file with its matching `rs_tb.meta`. The reader checks for `paoham.dat`, then `rs2paoham.dat`, then `rs_tb_paoham.dat`. The existing `paoflow2rs`, `conductivity_p2rs` and `exchange_p2rs` routes keep their external-file workflow.
 
 Effective import reconstructs every nonzero hopping shell and keeps separate wrapped images. The generic non-HOH kernels consume those blocks with the file's Fermi energy. Export-only records the input Fermi level. When native conductivity exports, it records the final Fermi level used in the response and the initial Fermi reference used to build the DOS mesh. The final value can equal the input if the native determination leaves it unchanged. Keep the energy limits and number of mesh points the same for a paired run. Charge, spin and orbital responses use the existing reconstruction. The import route rejects torque and reciprocal-only input.
 
