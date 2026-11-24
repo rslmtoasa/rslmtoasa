@@ -61,53 +61,62 @@ post_processing
 
 **Allowed values:**
 
-.. table::
-   :align: left
+.. list-table::
+   :header-rows: 1
 
-   +--------------------+---------------------------------------+
-   | post_processing    | Action                                |
-   +====================+=======================================+
-   | 'none'             | No post-processing (default)          |
-   +--------------------+---------------------------------------+
-   | 'density_of_states'| Calculate density of states           |
-   +--------------------+---------------------------------------+
-   | 'band_structure'   | Calculate band structure              |
-   +--------------------+---------------------------------------+
-   | 'paoflow2rs'       | PAOFLOW-to-RS conversion workflow     |
-   +--------------------+---------------------------------------+
-   | 'exchange'         | Calculate exchange interactions       |
-   +--------------------+---------------------------------------+
-   | 'conductivity'     | Calculate transport properties        |
-   +--------------------+---------------------------------------+
-   | 'exchange_p2rs'    | Exchange in p2rs workflow             |
-   +--------------------+---------------------------------------+
-   | 'conductivity_p2rs'| Conductivity in p2rs workflow         |
-   +--------------------+---------------------------------------+
-   | 'orbital_modern'   | Orbital-moment post-processing        |
-   +--------------------+---------------------------------------+
-   | 'bsf'              | Bloch spectral function A(k,E) (B3)   |
-   +--------------------+---------------------------------------+
-   | 'kspace_green'     | k-space Green's-function driver (B2)  |
-   +--------------------+---------------------------------------+
-   | 'frozen_magnon'    | Frozen-magnon E(q)/omega(q) sweep (B1)|
-   +--------------------+---------------------------------------+
-   | 'fermi_surface'    | Dense k-space eigenpair export for    |
-   |                    | Fermi-surface analysis                |
-   +--------------------+---------------------------------------+
-   | 'spin_response'    | Spin-response driver (see             |
-   |                    | :ref:`keywords/spin_response`)        |
-   +--------------------+---------------------------------------+
+   * - post_processing
+     - Action
+   * - ``'none'``
+     - No post-processing (default)
+   * - ``'hamiltonian_export'``
+     - Export the frozen native Hamiltonian
+   * - ``'dos_frozen'``
+     - Calculate frozen native real-space DOS
+   * - ``'dos_effective'``
+     - Calculate DOS from an effective real-space export
+   * - ``'conductivity_effective'``
+     - Calculate conductivity from an effective real-space export
+   * - ``'density_of_states'``
+     - Calculate native reciprocal DOS
+   * - ``'band_structure'``
+     - Calculate band structure
+   * - ``'paoflow2rs'``
+     - PAOFLOW-to-RS conversion workflow
+   * - ``'exchange'``
+     - Calculate exchange interactions
+   * - ``'conductivity'``
+     - Calculate transport properties
+   * - ``'exchange_p2rs'``
+     - Exchange in p2rs workflow
+   * - ``'conductivity_p2rs'``
+     - Conductivity in p2rs workflow
+   * - ``'orbital_modern'``
+     - Orbital-moment post-processing
+   * - ``'bsf'``
+     - Bloch spectral function A(k,E) (B3)
+   * - ``'kspace_green'``
+     - k-space Green's-function driver (B2)
+   * - ``'frozen_magnon'``
+     - Frozen-magnon E(q)/omega(q) sweep (B1)
+   * - ``'fermi_surface'``
+     - Dense k-space eigenpair export for Fermi-surface analysis
+   * - ``'spin_response'``
+     - Spin-response driver (see :ref:`keywords/spin_response`)
 
 **Default:** 'none'
 
 **Example:**
 
-For fixed Hamiltonian workflows, set ``pre_processing='none'``.
+For standalone fixed Hamiltonian workflows, set ``pre_processing='none'``
+and ``processing='none'``.
 ``post_processing='hamiltonian_export'`` builds the frozen native operator
 and applies the ``&hamiltonian`` export settings.
 ``'dos_frozen'`` evaluates its real-space DOS with Chebyshev or block recursion.
 ``'dos_effective'`` and ``'conductivity_effective'`` use the exported
-real-space Hamiltonian with an unchanged cluster geometry.
+real-space Hamiltonian and its metadata and require Chebyshev recursion.
+``'conductivity_p2rs'`` reads a standalone external ``paoham.dat``.
+See the :download:`Hamiltonian export and import manual <../../HAMILTONIAN_EXPORT.md>`
+for workflow selection and examples.
 
 .. code-block:: fortran
 

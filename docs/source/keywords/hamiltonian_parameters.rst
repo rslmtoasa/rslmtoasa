@@ -234,23 +234,27 @@ Hamiltonian export and import
      - Meaning
    * - ``export``
      - ``'none'``
-     - ``'python'`` or ``'rs2pao'`` writes the built Hamiltonian. Periodic output
-       includes an eV seven-column PAOFLOW-compatible file.
+     - Enables output. In either real-space scope, ``'rs2pao'`` writes
+       ``rs2paoham.dat`` and ``'python'`` writes ``rs_tb_paoham.dat``.
+       Both also write ``rs_tb.tb`` and ``rs_tb.meta``. Both enabled values
+       write ``rs_tb.kspace`` in reciprocal scope.
    * - ``export_scope``
      - ``'auto'``
      - ``'periodic'`` writes cell translations. ``'cluster'`` writes the exact
        finite graph and its periodic images. ``'kspace'`` writes native
        reciprocal matrices. Auto selects compact bulk for ordinary bulk
        operators, cluster for mixed-boundary bulk, surfaces, interfaces, impurities and explicit
-       textures, and reciprocal output for GBT single-q.
+       textures, and reciprocal output for GBT single-q. Use explicit
+       ``'cluster'`` to preserve an entirely open bulk cluster.
    * - ``effective_import``
      - ``'canonical'``
-     - Selects ``rs_tb.tb`` for ``'canonical'`` or seven-column ``paoham.dat``
-       for ``'legacy'`` on ``conductivity_effective`` and ``dos_effective``.
+     - Input format for ``conductivity_effective`` and ``dos_effective``.
+       ``'canonical'`` reads ``rs_tb.tb``. ``'legacy'`` looks for ``paoham.dat``,
+       ``rs2paoham.dat`` and ``rs_tb_paoham.dat`` in that order.
        Both require the matching ``rs_tb.meta``.
 
-See the repository guide ``docs/HAMILTONIAN_EXPORT.md`` for file conventions
-and examples.
+See the :download:`Hamiltonian export and import manual <../../HAMILTONIAN_EXPORT.md>`
+for file conventions and worked examples.
 
 See Also
 ========

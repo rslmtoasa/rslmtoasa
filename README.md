@@ -213,6 +213,8 @@ In `&control`, `calctype = 'B'`, `'S'`, and `'I'` select bulk, surface, and impu
 
 For exchange calculations, the supplied example defines `njij` and `ijpair` in `&lattice`. Pair indices refer to the generated real-space cluster; verify them after changing the structure.
 
+See the [Hamiltonian export and import manual](docs/HAMILTONIAN_EXPORT.md) for compact bulk, open and mixed-boundary exports, real-space DOS and conductivity replay, and reciprocal matrix output.
+
 ### Spin treatment
 
 The `nsp` parameter in `&control` selects the magnetic and relativistic treatment:

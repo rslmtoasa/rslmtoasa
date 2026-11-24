@@ -110,3 +110,22 @@ library. With spglib 2.6.0, GNU Fortran 14.2.0, system BLAS/LAPACK,
 OpenMP enabled and MPI disabled, the CPU quick suite passed 88/88 on
 the feature and 87/87 on main `4916e16`. All 14 reciprocal tests
 that failed in the spglib-disabled run passed with spglib enabled.
+
+## Final option audit
+
+| Finding | Assessment and follow-up |
+| --- | --- |
+| `kspace_ham_order='second'` with HOH off can label a first-order matrix as second order. | Confirmed on frozen bcc Fe. The first- and second-order requests produced identical 2,592 H records on a 2×2×2 mesh, while the header reported different requested orders. The writer should reject this combination or report the resolved order separately. The manual requires a built HOH operator for this example. |
+| Fully open bulk can resolve to compact periodic output under `auto`. | Confirmed on bcc Fe with `source_boundary F F F`. This retains the existing compact-bulk behavior. Use explicit `cluster` for finite-graph fidelity. Reporting the resolved scope at the console would make this easier to detect. |
+| `gf_route` and `export_scope` are independent in native conductivity. | For comparisons, pair native real-space recursion with periodic or cluster data and use `kspace` for native reciprocal matrices. An explicit target diagnostic would distinguish an intentional export of a different representation from paired replay. |
+| A combined SCF and conductivity or frozen export can write the same output twice. | The later stage takes precedence for the same filenames. Use separate jobs or document which stage owns the output. A single-dispatch change would need to preserve the existing SCF checkpoint workflow. |
+| `export='python'` and `'rs2pao'` share assembly and Cartesian serialization. | The two values preserve historical basenames. Both also write the spherical canonical view, which makes the basis and graph directly auditable. Either enabled value triggers the same reciprocal writer. |
+| `conductivity_p2rs` and `conductivity_effective` share the response driver. | Keep both entry points. The former reads standalone external bulk PAOFLOW files, and the latter validates a matched RS-LMTO-ASA export and rebuilds all image-resolved shells. The two DOS entry points share the recursion and Green-function driver. |
+
+The four examples in the [manual](docs/HAMILTONIAN_EXPORT.md) were exercised
+with spglib 2.6.0. For the mixed-boundary Cu example, the largest absolute
+difference across the native and seven-column replay response tables was
+7.13e-14 S/cm and the DOS tables matched numerically. The focused CTest
+selection passed 7/7, including keyword documentation coverage, both legacy
+writer names, external PAOFLOW conductivity, the effective algebra unit and
+both effective CLI tests. This review updated the documentation only.
