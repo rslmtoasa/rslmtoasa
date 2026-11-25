@@ -57,7 +57,7 @@ When a deck needs changing, start from these values (developer guidance):
 | `lld`, block recursion | `&control` | 21 | about 31 |
 | `lld`, Chebyshev | `&control` | 150 | about 200 |
 
-For production bulk runs other than transport, use a periodic cluster
+For production bulk runs, including transport, use a periodic cluster
 (`&lattice`, see
 [`keywords/lattice_geometry.rst`](source/keywords/lattice_geometry.rst)):
 
@@ -71,10 +71,11 @@ n2 = 15
 n3 = 15
 ```
 
-Transport (`post_processing = 'conductivity'`) needs open boundaries instead:
-`b1 = b2 = b3 = .false.`, as in the `example/conductivity/` fccCu, fccPt and
-bccFe decks (see
-[`conductivity_fcccu.rst`](source/user_guide/examples/conductivity_fcccu.rst)).
+Transport (`post_processing = 'conductivity'`) is linear response and doesn't
+need open boundaries; the periodic cluster gives better numerics. The
+`example/conductivity/` fccCu, fccPt and bccFe decks and
+`conductivity_fcccu.rst` still use open boundaries (`b1 = b2 = b3 = .false.`);
+don't copy that setting.
 
 ## 3. Files in a calculation directory
 
