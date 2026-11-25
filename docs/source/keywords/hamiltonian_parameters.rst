@@ -223,6 +223,45 @@ Spectral bounds and velocity scaling
      - Scale factor of the velocity operators per atom type; a bond uses the larger of
        its two types.
 
+Hamiltonian export and import
+=============================
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Default
+     - Meaning
+   * - ``export``
+     - ``'none'``
+     - Enables output. In either real-space scope, ``'rs2pao'`` writes
+       ``rs2paoham.dat`` and ``'python'`` writes ``rs_tb_paoham.dat``.
+       Both also write ``rs_tb.tb`` and ``rs_tb.meta``. Both enabled values
+       write ``rs_tb.kspace`` in reciprocal scope.
+   * - ``export_scope``
+     - ``'auto'``
+     - ``'periodic'`` writes cell translations. A repeating sheet can be
+       exported and imported in this form with a single cell along each open
+       direction. ``'cluster'`` writes the exact
+       finite graph and its periodic images. ``'kspace'`` writes native
+       reciprocal matrices. Auto selects compact bulk for ordinary bulk
+       operators, cluster for replicas with open directions, surfaces, interfaces, impurities and explicit
+       textures, and reciprocal output for GBT single-q. Use explicit
+       ``'cluster'`` to preserve an entirely open bulk cluster.
+   * - ``effective_import``
+     - ``'auto'``
+     - Input format for ``conductivity_import``, ``dos_import`` and
+       ``exchange_import``. ``'auto'`` uses ``rs_tb.tb`` when present
+       and otherwise reads a seven-column payload. ``'canonical'`` reads
+       ``rs_tb.tb``. ``'legacy'`` looks for ``paoham.dat``,
+       ``rs2paoham.dat`` and ``rs_tb_paoham.dat`` in that order.
+       Paired formats require the matching ``rs_tb.meta``. ``'external'`` uses
+       a seven-column file for the explicit input cluster and writes its
+       metadata if absent.
+
+See the :download:`Hamiltonian export and import manual <../../HAMILTONIAN_EXPORT.md>`
+for file conventions and worked examples.
+
 See Also
 ========
 

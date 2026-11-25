@@ -61,46 +61,66 @@ post_processing
 
 **Allowed values:**
 
-.. table::
-   :align: left
+.. list-table::
+   :header-rows: 1
 
-   +--------------------+---------------------------------------+
-   | post_processing    | Action                                |
-   +====================+=======================================+
-   | 'none'             | No post-processing (default)          |
-   +--------------------+---------------------------------------+
-   | 'density_of_states'| Calculate density of states           |
-   +--------------------+---------------------------------------+
-   | 'band_structure'   | Calculate band structure              |
-   +--------------------+---------------------------------------+
-   | 'paoflow2rs'       | PAOFLOW-to-RS conversion workflow     |
-   +--------------------+---------------------------------------+
-   | 'exchange'         | Calculate exchange interactions       |
-   +--------------------+---------------------------------------+
-   | 'conductivity'     | Calculate transport properties        |
-   +--------------------+---------------------------------------+
-   | 'exchange_p2rs'    | Exchange in p2rs workflow             |
-   +--------------------+---------------------------------------+
-   | 'conductivity_p2rs'| Conductivity in p2rs workflow         |
-   +--------------------+---------------------------------------+
-   | 'orbital_modern'   | Orbital-moment post-processing        |
-   +--------------------+---------------------------------------+
-   | 'bsf'              | Bloch spectral function A(k,E) (B3)   |
-   +--------------------+---------------------------------------+
-   | 'kspace_green'     | k-space Green's-function driver (B2)  |
-   +--------------------+---------------------------------------+
-   | 'frozen_magnon'    | Frozen-magnon E(q)/omega(q) sweep (B1)|
-   +--------------------+---------------------------------------+
-   | 'fermi_surface'    | Dense k-space eigenpair export for    |
-   |                    | Fermi-surface analysis                |
-   +--------------------+---------------------------------------+
-   | 'spin_response'    | Spin-response driver (see             |
-   |                    | :ref:`keywords/spin_response`)        |
-   +--------------------+---------------------------------------+
+   * - post_processing
+     - Action
+   * - ``'none'``
+     - No post-processing (default)
+   * - ``'hamiltonian_export'``
+     - Export the frozen native Hamiltonian
+   * - ``'dos_frozen'``
+     - Calculate frozen native real-space DOS
+   * - ``'dos_import'``
+     - Calculate DOS from a real-space Hamiltonian export
+   * - ``'conductivity_import'``
+     - Run the Kubo linear response with an imported real-space Hamiltonian
+   * - ``'exchange_import'``
+     - Calculate pair exchange, DMI and tensors using an imported Hamiltonian and the native pair list
+   * - ``'density_of_states'``
+     - Calculate native reciprocal DOS
+   * - ``'band_structure'``
+     - Calculate band structure
+   * - ``'paoflow2rs'``
+     - PAOFLOW-to-RS conversion workflow
+   * - ``'exchange'``
+     - Calculate exchange interactions
+   * - ``'conductivity'``
+     - Calculate transport properties
+   * - ``'exchange_p2rs'``
+     - Exchange in p2rs workflow
+   * - ``'conductivity_p2rs'``
+     - Conductivity in p2rs workflow
+   * - ``'orbital_modern'``
+     - Orbital-moment post-processing
+   * - ``'bsf'``
+     - Bloch spectral function A(k,E) (B3)
+   * - ``'kspace_green'``
+     - k-space Green's-function driver (B2)
+   * - ``'frozen_magnon'``
+     - Frozen-magnon E(q)/omega(q) sweep (B1)
+   * - ``'fermi_surface'``
+     - Dense k-space eigenpair export for Fermi-surface analysis
+   * - ``'spin_response'``
+     - Spin-response driver (see :ref:`keywords/spin_response`)
 
 **Default:** 'none'
 
 **Example:**
+
+For standalone fixed Hamiltonian workflows, set ``pre_processing='none'``
+and ``processing='none'``.
+``post_processing='hamiltonian_export'`` builds the frozen native operator
+and applies the ``&hamiltonian`` export settings.
+``'dos_frozen'`` evaluates its real-space DOS with Chebyshev or block recursion.
+The three import routes read the exported real-space Hamiltonian and its
+metadata. Conductivity requires Chebyshev recursion. DOS and pair exchange
+also support block recursion. ``'dos_effective'`` and
+``'conductivity_effective'`` remain accepted aliases.
+``'conductivity_p2rs'`` reads a standalone external ``paoham.dat``.
+See the :download:`Hamiltonian export and import manual <../../HAMILTONIAN_EXPORT.md>`
+for workflow selection and examples.
 
 .. code-block:: fortran
 
@@ -171,6 +191,15 @@ inversion :math:`[zS-H(k)-\Sigma]^{-1}`, B2 backend D)
   documented ``green_eta`` default, not identical to the recursion route).
 
 **Related code:** ``source/calculation.f90::check_gf_route()``
+
+exchange_delta
+~~~~~~~~~~~~~~
+
+Selects the exchange splitting for ``post_processing='exchange_import'``.
+``'lmto'`` (default) uses the energy-dependent LMTO potential matrix.
+``'onsite'`` uses the full real part of the onsite up-minus-down
+Hamiltonian block for a collinear ``spd`` model, following the PAOFLOW
+pair-exchange convention.
 
 do_damping
 ----------

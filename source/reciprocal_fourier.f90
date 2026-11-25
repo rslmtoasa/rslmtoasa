@@ -102,11 +102,12 @@ contains
       call this%clear()
    end subroutine reciprocal_workspace_destructor
 
-   module subroutine make_reciprocal_assembler(this, assembler)
+   module subroutine make_reciprocal_assembler(this, assembler, read_only)
       class(reciprocal), intent(inout) :: this
+      logical, optional, intent(in) :: read_only
       type(reciprocal_assembler), intent(out) :: assembler
       integer :: i
-      call this%build_neighbor_vectors()
+      call this%build_neighbor_vectors(read_only)
       assembler%hamiltonian => this%hamiltonian
       assembler%lattice => this%lattice
       assembler%control => this%control
@@ -123,6 +124,9 @@ contains
       case ('orthogonal'); assembler%use_orthogonal = .true.
       case default;    assembler%use_second_order = this%hamiltonian%hoh
       end select
+      if (present(read_only)) then
+         if (read_only) return
+      end if
       if (this%control%constraints_enable .and. trim(this%hamiltonian%magnetic_representation) == gbt_single_q &
           .and. .not. allocated(this%hamiltonian%gbt_ref_mom)) then   ! the SCF rewrites potential%mom; the frames keep this
          allocate (this%hamiltonian%gbt_ref_mom(3, this%lattice%ntype))

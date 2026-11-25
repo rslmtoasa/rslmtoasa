@@ -428,6 +428,8 @@ contains
       hubbard_radial_moments = this%hubbard_radial_moments
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
+      effective_import = this%effective_import
+      export_scope = this%export_scope
       export = this%export
 
       ! The bulk SCF loops index symbolic_atom by nbulk + recursion class, so ntype must equal nbulk + nrec.
@@ -528,6 +530,23 @@ contains
       if (len_trim(this%bounds%algorithm) == 0) this%bounds%algorithm = 'none'
       this%export = lower(trim(export))
       if (len_trim(this%export) == 0) this%export = 'none'
+      this%effective_import = lower(trim(effective_import))
+      select case (this%effective_import)
+      case ('auto', 'canonical', 'legacy', 'external')
+      case default
+         call g_logger%fatal('Invalid effective_import format', __FILE__, __LINE__)
+      end select
+      this%export_scope = lower(trim(export_scope))
+      select case (this%export_scope)
+      case ('auto', 'periodic', 'cluster', 'kspace')
+      case default
+         call g_logger%fatal('Invalid Hamiltonian export_scope', __FILE__, __LINE__)
+      end select
+      select case (this%export)
+      case ('none', 'rs2pao', 'python')
+      case default
+         call g_logger%fatal('Invalid Hamiltonian export format', __FILE__, __LINE__)
+      end select
       if (bounds_scaling > 0.0_rp) then
          this%bounds%scaling = bounds_scaling
       else
@@ -947,6 +966,8 @@ contains
       this%hubbard_u_sc_check = .false.
       this%hubbard_v_check = .false.
       this%export = 'none'
+      this%export_scope = 'auto'
+      this%effective_import = 'auto'
    end subroutine restore_to_default
 
    !> @brief Build charge velocity operators in real-space hopping layout.
@@ -1257,6 +1278,8 @@ contains
       integer :: ntype
       integer :: rd1_status
 
+      if (this%imported_effective) &
+         call g_logger%fatal('Cannot rebuild a fixed effective Hamiltonian as LMTO.', __FILE__, __LINE__)
       ! This is the single production rebuild boundary shared by recursion and
       ! reciprocal space. Advancing the generation invalidates every derived
       ! cache even when the changed dependency is not q itself (cone,

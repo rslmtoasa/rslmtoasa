@@ -1078,7 +1078,7 @@ module lattice_mod
    !> @param[in] ndi Leading dimension/capacity of crd.
    !> @param[inout] n Number of vectors found.
    !> @param[inout] sbarvec_out Optional output neighbor-vector storage.
-   module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out)
+   module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out, cache_vectors)
       implicit none
       class(lattice), intent(inout) :: this
       ! Inputs
@@ -1088,6 +1088,7 @@ module lattice_mod
       ! Output
       integer, intent(inout) :: n
       real(rp), dimension(:, :), intent(inout), optional :: sbarvec_out
+      logical, optional, intent(in) :: cache_vectors
       ! Local variables
       integer :: i, ii, k, nn
       real(rp) :: s1
@@ -1361,7 +1362,7 @@ module lattice_mod
    !> @param[out] ambiguous Optional; true if another image is equally short. The chosen image is unchanged.
    module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff,ambiguous)
       implicit none
-      class(lattice), intent(inout) :: this
+      class(lattice), intent(in) :: this
       integer, intent(in) :: Natom
       real(rp), dimension(3,Natom), intent(in) :: coord
       integer, intent(in) :: i_atom

@@ -245,6 +245,9 @@ if(RUN_UNIT_TESTS)
 
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
+  add_fortran_unit_test(UnitEffectiveHamiltonian quick SOURCES ${TestDIR}/unit/test_effective_hamiltonian.f90 LABELS hamiltonian_export)
+  add_executable(HamiltonianActionProbe ${TestDIR}/hamiltonian_export/probe_native_action.f90)
+  target_link_libraries(HamiltonianActionProbe PRIVATE ${PROJECT_NAME})
   foreach(_b1 IN ITEMS
       "UnitScfB1GuardCapacityRequiresFatal|capacity|B1 occupation-capacity fatal.*site=3.*channel=d.*iteration=17.*q0="
       "UnitScfB1GuardWarningBoundary|warning|B1 occupation-capacity warning.*site=3.*channel=d.*iteration=17.*q0="
@@ -543,6 +546,27 @@ endif()
 # Example (application) tests
 ##############################################################################################
 if(RUN_EXAMPLE_TESTS)
+  # Run the production CLI on a small mixed-boundary Cu replica.
+  foreach(_mode IN ITEMS round-trip block-dos compact-sheet)
+    rslmto_add_test(NAME EffectiveHamiltonian-${_mode} TIER standard TIMEOUT 120 LABELS hamiltonian_export postproc
+      COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_effective_workflow.py" "${TestBinary}"
+              "${CMAKE_SOURCE_DIR}/example/conductivity/fccCu" "${CMAKE_BINARY_DIR}" "${_mode}")
+  endforeach()
+
+  rslmto_add_test(NAME EffectiveHamiltonian-magnetic TIER standard TIMEOUT 180 LABELS hamiltonian_export postproc
+    COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_effective_workflow.py" "${TestBinary}"
+            "${TestDIR}/postproc/cases/exchange/bccFe" "${CMAKE_BINARY_DIR}" magnetic)
+
+  rslmto_add_test(NAME EffectiveHamiltonian-surface TIER standard TIMEOUT 120 LABELS hamiltonian_export postproc
+    COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_effective_workflow.py" "${TestBinary}"
+            "${CMAKE_SOURCE_DIR}/example/surface/fccCu001" "${CMAKE_BINARY_DIR}" surface)
+
+  if(TARGET HamiltonianActionProbe)
+    rslmto_add_test(NAME EffectiveHamiltonian-external TIER standard TIMEOUT 120 LABELS hamiltonian_export postproc
+      COMMAND "${PY}" "${TestDIR}/hamiltonian_export/test_external_tb.py" "${TestBinary}"
+              "$<TARGET_FILE:HamiltonianActionProbe>" "${CMAKE_SOURCE_DIR}/example/bulk/bccFeCo" "${CMAKE_BINARY_DIR}")
+  endif()
+
   # Register one CTest entry per case of a cases.json manifest.
   # Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
   function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)

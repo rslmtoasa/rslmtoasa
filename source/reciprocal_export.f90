@@ -2,9 +2,126 @@ submodule (reciprocal_mod) reciprocal_export
 #ifdef USE_MPI
    use mpi
 #endif
+   use magnetic_representation_mod, only: gbt_single_q
+   use hamiltonian_effective_mod, only: publish_hamiltonian_file
+   use ieee_arithmetic, only: ieee_is_finite
    implicit none
 
 contains
+
+   ! Stream one k-point at a time through the same assembler used by
+   ! reciprocal eigensolutions. No spectral reconstruction enters the file.
+   module subroutine write_kspace_matrices(this, fermi, fermi_provenance)
+      class(reciprocal), intent(inout) :: this
+      real(rp), intent(in) :: fermi
+      character(len=*), optional, intent(in) :: fermi_provenance
+      type(reciprocal_assembler) :: assembler
+      type(reciprocal_workspace) :: workspace
+      integer :: u, ios, ik, n, i, j, atom, t, slot, target
+      logical :: generalized, ambiguous
+      real(rp) :: hermiticity, bond(3), reference_moment(3)
+      real(rp), allocatable :: coordinates(:,:)
+      character(len=32) :: frame
+
+      if (rank /= 0) return
+      call this%validate_nonzero_q_gbt('reciprocal Hamiltonian export')
+      generalized = this%reciprocal_mode == 'generalized_overlap_proxy'
+      if (generalized .and. this%kspace_ham_order == 'orthogonal') &
+         call g_logger%fatal('The overlap proxy is unavailable in the exact orthogonal representation.', __FILE__, __LINE__)
+      if (this%hamiltonian%magnetic_representation == 'explicit_texture') &
+         call g_logger%fatal('Explicit texture export requires the real-space graph.', __FILE__, __LINE__)
+      if (this%hamiltonian%local_axis) then
+         if (any(this%hamiltonian%ee /= this%hamiltonian%ee_glob)) &
+            call g_logger%fatal('Reciprocal export needs global spin axes; use the frozen export route.', __FILE__, __LINE__)
+      end if
+      call this%generate_mp_mesh()
+      call this%make_reciprocal_assembler(assembler, read_only=.true.)
+      ! The native Fourier vectors assume complete representative rows.
+      ! Reject a wrapped replica whose real-space and Fourier slots disagree.
+      if (this%lattice%pbc .and. .not. assembler%use_orthogonal .and. &
+          this%hamiltonian%magnetic_representation /= gbt_single_q) then
+         coordinates = this%lattice%cr(:,:this%lattice%kk)*this%lattice%alat
+         do t = 1, this%lattice%ntype
+            atom = this%lattice%atlist(t)
+            do slot = 2, this%lattice%nn(atom,1)
+               target = this%lattice%nn(atom,slot)
+               if (target == 0) cycle
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk,coordinates,atom,target,bond,ambiguous)
+               if (ambiguous .or. norm2(bond-this%ham_vec_type(:,slot,t)) > 1.e-6_rp) &
+                  call g_logger%fatal('Reciprocal neighbor slots disagree with wrapped bonds; enlarge the replica.', &
+                                      __FILE__, __LINE__)
+            end do
+         end do
+      end if
+      n = this%lattice%nrec*nb
+      call workspace%ensure_capacity(n,1,generalized,this%hamiltonian%operator_generation,this%lattice%nn_max,this%lattice%ntype)
+      frame = 'global'
+      if (this%hamiltonian%magnetic_representation == gbt_single_q) frame = 'gbt_rotating'
+      open(newunit=u,file='rs_tb.kspace.tmp',action='write',status='replace',iostat=ios)
+      if (ios /= 0) goto 900
+      write(u,'(a)',err=900) '# rs-tb-kspace-v1', 'scope kspace', 'energy_unit Ry', 'overlap_unit dimensionless', &
+         'basis native_spherical', 'orbital_order site_then_spin_then_l_then_m_increasing', 'spin_frame '//trim(frame), &
+         'energy_reference unscaled_unshifted', 'source_commit '//RSLMTO_SOURCE_COMMIT, &
+         'k_coordinates fractional_reciprocal', 'reciprocal_mode '//trim(this%reciprocal_mode), &
+         'kspace_ham_order '//trim(this%kspace_ham_order), &
+         'magnetic_representation '//trim(this%hamiltonian%magnetic_representation)
+      write(u,'(a,l1)',err=900) 'hoh_original ',this%hamiltonian%hoh,'soc_original ',this%control%has_soc(), &
+         'ccor_original ',this%hamiltonian%ccor_2c,'hubbard_u_original ',this%hamiltonian%hubbard_u_general_check
+      if (present(fermi_provenance)) then
+         write(u,'(a)',err=900) 'fermi_provenance '//fermi_provenance
+      else
+         write(u,'(a)',err=900) 'fermi_provenance native_energy_object'
+      end if
+      write(u,'(a,es26.17e3)',err=900) 'fermi_Ry ',fermi, 'alat_Angstrom ',this%lattice%alat
+      write(u,'(a,3(1x,es26.17e3))',err=900) 'q_cartesian_2pi_over_alat', this%hamiltonian%q_ss
+      write(u,'(a,es26.17e3)',err=900) 'theta_radians ', this%hamiltonian%theta_ss
+      write(u,'(a,i0)',err=900) 'matrix_size ',n,'n_kpoints ',this%nk_total
+      write(u,'(a)',err=900) 'lattice_columns_Angstrom'
+      do i = 1, 3
+         write(u,'(3(es26.17e3,1x))',err=900) this%lattice%a(:,i)*this%lattice%alat
+      end do
+      write(u,'(a)',err=900) '# site index, type, position (Angstrom), reference moment, label'
+      do i = 1, this%lattice%nrec
+         t = this%lattice%ib(i)
+         atom = this%lattice%atlist(t)
+         reference_moment = this%lattice%symbolic_atoms(t)%potential%mom
+         if (allocated(this%hamiltonian%gbt_ref_mom)) reference_moment = this%hamiltonian%gbt_ref_mom(:,t)
+         write(u,'(a,2(i0,1x),6(es26.17e3,1x),a)',err=900) 'site ',i,t, &
+            this%lattice%cr(:,atom)*this%lattice%alat,reference_moment, &
+            trim(this%lattice%symbolic_atoms(t)%element%symbol)
+      end do
+      hermiticity = 0.0_rp
+      do ik = 1, this%nk_total
+         call assembler%assemble_batch(this%k_points(:,ik:ik), workspace)
+         if (generalized) then
+            call assembler%assemble_overlap_batch(this%k_points(:,ik:ik), workspace)
+            call this%check_overlap_properties(ik,workspace%s(:,:,1))
+         end if
+         if (.not. all(ieee_is_finite(real(workspace%h(:,:,1),rp))) .or. &
+             .not. all(ieee_is_finite(aimag(workspace%h(:,:,1))))) &
+            call g_logger%fatal('Nonfinite reciprocal Hamiltonian matrix.', __FILE__, __LINE__)
+         hermiticity = max(hermiticity,maxval(abs(workspace%h(:,:,1)-transpose(conjg(workspace%h(:,:,1))))))
+         write(u,'(a,i0,4(1x,es26.17e3))',err=900) 'k ',ik,this%k_points(:,ik),this%k_weights(ik)
+         do j = 1, n
+            do i = 1, n
+               write(u,'(a,2(i0,1x),2(es26.17e3,1x))',err=900) 'H ',i,j, &
+                  real(workspace%h(i,j,1),rp),aimag(workspace%h(i,j,1))
+               if (generalized) write(u,'(a,2(i0,1x),2(es26.17e3,1x))',err=900) 'S ',i,j, &
+                  real(workspace%s(i,j,1),rp),aimag(workspace%s(i,j,1))
+            end do
+         end do
+      end do
+      write(u,'(a,es26.17e3)',err=900) 'hermiticity_max_Ry ',hermiticity
+      if (hermiticity > 1.e-10_rp) then
+         write(*,'(a,es14.6)') 'Exported reciprocal operator has a native Hermiticity defect (Ry): ',hermiticity
+      end if
+      write(u,'(a,i0)',err=900) 'end_kpoints ',this%nk_total
+      close(u,iostat=ios)
+      if (ios /= 0) goto 900
+      ios = publish_hamiltonian_file('rs_tb.kspace.tmp','rs_tb.kspace')
+      if (ios == 0) return
+900   call g_logger%fatal('I/O error writing reciprocal Hamiltonian matrices.', __FILE__, __LINE__)
+   end subroutine write_kspace_matrices
 
    !> @brief Write a dense k-space eigensystem for Fermi-surface analysis.
    !> @details The binary payload is deliberately a simple stream rather than

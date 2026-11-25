@@ -5,6 +5,24 @@ submodule(calculation_mod) calculation_reciprocal
 
 contains
 
+   module subroutine dispatch_hamiltonian_export(ham, en, fermi_provenance)
+      type(hamiltonian), target, intent(inout) :: ham
+      type(energy), intent(in) :: en
+      character(len=*), optional, intent(in) :: fermi_provenance
+      type(reciprocal) :: recip
+
+      if (ham%export == 'none') return
+      if (ham%export_scope == 'kspace' .or. &
+          (ham%export_scope == 'auto' .and. ham%magnetic_representation == gbt_single_q)) then
+         if (ham%lattice%control%calctype /= 'B') &
+            call g_logger%fatal('Reciprocal Hamiltonian export requires a periodic bulk basis.', __FILE__, __LINE__)
+         recip = reciprocal(ham)
+         call recip%write_kspace_matrices(en%fermi, fermi_provenance)
+      else
+         call ham%export_rs_tb_all(en%fermi, fermi_provenance)
+      end if
+   end subroutine dispatch_hamiltonian_export
+
    !> @brief Build the shared object stack for a post-processing driver.
    module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
                                                    control_obj, lattice_obj, charge_obj, mix_obj, &
@@ -27,10 +45,22 @@ contains
       character(len=*), intent(in), optional :: preprocessing_route
       character(len=sl) :: route
       integer :: i, j
+      logical :: effective_input, effective_dos, effective_transport, effective_exchange
+      real(rp) :: fixed_fermi, imported_mesh_fermi
 
       control_obj = control(this%fname)
       lattice_obj = lattice(control_obj)
       route = trim(control_obj%calctype)
+      effective_transport = this%post_processing == 'conductivity_import' .or. &
+                            this%post_processing == 'conductivity_effective'
+      effective_dos = this%post_processing == 'dos_import' .or. this%post_processing == 'dos_effective'
+      effective_exchange = this%post_processing == 'exchange_import'
+      effective_input = effective_transport .or. effective_dos .or. effective_exchange
+      if ((effective_input .or. this%post_processing == 'hamiltonian_export' .or. &
+           this%post_processing == 'dos_frozen') .and. route == 'I') then
+         route = 'I_bulk'
+         if (lattice_obj%nlay > 0) route = 'I_surface'
+      end if
       if (present(preprocessing_route)) then
          select case (trim(preprocessing_route))
          case ('bravais')
@@ -56,38 +86,56 @@ contains
          case ('B')
             call lattice_obj%build_data()
             call lattice_obj%bravais()
-            call lattice_obj%structb(.true.)
+            call lattice_obj%structb(.not. effective_input)
          case ('S')
             call lattice_obj%build_data()
             call lattice_obj%bravais()
             call lattice_obj%build_surf_full()
-            call lattice_obj%structb(.true.)
+            call lattice_obj%structb(.not. effective_input)
          case ('I', 'I_surface')
             call lattice_obj%build_data()
             call lattice_obj%bravais()
             call lattice_obj%build_surf_full()
             call lattice_obj%newclu()
-            call lattice_obj%structb(.true.)
+            call lattice_obj%structb(.not. effective_input)
          case ('I_bulk')
             call lattice_obj%build_data()
             call lattice_obj%bravais()
             call lattice_obj%newclu()
-            call lattice_obj%structb(.true.)
+            call lattice_obj%structb(.not. effective_input)
          case ('L')
             ! B7.5: build_interface_full instead of build_surf_full -- the
             ! two-sided counterpart. Mirrors pre_processing_buildinterface.
             call lattice_obj%build_data()
             call lattice_obj%bravais()
             call lattice_obj%build_interface_full()
-            call lattice_obj%structb(.true.)
+            call lattice_obj%structb(.not. effective_input)
          end select
       end if
 
       call lattice_obj%atomlist()
 
-      if (present(preprocessing_route)) then
-         ! Spin dynamics consumes the active recursion atoms, matching the
-         ! normal preprocessing ownership and the original SD partition.
+      ! The intersite pair list is irrelevant to site DOS and transport. Their
+      ! recursion storage must use the onsite layout even in a shared deck.
+      if (effective_dos .or. effective_transport) then
+         lattice_obj%njij = 0
+         lattice_obj%njijk = 0
+      end if
+      if (effective_exchange) then
+         if (trim(this%gf_route) /= 'recursion') &
+            call g_logger%fatal('exchange_import requires gf_route=recursion.', __FILE__, __LINE__)
+         if (lattice_obj%njij <= 0 .or. lattice_obj%njijk /= 0) &
+            call g_logger%fatal('exchange_import requires a pair list (njij and ijpair, with njijk=0).', __FILE__, __LINE__)
+         if (any(lattice_obj%ijpair < 1) .or. any(lattice_obj%ijpair > lattice_obj%kk)) &
+            call g_logger%fatal('exchange_import ijpair indices must be valid cluster site numbers.', __FILE__, __LINE__)
+         if (norb /= 9) &
+            call g_logger%fatal('exchange_import uses the native spd pair-exchange kernel (lmax=2).', __FILE__, __LINE__)
+      end if
+
+      if (effective_dos .or. effective_transport .or. this%post_processing == 'conductivity' .or. &
+          this%post_processing == 'conductivity_p2rs' .or. present(preprocessing_route)) then
+         ! Onsite Green functions index recursion sites. Kubo trace loops
+         ! iterate atom types independently, including frozen types.
          call get_mpi_variables(rank, lattice_obj%nrec)
       else if (use_exchange_pairs) then
          call get_mpi_variables(rank, lattice_obj%njij)
@@ -107,7 +155,7 @@ contains
             call charge_obj%surfmat
          case ('I')
             call charge_obj%impmad()
-            if (present(preprocessing_route)) call charge_obj%get_charge_transf
+            if (present(preprocessing_route) .or. effective_exchange) call charge_obj%get_charge_transf
          case ('L')
             ! B7.5: same Madelung matrices as ’S’ (no interfacemat exists, by
             ! design), plus the region reference charges and the genuinely
@@ -123,10 +171,34 @@ contains
 
       mix_obj = mix(lattice_obj, charge_obj)
       energy_obj = energy(lattice_obj)
-      if (energy_mesh_before_hamiltonian) call energy_obj%e_mesh()
+      if (energy_mesh_before_hamiltonian .and. .not. effective_input) call energy_obj%e_mesh()
 
       hamiltonian_obj = hamiltonian(charge_obj)
-      if (use_paoflow) then
+      if (effective_input) then
+         if (control_obj%recur /= 'chebyshev' .and. (effective_transport .or. control_obj%recur /= 'block')) &
+            call g_logger%fatal('Hamiltonian import requires Chebyshev recursion, or block recursion for DOS and exchange.', &
+                                __FILE__, __LINE__)
+         if (effective_transport .and. trim(this%gf_route) /= 'recursion') &
+            call g_logger%fatal('conductivity_import requires gf_route=recursion.', __FILE__, __LINE__)
+         if (control_obj%gpu_plugin .or. control_obj%cheb_backend /= 'legacy' .or. control_obj%transport_backend /= 'legacy') &
+            call g_logger%info('Using generic FP64 legacy recursion for the effective Hamiltonian.', __FILE__, __LINE__)
+         control_obj%gpu_plugin = .false.
+         control_obj%cheb_backend = 'legacy'
+         control_obj%transport_backend = 'legacy'
+         call hamiltonian_obj%import_effective(fixed_fermi, imported_mesh_fermi, external_fermi=energy_obj%fermi)
+         if (effective_transport .and. control_obj%has_soc() .and. .not. hamiltonian_obj%effective_has_soc_split) then
+            if (index(control_obj%linear_in,'spin_torque') /= 0 .or. index(control_obj%linear_in,'soc') /= 0 .or. &
+                index(control_obj%linear_out,'spin_torque') /= 0 .or. index(control_obj%linear_out,'soc') /= 0) &
+               call g_logger%fatal('Spin and SOC torque import with SOC needs an export containing onsite SOC blocks.', &
+                                   __FILE__, __LINE__)
+         end if
+         ! Reproduce the native DOS grid, which is aligned before E_F is solved.
+         energy_obj%fermi = imported_mesh_fermi
+         if (effective_exchange) energy_obj%fermi = fixed_fermi
+         call energy_obj%e_mesh()
+         energy_obj%fermi = fixed_fermi
+         energy_obj%fix_fermi = .true.
+      else if (use_paoflow) then
          select case (control_obj%calctype)
          case ('B')
             call hamiltonian_obj%build_from_paoflow_opt()
@@ -174,7 +246,7 @@ contains
       dos_obj = dos(recursion_obj, energy_obj)
       green_obj = green(dos_obj)
       bands_obj = bands(green_obj)
-      if (.not. energy_mesh_before_hamiltonian) call energy_obj%e_mesh()
+      if (.not. energy_mesh_before_hamiltonian .and. .not. effective_input) call energy_obj%e_mesh()
    end subroutine prepare_post_processing_stack
 
    !> @brief Run the intersite recursion pass that produces the moments for G_ij.

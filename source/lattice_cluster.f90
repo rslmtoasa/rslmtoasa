@@ -1502,7 +1502,7 @@ contains
    !> @param[out] cdiff Minimum-image displacement from i_atom to j_atom.
    module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff,ambiguous)
       implicit none
-      class(lattice), intent(inout) :: this
+      class(lattice), intent(in) :: this
       integer, intent(in) :: Natom
       real(rp), dimension(3,Natom), intent(in) :: coord
       integer, intent(in) :: i_atom

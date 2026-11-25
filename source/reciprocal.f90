@@ -605,6 +605,7 @@ module reciprocal_mod
       procedure :: build_green_contour
       procedure :: calculate_bsf
       procedure :: write_kspace_eigenpairs
+      procedure :: write_kspace_matrices
       final     :: destructor
    end type reciprocal
 
@@ -955,8 +956,9 @@ module reciprocal_mod
       class(reciprocal_workspace), intent(inout) :: workspace
    end subroutine reciprocal_assembler_assemble_gbt
 
-   module subroutine make_reciprocal_assembler(this, assembler)
+   module subroutine make_reciprocal_assembler(this, assembler, read_only)
       class(reciprocal), intent(inout) :: this
+      logical, optional, intent(in) :: read_only
       type(reciprocal_assembler), intent(out) :: assembler
    end subroutine make_reciprocal_assembler
 
@@ -1032,8 +1034,9 @@ module reciprocal_mod
    !> @details Converts lattice neighbor geometry into Cartesian and direct
    !>          per-type R-vector tables aligned with Hamiltonian neighbor slots.
    !> @param[inout] this Reciprocal object receiving ham_vec_type arrays.
-   module subroutine build_neighbor_vectors(this)
+   module subroutine build_neighbor_vectors(this, read_only)
       class(reciprocal), intent(inout) :: this
+      logical, optional, intent(in) :: read_only
    end subroutine build_neighbor_vectors
 
    !> @brief Calculate exp(i k.R) factors for each neighbor/type.
@@ -1826,6 +1829,12 @@ end function integrate_dos_up_to_energy
    !>          and imaginary float64 arrays in Fortran column-major order.
    !> @param[inout] this Reciprocal object containing the eigensystem.
    !> @param[in] scf_iteration Optional source SCF iteration recorded in metadata.
+   module subroutine write_kspace_matrices(this, fermi, fermi_provenance)
+      class(reciprocal), intent(inout) :: this
+      real(rp), intent(in) :: fermi
+      character(len=*), optional, intent(in) :: fermi_provenance
+   end subroutine write_kspace_matrices
+
    module subroutine write_kspace_eigenpairs(this, scf_iteration)
       class(reciprocal), intent(inout) :: this
       integer, intent(in), optional :: scf_iteration
