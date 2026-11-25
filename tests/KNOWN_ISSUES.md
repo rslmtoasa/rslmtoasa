@@ -620,3 +620,6 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 
 ### PAOFLOW exchange input: pair list before `ntype`/`ct` fails to read — 2026-11-25
 - **Observed, not triaged:** in `tests/postproc/cases/paoflow/bccFe_exchange/input.nml`, placing `njij`/`ijpair` before `ntype`/`ct` in `&lattice` gives "Invalid &lattice namelist, iostat=5010"; placing them after works.
+
+### GPU on-site Chebyshev DOS slices mu_n with global atom indices under MPI — 2026-11-25
+- **Read, not run:** `chebyshev_green_core` (`source/green_chebyshev.f90`, GPU branch ~line 245) passes `mu_n(:,:,:,start_atom:end_atom)` and `g0(:,:,:,start_atom:end_atom)` to `chebyshev_dos`, while the per-atom recursion (`chebyshev_recur`) stores the moments of atom `ia_glob` at the local slot `g2l_map(ia_glob)`. On rank 0 the two coincide; on ranks above 0 the slice would read slots that the rank did not fill (or exceed the local count if the arrays are sized locally). Affects `gpu_plugin` runs with MPI on the Chebyshev DOS/SCF path only; the CPU path and the exchange (pair) routes use local slots. Not reproduced. Proposal: slice `1:atoms_per_process` (a few lines), with a 2-rank GPU check.
