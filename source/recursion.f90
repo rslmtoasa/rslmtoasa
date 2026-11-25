@@ -69,6 +69,8 @@ module recursion_mod
       !> Block recursion coefficients
       complex(rp), dimension(:, :, :, :), allocatable :: a_b, b2_b
       logical :: b2_b_is_sqrt = .false.
+      !> One-shot block Haydock: S_m(j) = P_j^H Q_m of every local pair, shape (nb,nb,lld-1,local pairs)
+      complex(rp), dimension(:, :, :, :), allocatable :: os_s
       complex(rp), dimension(:, :, :), allocatable :: atemp_b, b2temp_b
       !> Atom list in hopping region
       integer, dimension(:), allocatable :: izero, idum, irlist, nzero, mzero, ndum, mdum
@@ -113,6 +115,7 @@ module recursion_mod
       procedure :: crecal_b
       procedure :: recur_b
       procedure :: recur_b_ij
+      procedure :: recur_b_ij_oneshot
       procedure :: zsqr
       procedure :: bpopt
       procedure :: get_terminf
@@ -547,6 +550,12 @@ module recursion_mod
 
    end subroutine recur_b_ij
 
+   !> @brief One-shot block Haydock for intersite pairs: one block-Lanczos recursion per seed site.
+   !> @param[inout] this Recursion object; fills a_b, b2_b (slot 1 of each pair) and os_s.
+   module subroutine recur_b_ij_oneshot(this)
+      class(recursion), intent(inout) :: this
+   end subroutine recur_b_ij_oneshot
+
    !> @brief Generate block-Lanczos coefficients for the selected recursion atoms.
    !> @details Computes the block tridiagonal Haydock coefficients A_n and B_n
    !>          for each atom in lattice%irec. Real-space SCF and block Green’s
@@ -570,8 +579,10 @@ module recursion_mod
    !>          and stores temporary A_n/B_n blocks for the caller.
    !> @param[inout] this Recursion object with psi_b initialized for one atom or pair.
    !> @note Uses LAPACK zheev and mutates psi_b, pmn_b, atemp_b, and b2temp_b.
-   module subroutine crecal_b(this)
+   module subroutine crecal_b(this, targets, slices)
       class(recursion), intent(inout) :: this
+      integer, intent(in), optional :: targets(:)
+      complex(rp), intent(inout), optional :: slices(:, :, :, :)
       ! Local variables
       integer :: i, j, k, l, m, info, lwork
       integer :: ll, llmax ! Recursion step

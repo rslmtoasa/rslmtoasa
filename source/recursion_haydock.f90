@@ -415,10 +415,13 @@ contains
    !>          and stores temporary A_n/B_n blocks for the caller.
    !> @param[inout] this Recursion object with psi_b initialized for one atom or pair.
    !> @note Uses LAPACK zheev and mutates psi_b, pmn_b, atemp_b, and b2temp_b.
-   module subroutine crecal_b(this)
+   module subroutine crecal_b(this, targets, slices)
       use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
                              ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       class(recursion), intent(inout) :: this
+      !> Optional sites whose block of the normalized Q_ll is stored in slices(:,:,ll,:), ll = 1..lld-1
+      integer, intent(in), optional :: targets(:)
+      complex(rp), intent(inout), optional :: slices(:, :, :, :)
       ! Local variables
       integer :: i, j, k, l, m, info, lwork
       integer :: ll, llmax ! Recursion step
@@ -452,6 +455,13 @@ contains
             call this%hop_b(ll)     ! a_n=<PSI_n|H|PSI_n>
          end if
          call g_timer%stop('H|PSI_n>')
+
+         ! hop_b leaves psi_b untouched: here it is the normalized Q_ll that belongs to atemp_b(:,:,ll)
+         if (present(targets)) then
+            do i = 1, size(targets)
+               slices(:, :, ll, i) = this%psi_b(:, :, targets(i))
+            end do
+         end if
 
          !psi_t(:,:,:) = this%psi_b(:,:,:)
          !call zcopy(nb*nb*this%lattice%kk,this%psi_b,1,psi_t,1)

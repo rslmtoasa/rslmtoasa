@@ -1429,6 +1429,57 @@ contains
       !end do
    end subroutine recur_b_ij
 
+   !> @brief One-shot block Haydock for intersite pairs: one block-Lanczos recursion per seed site.
+   !> @details Block Lanczos from Q_1 = P_i (identity block at the seed site) through crecal_b (legacy FP64 path).
+   !>          Per local pair slot ij_loc it stores S_m(j) = P_j^H Q_m in os_s(:,:,m,ij_loc), m = 1..lld-1,
+   !>          and the seed's A_m, B_m^2 (m = 1..lld; A_lld is not computed by crecal_b) in slot ij_loc*4-3 of
+   !>          a_b/b2_b; slots 2-4 are zero. B_m^2 sits at index m: b2_b(:,:,m) = B_m^2 couples blocks m-1 and m.
+   !> @param[inout] this Recursion object; MPI ranks use start_atom..end_atom, no communication.
+   module subroutine recur_b_ij_oneshot(this)
+      use mpi_mod, only: rank, start_atom, end_atom, g2l_map
+      use intersite_request_mod, only: intersite_request
+      class(recursion), intent(inout) :: this
+      type(intersite_request) :: req
+      complex(rp), allocatable :: slices(:, :, :, :)
+      integer :: s, k, l, i, ij, ij_loc, ntg, llmax
+
+      this%b2_b_is_sqrt = .false.
+      llmax = this%lattice%control%lld
+      call req%build(this%lattice%ijpair, start_atom, end_atom)
+      if (req%npair == 0) return
+      if (allocated(this%os_s)) deallocate (this%os_s)
+      allocate (this%os_s(nb, nb, llmax - 1, end_atom - start_atom + 1))
+      this%a_b(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%b2_b(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      do s = 1, req%nseed
+         i = req%seed_site(s)
+         ntg = req%target_ptr(s + 1) - req%target_ptr(s)
+         allocate (slices(nb, nb, llmax - 1, ntg))
+         call g_logger%info(int2str(rank)//': one-shot block recursion from seed atom '//int2str(i), __FILE__, __LINE__)
+         this%izero(:) = 0
+         this%izero(i) = 1
+         this%psi_b(:, :, :) = (0.0_rp, 0.0_rp)
+         this%pmn_b(:, :, :) = (0.0_rp, 0.0_rp)
+         this%atemp_b(:, :, :) = (0.0_rp, 0.0_rp)
+         this%b2temp_b(:, :, :) = (0.0_rp, 0.0_rp)
+         do l = 1, nb
+            this%psi_b(l, l, i) = (1.0_rp, 0.0_rp)
+            this%b2temp_b(l, l, 1) = (1.0_rp, 0.0_rp)
+         end do
+         call this%crecal_b(req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), slices)
+         do k = 1, req%npair
+            if (req%pair_seed(k) /= s) cycle
+            ij = start_atom + k - 1
+            ij_loc = g2l_map(ij)
+            this%os_s(:, :, :, ij_loc) = slices(:, :, :, req%pair_entry(k) - req%target_ptr(s) + 1)
+            this%a_b(:, :, :, ij_loc*4 - 3) = this%atemp_b(:, :, 1:llmax)
+            this%b2_b(:, :, :, ij_loc*4 - 3) = this%b2temp_b(:, :, 1:llmax)
+         end do
+         deallocate (slices)
+      end do
+   end subroutine recur_b_ij_oneshot
+
    !> @brief Generate Chebyshev moments for intersite atom pairs.
    !> @details Runs four phase-combination moment recursions per ij pair so
    !>          green%chebyshev_green_ij can reconstruct intersite Green functions

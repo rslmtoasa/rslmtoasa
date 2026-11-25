@@ -193,6 +193,10 @@ if(RUN_REG_TESTS)
       COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_exchange.py" "--binary" "${TestBinary}"
         "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_exchange"
         "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
+    rslmto_add_test(NAME OneShotContour_MPI TIER standard TIMEOUT 1800 LABELS regression mpi
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_contour.py" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_contour"
+        "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
   endif()
 
   # --- Kubo transport operators and backends (pytest) -----------------------------------------
@@ -253,6 +257,7 @@ if(RUN_UNIT_TESTS)
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
   add_fortran_unit_test(UnitIntersiteRequest quick SOURCES ${TestDIR}/unit/test_intersite_request.f90)
+  add_fortran_unit_test(UnitBlockTridiag quick SOURCES ${TestDIR}/unit/test_block_tridiag.f90)
   add_fortran_unit_test(UnitEffectiveHamiltonian quick SOURCES ${TestDIR}/unit/test_effective_hamiltonian.f90 LABELS hamiltonian_export)
   add_executable(HamiltonianActionProbe ${TestDIR}/hamiltonian_export/probe_native_action.f90)
   target_link_libraries(HamiltonianActionProbe PRIVATE ${PROJECT_NAME})

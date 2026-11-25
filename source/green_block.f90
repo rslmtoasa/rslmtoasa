@@ -46,6 +46,49 @@ contains
 
    end subroutine block_green_ij_eta
 
+   !> @brief One-shot block Haydock G_ji(z), G_ij(z) of local pair ij_loc, in the four-slot legacy layout.
+   !> @details G_ji(z) = sum_m S_m(j) X_m(z) with X the first block column of (z - T)^-1 (finite T, no terminator),
+   !>          G_ij(z) = [G_ji(conj z)]^H. Slot 1 = Gij + Gji, slot 3 = i (Gij - Gji), slots 2 and 4 = 0, which the
+   !>          legacy combination 0.5[(g1-g2) -+ i(g3-g4)] maps back to Gij, Gji. Self pair: slot 1 = Gii.
+   !>          Needs zsqr to have turned the stored B^2 into B (b(:,:,m) = B_{m+1} = b2_b(:,:,m+1)).
+   module subroutine block_green_ij_eta_oneshot(this, ij_loc, z, g_ef)
+      use block_tridiag_mod, only: block_tridiag_first_column
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ij_loc
+      complex(rp), intent(in) :: z
+      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
+      complex(rp), allocatable :: b(:, :, :), x(:, :, :)
+      complex(rp), dimension(nb, nb) :: gji, gij
+      integer :: m, nblk, slot, ij
+
+      nblk = this%control%lld - 1
+      slot = ij_loc*4 - 3
+      allocate (b(nb, nb, nblk), x(nb, nb, nblk))
+      b(:, :, 1:nblk - 1) = this%recursion%b2_b(:, :, 2:nblk, slot)
+      b(:, :, nblk) = (0.0_rp, 0.0_rp)
+      g_ef = (0.0_rp, 0.0_rp)
+
+      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, z, x)
+      gji = (0.0_rp, 0.0_rp)
+      do m = 1, nblk
+         gji = gji + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
+      end do
+      ij = start_atom + ij_loc - 1
+      if (this%lattice%ijpair(ij, 1) == this%lattice%ijpair(ij, 2)) then
+         g_ef(:, :, 1) = gji
+         return
+      end if
+
+      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, conjg(z), x)
+      gij = (0.0_rp, 0.0_rp)
+      do m = 1, nblk
+         gij = gij + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
+      end do
+      gij = conjg(transpose(gij))
+      g_ef(:, :, 1) = gij + gji
+      g_ef(:, :, 3) = i_unit*(gij - gji)
+   end subroutine block_green_ij_eta_oneshot
+
    module subroutine block_green_ij(this, istart)
       implicit none
       class(green), intent(inout) :: this
@@ -214,7 +257,11 @@ contains
                eta = cmplx(0.0_rp, res)
                select case (this%control%recur)
                case ('block')
-                  call this%block_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
+                  if (this%control%intersite_mode == 'one_shot') then
+                     call this%block_green_ij_eta_oneshot(ia, cmplx(this%en%ene(fermi_point), 0.0_rp, rp) + eta, g0_ef)
+                  else
+                     call this%block_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
+                  end if
                case ('chebyshev')
                   call this%chebyshev_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
                end select
@@ -240,6 +287,9 @@ contains
          end do
          return
       end if
+
+      if (this%control%recur == 'block' .and. this%control%intersite_mode == 'one_shot') &
+         call g_logger%fatal('one_shot with recur = block supports only the complex contour (exchange_p2rs).', __FILE__, __LINE__)
 
       this%gij = 0.0d0; this%gji = 0.0d0; this%ginmag = 0.0d0; this%giz = 0.0d0; this%giy = 0.0d0; this%gix = 0.0d0
       this%gjnmag = 0.0d0; this%gjx = 0.0d0; this%gjy = 0.0d0; this%gjz = 0.0d0

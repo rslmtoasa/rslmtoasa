@@ -72,6 +72,7 @@ module green_mod
       procedure :: block_green_ij
       procedure :: block_green_ij_gpu
       procedure :: block_green_ij_eta
+      procedure :: block_green_ij_eta_oneshot
       procedure :: calculate_intersite_gf
       procedure :: calculate_intersite_gf_twoindex
       procedure :: calculate_intersite_gf_eta
@@ -181,6 +182,13 @@ module green_mod
       complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
       integer, intent(in) :: fermi_point
    end subroutine block_green_ij_eta
+
+   module subroutine block_green_ij_eta_oneshot(this, ij_loc, z, g_ef)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ij_loc
+      complex(rp), intent(in) :: z
+      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
+   end subroutine block_green_ij_eta_oneshot
 
    module subroutine block_green_ij(this, istart)
       class(green), intent(inout) :: this
