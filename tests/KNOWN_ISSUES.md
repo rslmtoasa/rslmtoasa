@@ -600,3 +600,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 
 ### Exchange kernels form dense products with the diagonal d_matrix — 2026-11-25
 - **Read, not run:** `dGdG_Jnc`, `dGdG_Dnc`, `dGdG_Anc` (`exchange.f90`) multiply by `d_matrix` (diagonal) with `matmul` and recompute the same `matmul(di, G)` / `matmul(dj, G)` inside their k/l loops (`dGdG_Anc` forms 8 products per (k,l)). **Proposal (deferred):** scale rows by the diagonal, form each product once, take traces as `sum(P*transpose(Q))` as in `torque_trace` (about 60 lines; changes results at rounding level).
+
+### Contour inter-site Green function halves self-pairs (i == j) — 2026-11-25
+- **Read, not run:** the eta (complex-contour) branch of `calculate_intersite_gf_core` (`green_block.f90`) applies `gij = 0.5*[(y1 - y2) - i(y3 - y4)]` to every pair. For a self-pair only slot 1 is filled (unit seed; slots 2–4 are skipped by `recur_b_ij` / `chebyshev_recur_ij`), so `gij = gji = 0.5*G_ii`, provided slots 2–4 hold zeros (not checked). The real-mesh branch special-cases i == j (`gij = gji = g0(:,:,:,1)`).
+- The one-shot routes (`intersite_mode = 'one_shot'`) fill slot 1 with G_ii and inherit the same factor. No contour test uses a self-pair. Proposal: copy the real-mesh special case into the eta branch (a few lines).
