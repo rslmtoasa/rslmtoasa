@@ -1630,6 +1630,8 @@ contains
             cur(:, :, :) = nxt(:, :, :)
             call gather(m, cur)
          end do
+         if (any(real(sum(sum(mji(:, :, this%lattice%control%lld + 2, :), 1), 1)) > 1000.d0)) &
+            call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
 
          ! legacy slot c_r seeds (Pi + c_r Pj)/sqrt2 give slot1-slot2 = Mij+Mji and slot3-slot4 = i(Mij-Mji);
          ! the unchanged combination 0.5[(g1-g2) -+ i(g3-g4)] then returns gij = Mij and gji = Mji.
