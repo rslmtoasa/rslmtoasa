@@ -74,7 +74,11 @@ def main(binary, fixture, root, mode):
             run(binary, cluster)
             base["hamiltonian"]["export_scope"] = "periodic"
             compact = setup("compact", "hamiltonian_export")
+            # A rerun can publish over outputs left by an earlier run.
+            for name in ("rs_tb.meta", "rs_tb.tb", "rs2paoham.dat"):
+                (compact / name).write_text("stale export\n")
             run(binary, compact)
+            assert not list(compact.glob("rs*.tmp"))
             fields = metadata(compact)
             assert fields["scope"] == "periodic" and fields["periodic"].split() == ["T", "T", "F"]
             assert int(fields["n_atoms"]) == 1 and int(metadata(cluster)["n_atoms"]) == 36

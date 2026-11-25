@@ -1,7 +1,7 @@
 submodule(hamiltonian_mod) hamiltonian_export
    use iso_fortran_env, only: int64
    use ieee_arithmetic, only: ieee_is_finite
-   use hamiltonian_effective_mod, only: resolve_translation, hopping_checksum
+   use hamiltonian_effective_mod, only: resolve_translation, hopping_checksum, publish_hamiltonian_file
    use magnetic_representation_mod, only: gbt_single_q, explicit_texture
    implicit none
    real(rp), parameter :: geometry_tol = 1.e-6_rp
@@ -354,11 +354,11 @@ contains
          'two_hop_paths ',paths,'legacy_records ',legacy_count,'end_records ',count
       close(meta,iostat=ios)
       if (ios /= 0) goto 900
-      call rename('rs_tb.tb.tmp','rs_tb.tb',ios)
+      ios = publish_hamiltonian_file('rs_tb.tb.tmp','rs_tb.tb')
       if (ios /= 0) goto 900
-      call rename(trim(legacy_name)//'.tmp',trim(legacy_name),ios)
+      ios = publish_hamiltonian_file(trim(legacy_name)//'.tmp',legacy_name)
       if (ios /= 0) goto 900
-      call rename('rs_tb.meta.tmp','rs_tb.meta',ios)
+      ios = publish_hamiltonian_file('rs_tb.meta.tmp','rs_tb.meta')
       if (ios == 0) return
 900   call g_logger%fatal('I/O error writing effective Hamiltonian export.', __FILE__, __LINE__)
    end subroutine export_rs_tb_all

@@ -1,11 +1,20 @@
 ! Sparse row accumulation shared by periodic and finite-graph HOH export.
 module hamiltonian_effective_mod
    use iso_fortran_env, only: int64
+   use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
    use ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    implicit none
    private
-   public :: effective_row, resolve_translation, hopping_checksum
+   public :: effective_row, resolve_translation, hopping_checksum, publish_hamiltonian_file
+
+   interface
+      function c_rename(old_path, new_path) bind(C, name='rename') result(status)
+         import :: c_char, c_int
+         character(kind=c_char), intent(in) :: old_path(*), new_path(*)
+         integer(c_int) :: status
+      end function c_rename
+   end interface
 
    type :: effective_row
       integer :: count = 0
@@ -19,6 +28,12 @@ module hamiltonian_effective_mod
    end type effective_row
 
 contains
+
+   ! Use the C interface because the Fortran RENAME extension differs across compilers.
+   integer function publish_hamiltonian_file(temp_path, final_path) result(status)
+      character(len=*), intent(in) :: temp_path, final_path
+      status = c_rename(trim(temp_path)//c_null_char, trim(final_path)//c_null_char)
+   end function publish_hamiltonian_file
 
    !> @brief Fingerprint the exact serialized hopping payload.
    !> @details FNV-1a over the file bytes, with a wide intermediate to avoid

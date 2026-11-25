@@ -1,7 +1,7 @@
 submodule(hamiltonian_mod) hamiltonian_effective_io
    use iso_fortran_env, only: int64, iostat_end
    use ieee_arithmetic, only: ieee_is_finite
-   use hamiltonian_effective_mod, only: resolve_translation, hopping_checksum
+   use hamiltonian_effective_mod, only: resolve_translation, hopping_checksum, publish_hamiltonian_file
    implicit none
    real(rp), parameter :: geometry_tol = 1.e-6_rp
 
@@ -336,7 +336,7 @@ contains
       write(u,'(a,1x,i0)',err=900) 'legacy_records',meta%legacy_records,'end_records',meta%legacy_records
       close(u,iostat=ios)
       if (ios /= 0) goto 900
-      call rename('rs_tb.meta.tmp','rs_tb.meta',ios)
+      ios = publish_hamiltonian_file('rs_tb.meta.tmp','rs_tb.meta')
       if (ios /= 0) goto 900
       return
 900   call g_logger%fatal('Cannot write external TB metadata rs_tb.meta.', __FILE__, __LINE__)

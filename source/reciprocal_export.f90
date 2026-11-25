@@ -3,6 +3,7 @@ submodule (reciprocal_mod) reciprocal_export
    use mpi
 #endif
    use magnetic_representation_mod, only: gbt_single_q
+   use hamiltonian_effective_mod, only: publish_hamiltonian_file
    use ieee_arithmetic, only: ieee_is_finite
    implicit none
 
@@ -117,7 +118,7 @@ contains
       write(u,'(a,i0)',err=900) 'end_kpoints ',this%nk_total
       close(u,iostat=ios)
       if (ios /= 0) goto 900
-      call rename('rs_tb.kspace.tmp','rs_tb.kspace',ios)
+      ios = publish_hamiltonian_file('rs_tb.kspace.tmp','rs_tb.kspace')
       if (ios == 0) return
 900   call g_logger%fatal('I/O error writing reciprocal Hamiltonian matrices.', __FILE__, __LINE__)
    end subroutine write_kspace_matrices
