@@ -110,7 +110,7 @@ module calculation_mod
       character(len=sl) :: gf_route
 
       !> Gilbert-damping switch for the exchange post-processing (B5.3).
-      !> When .true., `post_processing_exchange` also evaluates the on-site
+      !> When .true., `post_processing_exchange` also evaluates the pairwise (on-site and nonlocal)
       !> Kamberský torque-correlation Gilbert damping (`calculate_gilbert_damping`)
       !> from the same `green%gij` the J_ij consumer reads -- so it runs through
       !> whichever `gf_route` filled those arrays (recursion / lehmann / dyson),
@@ -746,8 +746,9 @@ contains
    !>          route fills the same canonical arrays, so
    !>          calculate_intersite_gf_twoindex and the exchange evaluation run
    !>          unchanged after this point. When this%do_damping is true, the
-   !>          routine also evaluates the on-site Kambersky torque-correlation
-   !>          Gilbert damping from the same green%gij.
+   !>          routine also evaluates the Kambersky torque-correlation Gilbert
+   !>          damping tensor of every pair (on-site and nonlocal) from the same
+   !>          green%gij.
    !> @param[in] this Calculation object. Reads fname, gf_route, and do_damping.
    !> @note The damping term needs SOC in the potential (xi_p/xi_d). The
    !>       k-space routes also need kspace_ham_order=’second’.
@@ -821,7 +822,7 @@ contains
          call exchange_obj%calculate_exchange()
          call exchange_obj%calculate_exchange_twoindex()
       end if
-      ! B5.3: on-site Kamberský torque-correlation Gilbert damping, off by
+      ! B5.3: pairwise (on-site and nonlocal) Kamberský torque-correlation Gilbert damping, off by
       ! default. Consumes the same green%gij just filled by gf_route, so it is
       ! route-agnostic (recursion / lehmann / dyson) by construction. Needs SOC
       ! in the potential (xi_p/xi_d); the k-space routes additionally need
