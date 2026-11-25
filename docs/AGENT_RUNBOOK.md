@@ -57,7 +57,8 @@ When a deck needs changing, start from these values (developer guidance):
 | `lld`, block recursion | `&control` | 21 | about 31 |
 | `lld`, Chebyshev | `&control` | 150 | about 200 |
 
-For production bulk runs, use a periodic cluster (`&lattice`, see
+For production bulk runs other than transport, use a periodic cluster
+(`&lattice`, see
 [`keywords/lattice_geometry.rst`](source/keywords/lattice_geometry.rst)):
 
 ```fortran
@@ -69,6 +70,11 @@ n1 = 15
 n2 = 15
 n3 = 15
 ```
+
+Transport (`post_processing = 'conductivity'`) needs open boundaries instead:
+`b1 = b2 = b3 = .false.`, as in the `example/conductivity/` fccCu, fccPt and
+bccFe decks (see
+[`conductivity_fcccu.rst`](source/user_guide/examples/conductivity_fcccu.rst)).
 
 ## 3. Files in a calculation directory
 
