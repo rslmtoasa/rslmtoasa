@@ -1579,6 +1579,95 @@ contains
 
    end subroutine chebyshev_recur_ij
 
+   !> @brief One-shot Chebyshev moments for intersite pairs: one recursion per seed site.
+   !> @details For each distinct first atom i of the local pair range, propagates V_m = T_m(Ht) P_i once and
+   !>          gathers M_ji(m) = P_j^H T_m P_i at every target j of that seed. The result is written into the
+   !>          four legacy mu_n slots of each pair so chebyshev_green_ij and calculate_intersite_gf_core are unchanged.
+   !> @param[inout] this Recursion object; fills pair-local slices of mu_n (CPU, FP64, no linear prediction).
+   module subroutine chebyshev_recur_ij_oneshot(this)
+      use mpi_mod, only: rank, start_atom, end_atom, g2l_map
+      use intersite_request_mod, only: intersite_request
+      class(recursion), intent(inout) :: this
+      type(intersite_request) :: req
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: s, k, m, i, j, nmom, ntg, idx, ij, ij_loc, kk
+      complex(rp), allocatable :: prev(:, :, :), cur(:, :, :), nxt(:, :, :), work(:, :, :, :), mji(:, :, :, :)
+      complex(rp), allocatable :: mij_m(:, :, :)
+
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      nmom = 2*this%lattice%control%lld + 2
+      kk = this%lattice%kk
+
+      call req%build(this%lattice%ijpair, start_atom, end_atom)
+      if (req%npair == 0) return
+      allocate (prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), work(nb, nb, kk, 6), mij_m(nb, nb, nmom))
+
+      do s = 1, req%nseed
+         i = req%seed_site(s)
+         ntg = req%target_ptr(s + 1) - req%target_ptr(s)
+         allocate (mji(nb, nb, nmom, ntg))
+         call g_logger%info(int2str(rank)//': one-shot Chebyshev recursion from seed atom '//int2str(i), __FILE__, __LINE__)
+
+         ! V_0 = P_i; the light cone starts at the seed site only.
+         prev(:, :, :) = (0.0_rp, 0.0_rp)
+         do k = 1, nb
+            prev(k, k, i) = (1.0_rp, 0.0_rp)
+         end do
+         this%izero(:) = 0
+         this%izero(i) = 1
+         call gather(1, prev)
+         ! T_0..T_{nmom-1}: nmom-1 Hamiltonian applications (bra and ket differ, no product identity).
+         call this%kubo_ham_vec_matmul(prev, cur, work, a=a, b=b)
+         this%izero(:) = this%idum(:)
+         call gather(2, cur)
+         do m = 3, nmom
+            call this%kubo_ham_vec_matmul(cur, nxt, work, a=a, b=b)
+            this%izero(:) = this%idum(:)
+            nxt(:, :, :) = 2*nxt(:, :, :) - prev(:, :, :)
+            prev(:, :, :) = cur(:, :, :)
+            cur(:, :, :) = nxt(:, :, :)
+            call gather(m, cur)
+         end do
+
+         ! legacy slot c_r seeds (Pi + c_r Pj)/sqrt2 give slot1-slot2 = Mij+Mji and slot3-slot4 = i(Mij-Mji);
+         ! the unchanged combination 0.5[(g1-g2) -+ i(g3-g4)] then returns gij = Mij and gji = Mji.
+         ! With Mij = Mji^H (Hermitian T_m) we store slot1 = Mij+Mji, slot3 = i(Mij-Mji), slots 2 and 4 = 0.
+         do k = 1, req%npair
+            if (req%pair_seed(k) /= s) cycle
+            ij = start_atom + k - 1
+            j = this%lattice%ijpair(ij, 2)
+            ij_loc = g2l_map(ij)
+            idx = req%pair_entry(k) - req%target_ptr(s) + 1
+            this%mu_n(:, :, 1:nmom, ij_loc*4 - 3:ij_loc*4) = (0.0_rp, 0.0_rp)
+            if (i == j) then
+               this%mu_n(:, :, 1:nmom, ij_loc*4 - 3) = mji(:, :, :, idx)
+            else
+               do m = 1, nmom
+                  mij_m(:, :, m) = conjg(transpose(mji(:, :, m, idx)))
+               end do
+               this%mu_n(:, :, 1:nmom, ij_loc*4 - 3) = mij_m + mji(:, :, :, idx)
+               this%mu_n(:, :, 1:nmom, ij_loc*4 - 1) = i_unit*(mij_m - mji(:, :, :, idx))
+            end if
+         end do
+         deallocate (mji)
+      end do
+
+   contains
+
+      !> Store V(:,:,j) of every target j of the current seed as the order-m moment.
+      subroutine gather(order, v)
+         integer, intent(in) :: order
+         complex(rp), intent(in) :: v(:, :, :)
+         integer :: t
+         do t = 1, ntg
+            mji(:, :, order, t) = v(:, :, req%target_site(req%target_ptr(s) + t - 1))
+         end do
+      end subroutine gather
+
+   end subroutine chebyshev_recur_ij_oneshot
+
    !> @brief Compute Chebyshev orbital-moment response data.
    !> @details Builds angular-momentum operator insertions and evaluates
    !>          Chebyshev moment/Green-function contractions for the

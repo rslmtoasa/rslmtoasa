@@ -123,6 +123,7 @@ module recursion_mod
       procedure :: cheb_1st_mom_hoh
       procedure :: resolve_chebyshev_window
       procedure :: chebyshev_recur_ij
+      procedure :: chebyshev_recur_ij_oneshot
       procedure :: chebyshev_recur_ll
       procedure :: chebyshev_recur_ll_hoh
       procedure :: chebyshev_orbital_mod
@@ -757,6 +758,11 @@ module recursion_mod
       integer :: ij_loc
 
    end subroutine chebyshev_recur_ij
+
+   !> @brief One-shot variant of chebyshev_recur_ij: one recursion per seed site, same mu_n layout.
+   module subroutine chebyshev_recur_ij_oneshot(this)
+      class(recursion), intent(inout) :: this
+   end subroutine chebyshev_recur_ij_oneshot
 
    !> @brief Advance one no-HOH legacy Chebyshev recursion level.
    !> @details Applies the scaled Hamiltonian and the double-trick recurrence to

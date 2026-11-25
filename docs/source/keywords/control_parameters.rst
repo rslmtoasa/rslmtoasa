@@ -415,6 +415,23 @@ linear_out
 
 **See also:** :ref:`reference/conductivity_module`
 
+intersite_mode
+--------------
+
+**Type:** Character string
+
+**Purpose:** Route of the inter-site Chebyshev moments used for ``G_ij`` (exchange pair list ``ijpair``).
+
+**Allowed values:** ``'pairs'``, ``'one_shot'``
+
+**Default:** ``'pairs'``
+
+**Notes:**
+
+- ``'pairs'``: four recursions per pair. ``'one_shot'``: one recursion per distinct first atom ``i`` of the pair list; fatal with ``recur = 'block'``, ``cheb_lp`` or ``gpu_plugin``.
+
+**Related code:** ``source/recursion_transport.f90``, ``source/calculation_reciprocal.f90``
+
 cheb_backend
 ------------
 

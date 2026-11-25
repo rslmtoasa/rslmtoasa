@@ -188,6 +188,13 @@ if(RUN_REG_TESTS)
         "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
   endif()
 
+  if(ENABLE_MPI)
+    rslmto_add_test(NAME OneShotExchange_MPI TIER standard TIMEOUT 1800 LABELS regression mpi
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_exchange.py" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_exchange"
+        "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
+  endif()
+
   # --- Kubo transport operators and backends (pytest) -----------------------------------------
   # The compile-based suites build Debug dense-reference drivers themselves (about 75 s for both);
   # test_transport_backend.py runs the executable of this build (RSLMTO_EXE).

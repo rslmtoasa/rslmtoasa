@@ -256,9 +256,16 @@ contains
 
       select case (control_obj%recur)
       case ('block')
+         if (control_obj%intersite_mode == 'one_shot') call g_logger%fatal('intersite_mode = one_shot is not yet implemented for recur = block.', __FILE__, __LINE__)
          call recursion_obj%recur_b_ij()
       case ('chebyshev')
-         call recursion_obj%chebyshev_recur_ij()
+         if (control_obj%intersite_mode == 'one_shot') then
+            if (control_obj%cheb_lp) call g_logger%fatal('intersite_mode = one_shot is not available with cheb_lp.', __FILE__, __LINE__)
+            if (control_obj%gpu_plugin) call g_logger%fatal('intersite_mode = one_shot is not available with gpu_plugin yet.', __FILE__, __LINE__)
+            call recursion_obj%chebyshev_recur_ij_oneshot()
+         else
+            call recursion_obj%chebyshev_recur_ij()
+         end if
       end select
    end subroutine run_intersite_moments
 
