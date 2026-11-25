@@ -1634,14 +1634,14 @@ contains
    !> @details For each distinct first atom i of the local pair range, propagates V_m = T_m(Ht) P_i once and
    !>          gathers M_ji(m) = P_j^H T_m P_i at every target j of that seed. The result is written into the
    !>          four legacy mu_n slots of each pair so chebyshev_green_ij and calculate_intersite_gf_core are unchanged.
-   !> @param[inout] this Recursion object; fills pair-local slices of mu_n (CPU, FP64, no linear prediction).
+   !> @param[inout] this Recursion object; fills pair-local slices of mu_n (FP64; linear prediction on the host when enabled).
    module subroutine chebyshev_recur_ij_oneshot(this)
       use mpi_mod, only: rank, start_atom, end_atom, g2l_map
       use intersite_request_mod, only: intersite_request
       class(recursion), intent(inout) :: this
       type(intersite_request) :: req
       real(rp) :: a, b, emin_win, emax_win
-      integer :: s, k, m, i, j, nmom, ntg, idx, ij, ij_loc, kk
+      integer :: s, k, m, i, j, nmom, ntot, ntg, idx, ij, ij_loc, kk
       complex(rp), allocatable :: prev(:, :, :), cur(:, :, :), nxt(:, :, :), work(:, :, :, :), mji(:, :, :, :)
       complex(rp), allocatable :: mij_m(:, :, :)
       logical :: on_gpu
@@ -1650,6 +1650,7 @@ contains
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
       nmom = 2*this%lattice%control%lld + 2
+      ntot = this%lp%n_total(this%lattice%control%lld)
       kk = this%lattice%kk
 
       call req%build(this%lattice%ijpair, start_atom, end_atom)
@@ -1660,12 +1661,13 @@ contains
       else
          allocate (prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), work(nb, nb, kk, 6))
       end if
-      allocate (mij_m(nb, nb, nmom))
+      allocate (mij_m(nb, nb, ntot))
 
       do s = 1, req%nseed
          i = req%seed_site(s)
          ntg = req%target_ptr(s + 1) - req%target_ptr(s)
-         allocate (mji(nb, nb, nmom, ntg))
+         allocate (mji(nb, nb, ntot, ntg))
+         mji(:, :, nmom + 1:, :) = (0.0_rp, 0.0_rp)
          call g_logger%info(int2str(rank)//': one-shot Chebyshev recursion from seed atom '//int2str(i), __FILE__, __LINE__)
 
          ! V_0 = P_i; the light cone starts at the seed site only.
@@ -1675,7 +1677,7 @@ contains
                this%psi0(k, k, i) = (1.0_rp, 0.0_rp)
             end do
             call this%gpu_backend%chebyshev_moments_targets(this%psi0, &
-               req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), nmom, a, b, mji)
+               req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), nmom, a, b, mji(:, :, 1:nmom, :))
          else
             prev(:, :, :) = (0.0_rp, 0.0_rp)
             do k = 1, nb
@@ -1700,6 +1702,14 @@ contains
          if (any(real(sum(sum(mji(:, :, this%lattice%control%lld + 2, :), 1), 1)) > 1000.d0)) &
             call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
 
+         ! Linear prediction of M_ji only: its real shared coefficients keep Mij = Mji^H exact for the extension.
+         if (this%lp%enabled) then
+            do k = 1, ntg
+               call this%lp%apply(mji(:, :, :, k), nmom, 'one-shot seed '//int2str(i)//' target '// &
+                                  int2str(req%target_site(req%target_ptr(s) + k - 1)))
+            end do
+         end if
+
          ! legacy slot c_r seeds (Pi + c_r Pj)/sqrt2 give slot1-slot2 = Mij+Mji and slot3-slot4 = i(Mij-Mji);
          ! the unchanged combination 0.5[(g1-g2) -+ i(g3-g4)] then returns gij = Mij and gji = Mji.
          ! With Mij = Mji^H (Hermitian T_m) we store slot1 = Mij+Mji, slot3 = i(Mij-Mji), slots 2 and 4 = 0.
@@ -1709,15 +1719,15 @@ contains
             j = this%lattice%ijpair(ij, 2)
             ij_loc = g2l_map(ij)
             idx = req%pair_entry(k) - req%target_ptr(s) + 1
-            this%mu_n(:, :, 1:nmom, ij_loc*4 - 3:ij_loc*4) = (0.0_rp, 0.0_rp)
+            this%mu_n(:, :, 1:ntot, ij_loc*4 - 3:ij_loc*4) = (0.0_rp, 0.0_rp)
             if (i == j) then
-               this%mu_n(:, :, 1:nmom, ij_loc*4 - 3) = mji(:, :, :, idx)
+               this%mu_n(:, :, 1:ntot, ij_loc*4 - 3) = mji(:, :, :, idx)
             else
-               do m = 1, nmom
+               do m = 1, ntot
                   mij_m(:, :, m) = conjg(transpose(mji(:, :, m, idx)))
                end do
-               this%mu_n(:, :, 1:nmom, ij_loc*4 - 3) = mij_m + mji(:, :, :, idx)
-               this%mu_n(:, :, 1:nmom, ij_loc*4 - 1) = i_unit*(mij_m - mji(:, :, :, idx))
+               this%mu_n(:, :, 1:ntot, ij_loc*4 - 3) = mij_m + mji(:, :, :, idx)
+               this%mu_n(:, :, 1:ntot, ij_loc*4 - 1) = i_unit*(mij_m - mji(:, :, :, idx))
             end if
          end do
          deallocate (mji)
