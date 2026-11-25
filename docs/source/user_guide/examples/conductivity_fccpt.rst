@@ -38,9 +38,9 @@ The SCF input in ``example/conductivity/fccPt/input.nml``:
    crystal_sym = 'fcc'
    wav = 1.5344598728
    pbc = .true.
-   b1 = .false.
-   b2 = .false.
-   b3 = .false.
+   b1 = .true.
+   b2 = .true.
+   b3 = .true.
    n1 = 20
    n2 = 20
    n3 = 20

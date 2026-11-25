@@ -41,9 +41,9 @@ Input File: input.nml
    crystal_sym = 'fcc'
    wav = 1.41237
    pbc = .true.
-   b1 = .false.                   ! ← Open boundaries
-   b2 = .false.                   ! (breaks translational symmetry)
-   b3 = .false.
+   b1 = .true.                    ! ← Periodic cluster
+   b2 = .true.
+   b3 = .true.
    n1 = 20
    n2 = 20
    n3 = 20
@@ -99,7 +99,7 @@ Critical Conductivity Parameters
 - ``linear_out = 'spin'`` or ``'orbital'``: Calculate spin or orbital contribution (``linear_in = 'charge'``)
 - ``cond_calctype = 'per_type'``: Atom-type resolved conductivity
 - ``v_alpha, v_beta``: Velocity operator directions for tensor component σ_αβ
-- ``b1 = b2 = b3 = .false.``: **Open boundaries required** for conductivity
+- ``b1 = b2 = b3 = .true.``: Periodic cluster; the linear-response calculation does not need open boundaries, and periodic boundaries give better numerics
 - ``recur = 'chebyshev'``: Use Chebyshev recursion (KPM method)
 
 Velocity Operator: Selecting Tensor Component
@@ -218,7 +218,7 @@ Troubleshooting
 
 - Check Fermi energy is correct
 - Verify velocity operators are normalized
-- Ensure b1=b2=b3=.false. (open boundaries)
+- Ensure ``pbc`` and ``b1 = b2 = b3 = .true.`` (periodic cluster)
 
 See Also
 ========

@@ -42,9 +42,9 @@ The SCF input in ``example/conductivity/bccFe/input.nml``:
    crystal_sym = 'bcc'
    wav = 1.40880
    pbc = .true.
-   b1 = .false.
-   b2 = .false.
-   b3 = .false.
+   b1 = .true.
+   b2 = .true.
+   b3 = .true.
    n1 = 20
    n2 = 20
    n3 = 20

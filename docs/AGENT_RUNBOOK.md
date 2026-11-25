@@ -73,9 +73,7 @@ n3 = 15
 
 Transport (`post_processing = 'conductivity'`) is linear response and doesn't
 need open boundaries; the periodic cluster gives better numerics. The
-`example/conductivity/` fccCu, fccPt and bccFe decks and
-`conductivity_fcccu.rst` still use open boundaries (`b1 = b2 = b3 = .false.`);
-don't copy that setting.
+`example/conductivity/` decks use it.
 
 ## 3. Files in a calculation directory
 
