@@ -54,6 +54,7 @@ contains
             spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
                      this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
          end do
+         pair(19, njij_glob) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
          do l = 1, 3
             tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
          end do
@@ -66,7 +67,7 @@ contains
             do k = 1, 3
                do l = 1, 3
                   m = m + 1
-                  total_damping(m, nv) = total_damping(m, nv) + real(c(k, l), rp)
+                  total_damping(m, nv) = total_damping(m, nv) + pair(19, njij_glob)*real(c(k, l), rp)
                   if (nv == ief) then
                      pair(m, njij_glob) = real(c(k, l), rp)
                      pair(9 + m, njij_glob) = aimag(c(k, l))
@@ -74,7 +75,6 @@ contains
                end do
             end do
          end do
-         pair(19, njij_glob) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
       end do
 
 #ifdef USE_MPI
@@ -103,10 +103,10 @@ contains
                distance_alat, this%lattice%cr(:, i) - this%lattice%cr(:, j)
          end do
 
-         ! Energy-resolved total, scaled by the factor of the last pair (see tests/KNOWN_ISSUES.md)
+         ! Energy-resolved total: sum over all listed pairs, each with its own prefactor
          write (unit_e, '(A)') '# E-Ef (Ry)  alpha: xx xy xz yx yy yz zx zy zz (dimensionless)'
          do nv = 1, nenergy
-            write (unit_e, '(F14.9,9ES16.8)') this%en%ene(nv) - this%en%fermi, factor*total_damping(:, nv)
+            write (unit_e, '(F14.9,9ES16.8)') this%en%ene(nv) - this%en%fermi, total_damping(:, nv)
          end do
          close (unit_e)
          close (unit_p)

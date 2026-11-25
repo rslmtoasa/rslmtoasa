@@ -274,7 +274,8 @@ where ``type_i``, ``type_j`` are the atom types (``iz``), ``dx dy dz`` is
   ``aijparts.out``.
 - From ``calculate_gilbert_damping``: ``alldampings.out`` (per pair, atom
   indices i, j) and ``damping-energy.out`` (energy-resolved sum; first
-  column :math:`E - E_F` in Ry; scaled by the prefactor of the last pair).
+  column :math:`E - E_F` in Ry; sum over all listed pairs, each with its
+  own prefactor, so at :math:`E_F` it equals the sum of the ``alldampings.out`` rows).
 
 Integration and Usage
 =====================

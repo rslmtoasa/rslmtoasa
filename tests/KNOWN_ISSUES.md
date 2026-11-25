@@ -527,11 +527,6 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Not checked:** whether the difference is only the k-mesh reduction without spglib (references were made with spglib) or a defect.
 - **Proposal:** decide whether these tests require spglib (skip them when it is off) or need spglib-off references; the developer owns that choice.
 
-### Damping total is scaled by the last pair's factor — 2026-11-16
-- **Read:** `source/exchange_dynamics.f90`, `calculate_gilbert_damping`: each pair (i, j) has `factor = -1/(2*pi*m_i)`, with `m_i` the spin moment of atom i only. `alldampings.out` and the screen output use each pair's own factor. `damping-energy.out` writes `factor*total_damping`, where `total_damping` sums the raw traces of all pairs and `factor` is that of the last pair.
-- **Scope:** wrong only when the pair list has different first atoms i with different moments; pairs sharing atom i (any j, any types) give a consistent total. The triad damping test reads only the per-pair column of `alldampings.out`, so no test covers the total.
-- **Options (developer decision; the method's paper, PRM 2, 013801 (2018), was not checked for the site-summed form):** (1) sum `factor_ij*trace_ij(E)`, so the total equals the sum of the `alldampings.out` rows (about 5 lines); (2) one energy-resolved total per distinct atom i (about 15 lines, new file layout); (3) keep, and stop or warn when the pair list has more than one distinct atom i (about 5 lines).
-
 ### `fort.*` files written by legacy routines — 2026-11-16
 - **Measured:** after a quick-tier run, `build_base/Testing` holds `fort.800` (136 directories), `fort.805` (135), `fort.99` (28), `fort.120` (8) and `fort.1122`/`fort.2122`/`fort.4122` (16, `recursion_haydock.f90` `recur_b`, one file per rank). Writers: `lattice_lifecycle.f90` (800), `lattice_cluster.f90` (805), `exchange.f90` (99), `charge.f90` (120), `recursion_haydock.f90` (1122+). All pre-AI; kept deliberately.
 - **Proposal:** remove or put behind a flag; developer decision.
