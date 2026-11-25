@@ -21,8 +21,10 @@ contains
    !> @param[in] b Sub-diagonal blocks (nb,nb,M); b(:,:,m) couples block m to block m+1.
    !> @param[in] z Complex energy.
    !> @param[out] x First block column (nb,nb,M).
-   subroutine block_tridiag_first_column(a, b, z, x)
+   !> @param[in] sigma Optional terminal self-energy (nb,nb): D_M = z - a_M - sigma.
+   subroutine block_tridiag_first_column(a, b, z, x, sigma)
       complex(kind(0.0d0)), intent(in) :: a(:, :, :), b(:, :, :), z
+      complex(kind(0.0d0)), intent(in), optional :: sigma(:, :)
       complex(kind(0.0d0)), intent(out) :: x(:, :, :)
       complex(kind(0.0d0)), allocatable :: d(:, :), w(:, :, :)
       integer, allocatable :: ipiv(:)
@@ -32,6 +34,7 @@ contains
       nblk = size(a, 3)
       allocate (d(nb, nb), w(nb, nb, max(nblk - 1, 1)), ipiv(nb))
       d = -a(:, :, nblk)
+      if (present(sigma)) d = d - sigma
       do k = 1, nb
          d(k, k) = d(k, k) + z
       end do

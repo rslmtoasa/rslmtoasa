@@ -36,6 +36,7 @@ module green_mod
    implicit none
 
    private
+   public :: bgreen_terminal_q
 
    !> Module´s main structure
    type, public :: green
@@ -268,6 +269,13 @@ module green_mod
       real(rp), dimension(nb, nb), intent(in) :: b_inf
       logical, intent(in), optional :: legacy_real_axis
    end subroutine bgreen_complex
+
+   module subroutine bgreen_terminal_q(sym_term, legacy_mode, z_eval, a_inf, b_inf, Q)
+      logical, intent(in) :: sym_term, legacy_mode
+      complex(rp), intent(in) :: z_eval
+      real(rp), dimension(nb, nb), intent(in) :: a_inf, b_inf
+      complex(rp), dimension(nb, nb), intent(out) :: Q
+   end subroutine bgreen_terminal_q
 
    end interface
 

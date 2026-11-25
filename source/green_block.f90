@@ -47,7 +47,8 @@ contains
    end subroutine block_green_ij_eta
 
    !> @brief One-shot block Haydock G_ji(z), G_ij(z) of local pair ij_loc, in the four-slot legacy layout.
-   !> @details G_ji(z) = sum_m S_m(j) X_m(z) with X the first block column of (z - T)^-1 (finite T, no terminator),
+   !> @details G_ji(z) = sum_m S_m(j) X_m(z) with X the first block column of (z - T)^-1 (T = blocks 1..lld-1,
+   !>          terminal self-energy Q(z) of the legacy contour route subtracted from the last diagonal block),
    !>          G_ij(z) = [G_ji(conj z)]^H. Slot 1 = Gij + Gji, slot 3 = i (Gij - Gji), slots 2 and 4 = 0, which the
    !>          legacy combination 0.5[(g1-g2) -+ i(g3-g4)] maps back to Gij, Gji. Self pair: slot 1 = Gii.
    !>          Needs zsqr to have turned the stored B^2 into B (b(:,:,m) = B_{m+1} = b2_b(:,:,m+1)).
@@ -58,8 +59,10 @@ contains
       complex(rp), intent(in) :: z
       complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
       complex(rp), allocatable :: b(:, :, :), x(:, :, :)
-      complex(rp), dimension(nb, nb) :: gji, gij
-      integer :: m, nblk, slot, ij
+      complex(rp), dimension(nb, nb) :: gji, gij, sigma
+      real(rp), dimension(nb, nb, 1) :: a_inf, b_inf
+      real(rp), dimension(1) :: a_inf0, b_inf0
+      integer :: m, nblk, slot, ij, nw
 
       nblk = this%control%lld - 1
       slot = ij_loc*4 - 3
@@ -68,7 +71,12 @@ contains
       b(:, :, nblk) = (0.0_rp, 0.0_rp)
       g_ef = (0.0_rp, 0.0_rp)
 
-      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, z, x)
+      ! Terminator from the seed's coefficients exactly as in block_green_ij_eta; Q is the self-energy on block lld-1
+      nw = 10*this%control%lld
+      call this%recursion%get_terminf(this%recursion%a_b(:, :, :, slot), this%recursion%b2_b(:, :, :, slot), 1, &
+                                      this%control%lld, nb, nw, a_inf, b_inf, a_inf0, b_inf0)
+      call bgreen_terminal_q(this%control%sym_term, .true., z, a_inf(:, :, 1), b_inf(:, :, 1), sigma)
+      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, z, x, sigma)
       gji = (0.0_rp, 0.0_rp)
       do m = 1, nblk
          gji = gji + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
@@ -79,7 +87,8 @@ contains
          return
       end if
 
-      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, conjg(z), x)
+      ! Advanced terminator: the legacy-mode Q keeps Re(sqrt) fixed at Re z, so Q(conj z) /= conj(Q(z)); use conj(Q(z))
+      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, conjg(z), x, conjg(sigma))
       gij = (0.0_rp, 0.0_rp)
       do m = 1, nblk
          gij = gij + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
