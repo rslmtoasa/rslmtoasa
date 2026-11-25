@@ -27,7 +27,7 @@ contains
       complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
       complex(rp) :: c(3, 3)
       integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nb_ij, nenergy, unit_e, unit_p
-      real(rp) :: spin_i, factor, distance_alat
+      real(rp) :: spin_i, factor, distance_alat, alpha(3, 3), mhat(3)
       ! pair(1:9) Re tensor at E_F, pair(10:18) Im tensor at E_F, pair(19) prefactor
       real(rp), allocatable :: pair(:, :), total_damping(:, :)
 
@@ -85,7 +85,7 @@ contains
       if (rank == 0) then
          open (newunit=unit_e, FILE='damping-energy.out', STATUS='replace', ACTION='write')
          open (newunit=unit_p, FILE='alldampings.out', STATUS='replace', ACTION='write')
-         write (unit_p, '(A)') '#     i      j  alpha: xx xy xz yx yy yz zx zy zz 0.5*(xx+yy) (dimensionless)'// &
+         write (unit_p, '(A)') '#     i      j  alpha: xx xy xz yx yy yz zx zy zz transverse (dimensionless)'// &
             '  dist rij=ri-rj (alat)'
          write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
          do njij_glob = 1, this%lattice%njij
@@ -98,8 +98,12 @@ contains
             write (*, '(A,I6,A,I6,A)') 'Imaginary part of the tensor between pair', i, ' and ', j, ' is'
             write (*, '(3ES16.8)') factor*pair(10:18, njij_glob)
             write (*, *) '----------------------'
+            ! Transverse damping 0.5*(Tr alpha - m.alpha.m), m the moment direction of atom i
+            ! (0.5*(xx+yy) for m along z); alpha(l, k) holds component kl, the scalar is unchanged.
+            alpha = reshape(factor*pair(1:9, njij_glob), [3, 3])
+            mhat = this%symbolic_atom(this%lattice%iz(i))%potential%mom
             write (unit_p, '(2I7,10ES16.8,4F11.6)') i, j, factor*pair(1:9, njij_glob), &
-               0.5*factor*(pair(1, njij_glob) + pair(5, njij_glob)), &
+               0.5_rp*(alpha(1, 1) + alpha(2, 2) + alpha(3, 3) - dot_product(mhat, matmul(alpha, mhat))), &
                distance_alat, this%lattice%cr(:, i) - this%lattice%cr(:, j)
          end do
 
