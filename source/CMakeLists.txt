@@ -88,6 +88,7 @@ add_library(${PROJECT_NAME} STATIC
     recursion_haydock.f90
     recursion_chebyshev.f90
     recursion_transport.f90
+    intersite_request.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90

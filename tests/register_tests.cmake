@@ -245,6 +245,7 @@ if(RUN_UNIT_TESTS)
 
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
+  add_fortran_unit_test(UnitIntersiteRequest quick SOURCES ${TestDIR}/unit/test_intersite_request.f90)
   add_fortran_unit_test(UnitEffectiveHamiltonian quick SOURCES ${TestDIR}/unit/test_effective_hamiltonian.f90 LABELS hamiltonian_export)
   add_executable(HamiltonianActionProbe ${TestDIR}/hamiltonian_export/probe_native_action.f90)
   target_link_libraries(HamiltonianActionProbe PRIVATE ${PROJECT_NAME})
