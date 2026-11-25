@@ -240,10 +240,12 @@ Hamiltonian export and import
        write ``rs_tb.kspace`` in reciprocal scope.
    * - ``export_scope``
      - ``'auto'``
-     - ``'periodic'`` writes cell translations. ``'cluster'`` writes the exact
+     - ``'periodic'`` writes cell translations. A repeating sheet can be
+       exported and imported in this form with a single cell along each open
+       direction. ``'cluster'`` writes the exact
        finite graph and its periodic images. ``'kspace'`` writes native
        reciprocal matrices. Auto selects compact bulk for ordinary bulk
-       operators, cluster for mixed-boundary bulk, surfaces, interfaces, impurities and explicit
+       operators, cluster for replicas with open directions, surfaces, interfaces, impurities and explicit
        textures, and reciprocal output for GBT single-q. Use explicit
        ``'cluster'`` to preserve an entirely open bulk cluster.
    * - ``effective_import``

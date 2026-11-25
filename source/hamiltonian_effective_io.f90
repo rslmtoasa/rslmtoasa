@@ -39,7 +39,7 @@ contains
       integer, allocatable :: order(:), cell_index(:,:)
       type(effective_row) :: lattice_index
       real(rp) :: cell(3,3), inverse(3,3), delta(3), coord(3)
-      integer :: r(3), key(4)
+      integer :: r(3), key(4), target_cell(3)
       logical :: legacy, found, canonical_exists, external
       complex(rp) :: empty(nb,nb)
 
@@ -64,8 +64,10 @@ contains
          call g_logger%fatal('Effective Hamiltonian boundary flags differ from input.', __FILE__, __LINE__)
       if (meta%periodic) then
          if (lat%ntype /= meta%sites .or. lat%nrec /= meta%sites .or. lat%nmax /= 0 .or. &
-             .not. all(meta%boundary) .or. any(nperiod <= 0)) &
-            call g_logger%fatal('Compact effective import needs a matching fully periodic bulk replica; use cluster data for open directions.', &
+             .not. lat%pbc .or. any(nperiod <= 0)) &
+            call g_logger%fatal('Compact effective import needs a matching bulk replica with pbc enabled.', __FILE__, __LINE__)
+         if (any((.not. meta%boundary) .and. nperiod /= 1)) &
+            call g_logger%fatal('Compact import needs one cell along each open direction; use cluster scope otherwise.', &
                                 __FILE__, __LINE__)
       else
          if (lat%kk /= meta%sites) &
@@ -113,7 +115,7 @@ contains
             delta = lat%cr(:,i)*lat%alat - meta%position(:,t)
             call resolve_translation(cell,inverse,delta,geometry_tol,r,found)
             if (.not. found) call g_logger%fatal('Cannot map replica site to effective cell.', __FILE__, __LINE__)
-            cell_index(:,i) = modulo(r,nperiod)
+            cell_index(:,i) = merge(modulo(r,nperiod),r,meta%boundary)
             key = [t,cell_index(:,i)]
             if (lattice_index%lookup(key) /= 0) &
                call g_logger%fatal('Duplicate site in effective Hamiltonian periodic replica.', __FILE__, __LINE__)
@@ -169,7 +171,8 @@ contains
             end if
             coord = meta%position(:,j) - meta%position(:,t) + matmul(cell,real(r,rp))
             if (meta%periodic) then
-               key = [j,modulo(cell_index(:,i)+r,nperiod)]
+               target_cell = cell_index(:,i)+r
+               key = [j,merge(modulo(target_cell,nperiod),target_cell,meta%boundary)]
                j = lattice_index%lookup(key)
                if (j == 0) call g_logger%fatal('Effective hopping target missing from periodic replica.', __FILE__, __LINE__)
                this%ee(:,:,expected,t) = rows(t)%block(:,:,idx)

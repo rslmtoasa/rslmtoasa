@@ -67,6 +67,52 @@ def main(binary, fixture, root, mode):
             base.write(directory / "input.nml")
             return directory
 
+        if mode == "compact-sheet":
+            base["lattice"].update(n1=6, n2=6, n3=1)
+            base["hamiltonian"].update(export="rs2pao", export_scope="cluster")
+            cluster = setup("cluster", "hamiltonian_export")
+            run(binary, cluster)
+            base["hamiltonian"]["export_scope"] = "periodic"
+            compact = setup("compact", "hamiltonian_export")
+            run(binary, compact)
+            fields = metadata(compact)
+            assert fields["scope"] == "periodic" and fields["periodic"].split() == ["T", "T", "F"]
+            assert int(fields["n_atoms"]) == 1 and int(metadata(cluster)["n_atoms"]) == 36
+            translations = [tuple(map(int, line.split()[:3]))
+                            for line in (compact / "rs2paoham.dat").read_text().splitlines()]
+            assert any(x or y for x, y, _ in translations)
+            assert all(z == 0 for _, _, z in translations)
+
+            base["hamiltonian"].update(export="none", effective_import="legacy")
+            outputs = []
+            for source in (cluster, compact):
+                directory = setup(f"replay-{source.name}", "conductivity_import")
+                for name in ("rs_tb.meta", "rs2paoham.dat"):
+                    shutil.copy2(source / name, directory)
+                run(binary, directory)
+                outputs.append(directory)
+            for name in ("response_total.out", "response_orbitals_real.out",
+                         "response_orbitals_imag.out", "Cu_dos.out"):
+                compare_tables(outputs[0] / name, outputs[1] / name)
+
+            # Retile the same frozen matrix. Independent native builds at
+            # other replica sizes can produce different screened hoppings.
+            base["lattice"]["n1"] = 8
+            larger = setup("larger-replica", "dos_import")
+            for name in ("rs_tb.meta", "rs2paoham.dat"):
+                shutil.copy2(compact / name, larger)
+            run(binary, larger)
+            assert int((larger / "fort.805").read_text().splitlines()[0]) == 48
+            assert any(row[1] > 0 for row in numbers(larger / "Cu_dos.out"))
+
+            directory = setup("boundary-mismatch", "conductivity_import")
+            shutil.copy2(compact / "rs2paoham.dat", directory)
+            sidecar = (compact / "rs_tb.meta").read_text()
+            record = next(line for line in sidecar.splitlines() if line.startswith("periodic "))
+            (directory / "rs_tb.meta").write_text(sidecar.replace(record, "periodic T T T", 1))
+            run(binary, directory, "Effective Hamiltonian boundary flags differ from input.")
+            return
+
         if mode == "block-dos":
             for recur in ("chebyshev", "block", "lanczos"):
                 directory = setup(recur, "hamiltonian_export", recur)

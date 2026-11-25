@@ -29,6 +29,9 @@ contains
             call g_logger%fatal('Compact periodic export requires a repeating bulk basis; use cluster scope.', __FILE__, __LINE__)
          if (lat%nbulk /= 0 .or. lat%nrec /= lat%ntype .or. lat%nrec /= lat%ntot) &
             call g_logger%fatal('Compact periodic export requires one recursion class per basis site.', __FILE__, __LINE__)
+         if (lat%pbc .and. any((.not. [lat%b1,lat%b2,lat%b3]) .and. [lat%n1,lat%n2,lat%n3] /= 1)) &
+            call g_logger%fatal('Compact export needs one cell along each open direction; use cluster scope otherwise.', &
+                                __FILE__, __LINE__)
          sites = lat%atlist
       else
          sites = [(i, i=1,lat%kk)]
@@ -179,7 +182,7 @@ contains
       integer, allocatable :: sites(:), keys(:,:,:), order(:)
       integer :: i, j, l, m, rec, k, r(3), ipao, jpao, u, meta, legacy, ios, a, b, onsite
       integer(int64) :: count, paths, legacy_count, unique_blocks, original_bonds
-      logical :: periodic, flags(3), mixed_boundaries
+      logical :: periodic, flags(3)
       character(len=8) :: canonical_checksum, legacy_checksum
       complex(rp) :: block(nb,nb)
       real(rp) :: cell(3,3)
@@ -201,10 +204,9 @@ contains
             call g_logger%fatal('CCOR export requires the built CCOR blocks.', __FILE__, __LINE__)
       end if
       flags = lat%pbc .and. [lat%b1,lat%b2,lat%b3]
-      mixed_boundaries = any(flags) .and. .not. all(flags)
       periodic = this%export_scope == 'periodic'
       if (this%export_scope == 'auto') periodic = lat%control%calctype == 'B' .and. lat%nmax == 0 .and. &
-                                                 this%magnetic_representation /= explicit_texture .and. .not. mixed_boundaries
+                                                 this%magnetic_representation /= explicit_texture .and. (.not. lat%pbc .or. all(flags))
       scope = 'cluster'
       if (periodic) scope = 'periodic'
       if (nb /= 2*norb) &
@@ -285,10 +287,11 @@ contains
       if (len_trim(canonical_checksum) == 0) goto 900
       legacy_checksum = hopping_checksum(trim(legacy_name)//'.tmp')
       if (len_trim(legacy_checksum) == 0) goto 900
-      flags = [.true.,.true.,.true.]
+      flags = lat%pbc .and. [lat%b1,lat%b2,lat%b3]
+      ! A compact export from an open cut cluster represents an infinite model.
+      if (periodic .and. .not. lat%pbc) flags = .true.
       cell = lat%a*lat%alat
       if (.not. periodic) then
-         flags = lat%pbc .and. [lat%b1,lat%b2,lat%b3]
          cell(:,1) = cell(:,1)*max(1,lat%n1)
          cell(:,2) = cell(:,2)*max(1,lat%n2)
          cell(:,3) = cell(:,3)*max(1,lat%n3)
