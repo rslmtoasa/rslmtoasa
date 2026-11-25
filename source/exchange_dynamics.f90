@@ -12,8 +12,6 @@ contains
    !>   alpha_ij^{mu nu} = alpha_C Tr[T_i^mu A_ij (T_j^nu)^dagger A_ji] at E_F,
    !> with A_ij = (G_ij - G_ji^dagger)/(2i) built from G - G^dagger (not Im G),
    !> alpha_C = g/(pi m_t) = 2/(pi m_spin) since g = 2(1 + m_orb/m_spin).
-   !> Eq. (15) as printed divides A by 2*pi*i; that gives alpha smaller by
-   !> pi**2 for the resolvent stored in green%gij, and is not used here.
    !> E_F is the energy-grid point nearest to en%fermi.
    !> The following calculation works better with hoh.
    !> Implemented by Ivan Miranda on 14.11.2023
