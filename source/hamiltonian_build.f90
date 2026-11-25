@@ -1045,8 +1045,8 @@ contains
          if (xi_p1*xi_p2 < 0.0_rp) call g_logger%fatal('build_lsham: xi_p(1) and xi_p(2) must have the same sign', __FILE__, __LINE__)
          if (xi_d1*xi_d2 < 0.0_rp) call g_logger%fatal('build_lsham: xi_d(1) and xi_d(2) must have the same sign', __FILE__, __LINE__)
          ! Signed geometric mean: (+a,+b) -> +sqrt(a*b), (-a,-b) -> -sqrt(a*b)
-         soc_p = sign(sqrt(abs(xi_p1*xi_p2)), xi_p1)
-         soc_d = sign(sqrt(abs(xi_d1*xi_d2)), xi_d1)
+         soc_p = signed_soc(xi_p1, xi_p2)
+         soc_d = signed_soc(xi_d1, xi_d2)
          ! The orbital-polarization square roots below are unchanged and give NaN for negative xi_d.
          if (this%orb_pol .and. xi_d1 < 0.0_rp) &
             call g_logger%warning('build_lsham: negative xi_d with orb_pol=.true.; rac/lz_loc square roots may produce NaN', __FILE__, __LINE__)
@@ -1063,9 +1063,9 @@ contains
             lz_loc = 0.0_rp
          end if
 
-         prefac = 0.0_rp
          do i = 1, norb
             do j = 1, norb
+               prefac = 0.0_rp
                ! p-orbitals (indices 2-4)
                if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
                ! d-orbitals (indices 5-9)
@@ -1108,7 +1108,8 @@ contains
       !
       ! Local variables
       integer :: i, j, k
-      complex(rp) :: prefac, sg, soc_p, soc_d
+      complex(rp) :: prefac, sg
+      real(rp) :: soc_p, soc_d
       complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       Lx(:, :) = L_x(:, :)
@@ -1124,11 +1125,12 @@ contains
       this%tmat(:, :, :, :) = cmplx(0.0_rp, 0.0_rp)
       do k = 1, this%charge%lattice%ntype
          sg = cmplx(0.5_rp, 0.0_rp)
-         soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
-         soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
-         prefac = 0.0_rp
+         ! Same SOC prefactors as build_lsham, so T = [sigma, H_so] (orbital-polarization terms excluded)
+         soc_p = signed_soc(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1), this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
+         soc_d = signed_soc(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1), this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
          do i = 1, norb
             do j = 1, norb
+               prefac = 0.0_rp
                if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
                if (i >= 5 .and. i <= 9 .and. j >= 5 .and. j <= 9) prefac = sg*soc_d
                ! build Tx
@@ -1149,6 +1151,14 @@ contains
       end do
 
    end subroutine torque_operator_collinear
+
+   !> Signed geometric mean of the two spin-channel SOC parameters of one l channel:
+   !> (+a,+b) -> +sqrt(a*b), (-a,-b) -> -sqrt(a*b).
+   pure real(rp) function signed_soc(xi1, xi2)
+      real(rp), intent(in) :: xi1, xi2
+
+      signed_soc = sign(sqrt(abs(xi1*xi2)), xi1)
+   end function signed_soc
 
    !> @brief Build overlap-bar matrices for the orthogonal representation.
    !> @details Converts potential/overlap information from symbolic atoms into
