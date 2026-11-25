@@ -45,6 +45,21 @@ Not every directory in `example/` is a curated starting point. Use the decks
 in the table. Of these, the regression tests read only `example/bulk/bccFe`,
 `example/surface/fccCu001` and `example/interface/fccCu111_Avac`.
 
+### Starting values
+
+When a deck needs changing, start from these values (developer guidance):
+
+| Key | Namelist | Baseline | Production |
+|---|---|---|---|
+| `beta` | `&mix` | 0.05–0.2 for stable systems | same |
+| `nstep` | `&self` | 25–50 for bulk metals, magnetic or not (metals converge slower); about 100 for surfaces | same |
+| `lld`, block recursion | `&control` | 21 | about 31 |
+| `lld`, Chebyshev | `&control` | 150 | about 200 |
+
+For production bulk runs, use a periodic cluster: `pbc`, `b1`, `b2` and `b3`
+all `.true.`, with `n1`, `n2`, `n3` set (`&lattice`, see
+[`keywords/lattice_geometry.rst`](source/keywords/lattice_geometry.rst)).
+
 ## 3. Files in a calculation directory
 
 | File | Role |

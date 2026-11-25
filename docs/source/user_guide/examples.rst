@@ -84,9 +84,10 @@ Best Practices
 **Parameter Selection Guidelines:**
 
 - **Cluster radius (rc):** 40-60 a.u. for bulk, 80-120 a.u. for surfaces
-- **Mixing parameter (beta):** 0.1-0.5 for stable systems, 0.001-0.01 for surfaces
-- **SCF iterations (nstep):** 25-50 for non-magnetic, 100-500 for magnetic/surface
-- **Recursion levels (lld):** 21-50 for simple systems, 150-300 for conductivity
+- **Mixing parameter (beta):** 0.05-0.2 for stable systems, 0.001-0.01 for surfaces
+- **SCF iterations (nstep):** 25-50 for bulk metals, magnetic or not (metals converge slower); about 100 for surfaces
+- **Recursion levels (lld):** block recursion 21 as a baseline, about 31 for production; Chebyshev 150 as a baseline, about 200 for production
+- **Production bulk runs:** use a periodic cluster (``pbc``, ``b1``, ``b2``, ``b3`` all ``.true.`` and ``n1``, ``n2``, ``n3`` in ``&lattice``; see :doc:`../keywords/lattice_geometry`)
 
 **Convergence Criteria:**
 
