@@ -77,9 +77,8 @@ contains
       if (rank == 0) then
          open (newunit=unit_e, FILE='damping-energy.out', STATUS='replace', ACTION='write')
          open (newunit=unit_p, FILE='alldampings.out', STATUS='replace', ACTION='write')
-         write (unit_p, *) '    #i     #j   #xx          #xy           #xz           '// &
-            '#yx           #yy           #yz           #zx           #zy           '// &
-            '#zz          #0.5*(xx + yy)     #Dist           #rij = (ri - rj)'
+         write (unit_p, '(A)') '#     i      j  alpha: xx xy xz yx yy yz zx zy zz 0.5*(xx+yy) (dimensionless)'// &
+            '  dist rij=ri-rj (alat)'
          write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
          do njij_glob = 1, this%lattice%njij
             i = this%lattice%ijpair(njij_glob, 1)
@@ -87,20 +86,19 @@ contains
             distance_alat = norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             factor = pair(19, njij_glob)
             write (*, '(A,I6,A,I6,A)') 'Damping tensor between pair', i, ' and ', j, ' is'
-            write (*, '(3F14.9)') factor*pair(1:9, njij_glob)
+            write (*, '(3ES16.8)') factor*pair(1:9, njij_glob)
             write (*, '(A,I6,A,I6,A)') 'Imaginary part of the tensor between pair', i, ' and ', j, ' is'
-            write (*, '(3F14.9)') factor*pair(10:18, njij_glob)
+            write (*, '(3ES16.8)') factor*pair(10:18, njij_glob)
             write (*, *) '----------------------'
-            write (unit_p, '(2I7,11F14.9,3F10.6)') i, j, factor*pair(1:9, njij_glob), &
+            write (unit_p, '(2I7,10ES16.8,4F11.6)') i, j, factor*pair(1:9, njij_glob), &
                0.5*factor*(pair(1, njij_glob) + pair(5, njij_glob)), &
                distance_alat, this%lattice%cr(:, i) - this%lattice%cr(:, j)
          end do
 
          ! Energy-resolved total, scaled by the factor of the last pair (see tests/KNOWN_ISSUES.md)
-         write (unit_e, *) '#Energy (E-Ef)         #xx         #xy           #xz           '// &
-            '#yx           #yy           #yz           #zx           #zy           #zz'
+         write (unit_e, '(A)') '# E-Ef (Ry)  alpha: xx xy xz yx yy yz zx zy zz (dimensionless)'
          do nv = 1, nenergy
-            write (unit_e, '(10F14.9)') this%en%ene(nv) - this%en%fermi, factor*total_damping(:, nv)
+            write (unit_e, '(F14.9,9ES16.8)') this%en%ene(nv) - this%en%fermi, factor*total_damping(:, nv)
          end do
          close (unit_e)
          close (unit_p)
