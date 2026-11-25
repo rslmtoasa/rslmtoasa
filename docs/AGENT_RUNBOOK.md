@@ -51,14 +51,24 @@ When a deck needs changing, start from these values (developer guidance):
 
 | Key | Namelist | Baseline | Production |
 |---|---|---|---|
-| `beta` | `&mix` | 0.05–0.2 for stable systems | same |
+| `rc` | `&lattice` | 40–60 a.u. for bulk, 80–120 a.u. for surfaces | same |
+| `beta` | `&mix` | 0.05–0.2 for stable systems, 0.001–0.01 for surfaces | same |
 | `nstep` | `&self` | 25–50 for bulk metals, magnetic or not (metals converge slower); about 100 for surfaces | same |
 | `lld`, block recursion | `&control` | 21 | about 31 |
 | `lld`, Chebyshev | `&control` | 150 | about 200 |
 
-For production bulk runs, use a periodic cluster: `pbc`, `b1`, `b2` and `b3`
-all `.true.`, with `n1`, `n2`, `n3` set (`&lattice`, see
-[`keywords/lattice_geometry.rst`](source/keywords/lattice_geometry.rst)).
+For production bulk runs, use a periodic cluster (`&lattice`, see
+[`keywords/lattice_geometry.rst`](source/keywords/lattice_geometry.rst)):
+
+```fortran
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 15
+n2 = 15
+n3 = 15
+```
 
 ## 3. Files in a calculation directory
 
