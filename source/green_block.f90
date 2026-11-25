@@ -46,57 +46,65 @@ contains
 
    end subroutine block_green_ij_eta
 
-   !> @brief One-shot block Haydock G_ji(z), G_ij(z) of local pair ij_loc, in the four-slot legacy layout.
+   !> @brief One-shot block Haydock G_ji(z), G_ij(z) of local pair ij_loc for the energies z(:), in the four-slot legacy layout.
    !> @details G_ji(z) = sum_m S_m(j) X_m(z) with X the first block column of (z - T)^-1 (T = blocks 1..lld-1,
    !>          terminal self-energy Q(z) of the legacy contour route subtracted from the last diagonal block),
    !>          G_ij(z) = [G_ji(conj z)]^H. Slot 1 = Gij + Gji, slot 3 = i (Gij - Gji), slots 2 and 4 = 0, which the
    !>          legacy combination 0.5[(g1-g2) -+ i(g3-g4)] maps back to Gij, Gji. Self pair: slot 1 = Gii.
+   !>          Terminator inputs and b are built once; the z loop is threaded.
    !>          Needs zsqr to have turned the stored B^2 into B (b(:,:,m) = B_{m+1} = b2_b(:,:,m+1)).
-   module subroutine block_green_ij_eta_oneshot(this, ij_loc, z, g_ef)
+   module subroutine block_green_ij_oneshot(this, ij_loc, z, g)
       use block_tridiag_mod, only: block_tridiag_first_column
       class(green), intent(inout) :: this
       integer, intent(in) :: ij_loc
-      complex(rp), intent(in) :: z
-      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
+      complex(rp), intent(in) :: z(:)
+      complex(rp), intent(inout) :: g(:, :, :, :)
       complex(rp), allocatable :: b(:, :, :), x(:, :, :)
       complex(rp), dimension(nb, nb) :: gji, gij, sigma
       real(rp), dimension(nb, nb, 1) :: a_inf, b_inf
       real(rp), dimension(1) :: a_inf0, b_inf0
-      integer :: m, nblk, slot, ij, nw
+      integer :: m, nblk, slot, iz, nw
+      logical :: self_pair
 
       nblk = this%control%lld - 1
       slot = ij_loc*4 - 3
-      allocate (b(nb, nb, nblk), x(nb, nb, nblk))
+      allocate (b(nb, nb, nblk))
       b(:, :, 1:nblk - 1) = this%recursion%b2_b(:, :, 2:nblk, slot)
       b(:, :, nblk) = (0.0_rp, 0.0_rp)
-      g_ef = (0.0_rp, 0.0_rp)
+      g = (0.0_rp, 0.0_rp)
+      self_pair = this%lattice%ijpair(start_atom + ij_loc - 1, 1) == this%lattice%ijpair(start_atom + ij_loc - 1, 2)
 
       ! Terminator from the seed's coefficients exactly as in block_green_ij_eta; Q is the self-energy on block lld-1
       nw = 10*this%control%lld
       call this%recursion%get_terminf(this%recursion%a_b(:, :, :, slot), this%recursion%b2_b(:, :, :, slot), 1, &
                                       this%control%lld, nb, nw, a_inf, b_inf, a_inf0, b_inf0)
-      call bgreen_terminal_q(this%control%sym_term, .true., z, a_inf(:, :, 1), b_inf(:, :, 1), sigma)
-      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, z, x, sigma)
-      gji = (0.0_rp, 0.0_rp)
-      do m = 1, nblk
-         gji = gji + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
-      end do
-      ij = start_atom + ij_loc - 1
-      if (this%lattice%ijpair(ij, 1) == this%lattice%ijpair(ij, 2)) then
-         g_ef(:, :, 1) = gji
-         return
-      end if
 
-      ! Advanced terminator: the legacy-mode Q keeps Re(sqrt) fixed at Re z, so Q(conj z) /= conj(Q(z)); use conj(Q(z))
-      call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, conjg(z), x, conjg(sigma))
-      gij = (0.0_rp, 0.0_rp)
-      do m = 1, nblk
-         gij = gij + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
+      !$omp parallel do default(shared) private(iz, m, x, gij, gji, sigma)
+      do iz = 1, size(z)
+         allocate (x(nb, nb, nblk))
+         call bgreen_terminal_q(this%control%sym_term, .true., z(iz), a_inf(:, :, 1), b_inf(:, :, 1), sigma)
+         call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, z(iz), x, sigma)
+         gji = (0.0_rp, 0.0_rp)
+         do m = 1, nblk
+            gji = gji + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
+         end do
+         if (self_pair) then
+            g(:, :, iz, 1) = gji
+         else
+            ! Advanced terminator: the legacy-mode Q keeps Re(sqrt) fixed at Re z, so Q(conj z) /= conj(Q(z)); use conj(Q(z))
+            call block_tridiag_first_column(this%recursion%a_b(:, :, 1:nblk, slot), b, conjg(z(iz)), x, conjg(sigma))
+            gij = (0.0_rp, 0.0_rp)
+            do m = 1, nblk
+               gij = gij + matmul(this%recursion%os_s(:, :, m, ij_loc), x(:, :, m))
+            end do
+            gij = conjg(transpose(gij))
+            g(:, :, iz, 1) = gij + gji
+            g(:, :, iz, 3) = i_unit*(gij - gji)
+         end if
+         deallocate (x)
       end do
-      gij = conjg(transpose(gij))
-      g_ef(:, :, 1) = gij + gji
-      g_ef(:, :, 3) = i_unit*(gij - gji)
-   end subroutine block_green_ij_eta_oneshot
+      !$omp end parallel do
+   end subroutine block_green_ij_oneshot
 
    module subroutine block_green_ij(this, istart)
       implicit none
@@ -230,6 +238,7 @@ contains
       logical, intent(in) :: eta_mode
       integer :: ia, ja_temp, j, i, ia_glob, fermi_point
       complex(rp), dimension(nb, nb, 4) :: g0_ef
+      complex(rp), dimension(nb, nb, 1, 4) :: g0_one
       complex(rp) :: eta
       complex(rp), dimension(64, nb, nb, 4) :: y
       real(rp) :: res, t
@@ -269,7 +278,8 @@ contains
                select case (this%control%recur)
                case ('block')
                   if (this%control%intersite_mode == 'one_shot') then
-                     call this%block_green_ij_eta_oneshot(ia, cmplx(this%en%ene(fermi_point), 0.0_rp, rp) + eta, g0_ef)
+                     call this%block_green_ij_oneshot(ia, [cmplx(this%en%ene(fermi_point), 0.0_rp, rp) + eta], g0_one)
+                     g0_ef = g0_one(:, :, 1, :)
                   else
                      call this%block_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
                   end if
@@ -299,9 +309,6 @@ contains
          return
       end if
 
-      if (this%control%recur == 'block' .and. this%control%intersite_mode == 'one_shot') &
-         call g_logger%fatal('one_shot with recur = block supports only the complex contour (exchange_p2rs).', __FILE__, __LINE__)
-
       this%gij = 0.0d0; this%gji = 0.0d0; this%ginmag = 0.0d0; this%giz = 0.0d0; this%giy = 0.0d0; this%gix = 0.0d0
       this%gjnmag = 0.0d0; this%gjx = 0.0d0; this%gjy = 0.0d0; this%gjz = 0.0d0
 
@@ -312,7 +319,9 @@ contains
          ja_temp = (ia - 1)*4 + 1
          select case (this%control%recur)
          case ('block')
-            if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
+            if (this%control%intersite_mode == 'one_shot') then
+               call this%block_green_ij_oneshot(ia, cmplx(this%en%ene(1:this%en%channels_ldos + 10), 0.0_rp, rp), this%g0)
+            else if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
                call this%block_green_ij_gpu(ja_temp)
             else
                call this%block_green_ij(ja_temp)

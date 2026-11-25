@@ -5,6 +5,7 @@ Runs intersite_mode = 'pairs' (serial), 'one_shot' (serial) and 'one_shot' (MPI)
 triad_bccFe_exchange fixture and requires J_ij to agree to rtol 1e-8 (absolute floor 1e-10 mRy).
 """
 import argparse
+import re
 import sys
 import time
 from pathlib import Path
@@ -19,8 +20,12 @@ RTOL, ATOL = 1e-8, 1e-10
 FIXTURE = Path(__file__).resolve().parent / "triad_bccFe_exchange"
 
 
-def run(binary, workdir, mode, mpi_exec=None, ranks=1, **control):
+def run(binary, workdir, mode, mpi_exec=None, ranks=1, ijpairs=None, **control):
     setup_workdir(FIXTURE, workdir)
+    if ijpairs is not None:
+        text = re.sub(r"ijpair\(\d+, :\) = .*\n", "", (workdir / "input.nml").read_text())
+        lines = "".join(f"ijpair({k}, :) = {a}, {b}\n" for k, (a, b) in enumerate(ijpairs, 1))
+        (workdir / "input.nml").write_text(re.sub(r"njij = \d+", f"njij = {len(ijpairs)}\n{lines}", text))
     tmp = workdir / "input.nml.tmp"
     f90nml.patch(str(workdir / "input.nml"), {"control": {"intersite_mode": mode, **control}}, str(tmp))
     tmp.replace(workdir / "input.nml")
@@ -87,6 +92,25 @@ def main():
             ok = diff <= ATOL + RTOL * abs(ref_val)
             failed |= not ok
             print(f"{name} pair {pair}: J={jij[pair]:.12e} pairs={ref_val:.12e} |diff|={diff:.3e} {'ok' if ok else 'FAIL'}")
+    return 1 if failed else main_real_mesh(a)
+
+
+def main_real_mesh(a):
+    """Real-energy mesh (post_processing = 'exchange', gf_route = 'recursion') with recur = 'block'."""
+    binary, work = a.binary.resolve(), a.workdir.resolve()
+    block = {"recur": "block", "lld": 40, "sym_term": False}
+    failed = False
+    leg, _ = run(binary, work / "block_self_pairs", "pairs", ijpairs=[(1, 1)], **block)
+    one, _ = run(binary, work / "block_self_one_shot", "one_shot", ijpairs=[(1, 1)], **block)
+    ser, _ = run(binary, work / "block_one_shot", "one_shot", **block)
+    par, _ = run(binary, work / "block_one_shot_mpi", "one_shot", a.mpi_exec, a.ranks, **block)
+    for label, got, ref_vals, tol in (("self pair one_shot vs pairs", one, leg, ATOL),
+                                      (f"one_shot np={a.ranks} vs serial", par, ser, 0.0)):
+        for pair, ref_val in ref_vals.items():
+            diff = abs(got[pair] - ref_val)
+            ok = diff <= tol + RTOL * abs(ref_val)
+            failed |= not ok
+            print(f"block real mesh {label} pair {pair}: J={got[pair]:.12e} ref={ref_val:.12e} |diff|={diff:.3e} {'ok' if ok else 'FAIL'}")
     return 1 if failed else 0
 
 
