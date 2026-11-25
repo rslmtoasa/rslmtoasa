@@ -7,8 +7,14 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculation of the Gilbert damping parameters in real-space
-   !> based on the LMTO solution (see, e.g., PRM 2, 013801 (2018)).
-   !> The model is the so-called torque-correlation
+   !> based on the LMTO solution, torque-correlation model following
+   !> PRB 108, 014433 (2023), Eq. (15), in the T -> 0 limit:
+   !>   alpha_ij^{mu nu} = alpha_C Tr[T_i^mu A_ij (T_j^nu)^dagger A_ji] at E_F,
+   !> with A_ij = (G_ij - G_ji^dagger)/(2i) built from G - G^dagger (not Im G),
+   !> alpha_C = g/(pi m_t) = 2/(pi m_spin) since g = 2(1 + m_orb/m_spin).
+   !> Eq. (15) as printed divides A by 2*pi*i; that gives alpha smaller by
+   !> pi**2 for the resolvent stored in green%gij, and is not used here.
+   !> E_F is the energy-grid point nearest to en%fermi.
    !> The following calculation works better with hoh.
    !> Implemented by Ivan Miranda on 14.11.2023
    !> Revised by Ivan Miranda on 29.04.2025
@@ -18,7 +24,8 @@ contains
       !
       class(exchange) :: this
       !
-      complex(rp), allocatable :: Aij(:, :), Aji(:, :), temp1(:, :), temp2(:, :), temp3(:, :)
+      complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
+      complex(rp) :: c(3, 3)
       integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nb_ij, nenergy, unit_e, unit_p
       real(rp) :: spin_i, factor, distance_alat
       ! pair(1:9) Re tensor at E_F, pair(10:18) Im tensor at E_F, pair(19) prefactor
@@ -33,7 +40,7 @@ contains
       nenergy = size(this%en%ene)
       nb_ij = size(this%green%gij, 1)
       allocate (total_damping(9, nenergy), pair(19, this%lattice%njij), source=0.0_rp)
-      allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij), temp1(nb_ij, nb_ij), temp2(nb_ij, nb_ij), temp3(nb_ij, nb_ij))
+      allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij), tjd(nb_ij, nb_ij, 3))
       ief = fermi_index(this%en%ene, this%en%fermi)
 
       ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
@@ -47,21 +54,22 @@ contains
             spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
                      this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
          end do
+         do l = 1, 3
+            tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
+         end do
          do nv = 1, nenergy
-            ! Anti-Hermitian parts of the intersite Green functions
+            ! Anti-Hermitian parts of the intersite Green functions (times 2i)
             Aij = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
             Aji = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
+            c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij, tjd, Aji)
             m = 0
             do k = 1, 3
                do l = 1, 3
-                  temp1 = matmul(this%hamiltonian%tmat(:, :, k, this%lattice%iz(i)), Aij)
-                  temp2 = matmul(transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j)))), Aji)
-                  temp3 = matmul(temp1, temp2)
                   m = m + 1
-                  total_damping(m, nv) = total_damping(m, nv) + rtrace(temp3)
+                  total_damping(m, nv) = total_damping(m, nv) + real(c(k, l), rp)
                   if (nv == ief) then
-                     pair(m, njij_glob) = rtrace(temp3)
-                     pair(9 + m, njij_glob) = imtrace(temp3)
+                     pair(m, njij_glob) = real(c(k, l), rp)
+                     pair(9 + m, njij_glob) = aimag(c(k, l))
                   end if
                end do
             end do
@@ -127,8 +135,8 @@ contains
       ! independently established normalization or production relation.
       complex(rp), allocatable :: Aij(:, :, :), Aji(:, :, :), Bij(:, :, :), Bji(:, :, :)
       complex(rp), allocatable :: sBij(:, :, :), sBji(:, :, :)
-      complex(rp), allocatable :: temp1(:, :), temp2(:, :), temp3(:, :)
-      complex(rp), allocatable :: temp4(:, :), temp5(:, :), temp6(:, :)
+      complex(rp), allocatable :: tjd(:, :, :)
+      complex(rp) :: c(3, 3)
       ! pair(1:9) Re kernel at E_F, pair(10:18) Im kernel at E_F
       real(rp), allocatable :: total_inertia(:, :), pair_b(:, :, :), pair(:, :)
       integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nenergy, nb_ij, u_re, u_im, u_e, u_p
@@ -154,8 +162,7 @@ contains
       allocate (total_inertia(9, nenergy), pair_b(4, nenergy, this%lattice%njij), pair(18, this%lattice%njij), source=0.0_rp)
       allocate (Aij(nb_ij, nb_ij, nenergy), Aji(nb_ij, nb_ij, nenergy), Bij(nb_ij, nb_ij, nenergy), Bji(nb_ij, nb_ij, nenergy))
       allocate (sBij(nb_ij, nb_ij, nenergy), sBji(nb_ij, nb_ij, nenergy))
-      allocate (temp1(nb_ij, nb_ij), temp2(nb_ij, nb_ij), temp3(nb_ij, nb_ij))
-      allocate (temp4(nb_ij, nb_ij), temp5(nb_ij, nb_ij), temp6(nb_ij, nb_ij))
+      allocate (tjd(nb_ij, nb_ij, 3))
       ief = fermi_index(this%en%ene, this%en%fermi)
 
       ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
@@ -182,21 +189,20 @@ contains
 
          pair_b(1, :, njij_glob) = real(Bij(1, 1, :)); pair_b(2, :, njij_glob) = real(sBij(1, 1, :))
          pair_b(3, :, njij_glob) = aimag(Bij(1, 1, :)); pair_b(4, :, njij_glob) = aimag(sBij(1, 1, :))
+         do l = 1, 3
+            tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
+         end do
          do nv = 1, nenergy
+            c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij(:, :, nv), tjd, sBji(:, :, nv)) + &
+                torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), sBij(:, :, nv), tjd, Aji(:, :, nv))
             m = 0
             do k = 1, 3
                do l = 1, 3
-                  temp1 = matmul(this%hamiltonian%tmat(:, :, k, this%lattice%iz(i)), Aij(:, :, nv))
-                  temp2 = matmul(transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j)))), sBji(:, :, nv))
-                  temp3 = matmul(this%hamiltonian%tmat(:, :, k, this%lattice%iz(i)), sBij(:, :, nv))
-                  temp4 = matmul(transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j)))), Aji(:, :, nv))
-                  temp5 = matmul(temp1, temp2)
-                  temp6 = matmul(temp3, temp4)
                   m = m + 1
-                  total_inertia(m, nv) = total_inertia(m, nv) + rtrace(temp5 + temp6)
+                  total_inertia(m, nv) = total_inertia(m, nv) + real(c(k, l), rp)
                   if (nv == ief) then
-                     pair(m, njij_glob) = rtrace(temp5 + temp6)
-                     pair(9 + m, njij_glob) = imtrace(temp5 + temp6)
+                     pair(m, njij_glob) = real(c(k, l), rp)
+                     pair(9 + m, njij_glob) = aimag(c(k, l))
                   end if
                end do
             end do
@@ -245,5 +251,24 @@ contains
 
       ief = minloc(abs(ene - fermi), dim=1)
    end function fermi_index
+
+   !> c(k, l) = Tr[ti(:, :, k) x tjd(:, :, l) y] for k, l = 1..3, using
+   !> Tr(P Q) = sum(P * transpose(Q)) so only six matrix products are formed.
+   pure function torque_trace(ti, x, tjd, y) result(c)
+      complex(rp), intent(in) :: ti(:, :, :), x(:, :), tjd(:, :, :), y(:, :)
+      complex(rp) :: c(3, 3)
+      complex(rp) :: p(size(x, 1), size(x, 2), 3), q(size(y, 1), size(y, 2), 3)
+      integer :: k, l
+
+      do k = 1, 3
+         p(:, :, k) = matmul(ti(:, :, k), x)
+         q(:, :, k) = transpose(matmul(tjd(:, :, k), y))
+      end do
+      do l = 1, 3
+         do k = 1, 3
+            c(k, l) = sum(p(:, :, k)*q(:, :, l))
+         end do
+      end do
+   end function torque_trace
 
 end submodule exchange_dynamics
