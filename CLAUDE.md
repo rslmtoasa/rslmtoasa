@@ -5,6 +5,8 @@ Start here, then read:
 - **[`docs/DEVELOPER_MAP.md`](docs/DEVELOPER_MAP.md)** — entry points, class
   chains, kernel inventory, testing map. The fastest way to find where a
   workflow lives.
+- **[`docs/AGENT_RUNBOOK.md`](docs/AGENT_RUNBOOK.md)** — setting up, running
+  and checking a calculation: starting decks, run protocol, convergence check.
 - **[`docs/ROADMAP.md`](docs/ROADMAP.md)** — planned feature work and current
   status.
 - **[`docs/DECISIONS.md`](docs/DECISIONS.md)** — closed campaign conclusions
