@@ -71,6 +71,15 @@ are not tracked here; see `docs/DECISIONS.md`.
   1)`), with `enpt` = 141 the E_F point is the centre of a Simpson panel, with f = 0.5 there. Whether the integral up to E_F is accurate, and how it
   depends on the parity of `enpt` or on `channels_ldos`, was not measured. The fixed lehmann J[1_335] moved +0.4% (0.257612 to 0.255696); neither
   value is known to be the correct J.
+- **Measured 2026-11-25 (parity of `enpt`):** triad deck, `recur = 'chebyshev'`, lld = 150, `intersite_mode = 'one_shot'` (equal to 'pairs' to
+  1e-12), T = 0, window [-1.2, 1.2] Ry, J[1_335] against 8002 channels (even `enpt`, 0.5004726136): even `enpt` gives -4.3e-5 (500 channels),
+  -2.8e-6 (1002), -1.8e-7 (2000), -1e-8 (4004) relative; odd `enpt` gives +1.5e-3 (1000), +3.8e-4 (2002), +1.7e-4 (3000), +9.5e-5 (4000), about
+  134*edel^2 absolute. With odd `enpt` E_F is the midpoint of a Simpson triplet (f = 0.5 there), which matches an O(h^2) error. Not checked at T > 0.
+  Proposal, not done (a few lines): force even `enpt` in `energy%e_mesh`, or treat the last panel in `simpson_f`. The fix would change J at the
+  1e-4 to 1e-3 level for odd-`enpt` inputs, including the triad deck (`enpt` = 141).
+- **Measured 2026-11-25 (block, real axis):** same deck with `recur = 'block'`, lld = 40, one_shot: J[1_335] scatters with a standard deviation of
+  1.9% over even-`enpt` channels from 500 to 8002 and does not converge with the mesh. Not diagnosed; suspected, not tested: poles of the finite
+  chain outside the terminator band [ebot, etop], where the terminator has no imaginary part.
 - **Suspected, not tested:** the original residual dependence came from `energy_min + edel*i` (`source/energy.f90:214`) contracted to FMA at `-O2`;
   the regression tests were not rebuilt with `-ffp-contract=off`. Tests: `tests/regression/triad_bccFe_exchange` (`Triad_triad_bccFe_jij`,
   `golden_rtol` 1e-2).
