@@ -22,12 +22,9 @@ contains
       !
       class(exchange) :: this
       !
-      complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
-      complex(rp) :: c(3, 3)
-      integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nb_ij, nenergy, unit_e, unit_p
-      real(rp) :: spin_i, factor, distance_alat, alpha(3, 3), mhat(3)
+      integer :: i, j, njij, njij_glob, ief, nenergy
       ! pair(1:9) Re tensor at E_F, pair(10:18) Im tensor at E_F, pair(19) prefactor
-      real(rp), allocatable :: pair(:, :), total_damping(:, :)
+      real(rp), allocatable :: pair(:, :), total_damping(:, :), contrib(:, :)
 
       if (this%control%nsp /= 2) then
          call g_logger%warning('calculate_gilbert_damping: needs nsp = 2 (collinear with l.s); skipped.', __FILE__, __LINE__)
@@ -36,9 +33,8 @@ contains
 
       call this%hamiltonian%torque_operator_collinear()
       nenergy = size(this%en%ene)
-      nb_ij = size(this%green%gij, 1)
       allocate (total_damping(9, nenergy), pair(19, this%lattice%njij), source=0.0_rp)
-      allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij), tjd(nb_ij, nb_ij, 3))
+      allocate (contrib(9, nenergy))
       ief = fermi_index(this%en%ene, this%en%fermi)
 
       ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
@@ -46,13 +42,34 @@ contains
          njij = g2l_map(njij_glob)
          i = this%lattice%ijpair(njij_glob, 1)
          j = this%lattice%ijpair(njij_glob, 2)
+         call damping_pair(this, njij, i, j, ief, pair(:, njij_glob), contrib)
+         total_damping = total_damping + contrib
+      end do
+
+      call damping_finalize(this, pair, total_damping, ief)
+   end subroutine calculate_gilbert_damping
+
+   !> Torque-correlation damping tensor of pair (i, j) at local index njij: pair(1:9) Re and pair(10:18) Im
+   !> at energy index ief, pair(19) prefactor; contrib(:, nv) is the pair's energy-resolved contribution.
+   subroutine damping_pair(this, njij, i, j, ief, pair, contrib)
+      class(exchange) :: this
+      integer, intent(in) :: njij, i, j, ief
+      real(rp), intent(out) :: pair(19), contrib(:, :)
+      complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
+      complex(rp) :: c(3, 3)
+      integer :: k, l, m, nv, nb_ij, nenergy
+      real(rp) :: spin_i
+
+      nenergy = size(this%en%ene)
+      nb_ij = size(this%green%gij, 1)
+      allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij), tjd(nb_ij, nb_ij, 3))
          ! Spin magnetic moment of atom i
          spin_i = 0.0_rp
          do k = 0, this%symbolic_atom(this%lattice%iz(i))%potential%lmax
             spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
                      this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
          end do
-         pair(19, njij_glob) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
+         pair(19) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
          do l = 1, 3
             tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
          end do
@@ -65,16 +82,25 @@ contains
             do k = 1, 3
                do l = 1, 3
                   m = m + 1
-                  total_damping(m, nv) = total_damping(m, nv) + pair(19, njij_glob)*real(c(k, l), rp)
+                  contrib(m, nv) = pair(19)*real(c(k, l), rp)
                   if (nv == ief) then
-                     pair(m, njij_glob) = real(c(k, l), rp)
-                     pair(9 + m, njij_glob) = aimag(c(k, l))
+                     pair(m) = real(c(k, l), rp)
+                     pair(9 + m) = aimag(c(k, l))
                   end if
                end do
             end do
          end do
-      end do
+   end subroutine damping_pair
 
+   subroutine damping_finalize(this, pair, total_damping, ief)
+      use mpi_mod
+      class(exchange) :: this
+      real(rp), intent(inout) :: pair(:, :), total_damping(:, :)
+      integer, intent(in) :: ief
+      integer :: i, j, njij_glob, nv, nenergy, unit_e, unit_p
+      real(rp) :: factor, distance_alat, alpha(3, 3), mhat(3)
+
+      nenergy = size(this%en%ene)
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, total_damping, size(total_damping), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, pair, size(pair), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -114,7 +140,7 @@ contains
          close (unit_p)
       end if
 
-   end subroutine calculate_gilbert_damping
+   end subroutine damping_finalize
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -135,14 +161,10 @@ contains
       ! Sci. Rep. 7, 931 (2017).  It is deliberately reported as the raw
       ! production kernel: unlike Gilbert damping above, this routine has no
       ! independently established normalization or production relation.
-      complex(rp), allocatable :: Aij(:, :, :), Aji(:, :, :), Bij(:, :, :), Bji(:, :, :)
-      complex(rp), allocatable :: sBij(:, :, :), sBji(:, :, :)
-      complex(rp), allocatable :: tjd(:, :, :)
-      complex(rp) :: c(3, 3)
       ! pair(1:9) Re kernel at E_F, pair(10:18) Im kernel at E_F
-      real(rp), allocatable :: total_inertia(:, :), pair_b(:, :, :), pair(:, :)
-      integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nenergy, nb_ij, u_re, u_im, u_e, u_p
-      real(rp) :: distance_alat, step_size
+      real(rp), allocatable :: total_inertia(:, :), pair_b(:, :, :), pair(:, :), contrib(:, :)
+      integer :: i, j, njij, njij_glob, ief, nenergy
+      real(rp) :: step_size
 
       if (this%control%nsp /= 2) then
          call g_logger%warning('calculate_moment_of_inertia: needs nsp = 2 (collinear with l.s); skipped.', __FILE__, __LINE__)
@@ -160,11 +182,8 @@ contains
       end if
 
       call this%hamiltonian%torque_operator_collinear()
-      nb_ij = size(this%green%gij, 1)
       allocate (total_inertia(9, nenergy), pair_b(4, nenergy, this%lattice%njij), pair(18, this%lattice%njij), source=0.0_rp)
-      allocate (Aij(nb_ij, nb_ij, nenergy), Aji(nb_ij, nb_ij, nenergy), Bij(nb_ij, nb_ij, nenergy), Bji(nb_ij, nb_ij, nenergy))
-      allocate (sBij(nb_ij, nb_ij, nenergy), sBji(nb_ij, nb_ij, nenergy))
-      allocate (tjd(nb_ij, nb_ij, 3))
+      allocate (contrib(9, nenergy))
       ief = fermi_index(this%en%ene, this%en%fermi)
 
       ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
@@ -172,6 +191,31 @@ contains
          njij = g2l_map(njij_glob)
          i = this%lattice%ijpair(njij_glob, 1)
          j = this%lattice%ijpair(njij_glob, 2)
+         call inertia_pair(this, njij, i, j, ief, step_size, pair(:, njij_glob), pair_b(:, :, njij_glob), contrib)
+         total_inertia = total_inertia + contrib
+      end do
+
+      call inertia_finalize(this, pair, pair_b, total_inertia, ief)
+   end subroutine calculate_moment_of_inertia
+
+   !> Raw inertia kernel of pair (i, j) at local index njij: pair(1:9) Re and pair(10:18) Im at energy index ief,
+   !> pair_b the Bij(1, 1) trace and its second derivative, contrib(:, nv) the energy-resolved real part.
+   subroutine inertia_pair(this, njij, i, j, ief, step_size, pair, pair_b, contrib)
+      class(exchange) :: this
+      integer, intent(in) :: njij, i, j, ief
+      real(rp), intent(in) :: step_size
+      real(rp), intent(out) :: pair(18), pair_b(:, :), contrib(:, :)
+      complex(rp), allocatable :: Aij(:, :, :), Aji(:, :, :), Bij(:, :, :), Bji(:, :, :)
+      complex(rp), allocatable :: sBij(:, :, :), sBji(:, :, :)
+      complex(rp), allocatable :: tjd(:, :, :)
+      complex(rp) :: c(3, 3)
+      integer :: k, l, m, nv, nenergy, nb_ij
+
+      nenergy = size(this%en%ene)
+      nb_ij = size(this%green%gij, 1)
+      allocate (Aij(nb_ij, nb_ij, nenergy), Aji(nb_ij, nb_ij, nenergy), Bij(nb_ij, nb_ij, nenergy), Bji(nb_ij, nb_ij, nenergy))
+      allocate (sBij(nb_ij, nb_ij, nenergy), sBji(nb_ij, nb_ij, nenergy))
+      allocate (tjd(nb_ij, nb_ij, 3))
 
          do nv = 1, nenergy
             Aij(:, :, nv) = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
@@ -189,8 +233,8 @@ contains
             end do
          end do
 
-         pair_b(1, :, njij_glob) = real(Bij(1, 1, :)); pair_b(2, :, njij_glob) = real(sBij(1, 1, :))
-         pair_b(3, :, njij_glob) = aimag(Bij(1, 1, :)); pair_b(4, :, njij_glob) = aimag(sBij(1, 1, :))
+         pair_b(1, :) = real(Bij(1, 1, :)); pair_b(2, :) = real(sBij(1, 1, :))
+         pair_b(3, :) = aimag(Bij(1, 1, :)); pair_b(4, :) = aimag(sBij(1, 1, :))
          do l = 1, 3
             tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
          end do
@@ -201,16 +245,25 @@ contains
             do k = 1, 3
                do l = 1, 3
                   m = m + 1
-                  total_inertia(m, nv) = total_inertia(m, nv) + real(c(k, l), rp)
+                  contrib(m, nv) = real(c(k, l), rp)
                   if (nv == ief) then
-                     pair(m, njij_glob) = real(c(k, l), rp)
-                     pair(9 + m, njij_glob) = aimag(c(k, l))
+                     pair(m) = real(c(k, l), rp)
+                     pair(9 + m) = aimag(c(k, l))
                   end if
                end do
             end do
          end do
-      end do
+   end subroutine inertia_pair
 
+   subroutine inertia_finalize(this, pair, pair_b, total_inertia, ief)
+      use mpi_mod
+      class(exchange) :: this
+      real(rp), intent(inout) :: pair(:, :), pair_b(:, :, :), total_inertia(:, :)
+      integer, intent(in) :: ief
+      integer :: i, j, njij_glob, nv, nenergy, u_re, u_im, u_e, u_p
+      real(rp) :: distance_alat
+
+      nenergy = size(this%en%ene)
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, total_inertia, size(total_inertia), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, pair_b, size(pair_b), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -245,7 +298,7 @@ contains
          end do
          close (u_re); close (u_im); close (u_e); close (u_p)
       end if
-   end subroutine calculate_moment_of_inertia
+   end subroutine inertia_finalize
 
    !> Index of the energy-grid point closest to the Fermi level.
    pure integer function fermi_index(ene, fermi) result(ief)
