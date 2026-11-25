@@ -527,11 +527,6 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Not checked:** whether the difference is only the k-mesh reduction without spglib (references were made with spglib) or a defect.
 - **Proposal:** decide whether these tests require spglib (skip them when it is off) or need spglib-off references; the developer owns that choice.
 
-### Damping total is scaled by the last pair's factor — 2026-11-16
-- **Read:** `source/exchange_dynamics.f90`, `calculate_gilbert_damping`: each pair (i, j) has `factor = -1/(2*pi*m_i)`, with `m_i` the spin moment of atom i only. `alldampings.out` and the screen output use each pair's own factor. `damping-energy.out` writes `factor*total_damping`, where `total_damping` sums the raw traces of all pairs and `factor` is that of the last pair.
-- **Scope:** wrong only when the pair list has different first atoms i with different moments; pairs sharing atom i (any j, any types) give a consistent total. The triad damping test reads only the per-pair column of `alldampings.out`, so no test covers the total.
-- **Options (developer decision; the method's paper, PRM 2, 013801 (2018), was not checked for the site-summed form):** (1) sum `factor_ij*trace_ij(E)`, so the total equals the sum of the `alldampings.out` rows (about 5 lines); (2) one energy-resolved total per distinct atom i (about 15 lines, new file layout); (3) keep, and stop or warn when the pair list has more than one distinct atom i (about 5 lines).
-
 ### `fort.*` files written by legacy routines — 2026-11-16
 - **Measured:** after a quick-tier run, `build_base/Testing` holds `fort.800` (136 directories), `fort.805` (135), `fort.99` (28), `fort.120` (8) and `fort.1122`/`fort.2122`/`fort.4122` (16, `recursion_haydock.f90` `recur_b`, one file per rank). Writers: `lattice_lifecycle.f90` (800), `lattice_cluster.f90` (805), `exchange.f90` (99), `charge.f90` (120), `recursion_haydock.f90` (1122+). All pre-AI; kept deliberately.
 - **Proposal:** remove or put behind a flag; developer decision.
@@ -591,3 +586,17 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 - **Cause (measured):** `reduction(+:SUMM)` with `schedule(dynamic, 100)` in `hop_b_hoh` and `hop_b` (`recursion_haydock.f90`): iteration-to-thread assignment, hence partial-sum order, varies between runs. With `schedule(static)` the 2-thread case and `sd_smoke` (no hoh, 2 threads) are byte-identical over 5 and 4 runs; the 2-thread result differs from the 1-thread result.
 - **Open (measured, not fixed):** at 4 threads, 4 runs still differ (3 reductions, incl. `crecal_b`, combine thread partials in arrival order). A fixed-order reduction would be needed; not started.
 - **Consequence:** byte-compare baselines must use `omp_threads` = 1 for these cases, or exclude them.
+
+### Inertia output differs between identical runs (OpenMP); finite-difference d²B/dE² — 2026-11-25
+- **Measured** (local copy of `triad_bccFe_damping` with `do_inertia = T`, pairs (1,1), (1,3), (2,9), same binary): with default threads, `allinertias.out`, `inertia-energy.out` and `example-{real,imag}.out` differ between two runs; `alldampings.out` differs by at most 2e-21. With `OMP_NUM_THREADS=1` two runs are byte-identical. The summed kernel in `inertia-energy.out` is about 1e-14 for bcc Fe (cancellation), so its run-to-run difference is of the same size as the value.
+- **Not diagnosed:** which OpenMP reduction in the Green-function fill varies (compare the `hop_b`/`crecal_b` entry above). `calculate_moment_of_inertia` takes `d²B/dE²` by a 3-point difference divided by `edel**2`, which magnifies last-bit differences in `B = G_ij + G_ji^dagger`.
+- **More stable options (proposals, not started):** (1) fixed-order reductions in the Green-function fill (also needed by the entry above); (2) analytic energy derivatives instead of differences: from the Chebyshev moments (derivative of the T_n series) on the recursion route, from the poles 2/(E - e_n + i eta)^3 on the Lehmann route; (3) a Cauchy-integral derivative on a circle of radius about eta in the upper half plane, which averages instead of differencing; (4) at least, report the kernel in absolute units with a noise floor instead of a relative value.
+
+### Damping and inertia: no test covers nonlocal pairs — 2026-11-25
+- `Triad_triad_bccFe_damping` and `Val08DampingInertia` use only the on-site pair (1,1). Not covered: nonlocal alpha_ij, pairs with different first atoms i (the energy-resolved total sums all pairs with their own prefactors), a k<->l swap in `torque_trace` (all tensors in the bcc Fe decks are symmetric), `lmax /= 2`, MPI. Skipped by developer decision for now.
+
+### Torque operator omits the orbital-polarization terms of H_so — 2026-11-25
+- With `orb_pol = .true.`, `build_lsham` adds `rac*lz_loc*Lz` to the spin-diagonal blocks of H_so; `torque_operator_collinear` leaves them out, so T = [sigma, H_so] holds only without `orb_pol`. Kept out by developer decision (2026-11-25). The signed-SOC mismatch and the `prefac` carry-over listed here before are fixed.
+
+### Exchange kernels form dense products with the diagonal d_matrix — 2026-11-25
+- **Read, not run:** `dGdG_Jnc`, `dGdG_Dnc`, `dGdG_Anc` (`exchange.f90`) multiply by `d_matrix` (diagonal) with `matmul` and recompute the same `matmul(di, G)` / `matmul(dj, G)` inside their k/l loops (`dGdG_Anc` forms 8 products per (k,l)). **Proposal (deferred):** scale rows by the diagonal, form each product once, take traces as `sum(P*transpose(Q))` as in `torque_trace` (about 60 lines; changes results at rounding level).

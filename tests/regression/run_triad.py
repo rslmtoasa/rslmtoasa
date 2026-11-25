@@ -113,8 +113,8 @@ def extract_sigma(workdir: Path, fermi: float) -> dict[str, float]:
 
 
 def extract_alpha(workdir: Path) -> dict[str, float]:
-    # On-site Gilbert damping alpha = 0.5*(xx+yy), column 12 of alldampings.out
-    # (cols: #i #j xx xy xz yx yy yz zx zy zz 0.5*(xx+yy) Dist rx ry rz).
+    # On-site Gilbert damping alpha (transverse to the moment; 0.5*(xx+yy) for m along z), column 12 of alldampings.out
+    # (cols: #i #j xx xy xz yx yy yz zx zy zz transverse Dist rx ry rz).
     path = workdir / "alldampings.out"
     if not path.exists():
         raise SystemExit("ERROR: alldampings.out not produced (do_damping off, or nsp!=2?)")
