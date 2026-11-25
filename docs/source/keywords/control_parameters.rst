@@ -420,7 +420,7 @@ intersite_mode
 
 **Type:** Character string
 
-**Purpose:** Route of the inter-site Chebyshev moments used for ``G_ij`` (exchange pair list ``ijpair``).
+**Purpose:** How the inter-site Green functions ``G_ij`` and ``G_ji`` of the pair list ``ijpair`` are obtained from the recursion (``recur = 'chebyshev'`` or ``'block'``).
 
 **Allowed values:** ``'pairs'``, ``'one_shot'``
 
@@ -428,9 +428,12 @@ intersite_mode
 
 **Notes:**
 
-- ``'pairs'``: four recursions per pair. ``'one_shot'``: one recursion per distinct first atom ``i`` of the pair list; fatal with ``recur = 'block'``, ``cheb_lp`` or ``gpu_plugin``.
+- ``'pairs'``: four recursions per pair, started from :math:`(|i\rangle + c|j\rangle)/\sqrt{2}` with :math:`c = \pm 1, \pm i`; self-pairs use one recursion.
+- ``'one_shot'``: one recursion per distinct first atom ``i`` of the pair list, started from site ``i`` alone. The blocks at every requested target ``j`` are read off during that recursion, and ``G_ij`` follows from ``G_ji`` by Hermitian conjugation. Pairs that share the first atom share one recursion, so list pairs grouped by ``i``. See :ref:`theory/recursion_method` (section "Inter-site Green functions: pairs and one-shot").
+- With ``recur = 'chebyshev'`` both routes compute the same moments; measured differences in ``J_ij`` on bcc Fe were 4e-13 to 6e-13 relative. Works with ``cheb_lp`` and ``gpu_plugin`` (fp32 and fp64).
+- With ``recur = 'block'`` the two routes build different Krylov spaces at finite ``lld``, so off-site ``G_ij``, ``J_ij`` and ``D_ij`` differ from ``'pairs'``; the difference was about 2 % for the first-neighbour ``J_ij`` on the bcc Fe contour test case and can be much larger for other pairs and depths. Self-pairs agree with ``'pairs'`` to rounding. The terminator (``sym_term``) is the same as for ``'pairs'``. Works with ``post_processing = 'exchange'`` and ``'exchange_p2rs'``, and with ``gpu_plugin`` (fp32 and fp64; the small projected solve runs on the CPU).
 
-**Related code:** ``source/recursion_transport.f90``, ``source/calculation_reciprocal.f90``
+**Related code:** ``source/intersite_request.f90``, ``source/recursion_transport.f90`` (``chebyshev_recur_ij_oneshot``, ``recur_b_ij_oneshot``), ``source/green_block.f90`` (``block_green_ij_oneshot``), ``source/block_tridiag.f90``, ``source/calculation_reciprocal.f90``
 
 cheb_backend
 ------------
