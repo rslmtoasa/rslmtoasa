@@ -284,12 +284,14 @@ Parameters Explained
 Running the Calculation
 ========================
 
-Step 1: Navigate to Example Directory
---------------------------------------
+Step 1: Copy the Example to a Run Directory
+-------------------------------------------
 
 .. code-block:: bash
 
-   cd example/bulk/Si
+   mkdir -p runs
+   cp -r example/bulk/Si runs/Si
+   cd runs/Si
 
 Step 2: Run the Calculation
 ----------------------------
@@ -298,13 +300,13 @@ The code reads ``input.nml`` from the current directory by default:
 
 .. code-block:: bash
 
-   ../../../build/bin/rslmto.x
+   ../../build/bin/rslmto.x
 
 **Alternative:** Redirect output to a log file:
 
 .. code-block:: bash
 
-   ../../../build/bin/rslmto.x > si_scf.log 2>&1
+   ../../build/bin/rslmto.x > si_scf.log 2>&1
 
 Step 3: Monitor Progress
 -------------------------
@@ -402,7 +404,7 @@ Performance
 .. code-block:: bash
 
    export OMP_NUM_THREADS=4
-   ../../../build/bin/rslmto.x
+   ../../build/bin/rslmto.x
 
 Troubleshooting
 ===============
@@ -499,7 +501,7 @@ Vary ``alat`` to study pressure dependence:
 
    for alat in 5.30 5.35 5.40 5.45 5.50; do
        sed "s/alat = .*/alat = $alat/" input.nml > input_$alat.nml
-       ../../../build/bin/rslmto.x input_$alat.nml
+       ../../build/bin/rslmto.x input_$alat.nml
        grep "etot" Si1_out.nml >> energy_vs_volume.dat
    done
 

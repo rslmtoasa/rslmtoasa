@@ -104,8 +104,10 @@ Running the Calculation
 
 .. code-block:: bash
 
-   cd example/bulk/bccFe
-   ../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/bulk/bccFe runs/bccFe
+   cd runs/bccFe
+   ../../build/bin/rslmto.x
 
 Expected Output
 ===============

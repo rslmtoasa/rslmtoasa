@@ -129,8 +129,10 @@ the SCF only:
 
 .. code-block:: bash
 
-   cd example/conductivity/fccCu
-   ../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/conductivity/fccCu runs/fccCu
+   cd runs/fccCu
+   ../../build/bin/rslmto.x
 
 The conductivity step does not repeat the SCF. The folders ``sigma_xy_z-spin`` (``linear_out = 'spin'``)
 and ``sigma_xy_z-orb`` (``linear_out = 'orbital'``) hold an ``input.nml`` that differs from the file
@@ -142,7 +144,7 @@ subfolder and run there:
 
    cp Cu_out.nml sigma_xy_z-spin/
    cd sigma_xy_z-spin
-   ../../../../build/bin/rslmto.x
+   ../../../build/bin/rslmto.x
 
 Expected Output
 ===============

@@ -147,8 +147,10 @@ Running the Calculation
 
 .. code-block:: bash
 
-   cd example/impurity/B2FeCo
-   ../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/impurity/B2FeCo runs/B2FeCo
+   cd runs/B2FeCo
+   ../../build/bin/rslmto.x
 
 Expected Output
 ===============

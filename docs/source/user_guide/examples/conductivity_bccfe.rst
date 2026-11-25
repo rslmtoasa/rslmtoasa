@@ -114,8 +114,10 @@ the SCF only:
 
 .. code-block:: bash
 
-   cd example/conductivity/bccFe
-   ../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/conductivity/bccFe runs/bccFe
+   cd runs/bccFe
+   ../../build/bin/rslmto.x
 
 The conductivity step does not repeat the SCF. It reads the converged ``Fe_out.nml`` (the code reads
 ``<label>_out.nml`` before ``<label>.nml``), so copy it into the subfolder and run there:
@@ -124,7 +126,7 @@ The conductivity step does not repeat the SCF. It reads the converged ``Fe_out.n
 
    cp Fe_out.nml sigma_xy_z-spin/
    cd sigma_xy_z-spin
-   ../../../../build/bin/rslmto.x
+   ../../../build/bin/rslmto.x
 
 Expected Output
 ===============

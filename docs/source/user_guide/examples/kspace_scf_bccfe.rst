@@ -112,10 +112,12 @@ Running the Calculation
 
 .. code-block:: bash
 
-   cd example/k_space_scf/bccFe
+   mkdir -p runs
+   cp -r example/k_space_scf/bccFe runs/bccFe
+   cd runs/bccFe
    # input.nml has &reciprocal (nsp = 1, 12x12x12 mesh, nstep = 2) but no use_kspace:
    # add use_kspace = .true. to &self, otherwise this is a recursion SCF
-   ../../../build/bin/rslmto.x
+   ../../build/bin/rslmto.x
 
 Expected Output
 ===============

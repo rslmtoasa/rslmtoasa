@@ -483,8 +483,10 @@ Running the examples
 
 .. code-block:: bash
 
-   cd example/interface/fccCu111_AA
-   ../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/interface/fccCu111_AA runs/fccCu111_AA
+   cd runs/fccCu111_AA
+   ../../build/bin/rslmto.x
 
 Each SCF iteration takes ~10 s on one core; the 30 iterations configured take
 roughly five minutes.

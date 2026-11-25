@@ -165,8 +165,10 @@ Running the Calculation
 
 .. code-block:: bash
 
-   cd example/bulk/Mn3Sn/120
-   ../../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/bulk/Mn3Sn/120 runs/Mn3Sn_120
+   cd runs/Mn3Sn_120
+   ../../build/bin/rslmto.x
 
 Expected Output
 ===============

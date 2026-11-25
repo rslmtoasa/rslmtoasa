@@ -162,8 +162,10 @@ Running the Calculation
 
 .. code-block:: bash
 
-   cd example/surface/fccCu001
-   ../../../build/bin/rslmto.x
+   mkdir -p runs
+   cp -r example/surface/fccCu001 runs/fccCu001
+   cd runs/fccCu001
+   ../../build/bin/rslmto.x
 
 Expected Output
 ===============
