@@ -1593,6 +1593,7 @@ contains
       integer :: s, k, m, i, j, nmom, ntg, idx, ij, ij_loc, kk
       complex(rp), allocatable :: prev(:, :, :), cur(:, :, :), nxt(:, :, :), work(:, :, :, :), mji(:, :, :, :)
       complex(rp), allocatable :: mij_m(:, :, :)
+      logical :: on_gpu
 
       call resolve_chebyshev_window(this, emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
@@ -1602,7 +1603,13 @@ contains
 
       call req%build(this%lattice%ijpair, start_atom, end_atom)
       if (req%npair == 0) return
-      allocate (prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), work(nb, nb, kk, 6), mij_m(nb, nb, nmom))
+      on_gpu = gpu_plugin_ready(this, 'chebyshev_recur_ij_oneshot()', allow_hoh=.true.)
+      if (on_gpu) then
+         call gpu_plugin_upload_hamiltonian(this)
+      else
+         allocate (prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), work(nb, nb, kk, 6))
+      end if
+      allocate (mij_m(nb, nb, nmom))
 
       do s = 1, req%nseed
          i = req%seed_site(s)
@@ -1611,25 +1618,34 @@ contains
          call g_logger%info(int2str(rank)//': one-shot Chebyshev recursion from seed atom '//int2str(i), __FILE__, __LINE__)
 
          ! V_0 = P_i; the light cone starts at the seed site only.
-         prev(:, :, :) = (0.0_rp, 0.0_rp)
-         do k = 1, nb
-            prev(k, k, i) = (1.0_rp, 0.0_rp)
-         end do
-         this%izero(:) = 0
-         this%izero(i) = 1
-         call gather(1, prev)
-         ! T_0..T_{nmom-1}: nmom-1 Hamiltonian applications (bra and ket differ, no product identity).
-         call this%kubo_ham_vec_matmul(prev, cur, work, a=a, b=b)
-         this%izero(:) = this%idum(:)
-         call gather(2, cur)
-         do m = 3, nmom
-            call this%kubo_ham_vec_matmul(cur, nxt, work, a=a, b=b)
+         if (on_gpu) then
+            this%psi0(:, :, :) = (0.0_rp, 0.0_rp)
+            do k = 1, nb
+               this%psi0(k, k, i) = (1.0_rp, 0.0_rp)
+            end do
+            call this%gpu_backend%chebyshev_moments_targets(this%psi0, &
+               req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), nmom, a, b, mji)
+         else
+            prev(:, :, :) = (0.0_rp, 0.0_rp)
+            do k = 1, nb
+               prev(k, k, i) = (1.0_rp, 0.0_rp)
+            end do
+            this%izero(:) = 0
+            this%izero(i) = 1
+            call gather(1, prev)
+            ! T_0..T_{nmom-1}: nmom-1 Hamiltonian applications (bra and ket differ, no product identity).
+            call this%kubo_ham_vec_matmul(prev, cur, work, a=a, b=b)
             this%izero(:) = this%idum(:)
-            nxt(:, :, :) = 2*nxt(:, :, :) - prev(:, :, :)
-            prev(:, :, :) = cur(:, :, :)
-            cur(:, :, :) = nxt(:, :, :)
-            call gather(m, cur)
-         end do
+            call gather(2, cur)
+            do m = 3, nmom
+               call this%kubo_ham_vec_matmul(cur, nxt, work, a=a, b=b)
+               this%izero(:) = this%idum(:)
+               nxt(:, :, :) = 2*nxt(:, :, :) - prev(:, :, :)
+               prev(:, :, :) = cur(:, :, :)
+               cur(:, :, :) = nxt(:, :, :)
+               call gather(m, cur)
+            end do
+         end if
          if (any(real(sum(sum(mji(:, :, this%lattice%control%lld + 2, :), 1), 1)) > 1000.d0)) &
             call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
 

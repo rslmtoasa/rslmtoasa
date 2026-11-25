@@ -261,7 +261,6 @@ contains
       case ('chebyshev')
          if (control_obj%intersite_mode == 'one_shot') then
             if (control_obj%cheb_lp) call g_logger%fatal('intersite_mode = one_shot is not available with cheb_lp.', __FILE__, __LINE__)
-            if (control_obj%gpu_plugin) call g_logger%fatal('intersite_mode = one_shot is not available with gpu_plugin yet.', __FILE__, __LINE__)
             call recursion_obj%chebyshev_recur_ij_oneshot()
          else
             call recursion_obj%chebyshev_recur_ij()

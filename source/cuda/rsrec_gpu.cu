@@ -1905,6 +1905,155 @@ extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0,
     return rsrec_chebyshev_moments_batch(c, psi0, 1, lld, a, b, mu);
 }
 
+/* One-shot inter-site moments: gather the nb x nb block of site targets[t]
+ * (0-based) of the site-major field v (element (l,col,k) at l + nb*k + ld*col)
+ * into slot m of out, laid out like the Fortran array (nb, nb, nmom, nt):
+ * out[l + nb*(col + nb*(m + nmom*t))].                                       */
+template <class CT>
+__global__ void k_gather_sites(int nb, size_t ld, int nt, size_t nmom, size_t m,
+                               const int *__restrict__ targets,
+                               const CT *__restrict__ v, CT *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= (size_t)nb * nb * nt) return;
+    int l = (int)(i % nb);
+    int col = (int)((i / nb) % nb);
+    size_t t = i / ((size_t)nb * nb);
+    out[(size_t)l + (size_t)nb * ((size_t)col + (size_t)nb * (m + nmom * t))] =
+        v[(size_t)l + (size_t)nb * (size_t)targets[t] + ld * col];
+}
+
+/* Plain three-term recursion V_{m+1} = 2 Ht V_m - V_{m-1} from one block state
+ * psi0 (nb, nb, kk); after each order the blocks V_m(:,:,targets) are gathered
+ * on device and downloaded once. mu_h is (nb, nb, nm, nt).                  */
+template <class CT, class RT>
+static int cheb_targets_engine(rsrec_ctx *c, const void *psi0_h, int nt,
+                               const int *targets_h, int nm, void *mu_h,
+                               const CT *bt, const CT *bh, RT inva, RT bsc,
+                               const CT *h_bare = nullptr,
+                               const CT *h_bare_imp = nullptr,
+                               const CT *h_eeo = nullptr,
+                               const CT *h_eeo_imp = nullptr,
+                               const CT *h_hons = nullptr) {
+    const int nb = c->nb, kk = c->kk;
+    const size_t bb = (size_t)nb * nb;
+    const size_t ld = (size_t)nb * kk;
+    const size_t nfield = ld * (size_t)nb;
+    const size_t ngat = bb * (size_t)nm * (size_t)nt;
+    const bool do_hoh = c->have_hoh;
+
+    size_t freeb, totalb;
+    cudaMemGetInfo(&freeb, &totalb);
+    if ((do_hoh ? 6 : 3) * nfield * sizeof(CT) + nfield * sizeof(zc) +
+        ngat * sizeof(CT) > freeb * 9 / 10)
+        FAIL("chebyshev_moments_targets: does not fit; reduce targets");
+
+    CT *p0, *p1, *p2, *dgat;
+    CT *t_hoh = nullptr, *e_hoh = nullptr, *o_hoh = nullptr;
+    zc *stage;
+    int *dtg;
+    CUCHK(cudaMalloc(&p0, nfield * sizeof(CT)));
+    CUCHK(cudaMalloc(&p1, nfield * sizeof(CT)));
+    CUCHK(cudaMalloc(&p2, nfield * sizeof(CT)));
+    CUCHK(cudaMalloc(&stage, nfield * sizeof(zc)));
+    CUCHK(cudaMalloc(&dgat, ngat * sizeof(CT)));
+    CUCHK(cudaMalloc(&dtg, (size_t)nt * sizeof(int)));
+    if (do_hoh) {
+        CUCHK(cudaMalloc(&t_hoh, nfield * sizeof(CT)));
+        CUCHK(cudaMalloc(&e_hoh, nfield * sizeof(CT)));
+        CUCHK(cudaMalloc(&o_hoh, nfield * sizeof(CT)));
+    }
+    std::vector<int> tg0(targets_h, targets_h + nt);   /* 1-based -> 0-based */
+    for (int &s : tg0) s -= 1;
+    CUCHK(cudaMemcpy(dtg, tg0.data(), (size_t)nt * sizeof(int),
+                     cudaMemcpyHostToDevice));
+
+    const int tpb = 256;
+    const int nbl = (int)((nfield + tpb - 1) / tpb);
+    const int nbg = (int)((bb * nt + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(stage, psi0_h, nfield * sizeof(zc),
+                     cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nfield, nb, nb, kk, ld, stage, p0);
+    CUCHK(cudaGetLastError());
+
+    auto gather = [&](const CT *v, size_t m) -> int {
+        k_gather_sites<CT><<<nbg, tpb>>>(nb, ld, nt, (size_t)nm, m, dtg, v, dgat);
+        CUCHK(cudaGetLastError());
+        return 0;
+    };
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
+                                          h_eeo_imp, h_hons, t_hoh, e_hoh,
+                                          o_hoh, x1, x0, yv, nb, al, be,
+                                          inva, bsc);
+        return step_apply<CT, RT>(c, bt, bh, 1, x1, x0, yv, nb, al, be,
+                                  inva, bsc);
+    };
+
+    int err = gather(p0, 0);
+    if (!err && nm > 1) err = matvec(p0, nullptr, p1, (RT)1, (RT)0);
+    if (!err && nm > 1) err = gather(p1, 1);
+    for (int m = 2; m < nm && !err; ++m) {
+        err = matvec(p1, p0, p2, (RT)2, (RT)-1);
+        if (!err) err = gather(p2, (size_t)m);
+        CT *t = p0; p0 = p1; p1 = p2; p2 = t;
+    }
+
+    std::vector<CT> h(ngat);
+    if (!err)
+        CUCHK(cudaMemcpy(h.data(), dgat, ngat * sizeof(CT),
+                         cudaMemcpyDeviceToHost));
+    cudaFree(p0); cudaFree(p1); cudaFree(p2); cudaFree(stage); cudaFree(dgat);
+    cudaFree(dtg);
+    if (t_hoh) cudaFree(t_hoh);
+    if (e_hoh) cudaFree(e_hoh);
+    if (o_hoh) cudaFree(o_hoh);
+    if (err) return 1;
+    cplx *mu = (cplx *)mu_h;
+    for (size_t i = 0; i < ngat; ++i) mu[i] = cplx(h[i].x, h[i].y);
+    return 0;
+}
+
+/* One-shot inter-site Chebyshev moments: V_m = T_m(Ht) psi0 for m < nmom, with
+ * the blocks of the 1-based sites targets[0..ntarget) returned in
+ * mu_out(nb, nb, nmom, ntarget). Block-ELL path only (hoh included); same
+ * precision/hoh dispatch as rsrec_chebyshev_moments_batch.                  */
+extern "C" int rsrec_chebyshev_moments_targets(rsrec_ctx *c, const void *psi0,
+                                               int ntarget, const int *targets,
+                                               int nmom, double a, double b,
+                                               void *mu_out) {
+    if (!c->have_h) FAIL("chebyshev_moments_targets: Hamiltonian not set");
+    if (ntarget < 1 || nmom < 1)
+        FAIL("chebyshev_moments_targets: ntarget and nmom must be positive");
+    if (c->use_struct && !c->have_hoh)
+        FAIL("chebyshev_moments_targets: structured backend not supported");
+    for (int t = 0; t < ntarget; ++t)
+        if (targets[t] < 1 || targets[t] > c->kk)
+            FAIL("chebyshev_moments_targets: target site out of range");
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c)) return 1;
+            return cheb_targets_engine<fc, float>(
+                c, psi0, ntarget, targets, nmom, mu_out, c->f_ee_bare,
+                c->f_hall_bare, (float)(1.0 / a), (float)b, c->f_ee_bare,
+                c->f_hall_bare, c->f_eeo, c->f_hallo, c->f_hons);
+        }
+        return cheb_targets_engine<zc, double>(
+            c, psi0, ntarget, targets, nmom, mu_out, c->d_ee_bare,
+            c->d_hall_bare, 1.0 / a, b, c->d_ee_bare, c->d_hall_bare,
+            c->d_eeo, c->d_hallo, c->d_hons);
+    }
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_ham(c, a, b)) return 1;
+        return cheb_targets_engine<fc, float>(c, psi0, ntarget, targets, nmom,
+                                              mu_out, c->f_ee, c->f_hall,
+                                              1.0f, 0.0f);
+    }
+    return cheb_targets_engine<zc, double>(c, psi0, ntarget, targets, nmom,
+                                           mu_out, c->d_ee, c->d_hall, 1.0 / a,
+                                           b);
+}
+
 /* Precision-templated block-Lanczos (Haydock) engine WITH hoh orthogonalisation.
  * Mirrors the fp64 block recurrence below and crecal_b/hop_b_hoh: the matvec is
  * the genuine two-sweep hoh apply (raw H, no Chebyshev a,b scaling) and the

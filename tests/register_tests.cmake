@@ -523,6 +523,10 @@ if(RUN_UNIT_TESTS)
     add_fortran_unit_test(CudaMpiDeviceMapping standard SOURCES ${TestDIR}/unit/test_cuda_mpi_device_mapping.f90
       LABELS cuda mpi PROPERTIES SKIP_RETURN_CODE 77)
     target_link_libraries(CudaMpiDeviceMapping rsrec_cuda)
+    rslmto_add_test(NAME OneShotExchange_GPU TIER standard TIMEOUT 1800 LABELS regression cuda
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_exchange.py" "--gpu" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_exchange_gpu")
+    set_tests_properties(OneShotExchange_GPU PROPERTIES SKIP_RETURN_CODE 77)
   endif()
   if(ENABLE_CUDA_RECIPROCAL)
     add_executable(ReciprocalCudaArbitraryK ${TestDIR}/unit/test_reciprocal_cuda_arbitrary_k.f90)

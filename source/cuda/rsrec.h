@@ -200,6 +200,16 @@ int rsrec_op_apply(rsrec_ctx *ctx, int which, const void *x, void *y,
 int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
                             double a, double b, void *mu_out);
 
+/* One-shot inter-site Chebyshev moments: plain recursion V_{m+1} = 2 Ht V_m
+ * - V_{m-1} from psi0 (nb, nb, kk); returns the blocks V_m(:,:,targets(t)).
+ *   targets : ntarget 1-based site ids
+ *   nmom    : number of orders (nmom-1 Hamiltonian applications)
+ *   mu_out  : (nb, nb, nmom, ntarget)
+ * Block-ELL path only; the structured backend returns an error.            */
+int rsrec_chebyshev_moments_targets(rsrec_ctx *ctx, const void *psi0,
+                                    int ntarget, const int *targets, int nmom,
+                                    double a, double b, void *mu_out);
+
 /* Block Lanczos (Haydock) recursion, mirrors crecal_b/hop_b.
  *   psi0   : (nb, nb, kk) starting block state
  *   lld    : recursion steps (control%lld)

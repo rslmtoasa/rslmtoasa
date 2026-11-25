@@ -232,6 +232,23 @@ extern "C" int rsrec_cuda_chebyshev_moments(rsrec_cuda_ctx *ctx,
     return status;
 }
 
+extern "C" int rsrec_cuda_chebyshev_moments_targets(
+    rsrec_cuda_ctx *ctx, const void *psi0, int ntarget, const int *targets,
+    int nmom, double a, double b, void *mu_out) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_chebyshev_moments_targets: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_chebyshev_moments_targets(
+        ctx->inner, psi0, ntarget, targets, nmom, a, b, mu_out);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_chebyshev_moments_targets: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0,
                                         int lld, void *a_b, void *b2_b,
                                         int prec) {
