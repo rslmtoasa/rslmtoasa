@@ -257,7 +257,6 @@ contains
       select case (control_obj%recur)
       case ('block')
          if (control_obj%intersite_mode == 'one_shot') then
-            if (control_obj%gpu_plugin) call g_logger%fatal('intersite_mode = one_shot is not available with gpu_plugin yet.', __FILE__, __LINE__)
             call recursion_obj%recur_b_ij_oneshot()
          else
             call recursion_obj%recur_b_ij()

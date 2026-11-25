@@ -1442,11 +1442,14 @@ contains
       type(intersite_request) :: req
       complex(rp), allocatable :: slices(:, :, :, :)
       integer :: s, k, l, i, ij, ij_loc, ntg, llmax
+      logical :: on_gpu
 
       this%b2_b_is_sqrt = .false.
       llmax = this%lattice%control%lld
       call req%build(this%lattice%ijpair, start_atom, end_atom)
       if (req%npair == 0) return
+      on_gpu = gpu_plugin_ready(this, 'recur_b_ij_oneshot()', allow_hoh=.true.)
+      if (on_gpu) call gpu_plugin_upload_hamiltonian(this)
       if (allocated(this%os_s)) deallocate (this%os_s)
       allocate (this%os_s(nb, nb, llmax - 1, end_atom - start_atom + 1))
       this%a_b(:, :, :, :) = (0.0_rp, 0.0_rp)
@@ -1467,7 +1470,13 @@ contains
             this%psi_b(l, l, i) = (1.0_rp, 0.0_rp)
             this%b2temp_b(l, l, 1) = (1.0_rp, 0.0_rp)
          end do
-         call this%crecal_b(req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), slices)
+         if (on_gpu) then
+            call this%gpu_backend%block_lanczos_targets(this%psi_b, llmax, &
+               req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), this%atemp_b, this%b2temp_b, slices, &
+               this%gpu_precision_code(block=.true.))
+         else
+            call this%crecal_b(req%target_site(req%target_ptr(s):req%target_ptr(s + 1) - 1), slices)
+         end if
          do k = 1, req%npair
             if (req%pair_seed(k) /= s) cycle
             ij = start_atom + k - 1

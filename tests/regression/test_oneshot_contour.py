@@ -5,6 +5,10 @@
 (ii) recur = block, one_shot: serial vs mpirun -np N, same tolerance.
 (iii) recur = block, lld = 21, sym_term = F, self pair (1,1): legacy ('pairs') vs one_shot J_11 and D_11, same tolerance.
 Haydock one_shot vs legacy for inter-site pairs is reported by hand-run measurements, not checked here.
+--gpu (needs a CUDA device, else exit 77): same fixture, lld = 21, sym_term = F, pairs plus the self pair (1,1):
+(iv) one_shot block with gpu_plugin = T at gpu_precision = fp64 vs one_shot block on the CPU, all pairs, same tolerance;
+     J_11 and D_11 also vs legacy block on the CPU, same tolerance.
+(v) the same at gpu_precision = fp32: differences are printed only.
 """
 import argparse
 import re
@@ -63,13 +67,48 @@ def compare(label, got, ref):
     return failed
 
 
+def has_cuda_device():
+    try:
+        out = subprocess.run(["nvidia-smi", "-L"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    except OSError:
+        return False
+    return out.returncode == 0 and "GPU" in out.stdout
+
+
+def main_gpu(a):
+    if not has_cuda_device():
+        print("SKIP: no CUDA device is available")
+        return 77
+    binary, work = a.binary.resolve(), a.workdir.resolve()
+    scf = {"nstep": 1}
+    ctl = {"recur": "block", "lld": 21, "nsp": 2, "sym_term": False}
+    cpu, _ = run(binary, work / "one_shot_cpu", {"control": {**ctl, "intersite_mode": "one_shot"}, "self": scf}, self_pair=True)
+    leg, _ = run(binary, work / "pairs_cpu", {"control": {**ctl, "intersite_mode": "pairs"}, "self": scf}, self_pair=True)
+    gpu = {}
+    for prec in ("fp64", "fp32"):
+        gpu[prec], _ = run(binary, work / f"one_shot_gpu_{prec}",
+                           {"control": {**ctl, "intersite_mode": "one_shot", "gpu_plugin": True, "gpu_precision": prec}, "self": scf},
+                           self_pair=True)
+    is11 = lambda d: {k: v for k, v in d.items() if re.match(r"[JD]ij 1-1\[", k)}
+    failed = compare("one_shot GPU fp64 vs one_shot CPU", gpu["fp64"], cpu)
+    failed |= compare("one_shot GPU fp64 vs legacy block CPU self pair", is11(gpu["fp64"]), is11(leg))
+    for key, ref_val in cpu.items():
+        print(f"one_shot GPU fp32 vs one_shot CPU {key}: {gpu['fp32'][key]:.12e} ref={ref_val:.12e} |diff|={abs(gpu['fp32'][key] - ref_val):.3e} (report only)")
+    return 1 if failed else 0
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--binary", type=Path, required=True)
     p.add_argument("--workdir", type=Path, required=True)
-    p.add_argument("--mpi-exec", required=True)
+    p.add_argument("--mpi-exec")
+    p.add_argument("--gpu", action="store_true")
     p.add_argument("--ranks", type=int, default=2)
     a = p.parse_args()
+    if a.gpu:
+        return main_gpu(a)
+    if not a.mpi_exec:
+        p.error("--mpi-exec is required without --gpu")
     binary, work = a.binary.resolve(), a.workdir.resolve()
     cheb = {"recur": "chebyshev", "lld": 150, "nsp": 2}
     block = {"recur": "block", "lld": 21, "nsp": 2, "intersite_mode": "one_shot"}

@@ -858,7 +858,6 @@ __global__ void k_col_shift(size_t ld, int ncols,
 /* cuBLAS scalar constants and thin precision-overloaded wrappers           */
 static const zc Z_ONE = {1.0, 0.0};
 static const zc Z_ZERO = {0.0, 0.0};
-static const zc Z_MONE = {-1.0, 0.0};
 static const fc C_ONE = {1.0f, 0.0f};
 static const fc C_ZERO = {0.0f, 0.0f};
 
@@ -909,39 +908,6 @@ static cublasStatus_t blas_gemm_sb(cublasHandle_t h, cublasOperation_t ta,
                                        ldb, sB, be, C, ldc, sC, batch);
 }
 
-/* B = U sqrt(ev) U^H, Bi = U ev^{-1/2} U^H on the host (zheev), like
- * crecal_b. dS/dB/dBi are device pointers.                                  */
-static int host_eig_sqrt(rsrec_ctx *c, const zc *dS, zc *dB, zc *dBi) {
-    const int nb = c->nb;
-    const size_t bb = (size_t)nb * nb;
-    std::vector<cplx> S(bb), Bm(bb), Bi(bb);
-    CUCHK(cudaMemcpy(S.data(), dS, bb * sizeof(zc), cudaMemcpyDeviceToHost));
-    std::vector<cplx> U = S;
-    std::vector<double> ev(nb), rwork(3 * nb - 2);
-    int lwork = nb * nb, info = 0;
-    std::vector<cplx> work(lwork);
-    zheev_("V", "U", &nb, U.data(), &nb, ev.data(), work.data(), &lwork,
-           rwork.data(), &info);
-    if (info != 0) FAIL("block_lanczos: zheev failed");
-    for (int j = 0; j < nb; ++j)
-        for (int i = 0; i < nb; ++i) {
-            cplx sb(0, 0), sbi(0, 0);
-            for (int l = 0; l < nb; ++l) {
-                double lam = sqrt(ev[l] > 0.0 ? ev[l] : 0.0);
-                cplx uu = U[i + (size_t)nb * l] *
-                          std::conj(U[j + (size_t)nb * l]);
-                sb += uu * lam;
-                if (lam > 0.0) sbi += uu / lam;
-            }
-            Bm[i + (size_t)nb * j] = sb;
-            Bi[i + (size_t)nb * j] = sbi;
-        }
-    CUCHK(cudaMemcpy(dB, Bm.data(), bb * sizeof(zc), cudaMemcpyHostToDevice));
-    CUCHK(cudaMemcpy(dBi, Bi.data(), bb * sizeof(zc),
-                     cudaMemcpyHostToDevice));
-    return 0;
-}
-
 /* Build a complex value of the engine precision CT (zc or fc) from doubles. */
 template <class CT>
 static inline CT ct_make(double re, double im) {
@@ -952,7 +918,7 @@ static inline CT ct_make(double re, double im) {
 }
 
 /* Precision-templated Hermitian matrix square root B = S^{1/2} and B^{-1/2}.
- * Identical to host_eig_sqrt but reads/writes the engine precision CT and always
+ * Reads/writes the engine precision CT and always
  * promotes to fp64 (cplx) on the host for zheev + the eigen reconstruction, so
  * the numerically sensitive block B-matrix is computed in double even in the
  * fp32 (mixed) block path -- mirroring bsqrt_dp in haydock_fast.f90.            */
@@ -2054,6 +2020,47 @@ extern "C" int rsrec_chebyshev_moments_targets(rsrec_ctx *c, const void *psi0,
                                            b);
 }
 
+/* Device-side capture of the nb x nb blocks of the 1-based sites targets[0..nt)
+ * of a site-major field into slot m of nm, downloaded once by finish() into the
+ * host array out(nb, nb, nm, nt) (complex128, Fortran order). Targets are
+ * range-checked by the caller. Used by the two block engines below.          */
+template <class CT>
+struct site_gather {
+    int nt = 0, nm = 0;
+    size_t nb = 0, ld = 0;
+    int *dtg = nullptr;
+    CT *dgat = nullptr;
+    cplx *out = nullptr;
+    ~site_gather() { cudaFree(dtg); cudaFree(dgat); }
+    size_t count() const { return nb * nb * (size_t)nm * (size_t)nt; }
+    int init(rsrec_ctx *c, int nt_, const int *targets_h, int nm_, void *out_) {
+        nt = nt_; nm = nm_; nb = c->nb; ld = nb * (size_t)c->kk;
+        out = (cplx *)out_;
+        std::vector<int> tg0(targets_h, targets_h + nt);   /* 1-based -> 0-based */
+        for (int &t : tg0) t -= 1;
+        CUCHK(cudaMalloc(&dtg, (size_t)nt * sizeof(int)));
+        CUCHK(cudaMalloc(&dgat, count() * sizeof(CT)));
+        CUCHK(cudaMemcpy(dtg, tg0.data(), (size_t)nt * sizeof(int),
+                         cudaMemcpyHostToDevice));
+        return 0;
+    }
+    int capture(const CT *v, size_t m) {
+        const int tpb = 256;
+        const int nbg = (int)((nb * nb * (size_t)nt + tpb - 1) / tpb);
+        k_gather_sites<CT><<<nbg, tpb>>>((int)nb, ld, nt, (size_t)nm, m, dtg,
+                                         v, dgat);
+        CUCHK(cudaGetLastError());
+        return 0;
+    }
+    int finish() {
+        std::vector<CT> h(count());
+        CUCHK(cudaMemcpy(h.data(), dgat, count() * sizeof(CT),
+                         cudaMemcpyDeviceToHost));
+        for (size_t i = 0; i < h.size(); ++i) out[i] = cplx(h[i].x, h[i].y);
+        return 0;
+    }
+};
+
 /* Precision-templated block-Lanczos (Haydock) engine WITH hoh orthogonalisation.
  * Mirrors the fp64 block recurrence below and crecal_b/hop_b_hoh: the matvec is
  * the genuine two-sweep hoh apply (raw H, no Chebyshev a,b scaling) and the
@@ -2067,7 +2074,8 @@ template <class CT, class RT>
 static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
                             void *a_b_, void *b2_b_, const CT *bare,
                             const CT *bare_imp, const CT *eeo,
-                            const CT *eeo_imp, const CT *hons) {
+                            const CT *eeo_imp, const CT *hons,
+                            site_gather<CT> *g = nullptr) {
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
     const size_t ld = (size_t)nb * c->kk;
@@ -2113,6 +2121,8 @@ static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
     std::vector<CT> hbb(bb);
 
     for (int ll = 0; ll < lld - 1; ++ll) {
+        /* normalised Q_{ll+1} at the targets, before the H apply (crecal_b) */
+        if (g && g->capture(psi, (size_t)ll)) return 1;
         /* hpsi = H psi (raw two-sweep hoh apply: t = h*psi; e = eeo*t;
          * o = (enim+lsham)*psi; hpsi = t - e + o)                            */
         if (step_apply_hoh<CT, RT>(c, bare, bare_imp, eeo, eeo_imp, hons, t_h,
@@ -2145,6 +2155,7 @@ static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
         CT *t = psi; psi = gt; gt = t;
     }
     std::memcpy(b2_b + (size_t)(lld - 1) * bb, sum_b.data(), bb * sizeof(cplx));
+    if (g && g->finish()) return 1;
 
     cudaFree(psi); cudaFree(pmn); cudaFree(hpsi); cudaFree(gt);
     cudaFree(t_h); cudaFree(e_h); cudaFree(o_h);
@@ -2152,12 +2163,138 @@ static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
     return 0;
 }
 
+/* Non-hoh H|psi> of the block engine below at the engine precision: fp64
+ * through step64 (also the structured backend), fp32 through the block-ELL
+ * kernel on the unscaled fp32 Hamiltonian (ensure_f32_ham(1, 0)).            */
+static int plain_apply(rsrec_ctx *c, const zc *x, zc *y, zc *tmp) {
+    return step64(c, 0, x, nullptr, y, tmp, c->nb, 1.0, 0.0, 1.0, 0.0);
+}
+static int plain_apply(rsrec_ctx *c, const fc *x, fc *y, fc *) {
+    return step_apply<fc, float>(c, c->f_ee, c->f_hall, 1, x, nullptr, y,
+                                 c->nb, 1.0f, 0.0f, 1.0f, 0.0f);
+}
+
+/* Block Lanczos without hoh, templated on the engine precision (site-major:
+ * each reduction/right-multiply is one big gemm; host zheev per step like
+ * crecal_b, always in fp64). The caller supplies the buffers: psi/pmn/hpsi/
+ * tmp/gt are nf-sized CT fields (only psi and gt are swapped), blk holds four
+ * nb x nb blocks, stage is an nf-sized zc buffer that may alias gt. With
+ * g != nullptr the normalised Q at the targets is captured at the start of
+ * each iteration, before the H apply.                                        */
+template <class CT, class RT>
+static int block_plain_engine(rsrec_ctx *c, const void *psi0_, int lld,
+                              void *a_b_, void *b2_b_, CT *psi, CT *pmn,
+                              CT *hpsi, CT *tmp, CT *gt, CT *blk, zc *stage,
+                              site_gather<CT> *g) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    cplx *a_b = (cplx *)a_b_, *b2_b = (cplx *)b2_b_;
+    CT *dAn = blk, *dSum = blk + bb, *dB = blk + 2 * bb, *dBi = blk + 3 * bb;
+
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(stage, psi0_, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, psi);
+    CUCHK(cudaGetLastError());
+    CUCHK(cudaMemset(pmn, 0, nf * sizeof(CT)));
+
+    const CT c_one = ct_make<CT>(1, 0), c_zero = ct_make<CT>(0, 0),
+             c_mone = ct_make<CT>(-1, 0);
+    std::vector<cplx> sum_b(bb, cplx(0, 0));
+    for (int i = 0; i < nb; ++i) sum_b[i + (size_t)nb * i] = 1.0;
+    std::memset(a_b, 0, bb * lld * sizeof(cplx));
+    std::memset(b2_b, 0, bb * lld * sizeof(cplx));
+    std::vector<CT> hbb(bb);
+
+    for (int ll = 0; ll < lld - 1; ++ll) {
+        /* normalised Q_{ll+1} at the targets, before the H apply (crecal_b) */
+        if (g && g->capture(psi, (size_t)ll)) return 1;
+        if (plain_apply(c, psi, hpsi, tmp)) return 1;
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                        &c_one, psi, (int)ld, hpsi, (int)ld, &c_zero, dAn,
+                        nb));                                     /* A_n    */
+        CUCHK(cudaMemcpy(hbb.data(), dAn, bb * sizeof(CT),
+                         cudaMemcpyDeviceToHost));
+        for (size_t i = 0; i < bb; ++i)
+            a_b[(size_t)ll * bb + i] = cplx(hbb[i].x, hbb[i].y);
+        k_axpby<CT, RT><<<nbl, tpb>>>(nf, (RT)1, hpsi, (RT)-1, pmn);
+        CUCHK(cudaGetLastError());                       /* pmn = hpsi - pmn */
+        std::memcpy(b2_b + (size_t)ll * bb, sum_b.data(), bb * sizeof(cplx));
+
+        /* pmn -= psi * A_n: ONE (ld x nb x nb) gemm, beta = 1               */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &c_mone, psi, (int)ld, dAn, nb, &c_one, pmn,
+                        (int)ld));
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                        &c_one, pmn, (int)ld, pmn, (int)ld, &c_zero, dSum,
+                        nb));                                     /* B^2    */
+        CUCHK(cudaMemcpy(hbb.data(), dSum, bb * sizeof(CT),
+                         cudaMemcpyDeviceToHost));
+        for (size_t i = 0; i < bb; ++i) sum_b[i] = cplx(hbb[i].x, hbb[i].y);
+        if (host_eig_sqrt_t<CT>(c, dSum, dB, dBi)) return 1;  /* fp64 B-sqrt */
+
+        /* psi_{n+1} = pmn * Bi (gemm into gt); pmn = psi_n * B; swap        */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &c_one, pmn, (int)ld, dBi, nb, &c_zero, gt,
+                        (int)ld));
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
+                        &c_one, psi, (int)ld, dB, nb, &c_zero, pmn,
+                        (int)ld));
+        CT *t = psi; psi = gt; gt = t;        /* psi <- new; gt <- old psi   */
+    }
+    std::memcpy(b2_b + (size_t)(lld - 1) * bb, sum_b.data(),
+                bb * sizeof(cplx));
+    if (g && g->finish()) return 1;
+    return 0;
+}
+
+/* fp64 instance on the context workspace d_s0..d_s3/d_blk plus one extra
+ * field (also the zc staging buffer). This is the legacy non-hoh block path. */
+static int block_plain_fp64(rsrec_ctx *c, const void *psi0_, int lld,
+                            void *a_b, void *b2_b, site_gather<zc> *g) {
+    zc *gt;
+    CUCHK(cudaMalloc(&gt, fieldsz(c) * sizeof(zc)));
+    const int err = block_plain_engine<zc, double>(
+        c, psi0_, lld, a_b, b2_b, c->d_s0, c->d_s1, c->d_s2, c->d_s3, gt,
+        c->d_blk, gt, g);
+    cudaFree(gt);
+    return err;
+}
+
+/* fp32 instance (mixed: fp32 field and gemms, fp64 B-sqrt) on private buffers;
+ * block-ELL only.                                                            */
+static int block_plain_fp32(rsrec_ctx *c, const void *psi0_, int lld,
+                            void *a_b, void *b2_b, site_gather<fc> *g) {
+    if (c->use_struct) FAIL("block_lanczos fp32: structured backend not supported");
+    if (ensure_f32_ham(c, 1.0, 0.0)) return 1;
+    const size_t nf = fieldsz(c), bb = (size_t)c->nb * c->nb;
+    fc *f[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    zc *stage = nullptr;
+    int err = 0;
+    for (int i = 0; i < 6 && !err; ++i)
+        if (cudaMalloc(&f[i], (i < 5 ? nf : 4 * bb) * sizeof(fc)) !=
+            cudaSuccess) {
+            g_err = "block_lanczos fp32: device allocation failed";
+            err = 1;
+        }
+    if (!err && cudaMalloc(&stage, nf * sizeof(zc)) != cudaSuccess) {
+        g_err = "block_lanczos fp32: device allocation failed";
+        err = 1;
+    }
+    if (!err)
+        err = block_plain_engine<fc, float>(c, psi0_, lld, a_b, b2_b, f[0],
+                                            f[1], f[2], f[3], f[4], f[5],
+                                            stage, g);
+    for (int i = 0; i < 6; ++i) cudaFree(f[i]);
+    cudaFree(stage);
+    return err;
+}
+
 /* --------------------------------------------------------------------------
- * API: block Lanczos (site-major: each reduction/right-multiply is one big
- * gemm; host zheev per step like crecal_b). Non-hoh path runs fp64 via step64
- * (and the structured backend when active). With hoh it dispatches to the
- * precision-templated two-sweep engine above: prec==0 -> fp32 mixed (fp64
- * B-sqrt), prec==1 -> full fp64.
+ * API: block Lanczos. With hoh it dispatches to the precision-templated
+ * two-sweep engine above: prec==0 -> fp32 mixed (fp64 B-sqrt), prec==1 -> full
+ * fp64. Without hoh it always runs the fp64 plain engine (prec is ignored).
  * ------------------------------------------------------------------------ */
 extern "C" int rsrec_block_lanczos(rsrec_ctx *c, const void *psi0_, int lld,
                                    void *a_b_, void *b2_b_, int prec) {
@@ -2173,64 +2310,44 @@ extern "C" int rsrec_block_lanczos(rsrec_ctx *c, const void *psi0_, int lld,
             c, psi0_, lld, a_b_, b2_b_, c->d_ee_bare, c->d_hall_bare,
             c->d_eeo, c->d_hallo, c->d_hons);
     }
-    const int nb = c->nb;
-    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
-    const size_t ld = (size_t)nb * c->kk;
-    cplx *a_b = (cplx *)a_b_, *b2_b = (cplx *)b2_b_;
+    return block_plain_fp64(c, psi0_, lld, a_b_, b2_b_, nullptr);
+}
 
-    zc *psi = c->d_s0, *pmn = c->d_s1, *hpsi = c->d_s2, *tmp = c->d_s3;
-    zc *gt;
-    CUCHK(cudaMalloc(&gt, nf * sizeof(zc)));
-    zc *dAn = c->d_blk, *dSum = c->d_blk + bb;
-    zc *dB = c->d_blk + 2 * bb, *dBi = c->d_blk + 3 * bb;
-
-    const int tpb = 256;
-    const int nbl = (int)((nf + tpb - 1) / tpb);
-    CUCHK(cudaMemcpy(gt, psi0_, nf * sizeof(zc), cudaMemcpyHostToDevice));
-    k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, gt, psi);
-    CUCHK(cudaGetLastError());
-    CUCHK(cudaMemset(pmn, 0, nf * sizeof(zc)));
-
-    std::vector<cplx> sum_b(bb, cplx(0, 0));
-    for (int i = 0; i < nb; ++i) sum_b[i + (size_t)nb * i] = 1.0;
-    std::memset(a_b, 0, bb * lld * sizeof(cplx));
-    std::memset(b2_b, 0, bb * lld * sizeof(cplx));
-
-    for (int ll = 0; ll < lld - 1; ++ll) {
-        if (step64(c, 0, psi, nullptr, hpsi, tmp, nb, 1.0, 0.0, 1.0, 0.0))
-            return 1;
-        if (gram64(c, psi, nb, hpsi, nb, dAn)) return 1;          /* A_n    */
-        CUCHK(cudaMemcpy(a_b + (size_t)ll * bb, dAn, bb * sizeof(zc),
-                         cudaMemcpyDeviceToHost));
-        k_axpby<zc, double><<<nbl, tpb>>>(nf, 1.0, hpsi, -1.0, pmn);
-        CUCHK(cudaGetLastError());                       /* pmn = hpsi - pmn */
-        std::memcpy(b2_b + (size_t)ll * bb, sum_b.data(), bb * sizeof(cplx));
-
-        /* pmn -= psi * A_n: ONE (ld x nb x nb) gemm, beta = 1               */
-        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
-                        &Z_MONE, psi, (int)ld, dAn, nb, &Z_ONE, pmn,
-                        (int)ld));
-        if (gram64(c, pmn, nb, pmn, nb, dSum)) return 1;          /* B^2    */
-        CUCHK(cudaMemcpy(sum_b.data(), dSum, bb * sizeof(zc),
-                         cudaMemcpyDeviceToHost));
-        if (host_eig_sqrt(c, dSum, dB, dBi)) return 1;
-
-        /* psi_{n+1} = pmn * Bi (gemm into gt); pmn = psi_n * B; swap        */
-        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
-                        &Z_ONE, pmn, (int)ld, dBi, nb, &Z_ZERO, gt,
-                        (int)ld));
-        CBCHK(blas_gemm(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, (int)ld, nb, nb,
-                        &Z_ONE, psi, (int)ld, dB, nb, &Z_ZERO, pmn,
-                        (int)ld));
-        zc *t = psi; psi = gt; gt = t;        /* psi <- new; gt <- old psi   */
+/* One-shot block Lanczos: same a_b/b2_b as rsrec_block_lanczos, plus the
+ * normalised Q_ll blocks at the 1-based sites targets[0..ntarget), ll =
+ * 1..lld-1, in slices(nb, nb, lld-1, ntarget) (complex128, Fortran order).
+ * Unlike the legacy entry, prec is honoured without hoh too.                 */
+extern "C" int rsrec_block_lanczos_targets(rsrec_ctx *c, const void *psi0_,
+                                           int lld, int ntarget,
+                                           const int *targets, void *a_b_,
+                                           void *b2_b_, void *slices,
+                                           int prec) {
+    if (!c->have_h) FAIL("block_lanczos_targets: Hamiltonian not set");
+    if (ntarget < 1 || lld < 2)
+        FAIL("block_lanczos_targets: ntarget must be positive and lld >= 2");
+    for (int t = 0; t < ntarget; ++t)
+        if (targets[t] < 1 || targets[t] > c->kk)
+            FAIL("block_lanczos_targets: target site out of range");
+    if (c->use_struct && !c->have_hoh && prec == 0)
+        FAIL("block_lanczos_targets: structured backend is fp64 only");
+    if (prec == 0) {
+        site_gather<fc> g;
+        if (g.init(c, ntarget, targets, lld - 1, slices)) return 1;
+        if (c->have_hoh) {
+            if (ensure_f32_hoh(c)) return 1;
+            return block_hoh_engine<fc, float>(
+                c, psi0_, lld, a_b_, b2_b_, c->f_ee_bare, c->f_hall_bare,
+                c->f_eeo, c->f_hallo, c->f_hons, &g);
+        }
+        return block_plain_fp32(c, psi0_, lld, a_b_, b2_b_, &g);
     }
-    std::memcpy(b2_b + (size_t)(lld - 1) * bb, sum_b.data(),
-                bb * sizeof(cplx));
-    /* free whichever rotated buffer is the extra allocation (not s0..s3)    */
-    zc *extra = (psi != c->d_s0 && psi != c->d_s1 && psi != c->d_s2 &&
-                 psi != c->d_s3) ? psi : gt;
-    cudaFree(extra);
-    return 0;
+    site_gather<zc> g;
+    if (g.init(c, ntarget, targets, lld - 1, slices)) return 1;
+    if (c->have_hoh)
+        return block_hoh_engine<zc, double>(
+            c, psi0_, lld, a_b_, b2_b_, c->d_ee_bare, c->d_hall_bare,
+            c->d_eeo, c->d_hallo, c->d_hons, &g);
+    return block_plain_fp64(c, psi0_, lld, a_b_, b2_b_, &g);
 }
 
 /* --------------------------------------------------------------------------

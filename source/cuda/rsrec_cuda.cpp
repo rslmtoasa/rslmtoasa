@@ -266,6 +266,23 @@ extern "C" int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0,
     return status;
 }
 
+extern "C" int rsrec_cuda_block_lanczos_targets(
+    rsrec_cuda_ctx *ctx, const void *psi0, int lld, int ntarget,
+    const int *targets, void *a_b, void *b2_b, void *slices, int prec) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_block_lanczos_targets: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_block_lanczos_targets(
+        ctx->inner, psi0, lld, ntarget, targets, a_b, b2_b, slices, prec);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_block_lanczos_targets: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j,
                                          int lld, double *a_out,
                                          double *b2_out) {

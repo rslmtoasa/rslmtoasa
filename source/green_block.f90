@@ -236,7 +236,9 @@ contains
       real(rp), dimension(64) :: x, w
 
       if (eta_mode) then
+         ! One-shot block data is the projected (non four-slot) form: its solve stays on the CPU.
          if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled() .and. &
+             .not. (this%control%recur == 'block' .and. this%control%intersite_mode == 'one_shot') .and. &
              (this%control%recur == 'block' .or. this%control%recur == 'chebyshev')) then
             call this%calculate_intersite_gf_eta_gpu()
             return

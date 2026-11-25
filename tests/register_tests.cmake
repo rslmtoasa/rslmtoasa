@@ -532,6 +532,10 @@ if(RUN_UNIT_TESTS)
       COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_exchange.py" "--gpu" "--binary" "${TestBinary}"
         "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_exchange_gpu")
     set_tests_properties(OneShotExchange_GPU PROPERTIES SKIP_RETURN_CODE 77)
+    rslmto_add_test(NAME OneShotContour_GPU TIER standard TIMEOUT 1800 LABELS regression cuda
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_contour.py" "--gpu" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_contour_gpu")
+    set_tests_properties(OneShotContour_GPU PROPERTIES SKIP_RETURN_CODE 77)
   endif()
   if(ENABLE_CUDA_RECIPROCAL)
     add_executable(ReciprocalCudaArbitraryK ${TestDIR}/unit/test_reciprocal_cuda_arbitrary_k.f90)

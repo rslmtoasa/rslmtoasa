@@ -218,6 +218,15 @@ int rsrec_chebyshev_moments_targets(rsrec_ctx *ctx, const void *psi0,
 int rsrec_block_lanczos(rsrec_ctx *ctx, const void *psi0, int lld,
                         void *a_b, void *b2_b, int prec);
 
+/* One-shot block Lanczos: a_b, b2_b as rsrec_block_lanczos, plus the
+ * normalised Q_ll blocks (ll = 1..lld-1, captured before the H apply of step
+ * ll) at the 1-based sites targets[0..ntarget):
+ *   slices : (nb, nb, lld-1, ntarget) complex128, Fortran order
+ *   prec   : 0 = fp32 (fp64 B-sqrt), 1 = fp64; honoured with and without hoh. */
+int rsrec_block_lanczos_targets(rsrec_ctx *ctx, const void *psi0, int lld,
+                                int ntarget, const int *targets, void *a_b,
+                                void *b2_b, void *slices, int prec);
+
 /* Scalar Lanczos, mirrors recur()/crecal()/hop() but runs all nb orbital
  * chains of one site simultaneously as independent columns.
  *   site_j : 1-based atom index in the clust (lattice%irec(i))

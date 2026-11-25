@@ -68,6 +68,10 @@ int rsrec_cuda_chebyshev_moments_targets(rsrec_cuda_ctx *ctx, const void *psi0,
                                          void *mu_out);
 int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0, int lld,
                              void *a_b, void *b2_b, int prec);
+int rsrec_cuda_block_lanczos_targets(rsrec_cuda_ctx *ctx, const void *psi0,
+                                     int lld, int ntarget, const int *targets,
+                                     void *a_b, void *b2_b, void *slices,
+                                     int prec);
 int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j, int lld,
                               double *a_out, double *b2_out);
 int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx, const void *psiref,
