@@ -10,6 +10,7 @@ contains
    !> @param[in] fname Namelist file
    !> @return type(green)
    !---------------------------------------------------------------------------
+   !> Sets pointers only; callers run restore_to_default on the assigned object (avoids copying the allocated arrays).
    module function constructor(dos_obj) result(obj)
       type(green) :: obj
       type(dos), target, intent(in) :: dos_obj
@@ -20,8 +21,6 @@ contains
       obj%symbolic_atom => dos_obj%recursion%hamiltonian%charge%lattice%symbolic_atoms
       obj%lattice => dos_obj%recursion%lattice
       obj%control => dos_obj%recursion%lattice%control
-
-      call obj%restore_to_default()
    end function constructor
 
    !---------------------------------------------------------------------------

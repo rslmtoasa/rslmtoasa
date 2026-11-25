@@ -538,9 +538,11 @@ contains
 
       ! Creating Green function object
       green_obj = green(dos_obj)
+      call green_obj%restore_to_default()
 
       ! Creating bands object
       bands_obj = bands(green_obj)
+      call bands_obj%restore_to_default()
 
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
@@ -675,9 +677,11 @@ contains
 
       ! Creating Green function object
       green_obj = green(dos_obj)
+      call green_obj%restore_to_default()
 
       ! Creating bands object
       bands_obj = bands(green_obj)
+      call bands_obj%restore_to_default()
 
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
@@ -1162,9 +1166,11 @@ contains
 
       ! Creating Green function object
       green_obj = green(dos_obj)
+      call green_obj%restore_to_default()
 
       ! Creating bands object
       bands_obj = bands(green_obj)
+      call bands_obj%restore_to_default()
    
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)

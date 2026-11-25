@@ -155,6 +155,7 @@ contains
    !> @param[in] fname Namelist file
    !> @return type(bands)
    !---------------------------------------------------------------------------
+   !> Sets pointers only; callers run restore_to_default on the assigned object (avoids copying the allocated arrays).
    function constructor(green_obj) result(obj)
       type(bands) :: obj
       type(green), target, intent(in) :: green_obj
@@ -166,8 +167,6 @@ contains
       obj%en => green_obj%dos%en
       obj%control => green_obj%dos%recursion%lattice%control
       obj%recursion => green_obj%dos%recursion
-
-      call obj%restore_to_default()
    end function constructor
 
    !---------------------------------------------------------------------------

@@ -245,7 +245,9 @@ contains
       recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
       dos_obj = dos(recursion_obj, energy_obj)
       green_obj = green(dos_obj)
+      call green_obj%restore_to_default()
       bands_obj = bands(green_obj)
+      call bands_obj%restore_to_default()
       if (.not. energy_mesh_before_hamiltonian .and. .not. effective_input) call energy_obj%e_mesh()
    end subroutine prepare_post_processing_stack
 
