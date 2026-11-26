@@ -12,7 +12,8 @@ susceptibility :math:`\chi(\mathbf{q}, \omega)` of a converged collinear ground
 state on the k-space route: the bare response :math:`\chi_0` from the
 eigenpairs at :math:`\mathbf{k}` and :math:`\mathbf{k}+\mathbf{q}`, then
 :math:`(1 + \chi_0 U)\chi = \chi_0`. The k mesh and Hamiltonian come from
-``&reciprocal`` (:ref:`keywords/reciprocal`). The namelist is optional; every key
+``&reciprocal`` (:ref:`keywords/reciprocal`); its ``temperature`` must be above 0 K, so
+``dos_method = 'blochl'`` (which forces 0 K) is refused. The namelist is optional; every key
 has a default, and a read error stops the run.
 
 .. code-block:: fortran

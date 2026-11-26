@@ -353,6 +353,8 @@ contains
       end do
 
       this%kt = rec%temperature*kB_Ry_per_K
+      if (this%kt <= 0.0_rp) call g_logger%fatal('spin_response%prepare: needs &reciprocal temperature > 0 (dos_method = ''blochl'' '// &
+                                                 'forces 0 K): the static chi0 of degenerate pairs is -f(1-f)/kT', __FILE__, __LINE__)
       this%fermi_input = rec%fermi_level
       if (.not. rec%auto_find_fermi) call g_logger%fatal('spin_response%prepare: E_F is always solved on the response mesh; auto_find_fermi must be .true.', &
                                                          __FILE__, __LINE__)

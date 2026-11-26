@@ -327,13 +327,6 @@ are not tracked here; see `docs/DECISIONS.md`.
   reproduces the sign and xi^2 slope); (2) the `K = U m0/m` prescription; (3) on-site L.S of the first-order k-space H; (4) deck handling. Only the xi
   = 0 identity (`SpinResponseSocZeroIdentity`) checks the setup.
 
-### Static chi0 at kT = 0 divides by zero for degenerate pairs — 2026-11-25
-- **Read, not run (no Fortran compiler in the session):** `accumulate_chi0` keeps a pair with `|e_n - e_m| < 1e-10` at `eta = 0` and gives it
-  `-f(1-f)/kt`; `spin_response%prepare` sets `kt = rec%temperature*kB_Ry_per_K` with no floor, so `&reciprocal temperature = 0` or
-  `dos_method = 'blochl'` (which forces 0 K) gives 0/0. With SOC every band at q = 0 pairs with itself (`de = 0` exactly), so `interaction` would
-  get a NaN static chi0 and U. Collinear runs hit it only on accidental up/down degeneracies.
-- **Not verified:** that a run produces NaN (the decks use 300 K). Proposal: a fatal for `kt = 0` in `prepare` (about 3 lines).
-
 ### Symmetry log cannot check physical inversion — 2026-10-14
 - **Measured:** two Fe atoms with different type labels, second atom at (1/2 + 0.05, 1/2, 1/2): the log prints P4mm (#99) (no inversion) while spglib
   with element labels gives P4/nmm (#129) with inversion; omega(q) = omega(-q) to 1e-16 Ry. Likely cause (read): `source/symmetry.f90` passes
