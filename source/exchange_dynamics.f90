@@ -308,10 +308,12 @@ contains
    end subroutine juelich_pair_moments
 
    !> Sum chi0, md (and the Juelich chi0j, mdj when present) over the ranks; on rank 0 write chi0_ij.dat, the type
-   !> diagnostics chi0_types.dat and the adiabatic spectrum chi0_adiabatic.dat at the q points of &spin_response.
+   !> diagnostics chi0_types.dat, the adiabatic spectrum chi0_adiabatic.dat at the q points of &spin_response and the
+   !> cluster spectrum chi0_cluster.dat.
    subroutine chi0_finalize(this, chi0, md, chi0j, mdj)
       use mpi_mod
-      use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types, type_sums_q, write_chi0_adiabatic
+      use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types, type_sums_q, write_chi0_adiabatic, &
+                                       cluster_sites, write_chi0_cluster
       use spin_response_mod, only: read_q_points
       class(exchange) :: this
       complex(rp), intent(inout) :: chi0(:)
@@ -323,6 +325,9 @@ contains
       real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:), rdir(:, :), q(:, :), qcart(:, :), &
                                qabs(:)
       real(rp) :: cell_inverse(3, 3)
+      integer, allocatable :: site(:)
+      complex(rp), allocatable :: chi0c(:, :), chi0cj(:, :)
+      real(rp), allocatable :: mc(:), mcj(:)
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, chi0, size(chi0), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -368,6 +373,15 @@ contains
       else
          call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
                                    type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m)
+      end if
+
+      ! Cluster of the atoms with a self pair
+      call cluster_sites(this%lattice%ijpair(1:size(chi0), :), chi0, md, site, chi0c, mc)
+      if (present(chi0j)) then
+         call cluster_sites(this%lattice%ijpair(1:size(chi0), :), chi0j, mdj, site, chi0cj, mcj)
+         call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c, mcj, chi0cj)
+      else
+         call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c)
       end if
    end subroutine chi0_finalize
 

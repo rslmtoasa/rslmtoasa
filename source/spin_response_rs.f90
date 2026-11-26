@@ -32,6 +32,13 @@
 !> chi0_ij exp(+2 pi i q.r_ij), r_ij = r_j - r_i in direct coordinates; with every pair included this is the chi0_ab(q)
 !> of the k-space spin_response (its Bloch gauge carries the phase exp(2 pi i k.(r_j - r_i))). Then
 !> Omega(q) = -N (chi0(q)^-1 + U) with N = diag(m) and the Goldstone U (adiabatic_frequencies of spin_response).
+!>
+!> Cluster of magnetic sites: S = the atoms i with a self pair (i, i), in pair-list order, and chi0_S(a, b) = chi0 of the
+!> listed pair (S_a, S_b). The static chi0^{+-} matrix is Hermitian: from the definition above, with the cyclic trace,
+!> X_ji = Tr[G^upup_ij G^dndn_ji] = Tr[G^dndn_ji G^upup_ij] = Y_ij and Y_ji = X_ij, so chi0_ji = -(Y_ij - conj(X_ij))/(2 pi i)
+!> = conj(chi0_ij). A pair listed in one order only is completed by the conjugate; a pair listed in neither order is 0
+!> (truncation to the pair list). m_a is the d moment of the self pair of S_a, U the Goldstone U of Re chi0_S and m, and
+!> Omega = -N (chi0_S^-1 + U), |S| frequencies, as for the lattice sum with one 'type' per site.
 !------------------------------------------------------------------------------
 module spin_response_rs_mod
    use precision_mod, only: rp
@@ -52,6 +59,9 @@ module spin_response_rs_mod
    public :: juelich_moments
    public :: type_sums_q
    public :: write_chi0_adiabatic
+   public :: cluster_sites
+   public :: cluster_frequencies
+   public :: write_chi0_cluster
 
    !> Angular momentum of the response channel.
    integer, parameter :: l_d = 2
@@ -381,5 +391,122 @@ contains
          text = buf
       end function frequencies
    end subroutine write_chi0_adiabatic
+
+   !> @brief Sites of the cluster and their chi0 matrix. site(a) is the a-th atom with a self pair (first occurrence, pair-list
+   !>        order), m(a) the md of that self pair and chi0c(a, b) the chi0 of the listed pair (site(a), site(b)); if only
+   !>        (site(b), site(a)) is listed its conjugate, if neither is listed 0. Pairs with an atom outside S are ignored.
+   !> @param[in] ijpair  Pair list, shape (npair, 2); chi0 (1/Ry) and md the d moment of each pair (self pairs only), shape (npair).
+   pure subroutine cluster_sites(ijpair, chi0, md, site, chi0c, m)
+      integer, intent(in) :: ijpair(:, :)
+      complex(rp), intent(in) :: chi0(:)
+      real(rp), intent(in) :: md(:)
+      integer, allocatable, intent(out) :: site(:)
+      complex(rp), allocatable, intent(out) :: chi0c(:, :)
+      real(rp), allocatable, intent(out) :: m(:)
+
+      integer :: p, a, b, nsite
+      logical, allocatable :: filled(:, :)
+
+      nsite = 0
+      allocate (site(size(chi0)))
+      do p = 1, size(chi0)
+         if (ijpair(p, 1) /= ijpair(p, 2) .or. any(site(1:nsite) == ijpair(p, 1))) cycle
+         nsite = nsite + 1
+         site(nsite) = ijpair(p, 1)
+      end do
+      site = site(1:nsite)
+      allocate (chi0c(nsite, nsite), m(nsite), filled(nsite, nsite))
+      chi0c = (0.0_rp, 0.0_rp)
+      m = 0.0_rp
+      filled = .false.
+      do p = 1, size(chi0)
+         a = findloc(site, ijpair(p, 1), 1)
+         b = findloc(site, ijpair(p, 2), 1)
+         if (a == 0 .or. b == 0 .or. filled(a, b)) cycle
+         chi0c(a, b) = chi0(p)
+         filled(a, b) = .true.
+         if (a == b) m(a) = md(p)
+      end do
+      do a = 1, nsite
+         do b = 1, nsite
+            if (.not. filled(a, b) .and. filled(b, a)) chi0c(a, b) = conjg(chi0c(b, a))
+         end do
+      end do
+   end subroutine cluster_sites
+
+   !> @brief Goldstone U of Re chi0c and m, then Omega = -N (chi0c^-1 + U) (omega), its largest |Im| and the force-theorem
+   !>        frequencies (omega_force), both ascending.
+   subroutine cluster_frequencies(chi0c, m, u, omega, imag_max, omega_force)
+      complex(rp), intent(in) :: chi0c(:, :)
+      real(rp), intent(in) :: m(:)
+      real(rp), intent(out) :: u(:), omega(:), imag_max, omega_force(:)
+
+      real(rp) :: kmat(size(m), size(m))
+      integer :: k
+
+      call u_juelich(real(chi0c, rp), m, u)
+      kmat = 0.0_rp
+      do k = 1, size(m)
+         kmat(k, k) = u(k)
+      end do
+      call adiabatic_frequencies(chi0c, kmat, m, omega, imag_max, omega_force)
+   end subroutine cluster_frequencies
+
+   !> @brief Write chi0_cluster.dat in three blocks, each after its own header line: one row per site (index, atom, type, m_d
+   !>        and Goldstone U of the coefficient and of the Juelich vertex), one row per frequency index (adiabatic and force-theorem
+   !>        frequencies of both vertices) and one row with the largest |Im| of each vertex. A vertex is n/a when there are no sites,
+   !>        a site has |m| < m_tol, or (Juelich) mj is absent; m is printed whenever it exists.
+   !> @param[in] site, iz  Atoms of the cluster (cluster_sites) and the type of each cluster atom.
+   !> @param[in] m, chi0c  d moments and chi0 matrix of the coefficient vertex; mj, chi0cj optional, the same with the Juelich vertex.
+   subroutine write_chi0_cluster(fname, site, iz, m, chi0c, mj, chi0cj)
+      character(len=*), intent(in) :: fname
+      integer, intent(in) :: site(:), iz(:)
+      real(rp), intent(in) :: m(:)
+      complex(rp), intent(in) :: chi0c(:, :)
+      real(rp), intent(in), optional :: mj(:)
+      complex(rp), intent(in), optional :: chi0cj(:, :)
+
+      integer :: funit, a, n
+      real(rp) :: u(size(m)), uj(size(m)), om(size(m)), omf(size(m)), omj(size(m)), omfj(size(m)), mja(size(m)), im, imj
+      logical :: have, havej
+
+      n = size(m)
+      u = 0.0_rp; uj = 0.0_rp; om = 0.0_rp; omf = 0.0_rp; omj = 0.0_rp; omfj = 0.0_rp; mja = 0.0_rp; im = 0.0_rp; imj = 0.0_rp
+      if (present(mj)) mja = mj
+      have = n > 0
+      if (have) have = all(abs(m) >= m_tol)
+      havej = present(mj)
+      if (havej) havej = n > 0
+      if (havej) havej = all(abs(mj) >= m_tol)
+      if (have) call cluster_frequencies(chi0c, m, u, om, im, omf)
+      if (havej) call cluster_frequencies(chi0cj, mj, uj, omj, imj, omfj)
+      open (newunit=funit, file=fname, action='write', status='replace')
+      write (funit, '(a)') '# site atom type m_d(mu_B) u_goldstone(Ry) m_d_juelich(mu_B) u_goldstone_juelich(Ry)'
+      do a = 1, n
+         write (funit, '(3i8,a)') a, site(a), iz(site(a)), real_cell(m(a), .true.)//real_cell(u(a), have)// &
+            real_cell(mja(a), present(mj))//real_cell(uj(a), havej)
+      end do
+      write (funit, '(a)') '# k omega_adiabatic(Ry) omega_force(Ry) omega_adiabatic_juelich(Ry) omega_force_juelich(Ry)'
+      do a = 1, n
+         write (funit, '(i8,a)') a, real_cell(om(a), have)//real_cell(omf(a), have)//real_cell(omj(a), havej)// &
+            real_cell(omfj(a), havej)
+      end do
+      write (funit, '(a)') '# max_abs_imag(Ry) max_abs_imag_juelich(Ry)'
+      write (funit, '(a)') real_cell(im, have)//real_cell(imj, havej)
+      close (funit)
+   end subroutine write_chi0_cluster
+
+   !> One 24-character column: x in es24.14 when ok, otherwise n/a right-justified.
+   function real_cell(x, ok) result(text)
+      real(rp), intent(in) :: x
+      logical, intent(in) :: ok
+      character(len=24) :: text
+
+      if (ok) then
+         write (text, '(es24.14)') x
+      else
+         text = repeat(' ', 21)//'n/a'
+      end if
+   end function real_cell
 
 end module spin_response_rs_mod

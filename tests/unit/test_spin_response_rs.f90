@@ -13,14 +13,17 @@
 ! references are spectral sums over the eigenpairs of a small Hermitian H, a
 ! route independent of the resolvent identity and the Chebyshev recurrence the
 ! kernels use. In type_sums_q a wrong phase sign, pairs of another seed or a
-! wrong pair-type grouping. Plumbing only: no physics is checked here.
+! wrong pair-type grouping. In cluster_sites a non-self seed taken as a site, a wrong
+! site order, a missing or unconjugated fill of a pair listed once, a listed pair
+! overwritten by the conjugate of its partner, a non-zero entry for an absent pair or
+! the wrong self pair for m; in cluster_frequencies a wrong U or sign of Omega. Plumbing only: no physics is checked here.
 !------------------------------------------------------------------------------
 program test_spin_response_rs
    use precision_mod, only: rp
    use math_mod, only: pi
    use basis_mod, only: basis_init, nb
    use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums, juelich_vectors, &
-                                   juelich_green, juelich_moments, type_sums_q
+                                   juelich_green, juelich_moments, type_sums_q, cluster_sites, cluster_frequencies
    implicit none
    complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), dm(:)
    complex(rp) :: t(2, 2), c
@@ -99,6 +102,7 @@ program test_spin_response_rs
 
    call check_juelich_kernels()
    call check_type_sums_q()
+   call check_cluster()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -173,6 +177,44 @@ contains
       call require(abs(cq(1, 1, 1) - (-11.0_rp, 0.0_rp)) < 1.0e-13_rp, 'type_sums_q q = (1,0,0) gives -11')
       call require(abs(cq(1, 1, 2) - (-11.0_rp, -2.0_rp)) < 1.0e-13_rp, 'type_sums_q q = (0,1,0) gives -11 - 2i')
    end subroutine check_type_sums_q
+
+   !> Pairs (5,5), (9,5), (2,2), (5,2), (7,7), (7,5), (2,5). Atom 9 only has a non-self pair: not a site. Sites 5, 2, 7 in
+   !> list order, m = 2, -1.5, 1 (md of the self pairs; the md of the other pairs, 7, must not enter).
+   !> (5,2) = (-0.5, 0.25) listed, (2,5) = (-0.6, -0.3) listed too: both used as given (not the conjugate of each other).
+   !> (7,5) = (-0.1, 0.2) only: (5,7) = conj = (-0.1, -0.2). (2,7) and (7,2) absent: 0.
+   subroutine check_cluster()
+      integer, allocatable :: site(:)
+      complex(rp), allocatable :: c(:, :)
+      real(rp), allocatable :: mc(:)
+      complex(rp) :: ref(3, 3)
+      integer :: pairs(7, 2)
+      real(rp) :: u(2), om(2), omf(2), imag_max
+
+      pairs(:, 1) = [5, 9, 2, 5, 7, 7, 2]
+      pairs(:, 2) = [5, 5, 2, 2, 7, 5, 5]
+      call cluster_sites(pairs, [(-3.0_rp, 0.0_rp), (-1.0_rp, 0.5_rp), (-4.0_rp, 0.0_rp), (-0.5_rp, 0.25_rp), &
+                                 (-2.0_rp, 0.0_rp), (-0.1_rp, 0.2_rp), (-0.6_rp, -0.3_rp)], &
+                         [2.0_rp, 7.0_rp, -1.5_rp, 7.0_rp, 1.0_rp, 7.0_rp, 7.0_rp], site, c, mc)
+      call require(size(site) == 3, 'cluster_sites: 3 sites')
+      if (size(site) /= 3) return
+      call require(all(site == [5, 2, 7]), 'cluster_sites: sites 5, 2, 7')
+      call require(all(abs(mc - [2.0_rp, -1.5_rp, 1.0_rp]) < 1.0e-14_rp), 'cluster_sites: m = 2, -1.5, 1')
+      ref = reshape([(-3.0_rp, 0.0_rp), (-0.6_rp, -0.3_rp), (-0.1_rp, 0.2_rp), &
+                     (-0.5_rp, 0.25_rp), (-4.0_rp, 0.0_rp), (0.0_rp, 0.0_rp), &
+                     (-0.1_rp, -0.2_rp), (0.0_rp, 0.0_rp), (-2.0_rp, 0.0_rp)], [3, 3])
+      call require(maxval(abs(c - ref)) < 1.0e-14_rp, 'cluster_sites: chi0 matrix (listed, conjugate fill, zero)')
+
+      ! Two identical sites, chi0 = [[a, b], [b, a]] = [[-3, -1], [-1, -3]], m = 2. Goldstone: (a + b) U m = -m, U = -1/(a + b) = 0.25.
+      ! Eigenvectors (1, 1) and (1, -1) of chi0 with eigenvalues a + b, a - b; Omega = -m (1/lambda + U):
+      ! symmetric 0, antisymmetric -m (1/(a - b) - 1/(a + b)) = -2 m b/(a^2 - b^2) = 4/8 = 0.5.
+      ! Force theorem, m U (1 + U lambda): symmetric 0, antisymmetric m U (1 + U (a - b)) = 2 * 0.25 * (1 - 0.5) = 0.25.
+      call cluster_frequencies(reshape([(-3.0_rp, 0.0_rp), (-1.0_rp, 0.0_rp), (-1.0_rp, 0.0_rp), (-3.0_rp, 0.0_rp)], [2, 2]), &
+                               [2.0_rp, 2.0_rp], u, om, imag_max, omf)
+      call require(all(abs(u - 0.25_rp) < 1.0e-13_rp), 'cluster_frequencies: U = 0.25')
+      call require(all(abs(om - [0.0_rp, 0.5_rp]) < 1.0e-12_rp), 'cluster_frequencies: Omega = 0, 0.5')
+      call require(all(abs(omf - [0.0_rp, 0.25_rp]) < 1.0e-12_rp), 'cluster_frequencies: force = 0, 0.25')
+      call require(imag_max < 1.0e-12_rp, 'cluster_frequencies: max |Im| = 0')
+   end subroutine check_cluster
 
    subroutine require(ok, label)
       logical, intent(in) :: ok

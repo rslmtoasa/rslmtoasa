@@ -290,6 +290,20 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   ``spin_response`` (frequencies, largest imaginary part, force-theorem frequencies), first with the
   coefficient vertex, then with the Jülich vertex (``n/a`` where its :math:`U` is not defined). The
   lattice sum is truncated to the pair list: list every atom within the radius to include.
+- Also writes ``chi0_cluster.dat``, the adiabatic spectrum of a cluster of magnetic atoms (Lounis-type
+  cluster RPA). The sites :math:`S` are the atoms :math:`i` with a self pair :math:`(i, i)` in the pair list
+  (atoms, not types), in pair-list order; :math:`\chi^0_S(a, b)` is :math:`\chi^0` of the listed pair
+  :math:`(S_a, S_b)`, or the complex conjugate of :math:`(S_b, S_a)` if only that one is listed (the static
+  :math:`\chi^{0,+-}` matrix is Hermitian, :math:`\chi^0_{ji} = \overline{\chi^0_{ij}}`), or 0 if neither is
+  listed (truncation to the pair list). :math:`m_a` is the d moment of the self pair of :math:`S_a`, :math:`U_a` the
+  Goldstone :math:`U` of :math:`\mathrm{Re}\,\chi^0_S` and :math:`m` over the cluster, and
+  :math:`\Omega = -N(\chi^{0\,-1}_S + U)` with :math:`N = \mathrm{diag}(m)`, :math:`|S|` frequencies, the
+  largest :math:`|\mathrm{Im}|` and the force-theorem frequencies, for the coefficient and the Jülich vertex.
+  The file has three blocks, each after its own header line: one row per site (m, :math:`U`), one row per
+  frequency index, one row with the largest imaginary parts. The values of a vertex are ``n/a`` when there
+  is no site, a site has :math:`|m| < 10^{-6}\,\mu_B`, or (Jülich) the vertex is absent. The result is meaningful
+  when every magnetic atom that couples is in :math:`S` (adatoms and clusters on non-magnetic hosts); for
+  magnetic hosts the cluster Goldstone :math:`U` and the truncation make it approximate.
 
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
 (``chi0_pair_mesh``, ``chi0_pair_moments``)

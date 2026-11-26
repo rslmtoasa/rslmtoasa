@@ -188,6 +188,14 @@ One row per q point of ``&spin_response``, after a one-line header: q (direct an
 type), the largest imaginary part of their eigenvalues and the force-theorem frequencies, from the lattice
 sum over the listed pairs. See ``do_chi0`` in :ref:`keywords/output_options`.
 
+**chi0_cluster.dat** (with ``do_chi0 = .true.``)
+
+Adiabatic spectrum of the cluster of atoms with a self pair, in three blocks each after a header line: one
+row per site (index, atom, type, d moment (:math:`\mu_B`) and Goldstone :math:`U` (Ry), coefficient then
+Jülich vertex), one row per frequency index (adiabatic and force-theorem frequencies in Ry, coefficient then
+Jülich vertex) and one row with the largest imaginary part of each vertex (Ry). Entries that are not defined
+are ``n/a``. See ``do_chi0`` in :ref:`keywords/output_options`.
+
 Transport Properties
 ====================
 
