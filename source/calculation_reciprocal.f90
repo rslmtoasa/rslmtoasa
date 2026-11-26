@@ -2,6 +2,7 @@ submodule(calculation_mod) calculation_reciprocal
    use spin_response_mod, only: spin_response
    use alsda_radial_mod, only: alsda_kernel
    use gbt_kspace_mod, only: grand_potential
+   use pair_list_mod, only: generate_exchange_pairs
 
 contains
 
@@ -115,6 +116,8 @@ contains
       end if
 
       call lattice_obj%atomlist()
+      ! pair_radius replaces njij/ijpair; the pair count sizes the MPI ranges and the Green-function slots below
+      if (use_exchange_pairs) call generate_exchange_pairs(lattice_obj)
 
       ! The intersite pair list is irrelevant to site DOS and transport. Their
       ! recursion storage must use the onsite layout even in a shared deck.
