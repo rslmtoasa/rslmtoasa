@@ -115,9 +115,9 @@ module exchange_mod
    end interface exchange
 
    interface
-      module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia)
+      module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia, do_chi0)
          class(exchange) :: this
-         logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
+         logical, intent(in) :: stream, do_exchange, do_damping, do_inertia, do_chi0
       end subroutine calculate_pairwise
    end interface
 

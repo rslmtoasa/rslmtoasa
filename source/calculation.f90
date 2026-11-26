@@ -126,6 +126,10 @@ module calculation_mod
       !> physical normalization is implied. Default .false.
       logical :: do_inertia
 
+      !> Static transverse chi0_ij (d channel) of the exchange pair list, written to chi0_ij.dat
+      !> (spin_response_rs). Collinear runs only (nsp = 1, or nsp = 2 with moments along z). Default .false.
+      logical :: do_chi0
+
       !> Controller for preprocessing verbosity.
       !>
       !> Controller for preprocessing verbosity. If true, call the subroutines:
@@ -304,6 +308,7 @@ contains
       exchange_delta = this%exchange_delta
       do_damping = this%do_damping
       do_inertia = this%do_inertia
+      do_chi0 = this%do_chi0
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -347,6 +352,7 @@ contains
       this%exchange_delta = exchange_delta
       this%do_damping = do_damping
       this%do_inertia = do_inertia
+      this%do_chi0 = do_chi0
 
       close (funit)
    end subroutine build_from_file
@@ -868,7 +874,7 @@ contains
       ! in the potential (xi_p/xi_d); the k-space routes additionally need
       ! kspace_ham_order=’second’.
       call exchange_obj%calculate_pairwise(stream, (lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0), &
-                                           this%do_damping, this%do_inertia)
+                                           this%do_damping, this%do_inertia, this%do_chi0)
    end subroutine post_processing_exchange
 
 
@@ -1832,6 +1838,7 @@ contains
       this%exchange_delta = 'lmto'
       this%do_damping = .false.
       this%do_inertia = .false.
+      this%do_chi0 = .false.
    end subroutine restore_to_default
 
    !> Check availability for post-processing

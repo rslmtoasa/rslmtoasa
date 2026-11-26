@@ -175,6 +175,7 @@ Alphabetical Listing (All Parameters)
 - ``do_cochg`` - Enable co-charge correction
 - ``do_comom`` - Enable co-moment correction
 - ``exchange_delta`` - Exchange splitting source for imported Hamiltonians
+- ``do_chi0`` - Static transverse chi0_ij in exchange post-processing
 - ``do_damping`` - Enable Gilbert-damping evaluation in exchange post-processing (B5)
 - ``dt`` - ASD time step
 

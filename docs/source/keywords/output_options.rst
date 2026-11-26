@@ -226,6 +226,39 @@ torque-correlation route already present in the ``gij_eta`` ladder.
 
 **Related code:** ``source/calculation.f90`` (search ``do_damping``)
 
+do_chi0
+-------
+
+**Type:** Logical
+
+**Purpose:** In the exchange post-processing, also evaluate the static transverse
+bare susceptibility :math:`\chi^0_{ij}(\omega = 0)` of the d channel for every pair of
+the pair list and write it to ``chi0_ij.dat``:
+
+.. math::
+
+   \chi^0_{ij} = -\frac{X - \bar Y}{2\pi i}, \quad
+   X = \int f(E)\, \mathrm{Tr}_d[G^{\uparrow\uparrow}_{ji} G^{\downarrow\downarrow}_{ij}]\, dE, \quad
+   Y = \int f(E)\, \mathrm{Tr}_d[G^{\downarrow\downarrow}_{ji} G^{\uparrow\uparrow}_{ij}]\, dE .
+
+Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
+``channels = 'd'``. Without SOC :math:`X = Y` and :math:`\chi^0_{ij}` is real.
+
+**Default:** ``.false.``
+
+**Notes:**
+
+- In ``&calculation`` namelist. Needs ``nsp = 1``, or ``nsp = 2`` with every
+  moment along :math:`\pm z`; other runs stop.
+- Runs on whichever ``gf_route`` filled ``G_ij``, and with both values of
+  ``exchange_integration``. The on-site term :math:`\chi^0_{ii}` needs the pair
+  :math:`(i, i)` in the pair list.
+- With SOC the transverse channel alone is not closed: the coupling to the
+  longitudinal and charge channels is not included.
+
+**Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
+(``chi0_pair_mesh``, ``chi0_pair_moments``)
+
 green_backend
 -------------
 

@@ -32,16 +32,17 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Pair loop of the exchange consumers (J/D/A, two-index J/D/A, Gilbert damping, moment of inertia).
+   !> Pair loop of the exchange consumers (J/D/A, two-index J/D/A, Gilbert damping, moment of inertia, static
+   !> transverse chi0 of spin_response_rs).
    !> @details Every enabled consumer runs its per-pair kernel on the Green functions of the pair, then its finalize
    !>          writes the outputs. With stream = .false. the Green functions of all local pairs are already filled
    !>          (k-space routes) and the kernels read slot = local pair index. With stream = .true. (real-space recursion
    !>          route) the Green-function arrays hold one slot: each pair is reconstructed into slot 1 before the kernels.
    !---------------------------------------------------------------------------
-   module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia)
+   module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia, do_chi0)
       use mpi_mod
       class(exchange) :: this
-      logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
+      logical, intent(in) :: stream, do_exchange, do_damping, do_inertia, do_chi0
       type(energy_nodes) :: nodes
       integer :: i, j, njij_glob, slot, ief, nenergy, nres, nb
       real(rp) :: step_size
@@ -52,6 +53,7 @@ contains
       ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
       real(rp), allocatable :: dpair(:, :), dtotal(:, :), dcontrib(:, :)
       real(rp), allocatable :: ipair(:, :), ipair_b(:, :, :), itotal(:, :), icontrib(:, :)
+      complex(rp), allocatable :: chi0(:)
 
       damping = do_damping
       if (damping) damping = damping_ready(this)
@@ -66,8 +68,13 @@ contains
                    xcparts(28, this%lattice%njij), source=0.0_rp)
          nodes = real_mesh_nodes(this)
       end if
+      if (do_chi0) then
+         call chi0_check(this)
+         allocate (chi0(this%lattice%njij), source=(0.0_rp, 0.0_rp))
+         if (.not. do_exchange) nodes = real_mesh_nodes(this)
+      end if
       ! Moment space: the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
-      if (moments .and. do_exchange) call this%green%chebyshev_exchange_weights(h, kernel)
+      if (moments .and. (do_exchange .or. do_chi0)) call this%green%chebyshev_exchange_weights(h, kernel)
       ! Energy-resolved arrays: empty in moment space, where the energy-resolved files are not written
       nres = merge(0, nenergy, moments)
       if (damping) allocate (dtotal(9, nres), dcontrib(9, nres), dpair(19, this%lattice%njij), source=0.0_rp)
@@ -91,6 +98,14 @@ contains
             slot = 1
             call this%green%fill_intersite_gf_pair(njij_glob, slot)
             call this%green%fill_intersite_gf_twoindex_pair(slot)
+         end if
+         ! Before the exchange kernels: in moment space they overwrite slot 2, which chi0_pair fills with the p = 0 transform
+         if (do_chi0) then
+            if (moments) then
+               chi0(njij_glob) = chi0_pair_moments(this, h, kernel)
+            else
+               chi0(njij_glob) = chi0_pair_mesh(this, nodes, slot)
+            end if
          end if
          if (do_exchange .and. moments) then
             call moment_exchange_pair(this, h, kernel, i, j, xc(:, njij_glob), xcso(:, njij_glob), xcfo(:, njij_glob), &
@@ -119,9 +134,79 @@ contains
          call exchange_finalize(this, xc)
          call exchange_twoindex_finalize(this, xcso, xcfo, xcparts)
       end if
+      if (do_chi0) call chi0_finalize(this, chi0)
       if (damping) call damping_finalize(this, dpair, dtotal, ief, moments)
       if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief, moments)
    end subroutine calculate_pairwise
+
+   !> Stop unless the run is collinear (nsp = 1, or nsp = 2 with every moment along +-z) and has a d channel: the spin
+   !> blocks of G are then the up and down states of the transverse response of spin_response_rs.
+   subroutine chi0_check(this)
+      class(exchange) :: this
+      integer :: it
+      real(rp) :: m(3)
+
+      if (this%control%nsp /= 1 .and. this%control%nsp /= 2) &
+         call g_logger%fatal('do_chi0 needs nsp = 1 or 2 (collinear, with or without SOC)', __FILE__, __LINE__)
+      if (lmax_basis < 2) call g_logger%fatal('do_chi0 needs lmax >= 2 (d channel)', __FILE__, __LINE__)
+      if (this%control%nsp == 1) return
+      do it = 1, this%lattice%ntype
+         m = this%symbolic_atom(it)%potential%mom
+         if (norm2(m(1:2)) > 1.0e-8_rp*norm2(m)) &
+            call g_logger%fatal('do_chi0 with nsp = 2 needs every moment along +-z (type '//int2str(it)//')', __FILE__, __LINE__)
+      end do
+   end subroutine chi0_check
+
+   !> chi0_ij of the pair in Green-function slot `slot` on the real energy mesh (Simpson with the Fermi function).
+   function chi0_pair_mesh(this, nodes, slot) result(chi0)
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot
+      complex(rp) :: chi0
+      complex(rp) :: t(size(nodes%z), 2)
+      real(rp) :: re(2), im(2)
+      integer :: k, n
+
+      n = size(nodes%z)
+      t = chi0_traces(this%green%gij(:, :, 1:n, slot), this%green%gji(:, :, 1:n, slot))
+      do k = 1, 2
+         call nodes%integrate(real(t(:, k), rp), re(k))
+         call nodes%integrate(aimag(t(:, k)), im(k))
+      end do
+      chi0 = chi0_from_traces(cmplx(re(1), im(1), rp), cmplx(re(2), im(2), rp))
+   end function chi0_pair_mesh
+
+   !> chi0_ij from the raw moments in slot 1 and their p = 0 bilinear transform, written to slot 2:
+   !> int f Tr[A(E) B(E)] dE = sum_m Tr[A_m B~_m] (see moment_exchange_pair).
+   function chi0_pair_moments(this, h, kernel) result(chi0)
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces
+      class(exchange) :: this
+      complex(rp), intent(in) :: h(0:, 0:)
+      real(rp), intent(in) :: kernel(:)
+      complex(rp) :: chi0
+      complex(rp), allocatable :: t(:, :)
+      integer :: n
+
+      n = size(kernel)
+      call this%green%transform_intersite_moments(1, 2, h(:, 0), kernel)
+      t = chi0_traces(this%green%gij(:, :, 1:n, 1), this%green%gji(:, :, 1:n, 2))
+      chi0 = chi0_from_traces(sum(t(:, 1)), sum(t(:, 2)))
+   end function chi0_pair_moments
+
+   !> Sum chi0 over the ranks and write chi0_ij.dat on rank 0.
+   subroutine chi0_finalize(this, chi0)
+      use mpi_mod
+      use spin_response_rs_mod, only: write_chi0_pairs
+      class(exchange) :: this
+      complex(rp), intent(inout) :: chi0(:)
+
+#ifdef USE_MPI
+      call MPI_ALLREDUCE(MPI_IN_PLACE, chi0, size(chi0), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+      if (rank == 0) call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, &
+                                           this%lattice%cr, chi0)
+   end subroutine chi0_finalize
 
    !> J, D, A of pair (i, j) from the raw moments in Green-function slot 1 (see fill_intersite_moments_pair). With
    !> Delta = alpha + beta E the integral is the sum over the E^p terms (alpha_i, alpha_j; beta_i, alpha_j and alpha_i, beta_j;

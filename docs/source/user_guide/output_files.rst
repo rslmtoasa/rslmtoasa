@@ -166,6 +166,12 @@ Dzyaloshinskii-Moriya vector (same first five columns, three components, distanc
 - Estimation of ordering temperature (Curie/Néel)
 - Comparison with experiment
 
+**chi0_ij.dat** (with ``do_chi0 = .true.``)
+
+Static transverse bare susceptibility of the d channel, one row per pair, after a one-line header:
+atoms ``i``, ``j``, their types, :math:`\mathbf{r}_j - \mathbf{r}_i` (three components, cluster
+coordinates), its length, and the real and imaginary parts of :math:`\chi^0_{ij}` (1/Ry).
+
 Transport Properties
 ====================
 
