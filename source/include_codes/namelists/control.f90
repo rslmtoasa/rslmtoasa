@@ -13,7 +13,7 @@ logical :: gpu_moment_download
 character(len=sl) :: linear_in, linear_out
 character(len=sl) :: density_policy
 logical :: gbt_scf_diagnostics
-logical :: cheb_lp
+logical :: cheb_lp, nonlocal_dm
 integer :: cheb_lp_factor
 logical :: fresh_start !< Ignore local <element>_out.nml files when loading atomic data.
 ! Constraints are provided in a separate namelist file `constraints.f90`
@@ -25,4 +25,4 @@ namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    gpu_stochastic_block, cpu_reconstruction_precision, &
    random_vec_num, cond_ll, cond_calctype, linear_in, linear_out, lmax, &
    dipole_electrostatics, dipole_mix, density_policy, gbt_scf_diagnostics, fresh_start, &
-   cheb_lp, cheb_lp_factor, cheb_kernel, cheb_kernel_lambda
+   cheb_lp, cheb_lp_factor, cheb_kernel, cheb_kernel_lambda, nonlocal_dm

@@ -1633,8 +1633,16 @@ contains
    !>          per unique (seed, target) entry. M_ij = M_ji^H is formed by the reconstruction. The request is kept in this%req.
    !> @param[inout] this Recursion object; fills os_mu (FP64; linear prediction on the host when enabled).
    module subroutine chebyshev_recur_ij_oneshot(this)
-      use mpi_mod, only: rank, start_atom, end_atom
+      use mpi_mod, only: start_atom, end_atom
       class(recursion), intent(inout) :: this
+      call this%chebyshev_oneshot_pairs(this%lattice%ijpair, start_atom, end_atom)
+   end subroutine chebyshev_recur_ij_oneshot
+
+   !> @brief Core of the one-shot recursion for the pairs(first:last, 1:2), see chebyshev_recur_ij_oneshot.
+   module subroutine chebyshev_oneshot_pairs(this, pairs, first, last)
+      use mpi_mod, only: rank
+      class(recursion), intent(inout) :: this
+      integer, intent(in) :: pairs(:, :), first, last
       real(rp) :: a, b, emin_win, emax_win
       integer :: s, k, m, i, nmom, ntot, ntg, p0, kk
       complex(rp), allocatable :: prev(:, :, :), cur(:, :, :), nxt(:, :, :), work(:, :, :, :)
@@ -1647,7 +1655,7 @@ contains
       ntot = this%lp%n_total(this%lattice%control%lld)
       kk = this%lattice%kk
 
-      call this%req%build(this%lattice%ijpair, start_atom, end_atom)
+      call this%req%build(pairs, first, last)
       if (this%req%npair == 0) return
       on_gpu = gpu_plugin_ready(this, 'chebyshev_recur_ij_oneshot()', allow_hoh=.true.)
       if (on_gpu) then
@@ -1720,7 +1728,7 @@ contains
          end do
       end subroutine gather
 
-   end subroutine chebyshev_recur_ij_oneshot
+   end subroutine chebyshev_oneshot_pairs
 
    !> @brief Compute Chebyshev orbital-moment response data.
    !> @details Builds angular-momentum operator insertions and evaluates

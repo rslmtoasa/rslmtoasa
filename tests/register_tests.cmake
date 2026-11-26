@@ -257,6 +257,7 @@ if(RUN_UNIT_TESTS)
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
   add_fortran_unit_test(UnitIntersiteRequest quick SOURCES ${TestDIR}/unit/test_intersite_request.f90)
+  add_fortran_unit_test(UnitNonlocalPairs quick SOURCES ${TestDIR}/unit/test_nonlocal_pairs.f90)
   add_fortran_unit_test(UnitSpinResponseRs quick SOURCES ${TestDIR}/unit/test_spin_response_rs.f90 LABELS spin-response)
   add_fortran_unit_test(UnitBlockTridiag quick SOURCES ${TestDIR}/unit/test_block_tridiag.f90)
   add_fortran_unit_test(UnitEffectiveHamiltonian quick SOURCES ${TestDIR}/unit/test_effective_hamiltonian.f90 LABELS hamiltonian_export)

@@ -769,6 +769,18 @@ contains
       b = (emax_win + emin_win)/2.0_rp
       call cheb_fast_reset_cache()
 
+      if (this%control%nonlocal_dm) then
+         ! One-shot recursion per site: on-site moments for the SCF, neighbour moments kept in os_mu/req.
+         ! The linear prediction is already applied per target there.
+         call this%nld%neighbour_pairs(this%lattice, start_atom, end_atom)
+         call this%chebyshev_oneshot_pairs(this%nld%pairs, 1, size(this%nld%pairs, 1))
+         do i = start_atom, end_atom
+            j = findloc(this%req%seed_site, this%lattice%irec(i), dim=1)
+            this%mu_n(:, :, :, g2l_map(i)) = this%os_mu(:, :, :, this%req%target_ptr(j))
+         end do
+         return
+      end if
+
       if (gpu_plugin_ready(this, 'chebyshev_recur()', allow_hoh=.true.)) then
          call gpu_plugin_upload_hamiltonian(this)
          do i = start_atom, end_atom

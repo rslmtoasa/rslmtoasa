@@ -91,6 +91,7 @@ add_library(${PROJECT_NAME} STATIC
     recursion_chebyshev.f90
     recursion_transport.f90
     intersite_request.f90
+    nonlocal_density.f90
     block_tridiag.f90
     sparse.f90
     report.f90

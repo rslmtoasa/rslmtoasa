@@ -471,6 +471,23 @@ scf_integration
 
 **Related code:** ``source/bands.f90`` (``calculate_fermi``, ``integrate``), ``source/green_chebyshev.f90`` (``chebyshev_scf_nodes``)
 
+nonlocal_dm
+-----------
+
+**Type:** Logical
+
+**Purpose:** Run the Chebyshev recursion of the real-space SCF as the one-shot inter-site recursion, so that one recursion per recursion site gives the on-site moments the SCF needs and the inter-site moments :math:`P_j^\dagger T_m P_i` to every neighbour :math:`j` of the site.
+
+**Default:** ``.false.``
+
+**Notes:**
+
+- Requires ``recur = 'chebyshev'`` and ``scf_integration = 'moments'`` (fatal otherwise).
+- The on-site moments are computed in double precision with the Hamiltonian action of the one-shot route, whatever ``cheb_backend`` is, and cost about :math:`2\times` the product-identity recursion.
+- Off, the SCF is bit-identical to a run without the keyword.
+
+**Related code:** ``source/nonlocal_density.f90``, ``source/recursion_chebyshev.f90``, ``source/recursion_transport.f90``
+
 cheb_backend
 ------------
 

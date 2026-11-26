@@ -201,6 +201,9 @@ The Kubo-Bastin conductivity moments (``compute_moments_stochastic`` in
 ``cond_calctype = 'random_vec'`` (default ``'per_type'``); ``random_vec_num``
 in ``&control`` sets their number.
 
+With ``nonlocal_dm = .true.`` the SCF moments are taken from the one-shot inter-site recursion
+(see the inter-site section), which also returns :math:`\mu_m(j,i)` for the neighbours :math:`j` of each recursion site :math:`i`.
+
 Numerical Aspects
 =================
 
