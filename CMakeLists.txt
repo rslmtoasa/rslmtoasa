@@ -203,6 +203,20 @@ if(ENABLE_LIBXC)
         message(STATUS "libXC library paths: ${LIBXC_LIBRARY_DIRS}")
         message(STATUS "libXCF03 libraries: ${LIBXCF03_LIBRARIES}")
         
+        # Fortran .mod files are compiler specific: check that this compiler can read libxc's module
+        include(CheckFortranSourceCompiles)
+        set(CMAKE_REQUIRED_INCLUDES ${LIBXCF03_INCLUDE_DIRS} ${LIBXC_INCLUDE_DIRS})
+        check_fortran_source_compiles("program libxc_module_check
+  use xc_f03_lib_m, only: xc_family_lda
+  print *, xc_family_lda
+end program libxc_module_check" RSLMTO_LIBXC_MODULE_USABLE SRC_EXT F90)
+        unset(CMAKE_REQUIRED_INCLUDES)
+        if(NOT RSLMTO_LIBXC_MODULE_USABLE)
+            message(FATAL_ERROR "The libxc Fortran module xc_f03_lib_m was not usable with ${CMAKE_Fortran_COMPILER} "
+                "(${CMAKE_Fortran_COMPILER_ID}); it was probably built by a different Fortran compiler. "
+                "Build libxc with this compiler and put it first on PKG_CONFIG_PATH, or configure with -DENABLE_LIBXC=OFF.")
+        endif()
+
         # Set up compiler flags
         set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DHAVE_LIBXC")
         
