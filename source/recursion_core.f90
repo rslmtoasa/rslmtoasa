@@ -389,6 +389,8 @@ contains
       nmom = this%lp%n_total(this%control%lld)
       ! Inter-site layout: 4 slots per pair owned by this rank (start_atom..end_atom, set before construction)
       nslot = 4*(end_atom - start_atom + 1)
+      ! One-shot route keeps compact per-entry storage (os_*) instead of the four-slot arrays
+      if (this%control%intersite_mode == 'one_shot') nslot = 0
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('recursion.a', this%a, (/max(this%lattice%control%llsp, this%lattice%control%lld), nb, this%lattice%nrec, 3/))

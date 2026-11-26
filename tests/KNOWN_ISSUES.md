@@ -612,7 +612,7 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 
 ### Contour inter-site Green function halves self-pairs (i == j) — 2026-11-25
 - **Read, not run:** the eta (complex-contour) branch of `calculate_intersite_gf_core` (`green_block.f90`) applies `gij = 0.5*[(y1 - y2) - i(y3 - y4)]` to every pair. For a self-pair only slot 1 is filled (unit seed; slots 2–4 are skipped by `recur_b_ij` / `chebyshev_recur_ij`), so `gij = gji = 0.5*G_ii`, provided slots 2–4 hold zeros (not checked). The real-mesh branch special-cases i == j (`gij = gji = g0(:,:,:,1)`).
-- The one-shot routes (`intersite_mode = 'one_shot'`) fill slot 1 with G_ii and inherit the same factor. No contour test uses a self-pair. Proposal: copy the real-mesh special case into the eta branch (a few lines).
+- The one-shot routes (`intersite_mode = 'one_shot'`) return G_ii and the contour branch applies the same 0.5 for i = j to match the pairs route. No contour test uses a self-pair. Proposal: copy the real-mesh special case into the eta branch (a few lines).
 
 
 ### Exchange two-index outputs differ in the last bits with OpenMP (pairs route) — 2026-11-25

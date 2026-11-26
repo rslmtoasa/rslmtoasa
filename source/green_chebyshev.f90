@@ -29,18 +29,29 @@ contains
    module subroutine chebyshev_green_ij(this, istart)
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
+      integer :: n
+
+      this%g0 = 0.0d0
+      do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
+         call chebyshev_reconstruct_block(this, this%recursion%mu_n(:, :, :, n + istart - 1), this%g0(:, :, :, n))
+      end do
+   end subroutine chebyshev_green_ij
+
+   !> Real-mesh Green function g(:,:,ie) on en%ene of one block of moments mu(:,:,:) (kernel-damped Chebyshev series).
+   subroutine chebyshev_reconstruct_block(this, mu, g)
+      class(green), intent(inout) :: this
+      complex(rp), intent(in) :: mu(:, :, :)
+      complex(rp), intent(inout) :: g(:, :, :)
       ! Local variables
       real(rp), dimension(:), allocatable :: kernel
       real(rp), dimension(:), allocatable :: wscale
       complex(rp), dimension(:, :, :), allocatable :: mug
       real(rp) :: a, b, emin_win, emax_win
       complex(rp) :: exp_factor
-      integer :: ie, i, l, m, n
+      integer :: ie, i, l, m
 
-      this%g0 = 0.0d0
-
-      allocate (kernel(size(this%recursion%mu_n, 3)), wscale(this%en%channels_ldos + 10))
-      allocate (mug(nb, nb, size(this%recursion%mu_n, 3)))
+      allocate (kernel(size(mu, 3)), wscale(this%en%channels_ldos + 10))
+      allocate (mug(nb, nb, size(mu, 3)))
       ! Defining rescaling coeficients
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
@@ -49,39 +60,89 @@ contains
       wscale(:) = (this%en%ene(:) - b)/a
 
       ! Calculating the damping kernel selected by control%cheb_kernel (Jackson by default)
-      call cheb_kernel_vector(this, size(this%recursion%mu_n, 3), kernel)
+      call cheb_kernel_vector(this, size(mu, 3), kernel)
 
-      do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               mug(l, m, :) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
-            end do
+      ! Multiply the moments with the kernel
+      do l = 1, nb
+         do m = 1, nb
+            mug(l, m, :) = mu(l, m, :)*kernel(:)
          end do
-         mug(:, :, 2:size(kernel)) = mug(:, :, 2:size(kernel))*2.0_rp
+      end do
+      mug(:, :, 2:size(kernel)) = mug(:, :, 2:size(kernel))*2.0_rp
 
-         ! Calculate the density of states
-         !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-         do ie = 1, this%en%channels_ldos + 10
-            do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
-               do l = 1, nb
-                  do m = 1, nb
-                     this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + mug(l, m, i)*exp_factor
-                  end do
-               end do
-            end do
+      ! Calculate the density of states
+      !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
+      do ie = 1, this%en%channels_ldos + 10
+         do i = 1, size(kernel)
+            exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
             do l = 1, nb
                do m = 1, nb
-                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
+                  g(l, m, ie) = g(l, m, ie) + mug(l, m, i)*exp_factor
                end do
             end do
          end do
-         !$omp end parallel do
-      end do  ! End loop on n
+         do l = 1, nb
+            do m = 1, nb
+               g(l, m, ie) = g(l, m, ie)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
+            end do
+         end do
+      end do
+      !$omp end parallel do
 
       deallocate (kernel, wscale, mug)
-   end subroutine chebyshev_green_ij
+   end subroutine chebyshev_reconstruct_block
+
+   !> M_ij(m) = M_ji(m)^H for every moment order m.
+   function moments_dagger(mu) result(md)
+      complex(rp), intent(in) :: mu(:, :, :)
+      complex(rp) :: md(size(mu, 2), size(mu, 1), size(mu, 3))
+      integer :: m
+
+      do m = 1, size(mu, 3)
+         md(:, :, m) = conjg(transpose(mu(:, :, m)))
+      end do
+   end function moments_dagger
+
+   !> Real-mesh G_ij and G_ji (nb,nb,nv) of local pair ij_loc from the one-shot moments M_ji = os_mu(:,:,:,ient),
+   !> M_ij = M_ji^H. Self pair: G_ij = G_ji = G_ii.
+   module subroutine chebyshev_green_ij_oneshot(this, ij_loc, gij, gji)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ij_loc
+      complex(rp), intent(out) :: gij(:, :, :), gji(:, :, :)
+      complex(rp), allocatable :: mu_local(:, :, :, :), g0_local(:, :, :, :)
+      real(rp), allocatable :: damp(:)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: ient, nv, n_mom
+      logical :: self_pair
+      type(rsrec_cuda_backend), pointer :: gpu_backend
+
+      ient = this%recursion%req%pair_entry(ij_loc)
+      self_pair = this%lattice%ijpair(start_atom + ij_loc - 1, 1) == this%lattice%ijpair(start_atom + ij_loc - 1, 2)
+      nv = this%en%channels_ldos + 10
+      n_mom = size(this%recursion%os_mu, 3)
+
+      if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
+         call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+         a = (emax_win - emin_win)/(2 - 0.3_rp)
+         b = (emax_win + emin_win)/2.0_rp
+         allocate (mu_local(nb, nb, n_mom, 2), g0_local(nb, nb, nv, 2))
+         mu_local(:, :, :, 1) = moments_dagger(this%recursion%os_mu(:, :, :, ient))
+         mu_local(:, :, :, 2) = this%recursion%os_mu(:, :, :, ient)
+         gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(this%recursion%gpu_precision_code())
+         call cheb_damping(this, n_mom, damp)
+         call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local, damp)
+         gij = g0_local(:, :, :, 1)
+         gji = g0_local(:, :, :, 2)
+         deallocate (mu_local, g0_local)
+      else
+         gji = 0.0d0
+         call chebyshev_reconstruct_block(this, this%recursion%os_mu(:, :, :, ient), gji)
+         gij = 0.0d0
+         if (.not. self_pair) call chebyshev_reconstruct_block(this, moments_dagger(this%recursion%os_mu(:, :, :, ient)), gij)
+      end if
+      if (self_pair) gij = gji
+   end subroutine chebyshev_green_ij_oneshot
 
    !---------------------------------------------------------------------------
    !> @brief GPU drop-in for chebyshev_green_ij (intersite Chebyshev GF).
@@ -147,6 +208,48 @@ contains
             nb, size(this%recursion%mu_n, 3), cmplx(this%en%ene(fermi_point), 0.0_rp, rp) + eta, a, b, g_ef(:, :, n), damp)
       end do  ! End loop on n
    end subroutine chebyshev_green_ij_eta
+
+   !> Contour G_ij and G_ji (nb,nb,size(z)) of local pair ij_loc at the complex energies z from the one-shot moments.
+   !> Self pair: G_ij = G_ji = G_ii.
+   module subroutine chebyshev_green_ij_eta_oneshot(this, ij_loc, z, gij, gji)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ij_loc
+      complex(rp), intent(in) :: z(:)
+      complex(rp), intent(out) :: gij(:, :, :), gji(:, :, :)
+      complex(rp), allocatable :: mu_local(:, :, :, :), g0_local(:, :, :, :), mij(:, :, :)
+      real(rp), allocatable :: damp(:)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: ient, iz, n_mom
+      logical :: self_pair
+      type(rsrec_cuda_backend), pointer :: gpu_backend
+
+      ient = this%recursion%req%pair_entry(ij_loc)
+      self_pair = this%lattice%ijpair(start_atom + ij_loc - 1, 1) == this%lattice%ijpair(start_atom + ij_loc - 1, 2)
+      n_mom = size(this%recursion%os_mu, 3)
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      call cheb_damping(this, n_mom, damp)
+
+      if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
+         allocate (mu_local(nb, nb, n_mom, 2), g0_local(nb, nb, size(z), 2))
+         mu_local(:, :, :, 1) = moments_dagger(this%recursion%os_mu(:, :, :, ient))
+         mu_local(:, :, :, 2) = this%recursion%os_mu(:, :, :, ient)
+         gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(this%recursion%gpu_precision_code())
+         call gpu_backend%chebyshev_gf_eta(mu_local, real(z(1), rp), z - real(z(1), rp), a, b, g0_local, damp)
+         gij = g0_local(:, :, :, 1)
+         gji = g0_local(:, :, :, 2)
+         deallocate (mu_local, g0_local)
+      else
+         if (.not. self_pair) mij = moments_dagger(this%recursion%os_mu(:, :, :, ient))
+         do iz = 1, size(z)
+            call cheb_green_complex(this%recursion%os_mu(:, :, :, ient), nb, n_mom, z(iz), a, b, gji(:, :, iz), damp)
+            if (.not. self_pair) call cheb_green_complex(mij, nb, n_mom, z(iz), a, b, gij(:, :, iz), damp)
+         end do
+      end if
+      if (self_pair) gij = gji
+   end subroutine chebyshev_green_ij_eta_oneshot
 
    !---------------------------------------------------------------------------
    !> @brief Dispatcher for the on-site Chebyshev Green’s-function/DOS

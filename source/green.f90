@@ -85,6 +85,8 @@ module green_mod
       procedure :: chebyshev_green_ij
       procedure :: chebyshev_green_ij_gpu
       procedure :: chebyshev_green_ij_eta
+      procedure :: chebyshev_green_ij_oneshot
+      procedure :: chebyshev_green_ij_eta_oneshot
       procedure :: chebyshev_dos_dispatch
       procedure :: cheb_damping
       procedure :: restore_to_default
@@ -150,6 +152,19 @@ module green_mod
       integer, intent(in) :: fermi_point
    end subroutine chebyshev_green_ij_eta
 
+   module subroutine chebyshev_green_ij_oneshot(this, ij_loc, gij, gji)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ij_loc
+      complex(rp), intent(out) :: gij(:, :, :), gji(:, :, :)
+   end subroutine chebyshev_green_ij_oneshot
+
+   module subroutine chebyshev_green_ij_eta_oneshot(this, ij_loc, z, gij, gji)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ij_loc
+      complex(rp), intent(in) :: z(:)
+      complex(rp), intent(out) :: gij(:, :, :), gji(:, :, :)
+   end subroutine chebyshev_green_ij_eta_oneshot
+
    module subroutine chebyshev_dos_dispatch(this)
       class(green), intent(inout) :: this
    end subroutine chebyshev_dos_dispatch
@@ -188,11 +203,11 @@ module green_mod
       integer, intent(in) :: fermi_point
    end subroutine block_green_ij_eta
 
-   module subroutine block_green_ij_oneshot(this, ij_loc, z, g)
+   module subroutine block_green_ij_oneshot(this, ij_loc, z, gij, gji)
       class(green), intent(inout) :: this
       integer, intent(in) :: ij_loc
       complex(rp), intent(in) :: z(:)
-      complex(rp), intent(inout) :: g(:, :, :, :)
+      complex(rp), intent(out) :: gij(:, :, :), gji(:, :, :)
    end subroutine block_green_ij_oneshot
 
    module subroutine block_green_ij(this, istart)

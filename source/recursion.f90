@@ -23,6 +23,7 @@ module recursion_mod
 
    use hamiltonian_mod
    use cheb_lp_mod, only: cheb_lp
+   use intersite_request_mod, only: intersite_request
    use chebyshev_fast_mod, only: cheb_moments_fast, cheb_moments_fast_batched, &
       cheb_moments_fast_mkl_batch, &
       cheb_moments_fast_mkl_sparse, cheb_fast_reset_cache, &
@@ -69,8 +70,14 @@ module recursion_mod
       !> Block recursion coefficients
       complex(rp), dimension(:, :, :, :), allocatable :: a_b, b2_b
       logical :: b2_b_is_sqrt = .false.
-      !> One-shot block Haydock: S_m(j) = P_j^H Q_m of every local pair, shape (nb,nb,lld-1,local pairs)
+      !> One-shot inter-site route: seeds, targets and the local pair -> (seed, target) entry map
+      type(intersite_request) :: req
+      !> One-shot block Haydock: S_m(j) = P_j^H Q_m per entry, shape (nb,nb,lld-1,entries)
       complex(rp), dimension(:, :, :, :), allocatable :: os_s
+      !> One-shot block Haydock: A_m and B_m^2 per seed, shape (nb,nb,lld,seeds)
+      complex(rp), dimension(:, :, :, :), allocatable :: os_a, os_b2
+      !> One-shot Chebyshev: M_ji(m) per entry, shape (nb,nb,moments,entries)
+      complex(rp), dimension(:, :, :, :), allocatable :: os_mu
       complex(rp), dimension(:, :, :), allocatable :: atemp_b, b2temp_b
       !> Atom list in hopping region
       integer, dimension(:), allocatable :: izero, idum, irlist, nzero, mzero, ndum, mdum
@@ -551,7 +558,7 @@ module recursion_mod
    end subroutine recur_b_ij
 
    !> @brief One-shot block Haydock for intersite pairs: one block-Lanczos recursion per seed site.
-   !> @param[inout] this Recursion object; fills a_b, b2_b (slot 1 of each pair) and os_s.
+   !> @param[inout] this Recursion object; fills req, os_a, os_b2 (per seed) and os_s (per entry).
    module subroutine recur_b_ij_oneshot(this)
       class(recursion), intent(inout) :: this
    end subroutine recur_b_ij_oneshot
@@ -770,7 +777,7 @@ module recursion_mod
 
    end subroutine chebyshev_recur_ij
 
-   !> @brief One-shot variant of chebyshev_recur_ij: one recursion per seed site, same mu_n layout.
+   !> @brief One-shot variant of chebyshev_recur_ij: one recursion per seed site, M_ji stored once per entry in os_mu.
    module subroutine chebyshev_recur_ij_oneshot(this)
       class(recursion), intent(inout) :: this
    end subroutine chebyshev_recur_ij_oneshot
