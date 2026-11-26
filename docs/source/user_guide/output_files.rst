@@ -172,6 +172,13 @@ Static transverse bare susceptibility of the d channel, one row per pair, after 
 atoms ``i``, ``j``, their types, :math:`\mathbf{r}_j - \mathbf{r}_i` (three components, cluster
 coordinates), its length, and the real and imaginary parts of :math:`\chi^0_{ij}` (1/Ry).
 
+**chi0_types.dat** (with ``do_chi0 = .true.``)
+
+One row per atom type with a self pair, after a one-line header: type, seed atom, number of its pairs,
+d moment (:math:`\mu_B`), Goldstone :math:`U` (Ry, by construction), Mills :math:`U` (Ry), Mills
+residual, and :math:`\chi^0(q = 0)` towards every type (1/Ry), summed over the listed pairs. See
+``do_chi0`` in :ref:`keywords/output_options`.
+
 Transport Properties
 ====================
 

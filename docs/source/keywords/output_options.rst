@@ -255,6 +255,20 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   :math:`(i, i)` in the pair list.
 - With SOC the transverse channel alone is not closed: the coupling to the
   longitudinal and charge channels is not included.
+- Also writes ``chi0_types.dat``, one row per atom type that has a self pair
+  :math:`(i, i)`; the first such :math:`i` of the type is its seed. Columns: the
+  d moment :math:`m_d = -\tfrac{1}{\pi}\mathrm{Im}\int f\,\mathrm{Tr}_d[G^{\uparrow\uparrow}_{ii} - G^{\downarrow\downarrow}_{ii}]\,dE`
+  of the seed, :math:`U` from the Goldstone condition
+  :math:`\sum_b \chi^0_{ab}(q=0)\, U_b m_b = -m_a` (holds by construction),
+  :math:`U_\mathrm{Mills} = (C^\downarrow_d - C^\uparrow_d)/m_d` from ``center_band``, the
+  Mills residual :math:`1 + \sum_b \chi^0_{ab} U^\mathrm{Mills}_b m_b / m_a`, and
+  :math:`\chi^0_{ab}(q=0)`, the sum of :math:`\mathrm{Re}\,\chi^0_{ij}` over the listed pairs of
+  the seed with :math:`j` of type :math:`b`. The sum runs over the pair list as given:
+  list every atom of the shells to include, not one per shell. The three :math:`U`
+  columns are ``n/a`` unless every type has a seed and a moment of at least
+  1e-6 :math:`\mu_B`. The definitions follow ``spin_response`` with ``method = 'mills'``.
+- In moment space (``exchange_integration = 'moments'``) :math:`m_d` uses the linear
+  Chebyshev weights on the same interval, window and kernel as the bilinear ones.
 
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
 (``chi0_pair_mesh``, ``chi0_pair_moments``)
