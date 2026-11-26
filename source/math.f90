@@ -1687,6 +1687,74 @@ contains
       end do
    end subroutine gauss_legendre
 
+   !> Energy integrals of the Chebyshev Green-function bilinear
+   !> \f$ \int f(E) E^p \mathrm{Tr}[A G_X(E) B G_Y(E)] dE \f$, with
+   !> \f$ G(E) = \sum_m w_m k_m \mu_m (-i e^{-im\theta})/\sqrt{a^2-(E-b)^2} \f$, \f$ E = a\cos\theta + b \f$.
+   !> Returns h(s,p) = - int f(E) E^p exp(-i s theta) / (a^2-(E-b)^2) dE, s = 0..2n-2, p = 0..2,
+   !> over [e_lo, e_f] (kbt = 0, step f) or with f = fermifun (kbt > 0; panels split at e_f -+ 40 kbt).
+   !> Gauss-Legendre in theta, 2n+64 nodes per panel.
+   subroutine cheb_bilinear_weights(n, a, b, e_lo, e_f, kbt, h)
+      integer, intent(in) :: n
+      real(rp), intent(in) :: a, b, e_lo, e_f, kbt
+      complex(rp), intent(out) :: h(0:2*n - 2, 0:2)
+      integer :: nq, ipan, iq, s, p
+      real(rp) :: edge(3), th_lo, th_up, fe, e
+      real(rp), allocatable :: x(:), w(:)
+
+      nq = 2*n + 64
+      allocate (x(nq), w(nq))
+      if (kbt > 0.0_rp) then
+         edge = [e_lo, max(e_lo, e_f - 40.0_rp*kbt), e_f + 40.0_rp*kbt]
+      else
+         edge = [e_lo, e_f, e_f]
+      end if
+      if (minval(edge) <= b - a .or. maxval(edge) >= b + a) &
+         error stop 'cheb_bilinear_weights: integration limits outside (b-a, b+a)'
+      h = (0.0_rp, 0.0_rp)
+      do ipan = 1, 2
+         if (edge(ipan + 1) <= edge(ipan)) cycle
+         th_lo = acos((edge(ipan) - b)/a)
+         th_up = acos((edge(ipan + 1) - b)/a)
+         call gauss_legendre(nq, th_up, th_lo, x, w)
+         do iq = 1, nq
+            e = a*cos(x(iq)) + b
+            fe = 1.0_rp
+            if (kbt > 0.0_rp) fe = fermifun(e, e_f, kbt)
+            do p = 0, 2
+               do s = 0, 2*n - 2
+                  h(s, p) = h(s, p) - w(iq)*fe*e**p*exp(-i_unit*s*x(iq))/(a*sin(x(iq)))
+               end do
+            end do
+         end do
+      end do
+   end subroutine cheb_bilinear_weights
+
+   !> Ytilde_m = sum_n c_mn Y_n, c_mn = w_m k_m w_n k_n h(m+n), w_0 = 1, w_m = 2 (m>0).
+   !> h is one column h(:,p) of cheb_bilinear_weights; mu(:,:,m+1) = Y_m.
+   subroutine cheb_bilinear_transform(h, kernel, mu, nt)
+      complex(rp), intent(in) :: h(0:)
+      real(rp), intent(in) :: kernel(:)
+      complex(rp), intent(in) :: mu(:, :, :)
+      complex(rp), intent(out) :: nt(:, :, :)
+      external :: zgemm
+      integer :: n, m, l, nm
+      real(rp) :: wk(size(mu, 3))
+      complex(rp), allocatable :: c(:, :)
+
+      n = size(mu, 3)
+      nm = size(mu, 1)*size(mu, 2)
+      wk = 2.0_rp*kernel(1:n)
+      wk(1) = kernel(1)
+      allocate (c(n, n))
+      do l = 0, n - 1
+         do m = 0, n - 1
+            c(m + 1, l + 1) = wk(m + 1)*wk(l + 1)*h(m + l)
+         end do
+      end do
+      ! c is symmetric: nt(:, m) = sum_n mu(:, n) c(n, m)
+      call zgemm('N', 'N', nm, n, n, (1.0_rp, 0.0_rp), mu, nm, c, n, (0.0_rp, 0.0_rp), nt, nm)
+   end subroutine cheb_bilinear_transform
+
    !> Calculates the imaginary part of the trace
    !> of a square matrix of any dimension.
    !> Implemented by Ivan Miranda on 04.10.2023
