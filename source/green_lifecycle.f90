@@ -105,11 +105,11 @@ contains
 
       nslot = atoms_per_process
       if (present(pair_slots)) nslot = pair_slots
-      ! Energy dimension of the intersite arrays; the moment-space exchange integral stores the Chebyshev moments in it
+      ! Energy dimension of the intersite arrays; in moment space they hold the Chebyshev moments only
       nen = this%en%channels_ldos + 10
       if (this%control%exchange_integration == 'moments') then
          lp = cheb_lp(this%control)
-         nen = max(nen, lp%n_total(this%control%lld))
+         nen = lp%n_total(this%control%lld)
       end if
 
 #ifdef USE_SAFE_ALLOC
