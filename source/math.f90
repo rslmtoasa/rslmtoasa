@@ -56,6 +56,9 @@ module math_mod
 
    !> Boltzmann constant (Ry/K) used by simpson_f
    real(rp), parameter :: kB_simpson_f = 0.633362019d-5
+   !> Extra Gauss-Legendre nodes on the Fermi panel [e_f-40kbt, e_f+40kbt] of the Chebyshev energy integrals:
+   !> f is analytic within pi kbt of the real axis, so 80 kbt need about 200 nodes for 1e-14, independent of n.
+   integer, parameter, private :: cheb_fermi_nodes = 192
 
    ! Irrational
    !> \f$ \sqrt{2} \f$
@@ -1701,18 +1704,13 @@ contains
       real(rp) :: edge(3), th_lo, th_up, fe, e
       real(rp), allocatable :: x(:), w(:)
 
-      nq = 2*n + 64
-      allocate (x(nq), w(nq))
-      if (kbt > 0.0_rp) then
-         edge = [e_lo, max(e_lo, e_f - 40.0_rp*kbt), e_f + 40.0_rp*kbt]
-      else
-         edge = [e_lo, e_f, e_f]
-      end if
-      if (minval(edge) <= b - a .or. maxval(edge) >= b + a) &
-         error stop 'cheb_bilinear_weights: integration limits outside (b-a, b+a)'
+      call cheb_panel_edges(a, b, e_lo, e_f, kbt, edge)
       h = (0.0_rp, 0.0_rp)
       do ipan = 1, 2
          if (edge(ipan + 1) <= edge(ipan)) cycle
+         nq = 2*n + 64
+         if (allocated(x)) deallocate (x, w)
+         allocate (x(nq), w(nq))
          th_lo = acos((edge(ipan) - b)/a)
          th_up = acos((edge(ipan + 1) - b)/a)
          call gauss_legendre(nq, th_up, th_lo, x, w)
@@ -1728,6 +1726,52 @@ contains
          end do
       end do
    end subroutine cheb_bilinear_weights
+
+   !> Panel edges shared by the Chebyshev energy integrals: [e_lo, e_f] (kbt = 0) or
+   !> [e_lo, max(e_lo, e_f-40kbt)], [.., e_f+40kbt] (kbt > 0). Stops if outside (b-a, b+a).
+   subroutine cheb_panel_edges(a, b, e_lo, e_f, kbt, edge)
+      real(rp), intent(in) :: a, b, e_lo, e_f, kbt
+      real(rp), intent(out) :: edge(3)
+
+      if (kbt > 0.0_rp) then
+         edge = [e_lo, max(e_lo, e_f - 40.0_rp*kbt), e_f + 40.0_rp*kbt]
+      else
+         edge = [e_lo, e_f, e_f]
+      end if
+      if (minval(edge) <= b - a .or. maxval(edge) >= b + a) &
+         error stop 'cheb_panel_edges: integration limits outside (b-a, b+a)'
+   end subroutine cheb_panel_edges
+
+   !> Quadrature nodes e(q) and weights w(q) (ascending e) such that
+   !> int_{e_lo}^{inf} f(E) y(E) dE ~= sum_q w(q) y(e(q)) for y = E^p G(E), p = 0..2, G the damped
+   !> Chebyshev series of n moments. Gauss-Legendre in theta on the cheb_bilinear_weights panels, n+64 nodes each
+   !> (+ cheb_fermi_nodes on the Fermi panel).
+   subroutine cheb_energy_nodes(n, a, b, e_lo, e_f, kbt, e, w)
+      integer, intent(in) :: n
+      real(rp), intent(in) :: a, b, e_lo, e_f, kbt
+      real(rp), allocatable, intent(out) :: e(:), w(:)
+      integer :: nq(2), ipan, iq, np
+      real(rp) :: edge(3)
+      real(rp), allocatable :: x(:), wx(:)
+
+      call cheb_panel_edges(a, b, e_lo, e_f, kbt, edge)
+      nq = [n + 64, n + 64 + cheb_fermi_nodes]
+      where (edge(2:3) <= edge(1:2)) nq = 0
+      allocate (e(sum(nq)), w(sum(nq)))
+      np = 0
+      do ipan = 1, 2
+         if (nq(ipan) == 0) cycle
+         if (allocated(x)) deallocate (x, wx)
+         allocate (x(nq(ipan)), wx(nq(ipan)))
+         call gauss_legendre(nq(ipan), acos((edge(ipan + 1) - b)/a), acos((edge(ipan) - b)/a), x, wx)
+         do iq = 1, nq(ipan)
+            np = np + 1
+            e(np) = a*cos(x(iq)) + b
+            w(np) = wx(iq)*a*sin(x(iq))
+            if (kbt > 0.0_rp) w(np) = w(np)*fermifun(e(np), e_f, kbt)
+         end do
+      end do
+   end subroutine cheb_energy_nodes
 
    !> Ytilde_m = sum_n c_mn Y_n, c_mn = w_m k_m w_n k_n h(m+n), w_0 = 1, w_m = 2 (m>0).
    !> h is one column h(:,p) of cheb_bilinear_weights; mu(:,:,m+1) = Y_m.
