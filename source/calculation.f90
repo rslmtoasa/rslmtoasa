@@ -48,7 +48,8 @@ module calculation_mod
    use timer_mod, only: g_timer
    use kpm_profile_mod, only: g_kpm_profile
    use logger_mod, only: g_logger
-   use basis_mod, only: basis_init, norb
+   use basis_mod, only: basis_init, norb, lmax_basis
+   use spin_response_rs_mod, only: check_chi0_input
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q
 #ifdef USE_MPI
    use mpi
@@ -799,6 +800,7 @@ contains
       type(reciprocal), target :: reciprocal_obj
       integer :: i
       logical :: stream, moments
+      real(rp), allocatable :: mom(:, :)
 
       ! The recursion route reconstructs one pair at a time into a single slot of the intersite Green-function arrays
       stream = trim(this%gf_route) == 'recursion'
@@ -818,6 +820,15 @@ contains
                                             green_obj, bands_obj)
       end if
       exchange_obj = exchange(bands_obj)
+
+      ! Refuse unsupported chi0 input before the recursion runs
+      if (this%do_chi0) then
+         allocate (mom(3, lattice_obj%ntype))
+         do i = 1, lattice_obj%ntype
+            mom(:, i) = lattice_obj%symbolic_atoms(i)%potential%mom
+         end do
+         call check_chi0_input(control_obj%nsp, lmax_basis, mom)
+      end if
 
       if (this%exchange_delta == 'onsite') then
          if (control_obj%is_noncollinear()) &
