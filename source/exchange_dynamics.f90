@@ -32,16 +32,17 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Pair loop of the exchange consumers (J/D/A, two-index J/D/A, Gilbert damping, moment of inertia).
+   !> Pair loop of the exchange consumers (J/D/A, two-index J/D/A, Gilbert damping, moment of inertia, static
+   !> transverse chi0 of spin_response_rs).
    !> @details Every enabled consumer runs its per-pair kernel on the Green functions of the pair, then its finalize
    !>          writes the outputs. With stream = .false. the Green functions of all local pairs are already filled
    !>          (k-space routes) and the kernels read slot = local pair index. With stream = .true. (real-space recursion
    !>          route) the Green-function arrays hold one slot: each pair is reconstructed into slot 1 before the kernels.
    !---------------------------------------------------------------------------
-   module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia)
+   module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia, do_chi0)
       use mpi_mod
       class(exchange) :: this
-      logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
+      logical, intent(in) :: stream, do_exchange, do_damping, do_inertia, do_chi0
       type(energy_nodes) :: nodes
       integer :: i, j, njij_glob, slot, ief, nenergy, nres, nb
       real(rp) :: step_size
@@ -52,11 +53,16 @@ contains
       ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
       real(rp), allocatable :: dpair(:, :), dtotal(:, :), dcontrib(:, :)
       real(rp), allocatable :: ipair(:, :), ipair_b(:, :, :), itotal(:, :), icontrib(:, :)
+      complex(rp), allocatable :: chi0(:), lin(:), lin1(:), chi0j(:), chi0w(:, :)
+      real(rp), allocatable :: md(:), mdj(:), j0(:), omega(:)
+      integer, allocatable :: kshift(:)
+      logical :: juelich, do_j0, dynamic
 
       damping = do_damping
       if (damping) damping = damping_ready(this)
       inertia = do_inertia
       moments = this%control%exchange_integration == 'moments'
+      juelich = .false.
       if (inertia) inertia = inertia_ready(this, step_size, moments)
       nenergy = size(this%en%ene)
       ief = fermi_index(this%en%ene, this%en%fermi)
@@ -66,8 +72,34 @@ contains
                    xcparts(28, this%lattice%njij), source=0.0_rp)
          nodes = real_mesh_nodes(this)
       end if
+      if (do_chi0) then
+         allocate (chi0(this%lattice%njij), source=(0.0_rp, 0.0_rp))
+         allocate (md(this%lattice%njij), source=0.0_rp)
+         ! Juelich vertex: needs the raw moments of each pair (H_ij from mu_1), so the real-space Chebyshev route only
+         juelich = stream .and. this%control%recur == 'chebyshev'
+         if (juelich) allocate (chi0j(this%lattice%njij), source=(0.0_rp, 0.0_rp))
+         if (juelich) allocate (mdj(this%lattice%njij), source=0.0_rp)
+         if (.not. do_exchange) nodes = real_mesh_nodes(this)
+         dynamic = .false.
+         if (moments) then
+            call g_logger%info('do_chi0: chi0_dynamic.dat and chi_rs_q.dat need the energy-mesh route; not written with exchange_integration = moments', &
+                               __FILE__, __LINE__)
+         else
+            call chi0_dynamic_setup(this, nodes, kshift, omega, dynamic)
+            if (dynamic) allocate (chi0w(this%lattice%njij, size(omega)), source=(0.0_rp, 0.0_rp))
+         end if
+      end if
+      ! Local J0 sum rule: needs J_ij and the d_matrix vertex (not the onsite delta)
+      do_j0 = do_chi0 .and. do_exchange .and. .not. this%use_onsite_delta
+      if (do_j0) allocate (j0(this%lattice%njij), source=0.0_rp)
       ! Moment space: the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
-      if (moments .and. do_exchange) call this%green%chebyshev_exchange_weights(h, kernel)
+      if (moments .and. do_j0) then
+         call this%green%chebyshev_exchange_weights(h, kernel, lin, lin1)
+      else if (moments .and. do_chi0) then
+         call this%green%chebyshev_exchange_weights(h, kernel, lin)
+      else if (moments .and. do_exchange) then
+         call this%green%chebyshev_exchange_weights(h, kernel)
+      end if
       ! Energy-resolved arrays: empty in moment space, where the energy-resolved files are not written
       nres = merge(0, nenergy, moments)
       if (damping) allocate (dtotal(9, nres), dcontrib(9, nres), dpair(19, this%lattice%njij), source=0.0_rp)
@@ -91,6 +123,24 @@ contains
             slot = 1
             call this%green%fill_intersite_gf_pair(njij_glob, slot)
             call this%green%fill_intersite_gf_twoindex_pair(slot)
+         end if
+         ! Before the exchange kernels: in moment space they overwrite slot 2, which chi0_pair fills with the p = 0 transform
+         if (do_chi0) then
+            if (moments) then
+               call chi0_pair_moments(this, h, kernel, lin, i == j, chi0(njij_glob), md(njij_glob))
+               if (juelich) call juelich_pair_moments(this, h, kernel, lin, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
+            else
+               call chi0_pair_mesh(this, nodes, slot, i == j, chi0(njij_glob), md(njij_glob))
+               if (dynamic) call chi0_pair_dynamic(this, nodes, slot, kshift, chi0w(njij_glob, :))
+               if (juelich) call juelich_pair_mesh(this, nodes, slot, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
+            end if
+         end if
+         if (do_j0 .and. i == j) then
+            if (moments) then
+               call j0_local_moments(this, i, lin, lin1, j0(njij_glob))
+            else
+               call j0_local_mesh(this, nodes, slot, i, j0(njij_glob))
+            end if
          end if
          if (do_exchange .and. moments) then
             call moment_exchange_pair(this, h, kernel, i, j, xc(:, njij_glob), xcso(:, njij_glob), xcfo(:, njij_glob), &
@@ -119,9 +169,346 @@ contains
          call exchange_finalize(this, xc)
          call exchange_twoindex_finalize(this, xcso, xcfo, xcparts)
       end if
+      if (do_chi0) then
+         if (juelich) then
+            call chi0_finalize(this, chi0, md, chi0j, mdj, xc, j0, chi0w, omega)
+         else
+            call chi0_finalize(this, chi0, md, xc=xc, j0=j0, chi0w=chi0w, omega=omega)
+         end if
+      end if
       if (damping) call damping_finalize(this, dpair, dtotal, ief, moments)
       if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief, moments)
    end subroutine calculate_pairwise
+
+   !> chi0_ij of the pair in Green-function slot `slot` on the real energy mesh (Simpson with the Fermi function), and for a
+   !> self pair its d moment md = -(1/pi) Im int f Tr_d[G^upup - G^dndn] dE (0 otherwise).
+   subroutine chi0_pair_mesh(this, nodes, slot, self_pair, chi0, md)
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot
+      logical, intent(in) :: self_pair
+      complex(rp), intent(out) :: chi0
+      real(rp), intent(out) :: md
+      complex(rp) :: t(size(nodes%z), 2)
+      real(rp) :: re(2), im(2)
+      integer :: k, n
+
+      n = size(nodes%z)
+      t = chi0_traces(this%green%gij(:, :, 1:n, slot), this%green%gji(:, :, 1:n, slot))
+      do k = 1, 2
+         call nodes%integrate(real(t(:, k), rp), re(k))
+         call nodes%integrate(aimag(t(:, k)), im(k))
+      end do
+      chi0 = chi0_from_traces(cmplx(re(1), im(1), rp), cmplx(re(2), im(2), rp))
+      md = 0.0_rp
+      if (self_pair) then
+         call nodes%integrate(aimag(d_moment_trace(this%green%gij(:, :, 1:n, slot))), md)
+         md = -md/pi
+      end if
+   end subroutine chi0_pair_mesh
+
+   !> chi0_ij from the raw moments in slot 1 and their p = 0 bilinear transform, written to slot 2:
+   !> int f Tr[A(E) B(E)] dE = sum_m Tr[A_m B~_m] (see moment_exchange_pair). For a self pair md is its d moment from the
+   !> linear weights lin (chebyshev_exchange_weights), 0 otherwise.
+   subroutine chi0_pair_moments(this, h, kernel, lin, self_pair, chi0, md)
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace
+      class(exchange) :: this
+      complex(rp), intent(in) :: h(0:, 0:), lin(:)
+      real(rp), intent(in) :: kernel(:)
+      logical, intent(in) :: self_pair
+      complex(rp), intent(out) :: chi0
+      real(rp), intent(out) :: md
+      complex(rp), allocatable :: t(:, :)
+      integer :: n
+
+      n = size(kernel)
+      md = 0.0_rp
+      if (self_pair) md = -aimag(sum(lin*d_moment_trace(this%green%gij(:, :, 1:n, 1))))/pi
+      call this%green%transform_intersite_moments(1, 2, h(:, 0), kernel)
+      t = chi0_traces(this%green%gij(:, :, 1:n, 1), this%green%gji(:, :, 1:n, 2))
+      chi0 = chi0_from_traces(sum(t(:, 1)), sum(t(:, 2)))
+   end subroutine chi0_pair_moments
+
+   !> Vertex of cluster atom i: de_k(e) = a_k + b_k e (d_matrix) and r_k = W_dn/W_up of the 9 orbitals with l <= 2.
+   subroutine local_vertex(this, i, a, b, r)
+      class(exchange) :: this
+      integer, intent(in) :: i
+      real(rp), intent(out) :: a(9), b(9), r(9)
+      complex(rp) :: m0(9, 9), m1(9, 9)
+      integer :: l, k
+
+      associate (sa => this%symbolic_atom(this%lattice%iz(i)))
+         call sa%d_matrix(m0, 0.0_rp)
+         call sa%d_matrix(m1, 1.0_rp)
+         r = 1.0_rp
+         do l = 0, min(sa%potential%lmax, 2)
+            r(l*l + 1:(l + 1)**2) = sa%potential%dele(l, 2)/sa%potential%dele(l, 1)
+         end do
+      end associate
+      do k = 1, 9
+         a(k) = real(m0(k, k), rp)
+         b(k) = real(m1(k, k), rp) - a(k)
+      end do
+   end subroutine local_vertex
+
+   !> Local J0 (mRy, normalization of xc(1)) of self pair (i, i) on the real energy mesh from slot `slot`:
+   !> (1e3/4 pi) Im int f sum_k de_k [r_k G^dn_kk - G^up_kk/r_k] dE.
+   subroutine j0_local_mesh(this, nodes, slot, i, j0)
+      use spin_response_rs_mod, only: j0_local_traces
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, i
+      real(rp), intent(out) :: j0
+      complex(rp), allocatable :: t(:, :)
+      real(rp) :: a(9), b(9), r(9)
+      integer :: n
+
+      n = size(nodes%z)
+      call local_vertex(this, i, a, b, r)
+      t = j0_local_traces(this%green%gij(:, :, 1:n, slot), a, b, r)
+      call nodes%integrate(aimag(t(:, 1) + real(nodes%z, rp)*t(:, 2)), j0)
+      j0 = j0*1.0e3_rp/(4.0_rp*pi)
+   end subroutine j0_local_mesh
+
+   !> The same in moment space from the raw moments of the self pair in slot 1 and the linear weights lin (E^0), lin1 (E^1).
+   subroutine j0_local_moments(this, i, lin, lin1, j0)
+      use spin_response_rs_mod, only: j0_local_traces
+      class(exchange) :: this
+      integer, intent(in) :: i
+      complex(rp), intent(in) :: lin(:), lin1(:)
+      real(rp), intent(out) :: j0
+      complex(rp), allocatable :: t(:, :)
+      real(rp) :: a(9), b(9), r(9)
+
+      call local_vertex(this, i, a, b, r)
+      t = j0_local_traces(this%green%gij(:, :, 1:size(lin), 1), a, b, r)
+      j0 = aimag(sum(lin*t(:, 1)) + sum(lin1*t(:, 2)))*1.0e3_rp/(4.0_rp*pi)
+   end subroutine j0_local_moments
+
+   !> Juelich coefficients of cluster atom iat (its type's d channel E_nu and ppar, E_F = en%fermi).
+   subroutine site_juelich(this, iat, alpha, beta)
+      use spin_response_rs_mod, only: juelich_vectors
+      class(exchange) :: this
+      integer, intent(in) :: iat
+      real(rp), intent(out) :: alpha(:), beta(:)
+
+      associate (pot => this%symbolic_atom(this%lattice%iz(iat))%potential)
+         call juelich_vectors(pot%enu(2, 1:2), pot%ppar(2, 1:2), this%en%fermi, alpha, beta)
+      end associate
+   end subroutine site_juelich
+
+   !> Juelich chi0_ij of global pair ia_glob (atoms i, j) on the real mesh from slot `slot`, with G~ of juelich_green and
+   !> H_ij from the raw moments; for a self pair also its Juelich d moment (0 otherwise).
+   subroutine juelich_pair_mesh(this, nodes, slot, ia_glob, i, j, chi0, md)
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, juelich_green
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, ia_glob, i, j
+      complex(rp), intent(out) :: chi0
+      real(rp), intent(out) :: md
+      complex(rp), allocatable :: gt_ij(:, :, :), gt_ji(:, :, :), hij(:, :), hji(:, :), t(:, :)
+      real(rp), allocatable :: ai(:), bi(:), aj(:), bj(:)
+      real(rp) :: a, b, re(2), im(2)
+      integer :: n, nb_, k
+
+      n = size(nodes%z)
+      nb_ = size(this%green%gij, 1)
+      allocate (gt_ij(nb_, nb_, n), gt_ji(nb_, nb_, n), hij(nb_, nb_), hji(nb_, nb_), ai(nb_), bi(nb_), aj(nb_), bj(nb_))
+      call this%green%pair_hamiltonian_block(ia_glob, hij, hji, a, b)
+      call site_juelich(this, i, ai, bi)
+      call site_juelich(this, j, aj, bj)
+      call juelich_green(this%green%gij(:, :, 1:n, slot), hij, real(nodes%z), ai, bi, aj, bj, i == j, gt_ij)
+      call juelich_green(this%green%gji(:, :, 1:n, slot), hji, real(nodes%z), aj, bj, ai, bi, i == j, gt_ji)
+      t = chi0_traces(gt_ij, gt_ji)
+      do k = 1, 2
+         call nodes%integrate(real(t(:, k), rp), re(k))
+         call nodes%integrate(aimag(t(:, k)), im(k))
+      end do
+      chi0 = chi0_from_traces(cmplx(re(1), im(1), rp), cmplx(re(2), im(2), rp))
+      md = 0.0_rp
+      if (i == j) then
+         call nodes%integrate(aimag(d_moment_trace(gt_ij)), md)
+         md = -md/pi
+      end if
+   end subroutine juelich_pair_mesh
+
+   !> Juelich chi0_ij of global pair ia_glob (atoms i, j) in moment space: the raw moments in slot 1 become mu~ of
+   !> juelich_moments (two fewer moments), and int f Tr[A B] dE = sum_m Tr[A~_m B~t_m] with the p = 0 transform of the
+   !> j side; for a self pair also its Juelich d moment from the linear weights (0 otherwise).
+   subroutine juelich_pair_moments(this, h, kernel, lin, ia_glob, i, j, chi0, md)
+      use math_mod, only: cheb_bilinear_transform
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, juelich_moments
+      class(exchange) :: this
+      complex(rp), intent(in) :: h(0:, 0:), lin(:)
+      real(rp), intent(in) :: kernel(:)
+      integer, intent(in) :: ia_glob, i, j
+      complex(rp), intent(out) :: chi0
+      real(rp), intent(out) :: md
+      complex(rp), allocatable :: mt_ij(:, :, :), mt_ji(:, :, :), tt_ji(:, :, :), hij(:, :), hji(:, :), t(:, :)
+      real(rp), allocatable :: ai(:), bi(:), aj(:), bj(:)
+      real(rp) :: a, b
+      integer :: n, nb_
+
+      n = size(kernel) - 2
+      nb_ = size(this%green%gij, 1)
+      allocate (mt_ij(nb_, nb_, n), mt_ji(nb_, nb_, n), tt_ji(nb_, nb_, n), hij(nb_, nb_), hji(nb_, nb_), &
+                ai(nb_), bi(nb_), aj(nb_), bj(nb_))
+      call this%green%pair_hamiltonian_block(ia_glob, hij, hji, a, b)
+      call site_juelich(this, i, ai, bi)
+      call site_juelich(this, j, aj, bj)
+      call juelich_moments(this%green%gij(:, :, 1:n + 2, 1), a, b, ai, bi, aj, bj, mt_ij)
+      call juelich_moments(this%green%gji(:, :, 1:n + 2, 1), a, b, aj, bj, ai, bi, mt_ji)
+      call cheb_bilinear_transform(h(:, 0), kernel(1:n), mt_ji, tt_ji)
+      t = chi0_traces(mt_ij, tt_ji)
+      chi0 = chi0_from_traces(sum(t(:, 1)), sum(t(:, 2)))
+      md = 0.0_rp
+      if (i == j) md = -aimag(sum(lin(1:n)*d_moment_trace(mt_ij)))/pi
+   end subroutine juelich_pair_moments
+
+   !> Frequency grid of the dynamic chi0_ij(omega): the omega of &spin_response rounded to kshift*dE, dE the step of the
+   !> energy mesh, omega = kshift*dE. dynamic = .false. (and a warning) when the mesh is not uniform.
+   subroutine chi0_dynamic_setup(this, nodes, kshift, omega, dynamic)
+      use spin_response_mod, only: read_omega_grid
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, allocatable, intent(out) :: kshift(:)
+      real(rp), allocatable, intent(out) :: omega(:)
+      logical, intent(out) :: dynamic
+      real(rp) :: de
+      integer :: n
+
+      n = size(nodes%z)
+      de = (real(nodes%z(n), rp) - real(nodes%z(1), rp))/real(n - 1, rp)
+      dynamic = n > 2
+      if (dynamic) dynamic = maxval(abs(real(nodes%z(2:n), rp) - real(nodes%z(1:n - 1), rp) - de)) <= 1.0e-6_rp*de
+      if (.not. dynamic) then
+         call g_logger%warning('do_chi0: the energy mesh is not uniform; chi0_dynamic.dat and chi_rs_q.dat not written', &
+                               __FILE__, __LINE__)
+         return
+      end if
+      call read_omega_grid(this%lattice%control%fname, omega)
+      kshift = nint(omega/de)
+      omega = kshift*de
+   end subroutine chi0_dynamic_setup
+
+   !> chi0_ij(omega) of the pair in Green-function slot `slot` for the shifts kshift (chi0_dynamic_traces on the mesh,
+   !> Simpson with the Fermi function). The G blocks of the slot are copied once.
+   subroutine chi0_pair_dynamic(this, nodes, slot, kshift, chi0w)
+      use spin_response_rs_mod, only: chi0_dynamic_traces
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, kshift(:)
+      complex(rp), intent(out) :: chi0w(:)
+      complex(rp), allocatable :: gij(:, :, :), gji(:, :, :)
+      complex(rp) :: t(size(nodes%z), 2)
+      real(rp) :: re, im
+      integer :: iw, n
+
+      n = size(nodes%z)
+      gij = this%green%gij(:, :, 1:n, slot)
+      gji = this%green%gji(:, :, 1:n, slot)
+      do iw = 1, size(kshift)
+         t = chi0_dynamic_traces(gij, gji, kshift(iw))
+         call nodes%integrate(real(t(:, 1) + t(:, 2), rp), re)
+         call nodes%integrate(aimag(t(:, 1) + t(:, 2)), im)
+         chi0w(iw) = cmplx(re, im, rp)
+      end do
+   end subroutine chi0_pair_dynamic
+
+   !> Sum chi0, md (and the Juelich chi0j, mdj when present) over the ranks; on rank 0 write chi0_ij.dat, the type
+   !> diagnostics chi0_types.dat, the adiabatic spectrum chi0_adiabatic.dat at the q points of &spin_response, the
+   !> cluster spectrum chi0_cluster.dat, with xc and j0 present the local J0 sum rule j0_sum_rule.dat, and with chi0w
+   !> present the dynamic chi0_dynamic.dat and chi_rs_q.dat.
+   subroutine chi0_finalize(this, chi0, md, chi0j, mdj, xc, j0, chi0w, omega)
+      use mpi_mod
+      use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types, type_sums_q, write_chi0_adiabatic, &
+                                      cluster_sites, write_chi0_cluster, write_j0_sum_rule, write_chi0_dynamic, write_chi_rs_q
+      use spin_response_mod, only: read_q_points
+      class(exchange) :: this
+      complex(rp), intent(inout) :: chi0(:)
+      real(rp), intent(inout) :: md(:)
+      complex(rp), intent(inout), optional :: chi0j(:)
+      real(rp), intent(inout), optional :: mdj(:)
+      real(rp), intent(in), optional :: xc(:, :)
+      real(rp), intent(inout), optional :: j0(:)
+      complex(rp), intent(inout), optional :: chi0w(:, :)
+      real(rp), intent(in), optional :: omega(:)
+      logical :: written
+      integer :: nt, it, p, iq
+      integer, allocatable :: seed(:), npair(:)
+      real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:), rdir(:, :), q(:, :), qcart(:, :), &
+                               qabs(:)
+      real(rp) :: cell_inverse(3, 3)
+      integer, allocatable :: site(:)
+      complex(rp), allocatable :: chi0c(:, :), chi0cj(:, :)
+      real(rp), allocatable :: mc(:), mcj(:)
+
+#ifdef USE_MPI
+      call MPI_ALLREDUCE(MPI_IN_PLACE, chi0, size(chi0), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, md, size(md), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      if (present(chi0w)) call MPI_ALLREDUCE(MPI_IN_PLACE, chi0w, size(chi0w), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+      if (present(chi0j)) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, chi0j, size(chi0j), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, mdj, size(mdj), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
+      if (present(j0)) call MPI_ALLREDUCE(MPI_IN_PLACE, j0, size(j0), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+      if (rank /= 0) return
+      if (present(j0)) call write_j0_sum_rule('j0_sum_rule.dat', this%lattice%ijpair(1:size(j0), :), this%lattice%iz, j0, xc(1, :))
+      nt = this%lattice%ntype
+      allocate (seed(nt), npair(nt), m(nt), chi0s(nt, nt), mj(nt), chi0sj(nt, nt), c_up(nt), c_dn(nt))
+      call type_sums(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, nt, chi0, md, seed, npair, m, chi0s)
+      do it = 1, nt
+         c_up(it) = this%symbolic_atom(it)%potential%center_band(3, 1)
+         c_dn(it) = this%symbolic_atom(it)%potential%center_band(3, 2)
+      end do
+      if (present(chi0j)) then
+         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0, chi0j)
+         call type_sums(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, nt, chi0j, mdj, seed, npair, mj, chi0sj)
+         call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn, mj, chi0sj)
+      else
+         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0)
+         call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn)
+      end if
+
+      ! Adiabatic spectrum: r_j - r_i in direct coordinates, as site_offset in spin_response; q_cart = C^T q (2 pi/a)
+      cell_inverse = merge(this%lattice%a_cart_inv, inverse_3x3(this%lattice%a), this%lattice%a_cart_inv_ready)
+      allocate (rdir(3, size(chi0)))
+      do p = 1, size(chi0)
+         rdir(:, p) = matmul(cell_inverse, this%lattice%cr(:, this%lattice%ijpair(p, 2)) - this%lattice%cr(:, this%lattice%ijpair(p, 1)))
+      end do
+      call read_q_points(this%lattice%control%fname, q)
+      qcart = matmul(transpose(cell_inverse), q)
+      allocate (qabs(size(q, 2)))
+      do iq = 1, size(q, 2)
+         qabs(iq) = 2.0_rp*pi*norm2(qcart(:, iq))/this%lattice%alat
+      end do
+      if (present(chi0j)) then
+         call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
+                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m, &
+                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0j, rdir, q), chi0sj, mj)
+      else
+         call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
+                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m)
+      end if
+
+      ! Cluster of the atoms with a self pair
+      call cluster_sites(this%lattice%ijpair(1:size(chi0), :), chi0, md, site, chi0c, mc)
+      if (present(chi0j)) then
+         call cluster_sites(this%lattice%ijpair(1:size(chi0), :), chi0j, mdj, site, chi0cj, mcj)
+         call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c, mcj, chi0cj)
+      else
+         call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c)
+      end if
+      if (present(chi0w)) then
+         call write_chi0_dynamic('chi0_dynamic.dat', this%lattice%ijpair(1:size(chi0), :), omega, chi0w)
+         call write_chi_rs_q('chi_rs_q.dat', q, this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, rdir, omega, chi0w, &
+                             chi0s, m, written)
+         if (.not. written) call g_logger%warning('do_chi0: chi_rs_q.dat not written (a type without a self pair or |m| < 1e-6)', &
+                                                  __FILE__, __LINE__)
+      end if
+   end subroutine chi0_finalize
 
    !> J, D, A of pair (i, j) from the raw moments in Green-function slot 1 (see fill_intersite_moments_pair). With
    !> Delta = alpha + beta E the integral is the sum over the E^p terms (alpha_i, alpha_j; beta_i, alpha_j and alpha_i, beta_j;

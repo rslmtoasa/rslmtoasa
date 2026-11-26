@@ -12,7 +12,8 @@ susceptibility :math:`\chi(\mathbf{q}, \omega)` of a converged collinear ground
 state on the k-space route: the bare response :math:`\chi_0` from the
 eigenpairs at :math:`\mathbf{k}` and :math:`\mathbf{k}+\mathbf{q}`, then
 :math:`(1 + \chi_0 U)\chi = \chi_0`. The k mesh and Hamiltonian come from
-``&reciprocal`` (:ref:`keywords/reciprocal`). The namelist is optional; every key
+``&reciprocal`` (:ref:`keywords/reciprocal`); its ``temperature`` must be above 0 K, so
+``dos_method = 'blochl'`` (which forces 0 K) is refused. The namelist is optional; every key
 has a default, and a read error stops the run.
 
 .. code-block:: fortran
@@ -106,5 +107,8 @@ Output files
   electron count, k mesh, site moments and d occupations, and the kernel U per site.
 
 Each file starts with a one-line header naming its columns and units.
+
+The q points (``n_q``, ``q_list``, ``q_file``) are also read by the real-space adiabatic spectrum of
+``do_chi0`` (:ref:`keywords/output_options`); the other keys are not used there.
 
 **Related code:** ``source/spin_response.f90``, ``source/calculation_reciprocal.f90``.

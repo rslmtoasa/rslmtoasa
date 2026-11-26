@@ -37,6 +37,8 @@ add_library(${PROJECT_NAME} STATIC
     lmto_magnetic_tangent.f90
     spin_density.f90
     spin_response.f90
+    spin_response_kernels.f90
+    spin_response_rs.f90
     alsda_radial.f90
     hamiltonian.f90
     hamiltonian_build.f90

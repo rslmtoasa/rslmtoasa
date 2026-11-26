@@ -157,6 +157,10 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
   same sign as Gate 1). Consequence: SOC gaps below about 1e-5 Ry cannot be
   measured with the projected vertex; FePt (1–3e-4 Ry) was not attempted.
 
+- 2026-11-26 — Real-space static χ⁰ opened (R1, R2; branch `claude/fervent-allen-k0x69x`): `do_chi0` adds χ⁰_ij of the d channel to the exchange pair loop (`chi0_ij.dat`) and Goldstone diagnostics per atom type (`chi0_types.dat`); results are promoted into the module `spin_response_rs`, with the exchange module holding only the pair-loop hook. The Jülich vertex needs H_ij (G~ = <a|F(H) G F(H)|b>, not F(z) G F(z)) and runs on the real-space Chebyshev route only. No independent reference yet; the checks are route agreement, symmetry and unit tests.
+
+- 2026-11-27 — K-SOC feasibility (4x4 spin-charge chi0 as a cause of the NC-2 gap): stopped, not implemented. Real-space bcc Fe, nsp = 2, 59 pairs: the q = 0 sums coupling chi0^{+-} to the z, charge and anomalous (++) channels are 8.7e-8, 7.1e-8 and 6.3e-9 1/Ry against |chi0^{+-}| = 11.98 (zero by C4z for m along z); per pair up to 9.6e-4. Estimated gap shift from them below 1e-7 Ry against the -2.3e-5 Ry bias, so the projected (Jülich) vertex stays the suspect. Next, if pursued: the +- block with the complete vertex against the Jülich vertex in k-space at fixed xi. No code kept (temporary measurement code only).
+
 ## GBT k-space restart, from 2026-10-17
 
 - 2026-10-17 — GBT restart opened (spec `cleanup/gbt_kspace_restart_spec.md`, branch `fable_v4b_gbt`); old GBT tests, fixtures and analysis tools archived at tag `gbt-campaign-archive-2026-10`.

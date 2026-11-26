@@ -166,6 +166,53 @@ Dzyaloshinskii-Moriya vector (same first five columns, three components, distanc
 - Estimation of ordering temperature (Curie/Néel)
 - Comparison with experiment
 
+**chi0_ij.dat** (with ``do_chi0 = .true.``)
+
+Static transverse bare susceptibility of the d channel, one row per pair, after a one-line header:
+atoms ``i``, ``j``, their types, :math:`\mathbf{r}_j - \mathbf{r}_i` (three components, cluster
+coordinates), its length, the real and imaginary parts of :math:`\chi^0_{ij}` (1/Ry), and the same with
+the Jülich vertex (``n/a`` off the real-space Chebyshev route).
+
+**chi0_types.dat** (with ``do_chi0 = .true.``)
+
+One row per atom type with a self pair, after a one-line header: type, seed atom, number of its pairs,
+d moment and Jülich d moment (:math:`\mu_B`), Goldstone :math:`U` with each vertex (Ry, by
+construction), Mills :math:`U` (Ry), Mills residual, and :math:`\chi^0(q = 0)` towards every type (1/Ry),
+summed over the listed pairs, first with the coefficient vertex and then with the Jülich vertex. See
+``do_chi0`` in :ref:`keywords/output_options`.
+
+**chi0_adiabatic.dat** (with ``do_chi0 = .true.``)
+
+One row per q point of ``&spin_response``, after a one-line header: q (direct and Cartesian, units
+:math:`2\pi/a`), :math:`|\mathbf q|` (1/Å), then for each vertex the adiabatic frequencies (Ry, one per
+type), the largest imaginary part of their eigenvalues and the force-theorem frequencies, from the lattice
+sum over the listed pairs. See ``do_chi0`` in :ref:`keywords/output_options`.
+
+**chi0_cluster.dat** (with ``do_chi0 = .true.``)
+
+Adiabatic spectrum of the cluster of atoms with a self pair, in three blocks each after a header line: one
+row per site (index, atom, type, d moment (:math:`\mu_B`) and Goldstone :math:`U` (Ry), coefficient then
+Jülich vertex), one row per frequency index (adiabatic and force-theorem frequencies in Ry, coefficient then
+Jülich vertex) and one row with the largest imaginary part of each vertex (Ry). Entries that are not defined
+are ``n/a``. See ``do_chi0`` in :ref:`keywords/output_options`.
+
+**j0_sum_rule.dat** (with ``do_chi0 = .true.`` and ``do_exchange``)
+
+One row per self pair, after a one-line header: atom, type, number of listed pairs with that first atom,
+the local :math:`J_0` from :math:`G_{ii}` (mRy), the sum of the listed :math:`J_{ij}` (mRy) and their
+difference. The two agree for ``nsp = 1``, ``hoh = .false.`` and a pair list covering the whole cluster; they
+differ with ``hoh``, spin-orbit coupling, a truncated pair list or a kernel-damped :math:`G`. See ``do_chi0``
+in :ref:`keywords/output_options`.
+
+**chi0_dynamic.dat**, **chi_rs_q.dat** (with ``do_chi0 = .true.``, energy-mesh route only)
+
+``chi0_dynamic.dat``: one row per pair and :math:`\omega`, after a one-line header: ``i``, ``j``, :math:`\omega` (Ry, rounded
+to a multiple of the mesh step), real and imaginary parts of :math:`\chi^0_{ij}(\omega)` (1/Ry). ``chi_rs_q.dat``: one row
+per q point of ``&spin_response`` and :math:`\omega`, after a one-line header: q index, q (direct), :math:`\omega` (Ry),
+real and imaginary parts of :math:`\mathrm{tr}\,\chi^0` and :math:`\mathrm{tr}\,\chi` (RPA, Goldstone :math:`U`, 1/Ry) and
+:math:`\mathrm{tr}\,L` (1/Ry); ``n/a`` for :math:`\chi` at q = 0, :math:`\omega = 0`. See ``do_chi0`` in
+:ref:`keywords/output_options`.
+
 Transport Properties
 ====================
 

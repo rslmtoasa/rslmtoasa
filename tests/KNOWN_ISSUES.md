@@ -224,6 +224,24 @@ are not tracked here; see `docs/DECISIONS.md`.
   to 6e-6 Ry. Block recursion at `nsp = 4` breaks down at large lld (|m| 2.104, 2.087, 1.776 muB at lld 21, 31, 41), consistent with the lld <= 28
   bound in `docs/DECISIONS.md`; cause not diagnosed.
 
+### Chebyshev and block routes give different d moments and first-neighbour J on bcc Fe (`do_chi0`) — 2026-11-26
+- **Measured (bcc Fe `tests/postproc/cases/exchange/bccFe`, `nsp = 1`, `lld = 21`):** the d moment of the self pair from G_ii (coefficient basis, `m_d`
+  of `chi0_types.dat`) is 1.80273 muB on the Chebyshev route (pairs and one-shot, energy mesh and moment space agree to 3e-11) and 2.19925 muB on the
+  block route. First-neighbour J is -0.160 (Chebyshev) against 0.739 (block); first-neighbour chi0 is +0.0637 against -0.0414 1/Ry.
+- **Measured, one extra run (Chebyshev, one-shot, moment space, `lld = 61`, otherwise the same deck):** `m_d` = 2.14902 muB, J_1 = 0.7242, first-neighbour
+  chi0 = -0.0431 1/Ry. The Chebyshev numbers move strongly with depth, toward the block values; no further depth was run, so the converged values and
+  whether the routes meet are not known.
+- **Not diagnosed:** whether `lld = 21` is simply under-converged on the Chebyshev route (the lld = 61 run points that way), and why the two routes differ by
+  this much at equal `lld`. No other deck was tried.
+
+### Block-route static chi0 differs between symmetry-equivalent neighbours — 2026-11-26
+- **Measured (`do_chi0`, block route, bcc Fe):** the spread of chi0 over symmetry-equivalent pairs is 1.8e-7 (8 first neighbours) and 4.0e-5 (6 second
+  neighbours) at `nsp = 1`, and 3.3e-4 for the second neighbours at `nsp = 2`. On the Chebyshev route (`lld = 21`) they agree to 11 digits.
+- **Suspected, not tested:** the finite-depth rotation non-invariance of block Haydock (the `lld`-dependent entry "RS block recursion at `nsp = 2` is not
+  invariant under spin-axis rotation" above; the documented finite-depth non-invariance of block Haydock). Not tested here: that the spread shrinks with
+  `lld`. Note that the one Chebyshev run at `lld = 61` (15 pairs) shows spreads of 1.4e-7 (8 first neighbours) and 1.3e-7 (6 second neighbours),
+  so the 11-digit agreement holds at `lld = 21` only.
+
 ### CPU Chebyshev DOS reconstruction is single precision for every `cheb_backend` — 2026-10-21
 - **Read:** `chebyshev_green_core` (`source/green_chebyshev.f90`) reconstructs the DOS on the CPU with `cheb_green_fast` (single precision) in every
   branch without `eta`; `cheb_backend` is not consulted. So `legacy` is not an fp64 oracle for the SCF energy.
@@ -289,10 +307,6 @@ are not tracked here; see `docs/DECISIONS.md`.
   `0.633362019d-5` (`kB_simpson_f`), a relative 9.7e-6 different, not unified because `simpson_f` is on the bit-identical exchange path.
   Proposal: one definition (about 5 lines; a 1e-5 relative change in kT at finite T).
 
-### `<prefix>_dispersion.dat` rows run `n/a` into the previous number — 2026-10-07
-- **Verified:** with no peak or crossing, rows read `2.19599654E-01n/a` (format `(7es16.8,2a24)` with left-justified texts); seen for every row with
-  `n_omega = 1`. Proposal: a leading `1x` before the two `a24` items (one line in `run`); not applied.
-
 ### Radial data at r = 0 — 2026-10-11
 - **Verified (bcc Fe):** `radial_ground_state` holds `vxc_up(1) = vxc_down(1) = 0` at r = 0 while `n_up(1) - n_down(1) = -0.8069` bohr^-3
   (`source/radial_ground_state.f90:257`), so dV/m is 0 there, not its limit; `radial_kernel_matrix` starts every sum at the second point.
@@ -305,10 +319,6 @@ are not tracked here; see `docs/DECISIONS.md`.
   -2.1e-2 Mills at 24^3); Fe at 60^3 has delta_q < 0 for `alsda_scaled` spd at several xi (-0.022 to -0.112 for Mills). Per-channel scaling not
   pursued.
 
-### `source/spin_response.f90` is past the 1,000-line guideline — 2026-10-12
-- **Verified:** 1187 lines now (1146 when recorded). The developer decided not to split now. Proposal: move the pure kernels (`accumulate_chi0`,
-  `u_juelich`, `solve_dyson`, `adiabatic_frequencies`) to a submodule (about 600 lines).
-
 ### bcc Cr antiferromagnet: response frequencies 1.6 to 2.4 times LSWT — 2026-10-13
 - **Measured (32^3, `tests/validation/spin_response_cr`, 94 q):** the adiabatic frequency over the LSWT `omega_plus` of `oracles/cr_lswt.dat` is 1.626
   to 2.374 (median 1.727; 64^3 the same); the force-theorem route is within 0.968 to 1.087 of LSWT for q >= 1/8, and Omega_RPA / Omega_force equals
@@ -319,6 +329,18 @@ are not tracked here; see `docs/DECISIONS.md`.
   `_state.dat` and fail `SpinResponseCrBaselineRepro` (no longer registered, 2026-11-16).
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
+
+### `&self soc_scale` has no effect in the exchange post-processing — 2026-11-26
+- **Measured (bcc Fe exchange deck, nsp = 2, block):** the `xi_d` printed by `build_lsham` is the same for `soc_scale` = 1.0, 0.5 and 0.0.
+- **Suspected, from reading:** the scaling is applied in `self%build_from_file` (`source/self.f90`, the `soc_scale` lines), and the exchange
+  post-processing stack may not build a `self` object. Not checked. Workaround used: scale `xi_p`, `xi_d` in the potential file.
+
+### Real-space chi0 with SOC is not smooth in the SOC strength at the 1e-3 level — 2026-11-26
+- **Measured (bcc Fe, nsp = 2, block, lld = 21, 59 pairs, `xi_p`/`xi_d` scaled in Fe.nml by 0, 0.001, 0.1, 0.5, 1):** the q = 0 sum of chi0^{+-}
+  is -11.96915, -11.96914, -11.96645, -11.98157, -11.98207 1/Ry and m_d is 2.199247, 2.199254, 2.201647, 2.199536, 2.199610 muB (a +2.4e-3 step
+  at scale 0.1 that falls back), so 1 + U chi0^{+-} moves by about 1e-3, far above an O(xi^2) gap of order 1e-5 Ry.
+- **Not diagnosed.** Suspects: the block recursion at lld = 21 with SOC (see the block-recursion rotation entry), truncation. A larger lld
+  was not tried. Consequence: the real-space route is not usable as a gap oracle for NC-2 at these settings.
 
 ### SOC gap in cubic bcc Fe carries an O(xi^2) bias (NC-2, Gate 1) — 2026-10-14
 - **Measured (`tests/validation/spin_response_fe_soc`, `nsp = 2`, q = 0, omega = 0):** omega_adiabatic -8.0e-6 (12^3) to -2.3e-5 Ry (48^3), scaling as
