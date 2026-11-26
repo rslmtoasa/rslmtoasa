@@ -256,11 +256,11 @@ module green_mod
       integer, intent(in) :: slot
    end subroutine pauli_pair
 
-   module subroutine chebyshev_exchange_weights(this, h, kernel, lin)
+   module subroutine chebyshev_exchange_weights(this, h, kernel, lin, lin1)
       class(green), intent(inout) :: this
       complex(rp), allocatable, intent(out) :: h(:, :)
       real(rp), allocatable, intent(out) :: kernel(:)
-      complex(rp), allocatable, intent(out), optional :: lin(:)
+      complex(rp), allocatable, intent(out), optional :: lin(:), lin1(:)
    end subroutine chebyshev_exchange_weights
 
    module subroutine fill_intersite_moments_pair(this, ia_glob, slot)

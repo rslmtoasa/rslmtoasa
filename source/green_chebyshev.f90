@@ -157,12 +157,13 @@ contains
 
    !> Weights h(0:2*nmom-2, 0:2) of the bilinear moment-space energy integral over [energy_min, fermi] (Fermi function
    !> for temperature > 0), with the window map of chebyshev_reconstruct_block, and the damping kernel(nmom).
-   !> Optional lin(nmom): the linear weights of cheb_linear_weights on the same interval, window and kernel.
-   module subroutine chebyshev_exchange_weights(this, h, kernel, lin)
+   !> Optional lin(nmom), lin1(nmom) (lin1 needs lin): the linear weights of cheb_linear_weights for E^0 and E^1 on the same
+   !> interval, window and kernel.
+   module subroutine chebyshev_exchange_weights(this, h, kernel, lin, lin1)
       class(green), intent(inout) :: this
       complex(rp), allocatable, intent(out) :: h(:, :)
       real(rp), allocatable, intent(out) :: kernel(:)
-      complex(rp), allocatable, intent(out), optional :: lin(:)
+      complex(rp), allocatable, intent(out), optional :: lin(:), lin1(:)
       real(rp) :: a, b, emin_win, emax_win
       integer :: nmom
 
@@ -175,7 +176,12 @@ contains
       call cheb_kernel_vector(this, nmom, kernel)
       if (present(lin)) then
          allocate (lin(nmom))
-         call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, lin)
+         if (present(lin1)) then
+            allocate (lin1(nmom))
+            call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, lin, lin1)
+         else
+            call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, lin)
+         end if
       end if
    end subroutine chebyshev_exchange_weights
 
