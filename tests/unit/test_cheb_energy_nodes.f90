@@ -9,11 +9,12 @@
 !>          arbitrary real kernel. Reference: int_{e_lo}^{inf} f(E) E^p G_X(E) dE by composite Gauss-Legendre
 !>          (400 panels x 16 nodes, panel boundary at e_f) of the explicit series, f = step or Fermi function
 !>          written here. Test: sum_q w(q) e(q)^p G_X(e(q)) with the nodes of cheb_energy_nodes and the same series.
+!>          The linear weights of cheb_linear_weights (p = 0, 1, 2) are checked against the same reference.
 !>          Also the occupation -(1/pi) Im Tr of the on-site p = 0 result.
 !------------------------------------------------------------------------------
 program test_cheb_energy_nodes
    use precision_mod, only: rp
-   use math_mod, only: cheb_energy_nodes
+   use math_mod, only: cheb_energy_nodes, cheb_linear_weights
    implicit none
 
    integer, parameter :: nd = 10, nb = 3, n = 40, npan = 400, ngl = 16
@@ -26,6 +27,7 @@ program test_cheb_energy_nodes
    real(rp), allocatable :: en(:), wn(:)
    complex(rp) :: iref(nb, nb), imom(nb, nb)
    real(rp) :: err, nref, nmom, err_n
+   complex(rp) :: cl(n, 0:2)
    integer :: i, j, m, info, is, ik, p, q
    logical :: ok
 
@@ -68,6 +70,18 @@ program test_cheb_energy_nodes
             end do
             err = sqrt(sum(abs(imom - iref)**2))/sqrt(sum(abs(iref)**2))
             write (*, '(i3,f9.4,i3,es14.4)') is, kbt, p, err
+            if (.not. (err < tol)) ok = .false.
+         end do
+         ! cheb_linear_weights: sum_m c_p(m) X_m against the same reference
+         call cheb_linear_weights(kern, a, b, e_lo, e_f, kbt, cl(:, 0), cl(:, 1), cl(:, 2))
+         do p = 0, 2
+            iref = ref_integral(is, p)
+            imom = (0.0_rp, 0.0_rp)
+            do m = 1, n
+               imom = imom + cl(m, p)*xm(:, :, m, is)
+            end do
+            err = sqrt(sum(abs(imom - iref)**2))/sqrt(sum(abs(iref)**2))
+            write (*, '(a,i3,f9.4,i3,es14.4)') 'lin', is, kbt, p, err
             if (.not. (err < tol)) ok = .false.
          end do
       end do

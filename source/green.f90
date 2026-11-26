@@ -264,11 +264,11 @@ module green_mod
       complex(rp), allocatable, intent(out), optional :: lin(:), lin1(:)
    end subroutine chebyshev_exchange_weights
 
-   module subroutine chebyshev_linear_weights(this, nmom, c, c1)
+   module subroutine chebyshev_linear_weights(this, nmom, c, c1, c2)
       class(green), intent(inout) :: this
       integer, intent(in) :: nmom
       complex(rp), intent(out) :: c(nmom)
-      complex(rp), intent(out), optional :: c1(nmom)
+      complex(rp), intent(out), optional :: c1(nmom), c2(nmom)
    end subroutine chebyshev_linear_weights
 
    module subroutine fill_intersite_moments_pair(this, ia_glob, slot)

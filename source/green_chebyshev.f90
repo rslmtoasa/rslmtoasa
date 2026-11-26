@@ -181,20 +181,20 @@ contains
       end if
    end subroutine chebyshev_exchange_weights
 
-   !> Linear weights c(nmom) (and c1 for E^1) of cheb_linear_weights at en%fermi, with the window map and the damping kernel
+   !> Linear weights c(nmom) (and c1, c2 for E^1, E^2) of cheb_linear_weights at en%fermi, with the window map and the damping kernel
    !> of chebyshev_exchange_weights.
-   module subroutine chebyshev_linear_weights(this, nmom, c, c1)
+   module subroutine chebyshev_linear_weights(this, nmom, c, c1, c2)
       class(green), intent(inout) :: this
       integer, intent(in) :: nmom
       complex(rp), intent(out) :: c(nmom)
-      complex(rp), intent(out), optional :: c1(nmom)
+      complex(rp), intent(out), optional :: c1(nmom), c2(nmom)
       real(rp) :: a, b, emin_win, emax_win, kernel(nmom)
 
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
       call cheb_kernel_vector(this, nmom, kernel)
-      call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, c, c1)
+      call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, c, c1, c2)
    end subroutine chebyshev_linear_weights
 
    !> Raw moments mij, mji(nb, nb, nmom) of G_ij and G_ji of global pair ia_glob (one_shot, pairs or self-pair source).

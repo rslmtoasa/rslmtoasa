@@ -490,6 +490,25 @@ nonlocal_dm
 
 **Related code:** ``source/nonlocal_density.f90``, ``source/recursion_chebyshev.f90``, ``source/recursion_transport.f90``
 
+nonlocal_dm_order
+-----------------
+
+**Type:** Integer
+
+**Purpose:** Highest raw energy moment :math:`p` of the non-local density matrix that is computed and written: :math:`n_{ij}^{(p)} = \int f(E)\,E^p\,[\ldots]\,dE = -\frac{1}{\pi}\sum_m \mathrm{Im}(c^{(p)}_m)\, M_{ji}(m)^\dagger`, with :math:`c^{(p)}_m = \int f(E)\,E^p\, g_m(E)\, dE`.
+
+**Allowed values:** ``0``, ``1``, ``2``
+
+**Default:** ``0``
+
+**Notes:**
+
+- Fatal outside 0..2, and fatal if larger than 0 without ``nonlocal_dm = .true.``.
+- The moments are taken about :math:`E = 0` (not about :math:`E_\nu`), in electrons\*Ry\ :sup:`p`.
+- ``p = 0`` is ``nonlocal_dm.out`` (unchanged); ``p = 1`` and ``p = 2`` are written to ``nonlocal_dm_e1.out`` and ``nonlocal_dm_e2.out`` in the same format, with the moment named in the header line.
+
+**Related code:** ``source/nonlocal_density.f90``, ``source/bands.f90``
+
 cheb_backend
 ------------
 

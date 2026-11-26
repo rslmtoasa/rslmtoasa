@@ -459,7 +459,8 @@ contains
       character(len=256) :: fname_total, fname_dos, fname_orb_dos, fname_magnetic
       logical :: moments
       integer :: nen
-      complex(rp), allocatable :: tmom(:), cw(:)
+      complex(rp), allocatable :: tmom(:), cw(:, :)
+      integer :: imom
 
       moments = this%control%scf_integration == 'moments'
 
@@ -484,10 +485,19 @@ contains
             .not. this%en%fix_fermi .and. (this%control%calctype == 'B' .or. this%control%calctype == 'L'))
          deallocate (tmom)
          if (this%control%nonlocal_dm) then
-            allocate (cw(size(this%recursion%os_mu, 3)))
-            call this%green%chebyshev_linear_weights(size(cw), cw)
+            allocate (cw(size(this%recursion%os_mu, 3), 0:this%control%nonlocal_dm_order))
+            select case (this%control%nonlocal_dm_order)
+            case (0)
+               call this%green%chebyshev_linear_weights(size(cw, 1), cw(:, 0))
+            case (1)
+               call this%green%chebyshev_linear_weights(size(cw, 1), cw(:, 0), cw(:, 1))
+            case (2)
+               call this%green%chebyshev_linear_weights(size(cw, 1), cw(:, 0), cw(:, 1), cw(:, 2))
+            end select
             call this%recursion%nld%integrate(this%recursion%req, this%recursion%os_mu, cw)
-            call this%recursion%nld%write(this%lattice)
+            do imom = 0, this%control%nonlocal_dm_order
+               call this%recursion%nld%write(this%lattice, imom)
+            end do
             deallocate (cw)
          end if
       end if

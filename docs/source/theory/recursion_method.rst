@@ -206,6 +206,7 @@ With ``nonlocal_dm = .true.`` the SCF moments are taken from the one-shot inter-
 From these, the non-local density matrix
 :math:`n_{ij} = -\frac{1}{2\pi i}\int f(E)\,[G_{ij}(E) - G_{ji}(E)^\dagger]\,dE = -\frac{1}{\pi}\sum_m \mathrm{Im}(c_m)\,\mu_m(j,i)^\dagger`
 is written to ``nonlocal_dm.out`` at every SCF step, with :math:`c_m` the moment-space weights :math:`\int f(E) g_m(E) dE` at :math:`E_F`.
+With ``nonlocal_dm_order`` = 1 or 2, the raw energy moments :math:`\int f(E)\,E^p [\ldots] dE` (about :math:`E = 0`) are also written, using the weights :math:`\int f(E) E^p g_m(E) dE`, to ``nonlocal_dm_e1.out`` and ``nonlocal_dm_e2.out``.
 
 Numerical Aspects
 =================

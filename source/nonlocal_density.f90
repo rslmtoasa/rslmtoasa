@@ -6,7 +6,8 @@
 !
 !> @brief Non-local density matrix from the inter-site Chebyshev moments of the SCF recursion.
 !> @details Holds the (site, neighbour) pairs requested from the one-shot recursion
-!>          when control%nonlocal_dm is set, and their density matrices n_ij.
+!>          when control%nonlocal_dm is set, and their density matrices n_ij. Besides the occupation (p = 0) it keeps the
+!>          raw energy moments  int f(E) E^p [...] dE, p = 1..control%nonlocal_dm_order (about E = 0, not about E_nu).
 !------------------------------------------------------------------------------
 module nonlocal_density_mod
    use lattice_mod, only: lattice
@@ -23,8 +24,8 @@ module nonlocal_density_mod
    type, public :: nonlocal_density
       !> Requested (i, j) pairs of the local recursion sites, self pair first.
       integer, allocatable :: pairs(:, :)
-      !> Density matrix n_ij (nb, nb, npairs) of each pair, aligned with pairs.
-      complex(rp), allocatable :: n(:, :, :)
+      !> Raw E^p moments (p = 0..order, electrons*Ry^p) of the density matrix n_ij, n(nb, nb, npairs, 0:order), aligned with pairs.
+      complex(rp), allocatable :: n(:, :, :, :)
    contains
       procedure :: neighbour_pairs
       procedure :: integrate
@@ -67,30 +68,36 @@ contains
    !> M_ji(m) = os_mu(:, :, m, entry) (target j bra, seed i ket, see the gather of chebyshev_oneshot_pairs).
    !> G_ij - G_ji^H = sum_m (g_m - conjg(g_m)) M_ji(m)^H = 2i sum_m Im(g_m) M_ji(m)^H, and c_m = int f(E) g_m(E) dE
    !> (cheb_linear_weights), so  n_ij = -(1/pi) sum_m Im(c_m) M_ji(m)^H.
+   !> The E^p moment uses c(:, p) = int f(E) E^p g_m(E) dE in place of c_m (raw moment about E = 0, units electrons*Ry^p).
    !> req must have been built from pairs(1:npairs), so that req%pair_entry(p) is the entry of pair p.
    subroutine integrate(this, req, os_mu, c)
       use intersite_request_mod, only: intersite_request
       class(nonlocal_density), intent(inout) :: this
       type(intersite_request), intent(in) :: req
-      complex(rp), intent(in) :: os_mu(:, :, :, :), c(:)
-      integer :: p, m
+      complex(rp), intent(in) :: os_mu(:, :, :, :), c(:, 0:)
+      integer :: p, m, k
 
       if (req%npair /= size(this%pairs, 1)) call g_logger%fatal('nonlocal_density: request does not match pairs', &
                                                                 __FILE__, __LINE__)
       if (allocated(this%n)) deallocate (this%n)
-      allocate (this%n(size(os_mu, 1), size(os_mu, 2), req%npair), source=(0.0_rp, 0.0_rp))
+      allocate (this%n(size(os_mu, 1), size(os_mu, 2), req%npair, 0:ubound(c, 2)), source=(0.0_rp, 0.0_rp))
       do p = 1, req%npair
-         do m = 1, size(c)
-            this%n(:, :, p) = this%n(:, :, p) - aimag(c(m))/pi*conjg(transpose(os_mu(:, :, m, req%pair_entry(p))))
+         do k = 0, ubound(c, 2)
+            do m = 1, size(c, 1)
+               this%n(:, :, p, k) = this%n(:, :, p, k) - aimag(c(m, k))/pi*conjg(transpose(os_mu(:, :, m, req%pair_entry(p))))
+            end do
          end do
       end do
    end subroutine integrate
 
-   !> Write nonlocal_dm.out from rank 0 (pairs gathered in rank order = global site order): per pair a line
+   !> Write the E^moment moment of n_ij (moment = 0, 1, 2: nonlocal_dm.out, nonlocal_dm_e1.out, nonlocal_dm_e2.out) from rank 0 (pairs gathered in rank order = global site order): per pair a line
    !> "site_i atom_j Rx Ry Rz" (R = cr(:, j) - cr(:, i) in alat) and nb lines of nb "Re Im" values of n_ij.
-   subroutine write(this, lat)
+   subroutine write(this, lat, moment)
       class(nonlocal_density), intent(in) :: this
       type(lattice), intent(in) :: lat
+      integer, intent(in) :: moment
+      character(len=32) :: fname
+      character(len=16) :: unit_str
       integer, allocatable :: counts(:), displs(:), pg(:, :), pt(:, :)
       complex(rp), allocatable :: ng(:, :, :)
       integer :: nb, np, p, b, r, u, ierr
@@ -110,15 +117,25 @@ contains
       pt = transpose(this%pairs)
 #ifdef USE_MPI
       call MPI_GATHERV(pt, 2*np, MPI_INTEGER, pg, 2*counts, 2*displs, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-      call MPI_GATHERV(this%n, nb*nb*np, MPI_DOUBLE_COMPLEX, ng, nb*nb*counts, nb*nb*displs, MPI_DOUBLE_COMPLEX, 0, &
+      call MPI_GATHERV(this%n(:, :, :, moment), nb*nb*np, MPI_DOUBLE_COMPLEX, ng, nb*nb*counts, nb*nb*displs, MPI_DOUBLE_COMPLEX, 0, &
                        MPI_COMM_WORLD, ierr)
 #else
       pg = pt
-      ng = this%n
+      ng = this%n(:, :, :, moment)
 #endif
       if (rank /= 0) return
-      open (newunit=u, file='nonlocal_dm.out', status='replace', action='write')
-      write (u, '(a)') '# site_i atom_j Rx Ry Rz [alat]; then nb rows of nb (Re Im) of n_ij [electrons]'
+      fname = 'nonlocal_dm.out'
+      if (moment > 0) then
+         write (fname, '(a,i0,a)') 'nonlocal_dm_e', moment, '.out'
+         write (unit_str, '(a,i0)') 'electrons*Ry^', moment
+      end if
+      open (newunit=u, file=fname, status='replace', action='write')
+      if (moment == 0) then
+         write (u, '(a)') '# site_i atom_j Rx Ry Rz [alat]; then nb rows of nb (Re Im) of n_ij [electrons]'
+      else
+         write (u, '(a,i0,a)') '# site_i atom_j Rx Ry Rz [alat]; then nb rows of nb (Re Im) of the raw E^', moment, &
+            ' moment of n_ij about E = 0 ['//trim(unit_str)//']'
+      end if
       do p = 1, size(pg, 2)
          write (u, '(2i6,3es16.8)') pg(1, p), pg(2, p), lat%cr(:, pg(2, p)) - lat%cr(:, pg(1, p))
          do b = 1, nb
