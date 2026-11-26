@@ -572,7 +572,7 @@ contains
       real(rp), dimension(nb) :: ev
       real(rp), dimension(3*nb - 2) ::rwork
       complex(rp), dimension(nb*nb) ::zwork
-      complex(rp), dimension(nb, nb) :: U, DUM, lam
+      complex(rp), dimension(nb, nb) :: U, DUM, lam, bsq
       logical :: halt_divide_by_zero
 
       lam = 0.0d0
@@ -601,7 +601,9 @@ contains
             end do
             ! calc. U*lamda*U´= B
             call zgemm('n', 'n', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), U, LDIM, lam, LDIM, (0.0d0, 0.0d0), DUM, LDIM)
-            call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), b2(1, 1, L, N), LDIM)
+            call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), bsq, LDIM)
+            ! Through a local block: b2 is assumed-shape, so its elements cannot be passed to the implicit-interface zgemm
+            b2(:, :, L, N) = bsq
          end do
       end do
    end subroutine zsqr_blocks
