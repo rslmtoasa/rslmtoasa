@@ -1695,7 +1695,7 @@ contains
    !> \f$ G(E) = \sum_m w_m k_m \mu_m (-i e^{-im\theta})/\sqrt{a^2-(E-b)^2} \f$, \f$ E = a\cos\theta + b \f$.
    !> Returns h(s,p) = - int f(E) E^p exp(-i s theta) / (a^2-(E-b)^2) dE, s = 0..2n-2, p = 0..2,
    !> over [e_lo, e_f] (kbt = 0, step f) or with f = fermifun (kbt > 0; panels split at e_f -+ 40 kbt).
-   !> Gauss-Legendre in theta, 2n+64 nodes per panel.
+   !> Gauss-Legendre in theta, 2n+64 nodes per panel (+ cheb_fermi_nodes on the Fermi panel).
    subroutine cheb_bilinear_weights(n, a, b, e_lo, e_f, kbt, h)
       integer, intent(in) :: n
       real(rp), intent(in) :: a, b, e_lo, e_f, kbt
@@ -1708,7 +1708,7 @@ contains
       h = (0.0_rp, 0.0_rp)
       do ipan = 1, 2
          if (edge(ipan + 1) <= edge(ipan)) cycle
-         nq = 2*n + 64
+         nq = 2*n + 64 + merge(cheb_fermi_nodes, 0, ipan == 2)
          if (allocated(x)) deallocate (x, w)
          allocate (x(nq), w(nq))
          th_lo = acos((edge(ipan) - b)/a)
