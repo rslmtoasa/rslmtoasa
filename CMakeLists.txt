@@ -118,7 +118,50 @@ if(ENABLE_MPI)
     # The user may select an MPI wrapper before configuration, but never mutate
     # CMAKE_Fortran_COMPILER after Fortran has been enabled. MPI::MPI_Fortran
     # carries the correct compiler options, module paths, and link libraries.
+    set(MPI_DETERMINE_LIBRARY_VERSION TRUE)
     find_package(MPI REQUIRED COMPONENTS Fortran)
+    # Several MPI installations side by side can mix vendors: the library behind the wrapper and the
+    # launcher must come from the same one (a mix aborts at run time, e.g. "MPI_Comm_f2c() ... before MPI_INIT").
+    function(rslmto_mpi_vendor text out)
+        if(text MATCHES "Open MPI|OpenRTE|open-mpi\\.org")
+            set(${out} "Open MPI" PARENT_SCOPE)
+        elseif(text MATCHES "Intel\\(R\\) MPI")
+            set(${out} "Intel MPI" PARENT_SCOPE)
+        elseif(text MATCHES "MPICH|HYDRA")
+            set(${out} "MPICH" PARENT_SCOPE)
+        else()
+            set(${out} "unknown" PARENT_SCOPE)
+        endif()
+    endfunction()
+    # FindMPI resolves the wrapper's library names with find_library, which searches CMAKE_PREFIX_PATH and the
+    # <prefix>/lib of PATH entries first, so libmpi can come from another installation than the wrapper's other libraries.
+    set(_mpi_lib_dirs "")
+    foreach(_name IN LISTS MPI_Fortran_LIB_NAMES)
+        if(_name MATCHES "^mpi" AND MPI_${_name}_LIBRARY)
+            get_filename_component(_dir "${MPI_${_name}_LIBRARY}" DIRECTORY)
+            list(APPEND _mpi_lib_dirs "${_dir}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES _mpi_lib_dirs)
+    list(LENGTH _mpi_lib_dirs _n_mpi_lib_dirs)
+    if(_n_mpi_lib_dirs GREATER 1)
+        message(FATAL_ERROR "The MPI libraries of ${MPI_Fortran_COMPILER} were found in different directories "
+            "(${_mpi_lib_dirs}), i.e. from different MPI installations; another MPI on CMAKE_PREFIX_PATH or PATH "
+            "(e.g. oneAPI setvars) shadows the wrapper's. Configure in a fresh build directory with that MPI removed "
+            "from CMAKE_PREFIX_PATH, PATH and LIBRARY_PATH, or set MPI_mpi_LIBRARY (and the other MPI_*_LIBRARY entries) explicitly.")
+    endif()
+    rslmto_mpi_vendor("${MPI_Fortran_LIBRARY_VERSION_STRING}" RSLMTO_MPI_LIB_VENDOR)
+    execute_process(COMMAND ${MPIEXEC_EXECUTABLE} --version OUTPUT_VARIABLE _mpiexec_version
+                    ERROR_VARIABLE _mpiexec_version TIMEOUT 20)
+    rslmto_mpi_vendor("${_mpiexec_version}" RSLMTO_MPIEXEC_VENDOR)
+    message(STATUS "MPI: library ${RSLMTO_MPI_LIB_VENDOR} (wrapper ${MPI_Fortran_COMPILER}), "
+                   "launcher ${RSLMTO_MPIEXEC_VENDOR} (${MPIEXEC_EXECUTABLE})")
+    if(NOT RSLMTO_MPI_LIB_VENDOR STREQUAL "unknown" AND NOT RSLMTO_MPIEXEC_VENDOR STREQUAL "unknown"
+       AND NOT RSLMTO_MPI_LIB_VENDOR STREQUAL RSLMTO_MPIEXEC_VENDOR)
+        message(FATAL_ERROR "MPI library (${RSLMTO_MPI_LIB_VENDOR}, from ${MPI_Fortran_COMPILER}) and launcher "
+            "(${RSLMTO_MPIEXEC_VENDOR}, ${MPIEXEC_EXECUTABLE}) come from different MPI installations. Pick one with "
+            "-DMPI_Fortran_COMPILER=<wrapper> -DMPIEXEC_EXECUTABLE=<its mpiexec> in a fresh build directory.")
+    endif()
 endif(ENABLE_MPI)
 
 # The source uses default-width BLAS/LAPACK integer arguments (and the MKL kernels use c_int).
@@ -306,6 +349,14 @@ elseif(ENABLE_MPI AND MPI_Fortran_FOUND)
     target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} MPI::MPI_Fortran)
 else()
     target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES})
+endif()
+
+# Fail the build if the executable ends up with libmpi from two MPI installations (e.g. Open MPI's wrapper
+# plus another vendor's libmpi found through LIBRARY_PATH); such a binary aborts at MPI start-up.
+if(ENABLE_MPI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_custom_command(TARGET ${PROJECT_BINARY} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -DBINARY=$<TARGET_FILE:${PROJECT_BINARY}> -P ${CMAKE_SOURCE_DIR}/cmake/check_mpi_link.cmake
+        VERBATIM)
 endif()
 
 ##############################################################################################
