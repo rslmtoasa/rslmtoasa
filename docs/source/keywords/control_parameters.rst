@@ -415,6 +415,62 @@ linear_out
 
 **See also:** :ref:`reference/conductivity_module`
 
+intersite_mode
+--------------
+
+**Type:** Character string
+
+**Purpose:** How the inter-site Green functions ``G_ij`` and ``G_ji`` of the pair list ``ijpair`` are obtained from the recursion (``recur = 'chebyshev'`` or ``'block'``).
+
+**Allowed values:** ``'pairs'``, ``'one_shot'``
+
+**Default:** ``'pairs'``
+
+**Notes:**
+
+- ``'pairs'``: four recursions per pair, started from :math:`(|i\rangle + c|j\rangle)/\sqrt{2}` with :math:`c = \pm 1, \pm i`; self-pairs use one recursion.
+- ``'one_shot'``: one recursion per distinct first atom ``i`` of the pair list, started from site ``i`` alone. The blocks at every requested target ``j`` are read off during that recursion, and ``G_ij`` follows from ``G_ji`` by Hermitian conjugation. Pairs that share the first atom share one recursion, so list pairs grouped by ``i``. See :ref:`theory/recursion_method` (section "Inter-site Green functions: pairs and one-shot").
+- With ``recur = 'chebyshev'`` both routes compute the same moments; measured differences in ``J_ij`` on bcc Fe were 4e-13 to 6e-13 relative. Works with ``cheb_lp`` and ``gpu_plugin`` (fp32 and fp64).
+- With ``recur = 'block'`` the two routes build different Krylov spaces at finite ``lld``, so off-site ``G_ij``, ``J_ij`` and ``D_ij`` differ from ``'pairs'``; the difference was about 2 % for the first-neighbour ``J_ij`` on the bcc Fe contour test case and can be much larger for other pairs and depths. Self-pairs agree with ``'pairs'`` to rounding. The terminator (``sym_term``) is the same as for ``'pairs'``. Works with ``post_processing = 'exchange'`` and ``'exchange_p2rs'``, and with ``gpu_plugin`` (fp32 and fp64; the small projected solve runs on the CPU).
+
+**Related code:** ``source/intersite_request.f90``, ``source/recursion_transport.f90`` (``chebyshev_recur_ij_oneshot``, ``recur_b_ij_oneshot``), ``source/green_block.f90`` (``block_green_ij_oneshot``), ``source/block_tridiag.f90``, ``source/calculation_reciprocal.f90``
+
+exchange_integration
+--------------------
+
+**Type:** Character string
+
+**Purpose:** How the energy integral of the exchange observables (``J_ij``, ``D_ij``, ``A_ij`` and the two-index ``so``/``fo`` parts) is evaluated on the real-space recursion route (``post_processing = 'exchange'``, ``gf_route = 'recursion'``).
+
+**Allowed values:** ``'dos'``, ``'moments'``
+
+**Default:** ``'dos'``
+
+**Notes:**
+
+- ``'dos'``: ``G_ij`` is reconstructed on the energy mesh and integrated with the Simpson rule.
+- ``'moments'``: the integral over :math:`[E_{min}, E_F]` (Fermi function for ``temperature > 0``) is evaluated from the Chebyshev moments of ``G_ij`` and ``G_ji``. Requires ``recur = 'chebyshev'`` and ``gf_route = 'recursion'``. ``do_damping`` and ``do_inertia`` use the series at :math:`E_F` and do not write the energy-resolved files. See :ref:`theory/recursion_method` (section "Inter-site Green functions: pairs and one-shot").
+
+**Related code:** ``source/green_chebyshev.f90``, ``source/exchange_dynamics.f90``
+
+scf_integration
+---------------
+
+**Type:** Character string
+
+**Purpose:** How the on-site energy integrals of the real-space SCF (charges, spin and orbital moments, band energy, density matrices) are evaluated.
+
+**Allowed values:** ``'dos'``, ``'moments'``
+
+**Default:** ``'dos'``
+
+**Notes:**
+
+- ``'dos'``: ``G`` is reconstructed on the energy mesh and integrated with the Simpson rule.
+- ``'moments'``: ``E_F`` solves :math:`N(E_F)` = valence from the on-site Chebyshev moments (bisection, 1e-12 Ry), ``G`` is reconstructed at Gauss-Legendre nodes of :math:`[E_{min}, E_F]` and the integrals are weighted sums over the nodes (Fermi function at the ``&energy`` ``temperature``; 0 gives the step). Requires ``recur = 'chebyshev'``. The energy-resolved DOS and cumulative-moment files are not written. See :ref:`theory/recursion_method`.
+
+**Related code:** ``source/bands.f90`` (``calculate_fermi``, ``integrate``), ``source/green_chebyshev.f90`` (``chebyshev_scf_nodes``)
+
 cheb_backend
 ------------
 

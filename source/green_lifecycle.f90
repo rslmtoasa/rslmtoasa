@@ -1,4 +1,5 @@
 submodule (green_mod) green_lifecycle
+   use cheb_lp_mod, only: cheb_lp
    implicit none
 
 contains
@@ -10,6 +11,7 @@ contains
    !> @param[in] fname Namelist file
    !> @return type(green)
    !---------------------------------------------------------------------------
+   !> Sets pointers only; callers run restore_to_default on the assigned object (avoids copying the allocated arrays).
    module function constructor(dos_obj) result(obj)
       type(green) :: obj
       type(dos), target, intent(in) :: dos_obj
@@ -20,8 +22,6 @@ contains
       obj%symbolic_atom => dos_obj%recursion%hamiltonian%charge%lattice%symbolic_atoms
       obj%lattice => dos_obj%recursion%lattice
       obj%control => dos_obj%recursion%lattice%control
-
-      call obj%restore_to_default()
    end function constructor
 
    !---------------------------------------------------------------------------
@@ -93,44 +93,57 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Reset all members to default
+   !> Reset all members to default. pair_slots sets the pair dimension of the real-mesh intersite arrays
+   !> (gij, gji and the Pauli and two-index families); the default is atoms_per_process.
    !---------------------------------------------------------------------------
-   module subroutine restore_to_default(this)
+   module subroutine restore_to_default(this, pair_slots)
       use mpi_mod
       class(green) :: this
+      integer, intent(in), optional :: pair_slots
+      integer :: nslot, nen
+      type(cheb_lp) :: lp
+
+      nslot = atoms_per_process
+      if (present(pair_slots)) nslot = pair_slots
+      ! Energy dimension of the intersite arrays; in moment space they hold the Chebyshev moments only
+      nen = this%en%channels_ldos + 10
+      if (this%control%exchange_integration == 'moments') then
+         lp = cheb_lp(this%control)
+         nen = lp%n_total(this%control%lld)
+      end if
 
 #ifdef USE_SAFE_ALLOC
       if (this%lattice%njij == 0) then
-         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
+         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%scf_energy_points(this%control), atoms_per_process/))
       else
-         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%channels_ldos + 10, 4/))
+         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%scf_energy_points(this%control), 4/))
       end if
-      call g_safe_alloc%allocate('green.gij', this%gij, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gji', this%gji, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.ginmag', this%ginmag, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjnmag', this%gjnmag, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gix', this%gix, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.giy', this%giy, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.giz', this%giz, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjx', this%gjx, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjy', this%gjy, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjz', this%gjz, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g00ij', this%g00ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g00ji', this%g00ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g01ij', this%g01ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g01ji', this%g01ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx0ij', this%gx0ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy0ij', this%gy0ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz0ij', this%gz0ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx1ij', this%gx1ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy1ij', this%gy1ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz1ij', this%gz1ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx0ji', this%gx0ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy0ji', this%gy0ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz0ji', this%gz0ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx1ji', this%gx1ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy1ji', this%gy1ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz1ji', this%gz1ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gij', this%gij, (/nb, nb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gji', this%gji, (/nb, nb, nen, nslot/))
+      call g_safe_alloc%allocate('green.ginmag', this%ginmag, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gjnmag', this%gjnmag, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gix', this%gix, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.giy', this%giy, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.giz', this%giz, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gjx', this%gjx, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gjy', this%gjy, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gjz', this%gjz, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.g00ij', this%g00ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.g00ji', this%g00ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.g01ij', this%g01ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.g01ji', this%g01ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gx0ij', this%gx0ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gy0ij', this%gy0ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gz0ij', this%gz0ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gx1ij', this%gx1ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gy1ij', this%gy1ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gz1ij', this%gz1ij, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gx0ji', this%gx0ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gy0ji', this%gy0ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gz0ji', this%gz0ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gx1ji', this%gx1ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gy1ji', this%gy1ji, (/norb, norb, nen, nslot/))
+      call g_safe_alloc%allocate('green.gz1ji', this%gz1ji, (/norb, norb, nen, nslot/))
       call g_safe_alloc%allocate('green.gij_eta', this%gij_eta, (/64, nb, nb, atoms_per_process/))
       call g_safe_alloc%allocate('green.gji_eta', this%gji_eta, (/64, nb, nb, atoms_per_process/))
       call g_safe_alloc%allocate('green.ginmag_eta', this%ginmag_eta, (/64, norb, norb, atoms_per_process/))
@@ -143,36 +156,36 @@ contains
       call g_safe_alloc%allocate('green.gjz_eta', this%gjz_eta, (/64, norb, norb, atoms_per_process/))
 #else
       if (this%lattice%njij == 0) then
-         allocate (this%g0(nb, nb, this%en%channels_ldos + 10, this%lattice%nrec))
+         allocate (this%g0(nb, nb, this%en%scf_energy_points(this%control), this%lattice%nrec))
       else
-         allocate (this%g0(nb, nb, this%en%channels_ldos + 10, 4))
+         allocate (this%g0(nb, nb, this%en%scf_energy_points(this%control), 4))
       end if
-      allocate (this%gij(nb, nb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gji(nb, nb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%ginmag(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjnmag(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gix(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%giy(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%giz(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjx(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjy(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjz(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g00ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g00ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g01ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g01ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx0ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy0ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz0ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx1ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy1ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz1ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx0ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy0ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz0ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gij(nb, nb, nen, nslot))
+      allocate (this%gji(nb, nb, nen, nslot))
+      allocate (this%ginmag(norb, norb, nen, nslot))
+      allocate (this%gjnmag(norb, norb, nen, nslot))
+      allocate (this%gix(norb, norb, nen, nslot))
+      allocate (this%giy(norb, norb, nen, nslot))
+      allocate (this%giz(norb, norb, nen, nslot))
+      allocate (this%gjx(norb, norb, nen, nslot))
+      allocate (this%gjy(norb, norb, nen, nslot))
+      allocate (this%gjz(norb, norb, nen, nslot))
+      allocate (this%g00ij(norb, norb, nen, nslot))
+      allocate (this%g00ji(norb, norb, nen, nslot))
+      allocate (this%g01ij(norb, norb, nen, nslot))
+      allocate (this%g01ji(norb, norb, nen, nslot))
+      allocate (this%gx0ij(norb, norb, nen, nslot))
+      allocate (this%gy0ij(norb, norb, nen, nslot))
+      allocate (this%gz0ij(norb, norb, nen, nslot))
+      allocate (this%gx1ij(norb, norb, nen, nslot))
+      allocate (this%gy1ij(norb, norb, nen, nslot))
+      allocate (this%gz1ij(norb, norb, nen, nslot))
+      allocate (this%gx0ji(norb, norb, nen, nslot))
+      allocate (this%gy0ji(norb, norb, nen, nslot))
+      allocate (this%gz0ji(norb, norb, nen, nslot))
+      allocate (this%gx1ji(norb, norb, nen, nslot))
+      allocate (this%gy1ji(norb, norb, nen, nslot))
+      allocate (this%gz1ji(norb, norb, nen, nslot))
       allocate (this%gij_eta(64, nb, nb, atoms_per_process))
       allocate (this%gji_eta(64, nb, nb, atoms_per_process))
       allocate (this%ginmag_eta(64, norb, norb, atoms_per_process))

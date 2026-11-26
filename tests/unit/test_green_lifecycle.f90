@@ -8,6 +8,7 @@
 !------------------------------------------------------------------------------
 program test_green_lifecycle
    use basis_mod, only: basis_init
+   use control_mod, only: control
    use energy_mod, only: energy
    use green_mod, only: green
    use lattice_mod, only: lattice
@@ -17,6 +18,7 @@ program test_green_lifecycle
 
    type(lattice), target :: lattice_obj
    type(energy), target :: energy_obj
+   type(control), target :: control_obj
    type(green) :: green_obj
    logical :: failed
    complex(rp), parameter :: zero = (0.0_rp, 0.0_rp)
@@ -28,6 +30,8 @@ program test_green_lifecycle
    lattice_obj%nrec = 1
    energy_obj%channels_ldos = 0
 
+   call control_obj%restore_to_default()
+   green_obj%control => control_obj
    green_obj%lattice => lattice_obj
    green_obj%en => energy_obj
    call green_obj%restore_to_default()

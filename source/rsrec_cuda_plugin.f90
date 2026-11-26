@@ -42,8 +42,10 @@ module rsrec_cuda_plugin_mod
       procedure :: block_dos
       procedure :: block_gf_eta
       procedure :: chebyshev_moments
+      procedure :: chebyshev_moments_targets
       procedure :: orbital_moments
       procedure :: block_lanczos
+      procedure :: block_lanczos_targets
       procedure :: scalar_lanczos
       procedure :: resident_moments_available
       procedure :: reconstruct_conductivity
@@ -111,6 +113,23 @@ module rsrec_cuda_plugin_mod
          real(c_double), value :: a, b
          integer(c_int) :: rsrec_cuda_chebyshev_moments
       end function rsrec_cuda_chebyshev_moments
+
+      function rsrec_cuda_chebyshev_moments_targets(ctx, psi0, ntarget, targets, nmom, a, b, mu_out) &
+         bind(C, name='rsrec_cuda_chebyshev_moments_targets')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, psi0, targets, mu_out
+         integer(c_int), value :: ntarget, nmom
+         real(c_double), value :: a, b
+         integer(c_int) :: rsrec_cuda_chebyshev_moments_targets
+      end function rsrec_cuda_chebyshev_moments_targets
+
+      function rsrec_cuda_block_lanczos_targets(ctx, psi0, lld, ntarget, targets, a_b, b2_b, slices, prec) &
+         bind(C, name='rsrec_cuda_block_lanczos_targets')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, psi0, targets, a_b, b2_b, slices
+         integer(c_int), value :: lld, ntarget, prec
+         integer(c_int) :: rsrec_cuda_block_lanczos_targets
+      end function rsrec_cuda_block_lanczos_targets
 
       function rsrec_cuda_block_lanczos(ctx, psi0, lld, a_b, b2_b, prec) &
          bind(C, name='rsrec_cuda_block_lanczos')
@@ -539,6 +558,22 @@ contains
 #endif
    end subroutine chebyshev_moments
 
+   !> One-shot moments: V_m(:,:,targets) of the plain recursion from psi0; mu_out is (nb, nb, nmom, ntarget).
+   subroutine chebyshev_moments_targets(this, psi0, targets, nmom, a, b, mu_out)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: psi0(:, :, :)
+      integer, target, contiguous, intent(in) :: targets(:)
+      integer, intent(in) :: nmom
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, intent(out) :: mu_out(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_chebyshev_moments_targets(this%ctx, c_loc(psi0), int(size(targets), c_int), &
+         c_loc(targets), int(nmom, c_int), real(a, c_double), real(b, c_double), c_loc(mu_out))
+      call check_status(status, 'rsrec_cuda_chebyshev_moments_targets')
+#endif
+   end subroutine chebyshev_moments_targets
+
    subroutine block_lanczos(this, psi0, lld, a_b, b2_b, prec)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: psi0(:, :, :)
@@ -560,6 +595,25 @@ contains
       call check_status(status, 'rsrec_cuda_block_lanczos')
 #endif
    end subroutine block_lanczos
+
+   !> One-shot block Lanczos: as block_lanczos plus slices(nb, nb, lld-1, ntarget) = normalised Q_ll at the targets.
+   !> prec (0 = fp32 with fp64 B-sqrt, 1 = fp64) is honoured with and without hoh.
+   subroutine block_lanczos_targets(this, psi0, lld, targets, a_b, b2_b, slices, prec)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: psi0(:, :, :)
+      integer, intent(in) :: lld
+      integer, target, contiguous, intent(in) :: targets(:)
+      complex(rp), target, contiguous, intent(out) :: a_b(:, :, :)
+      complex(rp), target, contiguous, intent(out) :: b2_b(:, :, :)
+      complex(rp), target, contiguous, intent(out) :: slices(:, :, :, :)
+      integer, intent(in) :: prec
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_block_lanczos_targets(this%ctx, c_loc(psi0), int(lld, c_int), &
+         int(size(targets), c_int), c_loc(targets), c_loc(a_b), c_loc(b2_b), c_loc(slices), int(prec, c_int))
+      call check_status(status, 'rsrec_cuda_block_lanczos_targets')
+#endif
+   end subroutine block_lanczos_targets
 
    subroutine scalar_lanczos(this, site_j, lld, a_out, b2_out)
       class(rsrec_cuda_backend), intent(inout) :: this

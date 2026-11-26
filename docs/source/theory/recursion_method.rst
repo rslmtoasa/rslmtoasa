@@ -293,6 +293,113 @@ Computational cost: :math:`O(n_{\text{orb}}^3)` higher per step, but fewer itera
 - ``recursion.f90::recur_b()`` - Full block recursion
 - ``recursion_mod::a_b``, ``b2_b`` - Block coefficient arrays
 
+Inter-site Green functions: pairs and one-shot
+==============================================
+
+Exchange, damping and inertia need the inter-site blocks
+:math:`G_{ij}(z) = P_i^\dagger (z - H)^{-1} P_j`, where :math:`P_i` embeds the
+:math:`n_b \times n_b` orbital-spin basis of site :math:`i`. The control key
+``intersite_mode`` selects one of two constructions; both fill the same
+``green%gij`` and ``green%gji`` arrays, so the consumers are unchanged.
+
+**Pairs route** (``intersite_mode = 'pairs'``). For each pair, four recursions
+start from :math:`|\pm\rangle = (|i\rangle \pm |j\rangle)/\sqrt{2}` and
+:math:`|\pm i\rangle = (|i\rangle \pm i|j\rangle)/\sqrt{2}`. Their on-site Green
+functions :math:`G_1, \ldots, G_4` combine to
+
+.. math::
+
+   G_{ij} = \tfrac12\left[(G_1 - G_2) - i(G_3 - G_4)\right], \qquad
+   G_{ji} = \tfrac12\left[(G_1 - G_2) + i(G_3 - G_4)\right].
+
+The complex seeds supply the s-p and p-d elements, which cancel in the real
+combination alone (Inoue, Okada and Ohta 1993). A self-pair uses one recursion
+from :math:`|i\rangle`.
+
+**One-shot route** (``intersite_mode = 'one_shot'``). One recursion starts from
+:math:`P_i` alone (the unit block at site :math:`i`). The pair list is grouped
+by its first atom (``source/intersite_request.f90``); during the recursion the
+block of every target :math:`j` of that seed is read off, so all pairs with the
+same first atom share one recursion. This gives :math:`G_{ji}` directly,
+including the s-p and p-d elements, and the reverse block follows from
+Hermiticity of :math:`H`:
+
+.. math::
+
+   G_{ij}(z) = \left[G_{ji}(\bar z)\right]^\dagger .
+
+*Chebyshev.* With :math:`V_0 = P_i`, :math:`V_1 = \tilde H V_0` and
+:math:`V_{m+1} = 2\tilde H V_m - V_{m-1}`, the moments are
+:math:`\mu_m(j,i) = P_j^\dagger V_m`, the :math:`j` block of :math:`V_m`, and
+:math:`\mu_m(i,j) = \mu_m(j,i)^\dagger` exactly. Bra and ket differ, so the
+product identity that doubles the moments of a single seed does not apply:
+:math:`2\,\mathrm{lld}+2` moments need :math:`2\,\mathrm{lld}+1` Hamiltonian
+applications (the pairs route needs :math:`4(\mathrm{lld}+1)` per pair). The
+moments are the same as in the pairs route, so the kernel, the reconstruction
+and the results are the same up to rounding. With ``cheb_lp`` the linear
+prediction is fitted once to each block :math:`\mu_m(j,i)`; its real shared
+coefficients keep :math:`\mu_m(i,j) = \mu_m(j,i)^\dagger` for the extended
+moments.
+
+*Block Haydock.* Block Lanczos from :math:`Q_1 = P_i` gives normalized blocks
+:math:`Q_m` and coefficients :math:`A_m` and Hermitian :math:`B_m` (the square
+root of the stored :math:`B_m^2`), i.e. a block-tridiagonal :math:`T_M` with
+:math:`M = \mathrm{lld}-1` blocks. At each step the target blocks
+:math:`S_m(j) = P_j^\dagger Q_m` are stored. Then
+
+.. math::
+
+   G_{ji}(z) = \sum_{m=1}^{M} S_m(j)\, X_m(z), \qquad
+   X(z) = \text{first block column of } (z - T_M - \Sigma_M(z))^{-1},
+
+solved by a backward Schur recursion (``source/block_tridiag.f90``).
+:math:`\Sigma_M` is the same terminal self-energy as in the pairs route and
+the on-site recursion (``sym_term`` selects the orbital-independent or
+orbital-dependent semicircle; it acts on the last block only). For the reverse
+block the advanced terminator :math:`\Sigma_M(z)^\dagger` is used. The
+recursion runs on the CPU or the GPU; the projected solve, one per seed and
+energy for all its targets, runs on the CPU.
+
+**Accuracy.** The one-shot and pairs Chebyshev routes give the same results
+up to rounding (4e-13 to 6e-13 relative in :math:`J_{ij}` on bcc Fe). The block
+Haydock routes project onto different Krylov spaces at finite depth, from
+:math:`P_i` and from :math:`(P_i + cP_j)/\sqrt{2}`, so off-site
+:math:`G_{ij}`, and hence :math:`J_{ij}` and :math:`D_{ij}`, differ between them
+and converge only with ``lld``. On the bcc Fe contour test case the first-neighbour
+:math:`J_{ij}` differed by about 2 %; other pairs and the real-energy mesh
+showed much larger differences, and the pairs route itself varied strongly with
+``lld`` there. Self-pairs use the same Krylov space in both routes and agree
+to rounding.
+
+**Cost.** Per distinct first atom: one recursion of :math:`2\,\mathrm{lld}+1`
+(Chebyshev) or :math:`\mathrm{lld}` (Haydock) Hamiltonian applications, shared
+by all its targets, against four recursions per pair in the pairs route. On
+bcc Fe with eight pairs sharing one first atom, the Chebyshev run took 15 s
+against 124 s. Memory is currently the same as in the pairs route.
+
+**Moment-space exchange integral** (``exchange_integration = 'moments'``, ``recur = 'chebyshev'``). Every exchange integrand is a sum of terms
+:math:`\mathrm{Tr}[\Delta_i(E)\, X(E)\, \Delta_j(E)\, Y(E)]`, with :math:`X` built linearly from :math:`G_{ij}, G_{ji}` and
+likewise :math:`Y`. With :math:`G(E)` the kernel-damped series of the stored moments :math:`\mu_n`, the energy integral is a
+bilinear form in the moments,
+
+.. math::
+
+   \int f(E)\, E^p\, \mathrm{Tr}[A\, X(E)\, B\, Y(E)]\, dE = \sum_m \mathrm{Tr}[A\, X_m\, B\, \tilde Y^{(p)}_m], \qquad
+   \tilde Y^{(p)}_m = \sum_n c^{(p)}_{mn} Y_n,
+
+where :math:`c^{(p)}_{mn}` contains the kernel factors of :math:`m` and :math:`n` and the weight
+:math:`-\int f(E) E^p e^{-i(m+n)\theta}/(a^2\sin^2\theta)\, dE`, :math:`E = a\cos\theta + b`. The exchange splitting
+:math:`\Delta(E)` is linear in :math:`E`, :math:`\Delta = \alpha + \beta E`, so each pair needs the weights with
+:math:`p = 0, 1, 2` (``use_onsite_delta``: :math:`p = 0` only). The moment sums are contracted as traces of all pairs of the 12 families of :math:`X` and :math:`Y`, from which every output is assembled. The limits are :math:`[E_{min}, E_F]` for :math:`T = 0` and :math:`f(E)` is the
+Fermi function for :math:`T > 0`. Damping and inertia use :math:`G` and the analytic :math:`d^2G/dE^2` of the series at :math:`E_F`; the energy-resolved files are not written in this mode.
+
+**Moment-space SCF integrals** (``scf_integration = 'moments'``, ``recur = 'chebyshev'``). The on-site integrals keep their
+formulas :math:`\int f(E) E^p y(E)\,dE` with :math:`y` built from :math:`G`; only the points and the rule change. The
+points are the Gauss-Legendre nodes in :math:`\theta` of ``cheb_energy_nodes`` on :math:`[E_{min}, E_F]` (Fermi function in the
+weights for ``temperature > 0``), so :math:`\int f E^p y\,dE \approx \sum_q w_q e_q^p y(e_q)`. The Fermi level solves
+:math:`N(E_F) = -\tfrac{1}{\pi}\mathrm{Im}\sum_m t_m \sum_q w_q g_m(e_q) = N_{val}`, with :math:`t_m` the diagonal on-site moments summed over atoms
+and spins, :math:`g_m` the kernel-damped basis functions of the series.
+
 Comparison: Direct Diagonalization vs. Recursion
 =================================================
 
@@ -351,6 +458,8 @@ References
 - Pettifor & Weaire, "The Electronic Structure of Complex Systems" - Recursion method overview
 - Lanczos, "Solution of Systems of Linear Equations by Minimized Iterations", J. Res. Natl. Bur. Stand. 49, 33 (1952)
 - Weaire et al., "The use of continued fractions in the calculation of electronic structure", Comm. Phys. 1, 25 (1976)
+- J. Inoue and Y. Ohta, J. Phys. C: Solid State Phys. 20, 1947 (1987) - Block recursion
+- J. Inoue, A. Okada and Y. Ohta, J. Phys.: Condens. Matter 5, L465 (1993) - Block recursion with complex starting vectors (s-p and p-d elements of :math:`G_{ij}`)
 
 See Also
 ========

@@ -318,6 +318,7 @@ contains
       if (allocated(this%b2temp)) call g_safe_alloc%deallocate('recursion.b2temp', this%b2temp)
       if (allocated(this%a_b)) call g_safe_alloc%deallocate('recursion.a_b', this%a_b)
       if (allocated(this%b2_b)) call g_safe_alloc%deallocate('recursion.b2_b', this%b2_b)
+      if (allocated(this%os_s)) deallocate (this%os_s)
       if (allocated(this%psi_b)) call g_safe_alloc%deallocate('recursion.psi_b', this%psi_b)
       if (allocated(this%hpsi)) call g_safe_alloc%deallocate('recursion.hpsi', this%hpsi)
       if (allocated(this%hohpsi)) call g_safe_alloc%deallocate('recursion.hohpsi', this%hohpsi)
@@ -349,6 +350,7 @@ contains
       if (allocated(this%b2temp)) deallocate (this%b2temp)
       if (allocated(this%a_b)) deallocate (this%a_b)
       if (allocated(this%b2_b)) deallocate (this%b2_b)
+      if (allocated(this%os_s)) deallocate (this%os_s)
       if (allocated(this%psi_b)) deallocate (this%psi_b)
       if (allocated(this%hpsi)) deallocate (this%hpsi)
       if (allocated(this%hohpsi)) deallocate (this%hohpsi)
@@ -375,15 +377,20 @@ contains
    !> @param[in] full Optional flag requesting deallocation of all owned arrays.
    !> @note Clears the CUDA backend pointer association but does not own the plugin context.
    module subroutine restore_to_default(this, full)
+      use mpi_mod, only: start_atom, end_atom
       class(recursion) :: this
       logical, intent(in), optional :: full
-      integer :: lmax, nmom
+      integer :: lmax, nmom, nslot
 
       this%b2_b_is_sqrt = .false.
 
       lmax = lmax_basis
       this%lp = cheb_lp(this%control)
       nmom = this%lp%n_total(this%control%lld)
+      ! Inter-site layout: 4 slots per pair owned by this rank (start_atom..end_atom, set before construction)
+      nslot = 4*(end_atom - start_atom + 1)
+      ! One-shot route keeps compact per-entry storage (os_*) instead of the four-slot arrays
+      if (this%control%intersite_mode == 'one_shot') nslot = 0
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('recursion.a', this%a, (/max(this%lattice%control%llsp, this%lattice%control%lld), nb, this%lattice%nrec, 3/))
@@ -407,9 +414,9 @@ contains
          call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld,, this%lattice%nrec/))
          call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, nmom, this%lattice%nrec/))
       else
-         call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/nb, nb, this%control%lld, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, nmom, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/nb, nb, this%control%lld, nslot/))
+         call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld, nslot/))
+         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, nmom, nslot/))
       end if
       call g_safe_alloc%allocate('recursion.psi_b', this%psi_b, (/nb, nb, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.hpsi', this%hpsi, (/nb, nb, this%lattice%kk/))
@@ -438,9 +445,9 @@ contains
          allocate (this%b2_b(nb, nb, this%control%lld, this%lattice%nrec))
          allocate (this%mu_n(nb, nb, nmom, this%lattice%nrec))
       else
-         allocate (this%a_b(nb, nb, this%control%lld, this%lattice%njij*4))
-         allocate (this%b2_b(nb, nb, this%control%lld, this%lattice%njij*4))
-         allocate (this%mu_n(nb, nb, nmom, this%lattice%njij*4))
+         allocate (this%a_b(nb, nb, this%control%lld, nslot))
+         allocate (this%b2_b(nb, nb, this%control%lld, nslot))
+         allocate (this%mu_n(nb, nb, nmom, nslot))
       end if
       allocate (this%psi_b(nb, nb, this%lattice%kk))
       allocate (this%hpsi(nb, nb, this%lattice%kk))
