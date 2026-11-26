@@ -799,8 +799,8 @@ contains
       ! The moment-space integral keeps the raw and the transformed moments of a pair in two slots
       control_obj = control(this%fname)
       moments = control_obj%exchange_integration == 'moments'
-      if (moments .and. (.not. stream .or. this%do_damping .or. this%do_inertia)) &
-         call g_logger%fatal('exchange_integration = ''moments'' needs gf_route = ''recursion''; damping/inertia with it are not available yet.', &
+      if (moments .and. .not. stream) &
+         call g_logger%fatal('exchange_integration = ''moments'' needs gf_route = ''recursion''.', &
                              __FILE__, __LINE__)
       if (stream) then
          call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &

@@ -175,18 +175,17 @@ contains
       call cheb_kernel_vector(this, nmom, kernel)
    end subroutine chebyshev_exchange_weights
 
-   !> Raw moments of G_ij and G_ji of global pair ia_glob in gij/gji(:, :, 1:nmom, slot), from the same moments as
-   !> fill_intersite_gf_pair, then the Pauli and two-index families of the slot (linear in gij, gji, so also moments).
-   module subroutine fill_intersite_moments_pair(this, ia_glob, slot)
-      class(green), intent(inout) :: this
-      integer, intent(in) :: ia_glob, slot
-      complex(rp), allocatable :: mij(:, :, :), mji(:, :, :), m4(:, :, :, :)
-      integer :: ia, ja_temp, nmom
+   !> Raw moments mij, mji(nb, nb, nmom) of G_ij and G_ji of global pair ia_glob (one_shot, pairs or self-pair source).
+   subroutine pair_moment_sources(this, ia_glob, mij, mji)
+      class(green), intent(in) :: this
+      integer, intent(in) :: ia_glob
+      complex(rp), allocatable, intent(out) :: mij(:, :, :), mji(:, :, :)
+      complex(rp), allocatable :: m4(:, :, :, :)
+      integer :: ia, ja_temp
       logical :: self_pair
 
       ia = g2l_map(ia_glob)
       ja_temp = (ia - 1)*4 + 1
-      nmom = intersite_moment_count(this)
       self_pair = this%lattice%ijpair(ia_glob, 1) == this%lattice%ijpair(ia_glob, 2)
       if (this%control%intersite_mode == 'one_shot') then
          mji = this%recursion%os_mu(:, :, :, this%recursion%req%pair_entry(ia))
@@ -200,12 +199,52 @@ contains
          mij = 0.5_rp*((m4(:, :, :, 1) - m4(:, :, :, 2)) + (1.0_rp/i_unit)*(m4(:, :, :, 3) - m4(:, :, :, 4)))
          mji = 0.5_rp*((m4(:, :, :, 1) - m4(:, :, :, 2)) - (1.0_rp/i_unit)*(m4(:, :, :, 3) - m4(:, :, :, 4)))
       end if
+   end subroutine pair_moment_sources
+
+   !> Raw moments of G_ij and G_ji of global pair ia_glob in gij/gji(:, :, 1:nmom, slot), from the same moments as
+   !> fill_intersite_gf_pair, then the Pauli and two-index families of the slot (linear in gij, gji, so also moments).
+   module subroutine fill_intersite_moments_pair(this, ia_glob, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob, slot
+      complex(rp), allocatable :: mij(:, :, :), mji(:, :, :)
+      integer :: nmom
+
+      nmom = intersite_moment_count(this)
+      call pair_moment_sources(this, ia_glob, mij, mji)
       this%gij(:, :, :, slot) = 0.0_rp
       this%gji(:, :, :, slot) = 0.0_rp
       this%gij(:, :, 1:nmom, slot) = mij
       this%gji(:, :, 1:nmom, slot) = mji
       call fill_slot_families(this, slot)
    end subroutine fill_intersite_moments_pair
+
+   !> G_ij, G_ji and their second energy derivatives (nb x nb) at E = en%fermi of global pair ia_glob, summed
+   !> from the moments with the window and kernel of chebyshev_exchange_weights.
+   module subroutine chebyshev_point_pair(this, ia_glob, gij0, gji0, gij2, gji2)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob
+      complex(rp), intent(out), dimension(:, :) :: gij0, gji0, gij2, gji2
+      complex(rp), allocatable :: mij(:, :, :), mji(:, :, :), g0(:), g2(:)
+      real(rp), allocatable :: kernel(:)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: nmom, m
+
+      nmom = intersite_moment_count(this)
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      allocate (kernel(nmom), g0(nmom), g2(nmom))
+      call cheb_kernel_vector(this, nmom, kernel)
+      call cheb_green_point_weights(kernel, a, b, this%en%fermi, g0, g2)
+      call pair_moment_sources(this, ia_glob, mij, mji)
+      gij0 = czero; gji0 = czero; gij2 = czero; gji2 = czero
+      do m = 1, nmom
+         gij0 = gij0 + g0(m)*mij(:, :, m)
+         gji0 = gji0 + g0(m)*mji(:, :, m)
+         gij2 = gij2 + g2(m)*mij(:, :, m)
+         gji2 = gji2 + g2(m)*mji(:, :, m)
+      end do
+   end subroutine chebyshev_point_pair
 
    !> gij, gji of slot_t = bilinear transform (weights column hp) of the raw moments in slot_raw, and their families.
    module subroutine transform_intersite_moments(this, slot_raw, slot_t, hp, kernel)

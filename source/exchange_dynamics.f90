@@ -43,10 +43,10 @@ contains
       class(exchange) :: this
       logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
       type(energy_nodes) :: nodes
-      integer :: i, j, njij_glob, slot, ief, nenergy
+      integer :: i, j, njij_glob, slot, ief, nenergy, nb
       real(rp) :: step_size
       logical :: damping, inertia, moments
-      complex(rp), allocatable :: h(:, :)
+      complex(rp), allocatable :: h(:, :), gij0(:, :), gji0(:, :), gij2(:, :), gji2(:, :)
       real(rp), allocatable :: kernel(:)
       real(rp), allocatable :: xc(:, :), xcso(:, :), xcfo(:, :), xcparts(:, :)
       ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
@@ -56,7 +56,8 @@ contains
       damping = do_damping
       if (damping) damping = damping_ready(this)
       inertia = do_inertia
-      if (inertia) inertia = inertia_ready(this, step_size)
+      moments = this%control%exchange_integration == 'moments'
+      if (inertia) inertia = inertia_ready(this, step_size, moments)
       nenergy = size(this%en%ene)
       ief = fermi_index(this%en%ene, this%en%fermi)
       if (do_exchange) then
@@ -66,16 +67,19 @@ contains
          nodes = real_mesh_nodes(this)
       end if
       ! Moment space: one node per Chebyshev moment; the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
-      moments = this%control%exchange_integration == 'moments'
       if (moments .and. do_exchange) then
          call this%green%chebyshev_exchange_weights(h, kernel)
          nodes = moment_nodes(size(kernel))
       end if
       if (damping) allocate (dtotal(9, nenergy), dpair(19, this%lattice%njij), source=0.0_rp)
-      if (damping) allocate (dcontrib(9, nenergy))
+      if (damping .and. .not. moments) allocate (dcontrib(9, nenergy))
       if (inertia) allocate (itotal(9, nenergy), ipair_b(4, nenergy, this%lattice%njij), ipair(18, this%lattice%njij), source=0.0_rp)
-      if (inertia) allocate (icontrib(9, nenergy))
+      if (inertia .and. .not. moments) allocate (icontrib(9, nenergy))
 
+      if (moments .and. (damping .or. inertia)) then
+         nb = size(this%green%gij, 1)
+         allocate (gij0(nb, nb), gji0(nb, nb), gij2(nb, nb), gji2(nb, nb))
+      end if
       if (stream) call this%green%prepare_intersite_gf()
       ! Each rank holds the pairs start_atom..end_atom (local index g2l_map)
       do njij_glob = start_atom, end_atom
@@ -97,13 +101,19 @@ contains
             call exchange_pair(this, nodes, slot, slot, i, j, xc(:, njij_glob))
             call exchange_twoindex_pair(this, nodes, slot, slot, i, j, xcso(:, njij_glob), xcfo(:, njij_glob), xcparts(:, njij_glob))
          end if
-         if (damping) then
-            call damping_pair(this, slot, i, j, ief, dpair(:, njij_glob), dcontrib)
-            dtotal = dtotal + dcontrib
-         end if
-         if (inertia) then
-            call inertia_pair(this, slot, i, j, ief, step_size, ipair(:, njij_glob), ipair_b(:, :, njij_glob), icontrib)
-            itotal = itotal + icontrib
+         if (moments .and. (damping .or. inertia)) then
+            call this%green%chebyshev_point_pair(njij_glob, gij0, gji0, gij2, gji2)
+            if (damping) call damping_point_pair(this, i, j, gij0, gji0, dpair(:, njij_glob))
+            if (inertia) call inertia_point_pair(this, i, j, gij0, gji0, gij2, gji2, ipair(:, njij_glob))
+         else
+            if (damping) then
+               call damping_pair(this, slot, i, j, ief, dpair(:, njij_glob), dcontrib)
+               dtotal = dtotal + dcontrib
+            end if
+            if (inertia) then
+               call inertia_pair(this, slot, i, j, ief, step_size, ipair(:, njij_glob), ipair_b(:, :, njij_glob), icontrib)
+               itotal = itotal + icontrib
+            end if
          end if
       end do
 
@@ -111,8 +121,8 @@ contains
          call exchange_finalize(this, xc)
          call exchange_twoindex_finalize(this, xcso, xcfo, xcparts)
       end if
-      if (damping) call damping_finalize(this, dpair, dtotal, ief)
-      if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief)
+      if (damping) call damping_finalize(this, dpair, dtotal, ief, moments)
+      if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief, moments)
    end subroutine calculate_pairwise
 
    !> J, D, A of pair (i, j) from the raw moments in Green-function slot 1 (see fill_intersite_moments_pair). With
@@ -164,21 +174,11 @@ contains
       complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
       complex(rp) :: c(3, 3)
       integer :: k, l, m, nv, nb_ij, nenergy
-      real(rp) :: spin_i
 
       nenergy = size(this%en%ene)
       nb_ij = size(this%green%gij, 1)
-      allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij), tjd(nb_ij, nb_ij, 3))
-      ! Spin magnetic moment of atom i
-      spin_i = 0.0_rp
-      do k = 0, this%symbolic_atom(this%lattice%iz(i))%potential%lmax
-         spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
-                  this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
-      end do
-      pair(19) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
-      do l = 1, 3
-         tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
-      end do
+      allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij))
+      call damping_setup(this, i, j, tjd, pair(19))
       do nv = 1, nenergy
          ! Anti-Hermitian parts of the intersite Green functions (times 2i)
          Aij = this%green%gij(:, :, nv, slot) - transpose(conjg(this%green%gji(:, :, nv, slot)))
@@ -198,11 +198,50 @@ contains
       end do
    end subroutine damping_pair
 
-   subroutine damping_finalize(this, pair, total_damping, ief)
+   !> Torque-correlation damping tensor of pair (i, j) at E_F from the point values of G_ij, G_ji (moment space).
+   subroutine damping_point_pair(this, i, j, gij0, gji0, pair)
+      class(exchange) :: this
+      integer, intent(in) :: i, j
+      complex(rp), intent(in) :: gij0(:, :), gji0(:, :)
+      real(rp), intent(out) :: pair(19)
+      complex(rp), allocatable :: tjd(:, :, :)
+      complex(rp) :: c(3, 3)
+
+      call damping_setup(this, i, j, tjd, pair(19))
+      c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), gij0 - transpose(conjg(gji0)), tjd, &
+                       gji0 - transpose(conjg(gij0)))
+      pair(1:9) = real(reshape(transpose(c), [9]), rp)
+      pair(10:18) = aimag(reshape(transpose(c), [9]))
+   end subroutine damping_point_pair
+
+   !> (T_j^mu)^dagger (nb, nb, 3) and the damping prefactor -(1/4) 2/(pi m_spin) of atom i.
+   subroutine damping_setup(this, i, j, tjd, prefactor)
+      class(exchange) :: this
+      integer, intent(in) :: i, j
+      complex(rp), allocatable, intent(out) :: tjd(:, :, :)
+      real(rp), intent(out) :: prefactor
+      integer :: k, l
+      real(rp) :: spin_i
+
+      allocate (tjd(size(this%green%gij, 1), size(this%green%gij, 1), 3))
+      ! Spin magnetic moment of atom i
+      spin_i = 0.0_rp
+      do k = 0, this%symbolic_atom(this%lattice%iz(i))%potential%lmax
+         spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
+                  this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
+      end do
+      prefactor = (-0.25_rp)*(2.0_rp/(pi*spin_i))
+      do l = 1, 3
+         tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
+      end do
+   end subroutine damping_setup
+
+   subroutine damping_finalize(this, pair, total_damping, ief, moments)
       use mpi_mod
       class(exchange) :: this
       real(rp), intent(inout) :: pair(:, :), total_damping(:, :)
       integer, intent(in) :: ief
+      logical, intent(in) :: moments
       integer :: i, j, njij_glob, nv, nenergy, unit_e, unit_p
       real(rp) :: factor, distance_alat, alpha(3, 3), mhat(3)
 
@@ -213,11 +252,15 @@ contains
 #endif
 
       if (rank == 0) then
-         open (newunit=unit_e, FILE='damping-energy.out', STATUS='replace', ACTION='write')
+         if (.not. moments) open (newunit=unit_e, FILE='damping-energy.out', STATUS='replace', ACTION='write')
          open (newunit=unit_p, FILE='alldampings.out', STATUS='replace', ACTION='write')
          write (unit_p, '(A)') '#     i      j  alpha: xx xy xz yx yy yz zx zy zz transverse (dimensionless)'// &
             '  dist rij=ri-rj (alat)'
-         write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
+         if (moments) then
+            write (*, *) 'Fermi energy used = ', this%en%fermi
+         else
+            write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
+         end if
          do njij_glob = 1, this%lattice%njij
             i = this%lattice%ijpair(njij_glob, 1)
             j = this%lattice%ijpair(njij_glob, 2)
@@ -238,11 +281,13 @@ contains
          end do
 
          ! Energy-resolved total: sum over all listed pairs, each with its own prefactor
-         write (unit_e, '(A)') '# E-Ef (Ry)  alpha: xx xy xz yx yy yz zx zy zz (dimensionless)'
-         do nv = 1, nenergy
-            write (unit_e, '(F14.9,9ES16.8)') this%en%ene(nv) - this%en%fermi, total_damping(:, nv)
-         end do
-         close (unit_e)
+         if (.not. moments) then
+            write (unit_e, '(A)') '# E-Ef (Ry)  alpha: xx xy xz yx yy yz zx zy zz (dimensionless)'
+            do nv = 1, nenergy
+               write (unit_e, '(F14.9,9ES16.8)') this%en%ene(nv) - this%en%fermi, total_damping(:, nv)
+            end do
+            close (unit_e)
+         end if
          close (unit_p)
       end if
 
@@ -258,9 +303,10 @@ contains
    !> The following calculation works better with hoh.
    !> Implemented by Ivan Miranda on 22.11.2023
    !---------------------------------------------------------------------------
-   function inertia_ready(this, step_size) result(ready)
+   function inertia_ready(this, step_size, moments) result(ready)
       class(exchange) :: this
       real(rp), intent(out) :: step_size
+      logical, intent(in) :: moments
       logical :: ready
       integer :: nenergy
 
@@ -275,6 +321,11 @@ contains
          return
       end if
       nenergy = size(this%en%ene)
+      if (moments) then
+         call this%hamiltonian%torque_operator_collinear()
+         ready = .true.
+         return
+      end if
       if (nenergy < 3) then
          write (*, *) 'Moment of inertia skipped: at least three energy points are required.'
          return
@@ -345,11 +396,31 @@ contains
       end do
    end subroutine inertia_pair
 
-   subroutine inertia_finalize(this, pair, pair_b, total_inertia, ief)
+   !> Raw inertia kernel of pair (i, j) at E_F from the point values of G and d2G/dE2 (moment space).
+   subroutine inertia_point_pair(this, i, j, gij0, gji0, gij2, gji2, pair)
+      class(exchange) :: this
+      integer, intent(in) :: i, j
+      complex(rp), intent(in) :: gij0(:, :), gji0(:, :), gij2(:, :), gji2(:, :)
+      real(rp), intent(out) :: pair(18)
+      complex(rp), allocatable :: tjd(:, :, :)
+      complex(rp) :: c(3, 3), Aij(size(gij0, 1), size(gij0, 1)), Aji(size(gij0, 1), size(gij0, 1))
+      real(rp) :: unused
+
+      call damping_setup(this, i, j, tjd, unused)
+      Aij = gij0 - transpose(conjg(gji0))
+      Aji = gji0 - transpose(conjg(gij0))
+      c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij, tjd, gji2 + transpose(conjg(gij2))) + &
+          torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), gij2 + transpose(conjg(gji2)), tjd, Aji)
+      pair(1:9) = real(reshape(transpose(c), [9]), rp)
+      pair(10:18) = aimag(reshape(transpose(c), [9]))
+   end subroutine inertia_point_pair
+
+   subroutine inertia_finalize(this, pair, pair_b, total_inertia, ief, moments)
       use mpi_mod
       class(exchange) :: this
       real(rp), intent(inout) :: pair(:, :), pair_b(:, :, :), total_inertia(:, :)
       integer, intent(in) :: ief
+      logical, intent(in) :: moments
       integer :: i, j, njij_glob, nv, nenergy, u_re, u_im, u_e, u_p
       real(rp) :: distance_alat
 
@@ -361,32 +432,39 @@ contains
 #endif
 
       if (rank == 0) then
-         open (newunit=u_re, FILE='example-real.out', STATUS='replace', ACTION='write')
-         open (newunit=u_im, FILE='example-imag.out', STATUS='replace', ACTION='write')
-         open (newunit=u_e, FILE='inertia-energy.out', STATUS='replace', ACTION='write')
          open (newunit=u_p, FILE='allinertias.out', STATUS='replace', ACTION='write')
-         write (u_re, '(A)') '# i j E Re(Bij_11) Re(d2Bij_11/dE2)'
-         write (u_im, '(A)') '# i j E Im(Bij_11) Im(d2Bij_11/dE2)'
-         write (u_e, '(A)') '# E-Ef total raw inertia kernel: 9 real components'
+         if (.not. moments) then
+            open (newunit=u_re, FILE='example-real.out', STATUS='replace', ACTION='write')
+            open (newunit=u_im, FILE='example-imag.out', STATUS='replace', ACTION='write')
+            open (newunit=u_e, FILE='inertia-energy.out', STATUS='replace', ACTION='write')
+            write (u_re, '(A)') '# i j E Re(Bij_11) Re(d2Bij_11/dE2)'
+            write (u_im, '(A)') '# i j E Im(Bij_11) Im(d2Bij_11/dE2)'
+            write (u_e, '(A)') '# E-Ef total raw inertia kernel: 9 real components'
+         end if
          write (u_p, '(A)') '# i j 9 real components 9 imaginary components distance'
          do njij_glob = 1, this%lattice%njij
             i = this%lattice%ijpair(njij_glob, 1)
             j = this%lattice%ijpair(njij_glob, 2)
-            do nv = 1, nenergy
-               write (u_re, '(2I7,3ES18.8)') i, j, this%en%ene(nv), pair_b(1, nv, njij_glob), pair_b(2, nv, njij_glob)
-               write (u_im, '(2I7,3ES18.8)') i, j, this%en%ene(nv), pair_b(3, nv, njij_glob), pair_b(4, nv, njij_glob)
-            end do
+            if (.not. moments) then
+               do nv = 1, nenergy
+                  write (u_re, '(2I7,3ES18.8)') i, j, this%en%ene(nv), pair_b(1, nv, njij_glob), pair_b(2, nv, njij_glob)
+                  write (u_im, '(2I7,3ES18.8)') i, j, this%en%ene(nv), pair_b(3, nv, njij_glob), pair_b(4, nv, njij_glob)
+               end do
+            end if
             distance_alat = norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             write (u_p, '(2I7,18ES18.8,F12.6)') i, j, pair(:, njij_glob), distance_alat
-            write (*, '(A,I6,A,I6,A,ES14.6)') 'Raw inertia kernel pair ', i, ' and ', j, ' at Ef = ', this%en%ene(ief)
+            write (*, '(A,I6,A,I6,A,ES14.6)') 'Raw inertia kernel pair ', i, ' and ', j, ' at Ef = ', merge(this%en%fermi, this%en%ene(ief), moments)
             write (*, '(3ES14.6)') pair(1:3, njij_glob)
             write (*, '(3ES14.6)') pair(4:6, njij_glob)
             write (*, '(3ES14.6)') pair(7:9, njij_glob)
          end do
-         do nv = 1, nenergy
-            write (u_e, '(10ES18.8)') this%en%ene(nv) - this%en%fermi, total_inertia(:, nv)
-         end do
-         close (u_re); close (u_im); close (u_e); close (u_p)
+         if (.not. moments) then
+            do nv = 1, nenergy
+               write (u_e, '(10ES18.8)') this%en%ene(nv) - this%en%fermi, total_inertia(:, nv)
+            end do
+            close (u_re); close (u_im); close (u_e)
+         end if
+         close (u_p)
       end if
    end subroutine inertia_finalize
 

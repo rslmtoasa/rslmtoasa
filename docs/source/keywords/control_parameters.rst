@@ -449,7 +449,7 @@ exchange_integration
 **Notes:**
 
 - ``'dos'``: ``G_ij`` is reconstructed on the energy mesh and integrated with the Simpson rule.
-- ``'moments'``: the integral over :math:`[E_{min}, E_F]` (Fermi function for ``temperature > 0``) is evaluated from the Chebyshev moments of ``G_ij`` and ``G_ji``. Requires ``recur = 'chebyshev'`` and ``gf_route = 'recursion'``; ``do_damping`` and ``do_inertia`` are not available with it. See :ref:`theory/recursion_method` (section "Inter-site Green functions: pairs and one-shot").
+- ``'moments'``: the integral over :math:`[E_{min}, E_F]` (Fermi function for ``temperature > 0``) is evaluated from the Chebyshev moments of ``G_ij`` and ``G_ji``. Requires ``recur = 'chebyshev'`` and ``gf_route = 'recursion'``. ``do_damping`` and ``do_inertia`` use the series at :math:`E_F` and do not write the energy-resolved files. See :ref:`theory/recursion_method` (section "Inter-site Green functions: pairs and one-shot").
 
 **Related code:** ``source/green_chebyshev.f90``, ``source/exchange_dynamics.f90``
 
