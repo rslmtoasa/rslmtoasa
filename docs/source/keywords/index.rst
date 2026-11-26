@@ -177,6 +177,7 @@ Alphabetical Listing (All Parameters)
 - ``exchange_delta`` - Exchange splitting source for imported Hamiltonians
 - ``do_chi0`` - Static transverse chi0_ij in exchange post-processing
 - ``do_damping`` - Enable Gilbert-damping evaluation in exchange post-processing (B5)
+- ``do_sigma`` - One-shot G_ii(z) for a site-local self-energy read from sigma.dat (gloc_sigma.dat)
 - ``dt`` - ASD time step
 
 **E**
@@ -261,6 +262,7 @@ Alphabetical Listing (All Parameters)
 **S**
 
 - ``sd_temp`` - ASD simulation temperature
+- ``sigma_tol`` - Tail bound that marks a do_sigma G_ii(z) block converged
 - ``soc_scale`` - Spin-orbit coupling scaling factor
 - ``svac`` - Spherically averaged atomic spheres
 - ``symbol`` - Element chemical symbol

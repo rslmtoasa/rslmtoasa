@@ -199,6 +199,11 @@ if(RUN_REG_TESTS)
         "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
   endif()
 
+  # do_sigma: G_ii(z) with a site-local Sigma on bcc Fe; Sigma = sigma*I at z against Sigma = 0 at z - sigma, and the 1/z limit.
+  rslmto_add_test(NAME SigmaGloc_bccFe TIER quick LABELS sigma scf functional
+    COMMAND "${PY}" "${TestDIR}/sigma/test_sigma_gloc.py" "--binary" "${TestBinary}"
+      "--workdir" "${CMAKE_BINARY_DIR}/Testing/sigma/bccFe")
+
   # --- Kubo transport operators and backends (pytest) -----------------------------------------
   # The compile-based suites build Debug dense-reference drivers themselves (about 75 s for both);
   # test_transport_backend.py runs the executable of this build (RSLMTO_EXE).

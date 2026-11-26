@@ -340,6 +340,41 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
 (``chi0_pair_mesh``, ``chi0_pair_moments``, ``j0_local_mesh``, ``j0_local_moments``, ``chi0_pair_dynamic``)
 
+do_sigma
+--------
+
+**Type:** Logical
+
+**Purpose:** After a converged SCF (``pre_processing = 'bravais'``, real-space Chebyshev), evaluate once the local Green
+function :math:`G_{ii}(z) = \langle i|(z - H - \Sigma_t(z))^{-1}|i\rangle` of every recursion atom for a site-local,
+non-Hermitian self-energy :math:`\Sigma_t` per atom type :math:`t`, read from ``sigma.dat``, and write it to ``gloc_sigma.dat``.
+
+``sigma.dat``: a free header line; ``nz ntype nb``; then for each :math:`z` a line ``x y`` (:math:`z = E_F + x + iy`, Ry)
+followed by ``ntype`` blocks of ``nb`` lines, each line holding the ``nb`` entries of one row of :math:`\Sigma_t` as
+``re im`` pairs (Ry, same basis as the Hamiltonian). ``gloc_sigma.dat``: header line, ``nz nrec nb``, then per :math:`z` the
+line ``x y`` and one :math:`G_{ii}` block (1/Ry) per recursion atom in the same row layout; ``n/a`` lines mark a block that did not converge.
+
+**Default:** ``.false.``
+
+**Notes:**
+
+- In ``&calculation`` namelist; ``sigma_tol`` (default ``1.0e-6``) is the relative tail bound that marks a block converged.
+- The expansion is in :math:`(H + \Sigma - b)/a` with a complex centre :math:`b` and uses at most ``lld`` moments (order
+  :math:`n` costs :math:`n` operator applications). It converges when :math:`z` lies outside the ellipse enclosing the
+  numerical range of :math:`H + \Sigma`: points too close to the real axis relative to :math:`\max|\mathrm{Im}\,\Sigma|`
+  are reported ``n/a``.
+
+**Related code:** ``source/self_energy.f90``, ``source/cheb_sigma_kernel.f90``
+
+sigma_tol
+---------
+
+**Type:** Real
+
+**Purpose:** Relative tail bound below which a :math:`G_{ii}(z)` block of ``do_sigma`` is written; see ``do_sigma``.
+
+**Default:** ``1.0e-6``
+
 green_backend
 -------------
 
