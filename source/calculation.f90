@@ -111,7 +111,7 @@ module calculation_mod
 
       !> Gilbert-damping switch for the exchange post-processing (B5.3).
       !> When .true., `post_processing_exchange` also evaluates the pairwise (on-site and nonlocal)
-      !> Kamberský torque-correlation Gilbert damping (`calculate_gilbert_damping`)
+      !> Kamberský torque-correlation Gilbert damping (`damping_pair`)
       !> from the same `green%gij` the J_ij consumer reads -- so it runs through
       !> whichever `gf_route` filled those arrays (recursion / lehmann / dyson),
       !> route-agnostic by construction. Requires SOC in the potential (xi_p/xi_d)
@@ -121,7 +121,7 @@ module calculation_mod
 
       !> Experimental magnetic moment-of-inertia switch for exchange post-processing.
       !> When true, evaluate the finite-difference torque-correlation kernel
-      !> (`calculate_moment_of_inertia`) on the same canonical Green functions.
+      !> (`inertia_pair`) on the same canonical Green functions.
       !> This is diagnostic output only: no independent production relation or
       !> physical normalization is implied. Default .false.
       logical :: do_inertia
@@ -835,7 +835,7 @@ contains
       case ('lehmann', 'dyson')
          ! B2.6 (done): the exchange consumer runs UNCHANGED on the k-space-filled
          ! arrays -- it reads the same gij/gji + intersite torque families
-         ! (Ginmag/Gj{x,y,z}) the recursion route fills, so calculate_exchange
+         ! (Ginmag/Gj{x,y,z}) the recursion route fills, so exchange_pair
          ! produces a physical J_ij (correct tensor structure: isotropic J, zero
          ! DMI on collinear bcc Fe). The intersite normalization is CORRECT -- the
          ! former ″1/sqrt2″ worry is resolved: the fixed-broadening J difference vs

@@ -158,9 +158,11 @@ instead.
 ```text
 calculation.f90: run_intersite_moments(control_obj, recursion_obj)
   -> recursion%recur_b_ij() / recursion%chebyshev_recur_ij()   [recursion.f90]
-  -> green%calculate_intersite_gf_core() / green%calculate_intersite_gf_eta()
-       -> green%bgreen()   [green.f90 — per-pair, per-energy Green's function terminator]
-  -> exchange.f90 (calculate_exchange / _twoindex / _gauss_legendre)
+  -> exchange%calculate_pairwise()   [exchange_dynamics.f90 — pair loop]
+       -> green%fill_intersite_gf_pair() + fill_intersite_gf_twoindex_pair()   [one pair into one slot]
+            -> green%bgreen()   [green.f90 — per-pair, per-energy Green's function terminator]
+       -> exchange_pair / exchange_twoindex_pair / damping_pair / inertia_pair, then *_finalize
+  -> contour route: green%calculate_intersite_gf_eta() -> exchange.f90 calculate_exchange_gauss_legendre
      or conductivity.f90 (calculate_gamma_nm / calculate_conductivity_tensor)
 ```
 The energy integrals in `exchange.f90` (`simpson_f`) use the electronic
