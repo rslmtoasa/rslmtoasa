@@ -314,8 +314,31 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   is only approximate with ``hoh``, with spin-orbit coupling, for a pair list shorter than the cluster and for
   a kernel-damped :math:`G`. Not written with ``exchange_delta = 'onsite'``.
 
+- Dynamic :math:`\chi^0_{ij}(\omega)` on the energy-mesh route (coefficient vertex), from the Lehmann form with
+  :math:`A = (G - G^\dagger)/(-2\pi i)` and :math:`G^A_{ji} = G_{ij}^\dagger`:
+
+  .. math::
+
+     \chi^0_{ij}(\omega) = \int f(E)\,\mathrm{Tr}_d[A^{\uparrow\uparrow}_{ji}(E)\, G^{\downarrow\downarrow}_{ij}(E+\omega)]\,dE
+     + \int f(E)\,\mathrm{Tr}_d[G^{\uparrow\uparrow,A}_{ji}(E-\omega)\, A^{\downarrow\downarrow}_{ij}(E)]\,dE .
+
+  At :math:`\omega = 0` this is algebraically the static expression above. Poles sit at
+  :math:`\omega = e^\downarrow - e^\uparrow` (positive for a majority-up moment). The energy mesh must be uniform
+  (otherwise a warning and no dynamic output); each :math:`\omega` of the ``&spin_response`` grid (``omega_min``,
+  ``omega_max``, ``n_omega``; defaults 0, 0.05 Ry, 201, negative values allowed) is rounded to the nearest multiple
+  :math:`k\,\Delta E` of the mesh step and the rounded value is what is written, so the resolution is :math:`\Delta E`.
+  A term whose shifted energy :math:`E \pm \omega` lies outside the mesh is dropped. ``eta`` of ``&spin_response`` is not
+  used: the broadening is that of the recursion (its terminator or Chebyshev kernel). Not available in moment space
+  (``exchange_integration = 'moments'``: one info line, no dynamic files). Cost: one pass over the mesh per pair and
+  :math:`\omega`. Writes ``chi0_dynamic.dat`` and ``chi_rs_q.dat``: for each q of ``&spin_response`` the
+  :math:`\chi^0_{ab}(\mathbf q, \omega)` lattice sum at every :math:`\omega`, :math:`\chi = (I + \chi^0 K)^{-1}\chi^0` with
+  :math:`K = \mathrm{diag}(U)` and the Goldstone :math:`U` of ``chi0_types.dat``, and
+  :math:`\mathrm{tr}\,L = -\mathrm{Im}\,\mathrm{tr}\,\chi/\pi`. Coefficient vertex only (no Jülich). At q = 0 and
+  :math:`\omega = 0` the matrix :math:`I + \chi^0 K` is singular (Goldstone) and :math:`\chi` is ``n/a``. For a self pair
+  :math:`\int d\omega\,(-1/\pi)\,\mathrm{Im}\,\chi^0_{ii}(\omega)` over all :math:`\omega` equals :math:`m_d`.
+
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
-(``chi0_pair_mesh``, ``chi0_pair_moments``, ``j0_local_mesh``, ``j0_local_moments``)
+(``chi0_pair_mesh``, ``chi0_pair_moments``, ``j0_local_mesh``, ``j0_local_moments``, ``chi0_pair_dynamic``)
 
 green_backend
 -------------

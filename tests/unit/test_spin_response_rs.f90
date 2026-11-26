@@ -20,7 +20,9 @@
 ! In j0_local_traces (3 sites x 2 orbitals, H^s = C^s + W^s S W^s with a Hermitian S, complex z,
 ! reference the direct sum over all sites of Tr[de_i G^up_ij de_j G^dn_ji] with G from a linear solve): r = W_dn/W_up
 ! inverted or applied to the wrong spin, the a/b (z-dependence) split of the vertex swapped, a wrong spin_off, a dropped
-! orbital. Plumbing only otherwise: no physics is checked here.
+! orbital.
+! In chi0_dynamic_traces a wrong sign of the energy shift, swapped spin roles, a missing
+! conjugate or transpose, or a wrong d block, against the Lehmann sum of the eigenpairs of a two-site model. Plumbing only: no physics is checked here.
 !------------------------------------------------------------------------------
 program test_spin_response_rs
    use precision_mod, only: rp
@@ -28,7 +30,7 @@ program test_spin_response_rs
    use basis_mod, only: basis_init, nb, spin_off
    use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums, juelich_vectors, &
                                    juelich_green, juelich_moments, type_sums_q, cluster_sites, cluster_frequencies, &
-                                   j0_local_traces
+                                   j0_local_traces, chi0_dynamic_traces
    implicit none
    complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), dm(:)
    complex(rp) :: t(2, 2), c
@@ -109,6 +111,7 @@ program test_spin_response_rs
    call check_type_sums_q()
    call check_cluster()
    call check_j0_local()
+   call check_chi0_dynamic()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -276,6 +279,92 @@ contains
          end do
       end do
    end subroutine check_j0_local
+   !> Two sites of five d orbitals, different Hermitian H for spin up and down (10x10, fixed numbers). Exact G_ij, G_ji on a
+   !> uniform mesh E_n = -1 + 0.05 (n - 1), n = 1..41, at z = E_n + i eta. Reference: the Lehmann form evaluated from the
+   !> eigenpairs, with A_a(E) = (eta/pi)/((E - e_a)^2 + eta^2) and weights w_ab = sum_{mu nu} vu(j mu, a) conj(vu(i nu, a))
+   !> vd(i nu, b) conj(vd(j mu, b)):
+   !>   term 1 = sum_n f_n sum_ab w_ab A^up_a(E_n) /(E_(n+k) + i eta - e^dn_b),
+   !>   term 2 = sum_n f_n sum_ab w_ab /(E_(n-k) - i eta - e^up_a) A^dn_b(E_n),
+   !> f_n = 1 for E_n <= 0.2, terms with n +- k outside the mesh dropped. A wrong sign of the shift, a swapped spin role, a
+   !> missing conjugate or transpose, or a wrong d block changes the sum for k = 3 and k = -2 (the reference values differ).
+   subroutine check_chi0_dynamic()
+      integer, parameter :: ns = 10, nn = 41
+      real(rp), parameter :: de = 0.05_rp, eta = 0.03_rp, ef = 0.2_rp
+      complex(rp) :: h(ns, ns, 2), v(ns, ns, 2), work(4*ns), g(nb, nb, nn), gt(nb, nb, nn), z, w, kern, ref, xs(2)
+      complex(rp) :: tr(nn, 2), td(nn, 2)
+      real(rp) :: e(ns, 2), rwork(3*ns), en(nn), a_up, a_dn
+      integer :: s, p, q, info, n, a, b, mu, nu, ks(2), ik, k, mm
+
+      do s = 1, 2
+         do q = 1, ns
+            do p = 1, q - 1
+               h(p, q, s) = cmplx(0.3_rp*sin(0.7_rp*p + 1.3_rp*q + s), 0.2_rp*cos(0.4_rp*p - 0.9_rp*q + s), rp)
+               h(q, p, s) = conjg(h(p, q, s))
+            end do
+            h(q, q, s) = cmplx(0.12_rp*q - 0.7_rp + 0.15_rp*(s - 1), 0.0_rp, rp)
+         end do
+         v(:, :, s) = h(:, :, s)
+         call zheev('V', 'U', ns, v(:, :, s), ns, e(:, s), work, size(work), rwork, info)
+         if (info /= 0) error stop 'zheev failed'
+      end do
+      en = [(-1.0_rp + de*(n - 1), n=1, nn)]
+      ! G_ij = rows of site i (1:5), columns of site j (6:10); G_ji the transposed roles; every other element 100
+      g = (100.0_rp, 0.0_rp)
+      gt = (100.0_rp, 0.0_rp)
+      do s = 1, 2
+         do n = 1, nn
+            z = cmplx(en(n), eta, rp)
+            do mu = 1, 5
+               do nu = 1, 5
+                  g(4 + nu + 16*(s - 1), 4 + mu + 16*(s - 1), n) = &
+                     sum(v(nu, :, s)*conjg(v(5 + mu, :, s))/(z - e(:, s)))
+                  gt(4 + mu + 16*(s - 1), 4 + nu + 16*(s - 1), n) = &
+                     sum(v(5 + mu, :, s)*conjg(v(nu, :, s))/(z - e(:, s)))
+               end do
+            end do
+         end do
+      end do
+
+      ks = [3, -2]
+      do ik = 1, 2
+         k = ks(ik)
+         ! kernel: gij = g, gji = gt
+         td = chi0_dynamic_traces(g, gt, k)
+         kern = (0.0_rp, 0.0_rp)
+         ref = (0.0_rp, 0.0_rp)
+         do n = 1, nn
+            if (en(n) > ef) cycle
+            kern = kern + td(n, 1) + td(n, 2)
+            do a = 1, ns
+               do b = 1, ns
+                  w = (0.0_rp, 0.0_rp)
+                  do mu = 1, 5
+                     do nu = 1, 5
+                        w = w + v(5 + mu, a, 1)*conjg(v(nu, a, 1))*v(nu, b, 2)*conjg(v(5 + mu, b, 2))
+                     end do
+                  end do
+                  a_up = eta/pi/((en(n) - e(a, 1))**2 + eta**2)
+                  a_dn = eta/pi/((en(n) - e(b, 2))**2 + eta**2)
+                  mm = n + k
+                  if (mm >= 1 .and. mm <= nn) ref = ref + w*a_up/cmplx(en(mm) - e(b, 2), eta, rp)
+                  mm = n - k
+                  if (mm >= 1 .and. mm <= nn) ref = ref + w/cmplx(en(mm) - e(a, 1), -eta, rp)*a_dn
+               end do
+            end do
+         end do
+         xs(ik) = ref
+         call require(abs(ref) > 1.0e-3_rp, 'chi0_dynamic reference is not small')
+         call require(abs(kern - ref) < 1.0e-11_rp*abs(ref), 'chi0_dynamic_traces = Lehmann sum')
+      end do
+      call require(abs(xs(1) - xs(2)) > 1.0e-3_rp*abs(xs(1)), 'chi0_dynamic reference depends on the sign of k')
+
+      ! k = 0 against the static traces (by construction: the algebra of A = (G - G^A)/(-2 pi i) reduces to chi0_from_traces)
+      td = chi0_dynamic_traces(g, gt, 0)
+      tr = chi0_traces(g, gt)
+      kern = sum(td(:, 1) + td(:, 2))
+      ref = chi0_from_traces(sum(tr(:, 1)), sum(tr(:, 2)))
+      call require(abs(kern - ref) < 1.0e-11_rp*abs(ref), 'chi0_dynamic_traces at k = 0 = static (by construction)')
+   end subroutine check_chi0_dynamic
 
    subroutine require(ok, label)
       logical, intent(in) :: ok

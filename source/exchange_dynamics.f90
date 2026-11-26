@@ -53,9 +53,10 @@ contains
       ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
       real(rp), allocatable :: dpair(:, :), dtotal(:, :), dcontrib(:, :)
       real(rp), allocatable :: ipair(:, :), ipair_b(:, :, :), itotal(:, :), icontrib(:, :)
-      complex(rp), allocatable :: chi0(:), lin(:), lin1(:), chi0j(:)
-      real(rp), allocatable :: md(:), mdj(:), j0(:)
-      logical :: juelich, do_j0
+      complex(rp), allocatable :: chi0(:), lin(:), lin1(:), chi0j(:), chi0w(:, :)
+      real(rp), allocatable :: md(:), mdj(:), j0(:), omega(:)
+      integer, allocatable :: kshift(:)
+      logical :: juelich, do_j0, dynamic
 
       damping = do_damping
       if (damping) damping = damping_ready(this)
@@ -79,6 +80,14 @@ contains
          if (juelich) allocate (chi0j(this%lattice%njij), source=(0.0_rp, 0.0_rp))
          if (juelich) allocate (mdj(this%lattice%njij), source=0.0_rp)
          if (.not. do_exchange) nodes = real_mesh_nodes(this)
+         dynamic = .false.
+         if (moments) then
+            call g_logger%info('do_chi0: chi0_dynamic.dat and chi_rs_q.dat need the energy-mesh route; not written with exchange_integration = moments', &
+                               __FILE__, __LINE__)
+         else
+            call chi0_dynamic_setup(this, nodes, kshift, omega, dynamic)
+            if (dynamic) allocate (chi0w(this%lattice%njij, size(omega)), source=(0.0_rp, 0.0_rp))
+         end if
       end if
       ! Local J0 sum rule: needs J_ij and the d_matrix vertex (not the onsite delta)
       do_j0 = do_chi0 .and. do_exchange .and. .not. this%use_onsite_delta
@@ -122,6 +131,7 @@ contains
                if (juelich) call juelich_pair_moments(this, h, kernel, lin, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
             else
                call chi0_pair_mesh(this, nodes, slot, i == j, chi0(njij_glob), md(njij_glob))
+               if (dynamic) call chi0_pair_dynamic(this, nodes, slot, kshift, chi0w(njij_glob, :))
                if (juelich) call juelich_pair_mesh(this, nodes, slot, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
             end if
          end if
@@ -161,9 +171,9 @@ contains
       end if
       if (do_chi0) then
          if (juelich) then
-            call chi0_finalize(this, chi0, md, chi0j, mdj, xc, j0)
+            call chi0_finalize(this, chi0, md, chi0j, mdj, xc, j0, chi0w, omega)
          else
-            call chi0_finalize(this, chi0, md, xc=xc, j0=j0)
+            call chi0_finalize(this, chi0, md, xc=xc, j0=j0, chi0w=chi0w, omega=omega)
          end if
       end if
       if (damping) call damping_finalize(this, dpair, dtotal, ief, moments)
@@ -356,13 +366,64 @@ contains
       if (i == j) md = -aimag(sum(lin(1:n)*d_moment_trace(mt_ij)))/pi
    end subroutine juelich_pair_moments
 
+   !> Frequency grid of the dynamic chi0_ij(omega): the omega of &spin_response rounded to kshift*dE, dE the step of the
+   !> energy mesh, omega = kshift*dE. dynamic = .false. (and a warning) when the mesh is not uniform.
+   subroutine chi0_dynamic_setup(this, nodes, kshift, omega, dynamic)
+      use spin_response_mod, only: read_omega_grid
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, allocatable, intent(out) :: kshift(:)
+      real(rp), allocatable, intent(out) :: omega(:)
+      logical, intent(out) :: dynamic
+      real(rp) :: de
+      integer :: n
+
+      n = size(nodes%z)
+      de = (real(nodes%z(n), rp) - real(nodes%z(1), rp))/real(n - 1, rp)
+      dynamic = n > 2
+      if (dynamic) dynamic = maxval(abs(real(nodes%z(2:n), rp) - real(nodes%z(1:n - 1), rp) - de)) <= 1.0e-6_rp*de
+      if (.not. dynamic) then
+         call g_logger%warning('do_chi0: the energy mesh is not uniform; chi0_dynamic.dat and chi_rs_q.dat not written', &
+                               __FILE__, __LINE__)
+         return
+      end if
+      call read_omega_grid(this%lattice%control%fname, omega)
+      kshift = nint(omega/de)
+      omega = kshift*de
+   end subroutine chi0_dynamic_setup
+
+   !> chi0_ij(omega) of the pair in Green-function slot `slot` for the shifts kshift (chi0_dynamic_traces on the mesh,
+   !> Simpson with the Fermi function). The G blocks of the slot are copied once.
+   subroutine chi0_pair_dynamic(this, nodes, slot, kshift, chi0w)
+      use spin_response_rs_mod, only: chi0_dynamic_traces
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, kshift(:)
+      complex(rp), intent(out) :: chi0w(:)
+      complex(rp), allocatable :: gij(:, :, :), gji(:, :, :)
+      complex(rp) :: t(size(nodes%z), 2)
+      real(rp) :: re, im
+      integer :: iw, n
+
+      n = size(nodes%z)
+      gij = this%green%gij(:, :, 1:n, slot)
+      gji = this%green%gji(:, :, 1:n, slot)
+      do iw = 1, size(kshift)
+         t = chi0_dynamic_traces(gij, gji, kshift(iw))
+         call nodes%integrate(real(t(:, 1) + t(:, 2), rp), re)
+         call nodes%integrate(aimag(t(:, 1) + t(:, 2)), im)
+         chi0w(iw) = cmplx(re, im, rp)
+      end do
+   end subroutine chi0_pair_dynamic
+
    !> Sum chi0, md (and the Juelich chi0j, mdj when present) over the ranks; on rank 0 write chi0_ij.dat, the type
    !> diagnostics chi0_types.dat, the adiabatic spectrum chi0_adiabatic.dat at the q points of &spin_response, the
-   !> cluster spectrum chi0_cluster.dat and, with xc and j0 present, the local J0 sum rule j0_sum_rule.dat.
-   subroutine chi0_finalize(this, chi0, md, chi0j, mdj, xc, j0)
+   !> cluster spectrum chi0_cluster.dat, with xc and j0 present the local J0 sum rule j0_sum_rule.dat, and with chi0w
+   !> present the dynamic chi0_dynamic.dat and chi_rs_q.dat.
+   subroutine chi0_finalize(this, chi0, md, chi0j, mdj, xc, j0, chi0w, omega)
       use mpi_mod
       use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types, type_sums_q, write_chi0_adiabatic, &
-                                      cluster_sites, write_chi0_cluster, write_j0_sum_rule
+                                      cluster_sites, write_chi0_cluster, write_j0_sum_rule, write_chi0_dynamic, write_chi_rs_q
       use spin_response_mod, only: read_q_points
       class(exchange) :: this
       complex(rp), intent(inout) :: chi0(:)
@@ -371,6 +432,9 @@ contains
       real(rp), intent(inout), optional :: mdj(:)
       real(rp), intent(in), optional :: xc(:, :)
       real(rp), intent(inout), optional :: j0(:)
+      complex(rp), intent(inout), optional :: chi0w(:, :)
+      real(rp), intent(in), optional :: omega(:)
+      logical :: written
       integer :: nt, it, p, iq
       integer, allocatable :: seed(:), npair(:)
       real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:), rdir(:, :), q(:, :), qcart(:, :), &
@@ -383,6 +447,7 @@ contains
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, chi0, size(chi0), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, md, size(md), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      if (present(chi0w)) call MPI_ALLREDUCE(MPI_IN_PLACE, chi0w, size(chi0w), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
       if (present(chi0j)) then
          call MPI_ALLREDUCE(MPI_IN_PLACE, chi0j, size(chi0j), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
          call MPI_ALLREDUCE(MPI_IN_PLACE, mdj, size(mdj), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -435,6 +500,13 @@ contains
          call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c, mcj, chi0cj)
       else
          call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c)
+      end if
+      if (present(chi0w)) then
+         call write_chi0_dynamic('chi0_dynamic.dat', this%lattice%ijpair(1:size(chi0), :), omega, chi0w)
+         call write_chi_rs_q('chi_rs_q.dat', q, this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, rdir, omega, chi0w, &
+                             chi0s, m, written)
+         if (.not. written) call g_logger%warning('do_chi0: chi_rs_q.dat not written (a type without a self pair or |m| < 1e-6)', &
+                                                  __FILE__, __LINE__)
       end if
    end subroutine chi0_finalize
 

@@ -204,6 +204,15 @@ difference. The two agree for ``nsp = 1``, ``hoh = .false.`` and a pair list cov
 differ with ``hoh``, spin-orbit coupling, a truncated pair list or a kernel-damped :math:`G`. See ``do_chi0``
 in :ref:`keywords/output_options`.
 
+**chi0_dynamic.dat**, **chi_rs_q.dat** (with ``do_chi0 = .true.``, energy-mesh route only)
+
+``chi0_dynamic.dat``: one row per pair and :math:`\omega`, after a one-line header: ``i``, ``j``, :math:`\omega` (Ry, rounded
+to a multiple of the mesh step), real and imaginary parts of :math:`\chi^0_{ij}(\omega)` (1/Ry). ``chi_rs_q.dat``: one row
+per q point of ``&spin_response`` and :math:`\omega`, after a one-line header: q index, q (direct), :math:`\omega` (Ry),
+real and imaginary parts of :math:`\mathrm{tr}\,\chi^0` and :math:`\mathrm{tr}\,\chi` (RPA, Goldstone :math:`U`, 1/Ry) and
+:math:`\mathrm{tr}\,L` (1/Ry); ``n/a`` for :math:`\chi` at q = 0, :math:`\omega = 0`. See ``do_chi0`` in
+:ref:`keywords/output_options`.
+
 Transport Properties
 ====================
 
