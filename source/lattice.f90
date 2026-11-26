@@ -398,6 +398,8 @@ module lattice_mod
       integer, dimension(:, :), allocatable :: pair_full
       !> For every row of pair_full, the row of ijpair holding its star representative
       integer, dimension(:), allocatable :: pair_rep
+      !> For every row of pair_full, the Cartesian rotation that maps the pair vector of its representative onto its own
+      real(rp), dimension(:, :, :), allocatable :: pair_rot
 
       !> Trio of atoms to calculate the spin-lattice interactions
       real(rp), dimension(:, :), allocatable :: ijktrio

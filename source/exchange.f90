@@ -1326,6 +1326,7 @@ contains
             print '(3f12.6)', jtens(3, :)
 
          end do
+         if (allocated(this%lattice%pair_rep)) call write_pair_stars(this%lattice, T_comm_xc)
       end if
 
       close (20)
@@ -1338,6 +1339,33 @@ contains
 #endif
 
    end subroutine exchange_finalize
+
+   !> Full star expansion of the pair_unique list, one row per member pair of every star: J, D' = Rt D, A' = Rt A Rt^T
+   !> of the representative, Rt = det(R) R with R the Cartesian rotation that maps the representative onto the member.
+   subroutine write_pair_stars(lat, xc)
+      type(lattice), intent(in) :: lat
+      real(rp), intent(in) :: xc(:, :)
+      real(rp) :: r(3, 3), a(3, 3), d(3)
+      integer :: f, i, j, p, unit
+
+      open (newunit=unit, file='exchange_stars.out', action='write', status='replace')
+      write (unit, '(a)') '# i j type_i type_j r_ij(3, cluster coordinates) |r_ij| J(mRy) D(3, mRy) A(9, mRy, as aij.out)'
+      do f = 1, size(lat%pair_rep)
+         i = lat%pair_full(f, 1)
+         j = lat%pair_full(f, 2)
+         p = lat%pair_rep(f)
+         r = lat%pair_rot(:, :, f)
+         ! Without spin-orbit coupling the spins are decoupled from the lattice: nothing to rotate
+         if (lat%control%nsp == 1) r = reshape([1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp], [3, 3])
+         if (r(1, 1)*(r(2, 2)*r(3, 3) - r(2, 3)*r(3, 2)) - r(1, 2)*(r(2, 1)*r(3, 3) - r(2, 3)*r(3, 1)) &
+             + r(1, 3)*(r(2, 1)*r(3, 2) - r(2, 2)*r(3, 1)) < 0.0_rp) r = -r
+         d = matmul(r, xc(2:4, p))
+         a = matmul(r, matmul(reshape(xc(5:13, p), [3, 3]), transpose(r)))
+         write (unit, '(4i8,2x,3f12.6,1x,f12.6,2x,f12.6,2x,3f12.6,2x,9f12.6)') i, j, lat%iz(i), lat%iz(j), &
+            lat%cr(:, j) - lat%cr(:, i), norm2(lat%cr(:, j) - lat%cr(:, i)), xc(1, p), d, a
+      end do
+      close (unit)
+   end subroutine write_pair_stars
 
    subroutine calculate_exchange_rs2pao(this)
       use mpi_mod

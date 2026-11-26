@@ -12,7 +12,7 @@ program test_pair_list
                                        1.7320508075688772_rp]
    real(rp), allocatable :: cr(:, :), rot48(:, :, :), rot8(:, :, :), rc(:, :, :), tr(:, :)
    real(rp) :: v(3)
-   integer, allocatable :: jl(:), rep(:), types(:), rf(:, :, :)
+   integer, allocatable :: jl(:), rep(:), irot(:), types(:), rf(:, :, :)
    integer :: n1, n2, n3, n, seed, i, k, s, nbad, nrep, perm(3, 6), sg, p, q, n48, n8
    logical :: failed = .false.
    real(rp) :: d, ainv(3, 3), r(3, 3)
@@ -87,7 +87,7 @@ program test_pair_list
    call require(size(rc, 3) == 8, 'site symmetry on the x axis: 8 operations')
 
    ! catches: stars that do not cover a shell, wrong multiplicity, representative not the first member
-   call pair_stars(cr, types, seed, jl, rot48, rep, nbad)
+   call pair_stars(cr, types, seed, jl, rot48, rep, irot, nbad)
    call require(nbad == 0, 'stars: all images found')
    nrep = 0
    do k = 1, size(jl)
@@ -99,6 +99,17 @@ program test_pair_list
       call require(count(rep == k + 1) == shell_count(s), 'star multiplicity of a shell')
       k = k + shell_count(s)
    end do
+
+   ! catches: a rotation index that does not map the representative onto the member
+   d = 0.0_rp
+   do k = 1, size(jl)
+      if (rep(k) == k) then
+         if (irot(k) /= 0) d = 1.0_rp
+      else
+         d = max(d, maxval(abs(matmul(rot48(:, :, irot(k)), cr(:, jl(rep(k))) - cr(:, seed)) - (cr(:, jl(k)) - cr(:, seed)))))
+      end if
+   end do
+   call require(d < 1.0e-12_rp, 'irot maps the representative onto its members')
 
    ! C4v about z: 8-shell splits 4 + 4, 6-shell 4 + 1 + 1
    n8 = 0
@@ -114,7 +125,7 @@ program test_pair_list
       end if
    end do
    call require(n8 == 8, 'C4v: 8 operations')
-   call pair_stars(cr, types, seed, jl, rot8, rep, nbad)
+   call pair_stars(cr, types, seed, jl, rot8, rep, irot, nbad)
    call require(nbad == 0, 'C4v stars: all images found')
    call require(nstars(rep, 2, 9) == 2 .and. maxstar(rep, 2, 9) == 4 .and. minstar(rep, 2, 9) == 4, &
                 '8-shell under C4v: 2 stars of 4')
@@ -124,7 +135,7 @@ program test_pair_list
    ! catches: a type that is ignored (C4v maps the type-2 neighbour onto type-1 atoms, so images must be reported missing)
    types = 1
    types(jl(2)) = 2
-   call pair_stars(cr, types, seed, jl, rot8, rep, nbad)
+   call pair_stars(cr, types, seed, jl, rot8, rep, irot, nbad)
    call require(nbad > 0, 'a rotation that changes the type is not a symmetry')
 
    if (failed) then

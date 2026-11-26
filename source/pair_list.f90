@@ -73,18 +73,20 @@ contains
    end subroutine site_cart_rotations
 
    !> Symmetry stars of the pairs (seed, jlist(k)): rep(k) is the first position in jlist of the star of k. Two pairs are in
-   !> one star when a rotation of rot_cart maps r_j - r_seed onto r_j' - r_seed and types(j) == types(j'). nbad counts the
-   !> (rotation, pair) images that fall on no atom of jlist (zero for a complete list and a true symmetry).
-   subroutine pair_stars(cr, types, seed, jlist, rot_cart, rep, nbad)
+   !> one star when a rotation of rot_cart maps r_j - r_seed onto r_j' - r_seed and types(j) == types(j'). irot(k) is the
+   !> rotation that maps the vector of rep(k) onto that of k (0 for a representative). nbad counts the (rotation, pair)
+   !> images that fall on no atom of jlist (zero for a complete list and a true symmetry).
+   subroutine pair_stars(cr, types, seed, jlist, rot_cart, rep, irot, nbad)
       real(rp), intent(in) :: cr(:, :), rot_cart(:, :, :)
       integer, intent(in) :: types(:), seed, jlist(:)
-      integer, allocatable, intent(out) :: rep(:)
+      integer, allocatable, intent(out) :: rep(:), irot(:)
       integer, intent(out) :: nbad
       real(rp) :: v(3), w(3)
       integer :: k, l, m, r
 
-      allocate (rep(size(jlist)))
+      allocate (rep(size(jlist)), irot(size(jlist)))
       rep = 0
+      irot = 0
       nbad = 0
       do k = 1, size(jlist)
          if (rep(k) /= 0) cycle
@@ -103,6 +105,7 @@ contains
                nbad = nbad + 1
             else if (rep(m) == 0) then
                rep(m) = k
+               irot(m) = r
             end if
          end do
       end do
@@ -113,11 +116,12 @@ contains
    subroutine generate_exchange_pairs(lat)
       type(lattice), target, intent(inout) :: lat
       type(symmetry) :: sym
-      integer, allocatable :: jl(:), rep(:), seeds(:), full(:, :), fullrep(:), rot_frac(:, :, :), flips(:), newidx(:)
+      integer, allocatable :: jl(:), rep(:), irot(:), seeds(:), full(:, :), fullrep(:), rot_frac(:, :, :), flips(:), newidx(:)
       logical, allocatable :: isrep(:)
-      real(rp), allocatable :: trans(:, :), rot_cart(:, :, :), frac(:, :), moments(:, :)
+      real(rp), allocatable :: trans(:, :), rot_cart(:, :, :), frac(:, :), moments(:, :), rots(:, :, :), rs(:, :, :)
       real(rp) :: r_cluster
-      integer :: s, k, n, nfull, nops, nbad, nrep
+      real(rp), parameter :: identity(3, 3) = reshape([1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp], [3, 3])
+      integer :: s, k, n, nfull, nops, nbad, nrep, nsp
 
       if (lat%pair_radius <= 0.0_rp) then
          if (lat%pair_unique) call g_logger%fatal('pair_unique needs pair_radius > 0.', __FILE__, __LINE__)
@@ -126,9 +130,9 @@ contains
       if (lat%njij /= 0 .or. lat%njijk /= 0) &
          call g_logger%fatal('pair_radius generates the pair list: do not set njij, ijpair or njijk together with it.', &
                              __FILE__, __LINE__)
-      if (lat%pair_unique .and. lat%control%nsp /= 1) &
-         call g_logger%fatal('pair_unique needs nsp = 1: D and the anisotropic tensor of a representative do not carry ' // &
-                             'over to the other members of its star.', __FILE__, __LINE__)
+      nsp = lat%control%nsp
+      if (lat%pair_unique .and. nsp /= 1 .and. nsp /= 2 .and. nsp /= 4) &
+         call g_logger%fatal('pair_unique needs nsp = 1, 2 or 4.', __FILE__, __LINE__)
       if (lat%pair_unique .and. trim(lat%control%calctype) /= 'B') &
          call g_logger%fatal('pair_unique needs calctype = ''B'' (the crystal space group acts on the bulk cluster).', &
                              __FILE__, __LINE__)
@@ -143,7 +147,7 @@ contains
       end do
 
       ! Full list, seed by seed
-      allocate (full(0, 2), fullrep(0))
+      allocate (full(0, 2), fullrep(0), rots(3, 3, 0))
       nfull = 0
       allocate (isrep(0))
       if (lat%pair_unique) then
@@ -151,11 +155,13 @@ contains
          n = lat%nrec
          call sym%initialize(lat)
          allocate (frac(3, n), moments(3, n))
-         moments = 0.0_rp
          do k = 1, n
             frac(:, k) = matmul(inverse_3x3(lat%a), lat%cr(:, k))
+            moments(:, k) = site_axis(lat%symbolic_atoms(lat%nbulk + k))
          end do
-         nops = sym%spglib%get_magnetic_symmetry(frac, lat%iz(1:n), moments, .false., rot_frac, trans, flips)
+         ! nsp = 2, 4: magnetic group of the moments as axial vectors (time-reversal-combined operations included);
+         ! nsp = 1: operations that map every site onto a site with the same type and moment
+         nops = sym%spglib%get_magnetic_symmetry(frac, lat%iz(1:n), moments, nsp == 2 .or. nsp == 4, rot_frac, trans, flips)
          if (nops == 0) call g_logger%fatal('pair_unique: spglib returned no symmetry operations.', __FILE__, __LINE__)
 #else
          call g_logger%fatal('pair_unique needs spglib, which is not compiled in.', __FILE__, __LINE__)
@@ -166,9 +172,16 @@ contains
          n = size(jl)
          if (lat%pair_unique) then
             call site_cart_rotations(lat%a, rot_frac, trans, matmul(inverse_3x3(lat%a), lat%cr(:, seeds(s))), rot_cart)
-            call pair_stars(lat%cr, lat%iz, seeds(s), jl, rot_cart, rep, nbad)
+            call pair_stars(lat%cr, lat%iz, seeds(s), jl, rot_cart, rep, irot, nbad)
             if (nbad /= 0) call g_logger%fatal('pair_unique: ' // trim(int2str(nbad)) // ' symmetry images of the pairs of atom ' // &
                                                trim(int2str(seeds(s))) // ' are not in the cluster.', __FILE__, __LINE__)
+            allocate (rs(3, 3, n))
+            do k = 1, n
+               rs(:, :, k) = identity
+               if (irot(k) /= 0) rs(:, :, k) = rot_cart(:, :, irot(k))
+            end do
+            rots = reshape([rots, rs], [3, 3, nfull + n])
+            deallocate (rs)
          else
             rep = [(k, k=1, n)]
          end if
@@ -195,6 +208,7 @@ contains
          lat%ijpair = full(pack([(k, k=1, nfull)], isrep), :)
          lat%pair_rep = newidx(fullrep)
          lat%pair_full = full
+         lat%pair_rot = rots
          lat%njij = nrep
          if (rank == 0) then
             do k = 1, nfull
@@ -212,6 +226,19 @@ contains
          if (rank == 0) call g_logger%info('pair_radius: ' // trim(int2str(nfull)) // ' pairs', __FILE__, __LINE__)
       end if
    end subroutine generate_exchange_pairs
+
+   !> Unit moment direction of a site (constraint target, else the potential moment), zero for a nonmagnetic site.
+   function site_axis(atom) result(axis)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      real(rp) :: axis(3), nrm
+
+      axis = atom%potential%mom
+      if (norm2(atom%constraint_target) > 1.0e-12_rp) axis = atom%constraint_target
+      nrm = norm2(axis)
+      axis = merge(axis/nrm, [0.0_rp, 0.0_rp, 1.0_rp], nrm > tiny(1.0_rp))
+      if (atom%force_nonmagnetic) axis = 0.0_rp
+   end function site_axis
 
    function real_str(x) result(str)
       real(rp), intent(in) :: x
