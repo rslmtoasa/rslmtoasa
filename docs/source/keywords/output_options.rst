@@ -290,9 +290,18 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   ``spin_response`` (frequencies, largest imaginary part, force-theorem frequencies), first with the
   coefficient vertex, then with the Jülich vertex (``n/a`` where its :math:`U` is not defined). The
   lattice sum is truncated to the pair list: list every atom within the radius to include.
+- With ``do_exchange`` also writes ``j0_sum_rule.dat``, a local check of the exchange integral. For a
+  first-order Hamiltonian :math:`H^s = C^s + W^s S W^s` with spin-independent :math:`S`
+  (``nsp = 1``, ``hoh = .false.``), :math:`\sum_j \mathrm{Tr}[\delta_i G^\uparrow_{ij}\delta_j G^\downarrow_{ji}]
+  = \sum_k \delta_k (r_k G^\downarrow_{kk} - G^\uparrow_{kk}/r_k)`, with :math:`\delta_k(E)` the exchange
+  vertex of ``d_matrix`` and :math:`r_k = W_\downarrow/W_\uparrow`, :math:`j` over the whole cluster and
+  :math:`k` over the orbitals :math:`l \le 2` of atom :math:`i`; only the self pair :math:`G_{ii}` enters. The
+  file lists this local :math:`J_0` next to the sum of the listed :math:`J_{ij}` of atom :math:`i`. The identity
+  is only approximate with ``hoh``, with spin-orbit coupling, for a pair list shorter than the cluster and for
+  a kernel-damped :math:`G`. Not written with ``exchange_delta = 'onsite'``.
 
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
-(``chi0_pair_mesh``, ``chi0_pair_moments``)
+(``chi0_pair_mesh``, ``chi0_pair_moments``, ``j0_local_mesh``, ``j0_local_moments``)
 
 green_backend
 -------------

@@ -13,14 +13,17 @@
 ! references are spectral sums over the eigenpairs of a small Hermitian H, a
 ! route independent of the resolvent identity and the Chebyshev recurrence the
 ! kernels use. In type_sums_q a wrong phase sign, pairs of another seed or a
-! wrong pair-type grouping. Plumbing only: no physics is checked here.
+! wrong pair-type grouping. In j0_local_traces (3 sites x 2 orbitals, H^s = C^s + W^s S W^s with a Hermitian S, complex z,
+! reference the direct sum over all sites of Tr[de_i G^up_ij de_j G^dn_ji] with G from a linear solve): r = W_dn/W_up
+! inverted or applied to the wrong spin, the a/b (z-dependence) split of the vertex swapped, a wrong spin_off, a dropped
+! orbital. Plumbing only otherwise: no physics is checked here.
 !------------------------------------------------------------------------------
 program test_spin_response_rs
    use precision_mod, only: rp
    use math_mod, only: pi
-   use basis_mod, only: basis_init, nb
+   use basis_mod, only: basis_init, nb, spin_off
    use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums, juelich_vectors, &
-                                   juelich_green, juelich_moments, type_sums_q
+                                   juelich_green, juelich_moments, type_sums_q, j0_local_traces
    implicit none
    complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), dm(:)
    complex(rp) :: t(2, 2), c
@@ -99,6 +102,7 @@ program test_spin_response_rs
 
    call check_juelich_kernels()
    call check_type_sums_q()
+   call check_j0_local()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -173,6 +177,62 @@ contains
       call require(abs(cq(1, 1, 1) - (-11.0_rp, 0.0_rp)) < 1.0e-13_rp, 'type_sums_q q = (1,0,0) gives -11')
       call require(abs(cq(1, 1, 2) - (-11.0_rp, -2.0_rp)) < 1.0e-13_rp, 'type_sums_q q = (0,1,0) gives -11 - 2i')
    end subroutine check_type_sums_q
+
+   !> H^s = C^s + W^s S W^s on 3 sites of 2 orbitals (S Hermitian, spin independent), G^s = (z - H^s)^-1 by zgesv at two complex z.
+   !> Reference: sum_j Tr[de_i G^up_ij de_j G^dn_ji] over all 6 orbitals j, de = W_up W_dn (P_up - P_dn), P = (z - C)/W^2.
+   !> Kernel: de_k = a_k + b_k z with a = (C_dn W_up^2 - C_up W_dn^2)/(W_up W_dn), b = (W_dn^2 - W_up^2)/(W_up W_dn).
+   subroutine check_j0_local()
+      integer, parameter :: n = 6
+      complex(rp) :: s(n, n), gs(n, n, 2), mm(n, n), de(n), z, tk(1, 2), gloc(nb, nb, 1), ref
+      real(rp) :: cu(n), cd(n), wu(n), wd(n), a(2), b(2), r(2)
+      integer :: k, l, iz, is, site, io, ipiv(n), info
+
+      do l = 1, n
+         do k = 1, n
+            s(k, l) = 0.3_rp*cmplx(sin(1.3_rp*k + 0.7_rp*l), cos(0.9_rp*k - 1.1_rp*l), rp)
+         end do
+      end do
+      s = 0.5_rp*(s + conjg(transpose(s)))
+      cu = [0.10_rp, -0.20_rp, 0.15_rp, 0.30_rp, -0.05_rp, 0.25_rp]
+      cd = [0.35_rp, 0.10_rp, -0.10_rp, 0.55_rp, 0.20_rp, 0.05_rp]
+      wu = [0.90_rp, 1.10_rp, 1.00_rp, 0.80_rp, 1.20_rp, 0.95_rp]
+      wd = [1.05_rp, 0.85_rp, 1.10_rp, 0.90_rp, 1.00_rp, 1.15_rp]
+      do iz = 1, 2
+         z = merge((0.3_rp, 0.2_rp), (-0.5_rp, 0.4_rp), iz == 1)
+         do is = 1, 2
+            do l = 1, n
+               do k = 1, n
+                  mm(k, l) = -merge(wu(k)*wu(l), wd(k)*wd(l), is == 1)*s(k, l)
+               end do
+               mm(l, l) = mm(l, l) + z - merge(cu(l), cd(l), is == 1)
+            end do
+            gs(:, :, is) = (0.0_rp, 0.0_rp)
+            do l = 1, n
+               gs(l, l, is) = (1.0_rp, 0.0_rp)
+            end do
+            call zgesv(n, n, mm, n, ipiv, gs(:, :, is), n, info)
+            if (info /= 0) error stop 'zgesv failed'
+         end do
+         de = wu*wd*((z - cu)/wu**2 - (z - cd)/wd**2)
+         do site = 1, 3
+            k = 2*(site - 1)
+            gloc = (0.0_rp, 0.0_rp)
+            gloc(1:2, 1:2, 1) = gs(k + 1:k + 2, k + 1:k + 2, 1)
+            gloc(spin_off + 1:spin_off + 2, spin_off + 1:spin_off + 2, 1) = gs(k + 1:k + 2, k + 1:k + 2, 2)
+            a = (cd(k + 1:k + 2)*wu(k + 1:k + 2)**2 - cu(k + 1:k + 2)*wd(k + 1:k + 2)**2)/(wu(k + 1:k + 2)*wd(k + 1:k + 2))
+            b = (wd(k + 1:k + 2)**2 - wu(k + 1:k + 2)**2)/(wu(k + 1:k + 2)*wd(k + 1:k + 2))
+            r = wd(k + 1:k + 2)/wu(k + 1:k + 2)
+            tk = j0_local_traces(gloc, a, b, r)
+            ref = (0.0_rp, 0.0_rp)
+            do io = 1, 2
+               do l = 1, n
+                  ref = ref + de(k + io)*gs(k + io, l, 1)*de(l)*gs(l, k + io, 2)
+               end do
+            end do
+            call require(abs(tk(1, 1) + z*tk(1, 2) - ref) < 1.0e-12_rp*abs(ref), 'j0_local_traces = direct cluster sum')
+         end do
+      end do
+   end subroutine check_j0_local
 
    subroutine require(ok, label)
       logical, intent(in) :: ok
