@@ -196,6 +196,14 @@ Jülich vertex), one row per frequency index (adiabatic and force-theorem freque
 Jülich vertex) and one row with the largest imaginary part of each vertex (Ry). Entries that are not defined
 are ``n/a``. See ``do_chi0`` in :ref:`keywords/output_options`.
 
+**j0_sum_rule.dat** (with ``do_chi0 = .true.`` and ``do_exchange``)
+
+One row per self pair, after a one-line header: atom, type, number of listed pairs with that first atom,
+the local :math:`J_0` from :math:`G_{ii}` (mRy), the sum of the listed :math:`J_{ij}` (mRy) and their
+difference. The two agree for ``nsp = 1``, ``hoh = .false.`` and a pair list covering the whole cluster; they
+differ with ``hoh``, spin-orbit coupling, a truncated pair list or a kernel-damped :math:`G`. See ``do_chi0``
+in :ref:`keywords/output_options`.
+
 Transport Properties
 ====================
 

@@ -39,6 +39,12 @@
 !> = conj(chi0_ij). A pair listed in one order only is completed by the conjugate; a pair listed in neither order is 0
 !> (truncation to the pair list). m_a is the d moment of the self pair of S_a, U the Goldstone U of Re chi0_S and m, and
 !> Omega = -N (chi0_S^-1 + U), |S| frequencies, as for the lattice sum with one 'type' per site.
+!> Local J0 sum rule (do_exchange): with H^s = C^s + W^s S W^s, S spin independent, g^s = (P^s - S)^-1 = W^s G^s W^s and
+!> g_up - g_dn = g_up (P_dn - P_up) g_dn, the vertex de = W_up W_dn (P_up - P_dn) gives
+!>   sum_j G^up_ij de_j G^dn_ji = (W_up)^-1 W_dn G^dn_ii - G^up_ii W_up (W_dn)^-1,
+!> so sum_j Tr[de_i G^up_ij de_j G^dn_ji] = sum_k de_k [r_k G^dn_kk - G^up_kk / r_k], r = W_dn/W_up, k over the orbitals of
+!> the vertex. The down-up term of the collinear J integrand (Gn Gn - Gz Gz = (up dn + dn up)/2 per trace) gives the same
+!> expression, so J0_i = sum_j J_ij is the integral of Im of it. Holds for nsp = 1, hoh = .false. and the full cluster sum.
 !------------------------------------------------------------------------------
 module spin_response_rs_mod
    use precision_mod, only: rp
@@ -62,6 +68,8 @@ module spin_response_rs_mod
    public :: cluster_sites
    public :: cluster_frequencies
    public :: write_chi0_cluster
+   public :: j0_local_traces
+   public :: write_j0_sum_rule
 
    !> Angular momentum of the response channel.
    integer, parameter :: l_d = 2
@@ -508,5 +516,50 @@ contains
          text = repeat(' ', 21)//'n/a'
       end if
    end function real_cell
+   !> @brief sum_k de_k [r_k G^dn_kk - G^up_kk/r_k] of a self pair with de_k = a_k + b_k e: column 1 the a part, column 2
+   !>        the b part, for each index n of the third dimension (energy point or moment). k runs over size(a) orbitals.
+   !> @param[in] g     G_ii, shape (nb, nb, n), spin-down block from spin_off + 1.
+   !> @param[in] a, b  Vertex de_k(e) = a_k + b_k e as d_matrix(e), shape (norb); r = W_dn/W_up per orbital.
+   pure function j0_local_traces(g, a, b, r) result(t)
+      complex(rp), intent(in) :: g(:, :, :)
+      real(rp), intent(in) :: a(:), b(:), r(:)
+      complex(rp) :: t(size(g, 3), 2)
+
+      integer :: n, k
+      complex(rp) :: x
+
+      do n = 1, size(g, 3)
+         t(n, :) = (0.0_rp, 0.0_rp)
+         do k = 1, size(a)
+            x = r(k)*g(k + spin_off, k + spin_off, n) - g(k, k, n)/r(k)
+            t(n, 1) = t(n, 1) + a(k)*x
+            t(n, 2) = t(n, 2) + b(k)*x
+         end do
+      end do
+   end function j0_local_traces
+
+   !> @brief One row per self pair (i, i): atom, type, number of pairs with first atom i, local J0 (mRy), sum of the listed
+   !>        J_ij of first atom i (mRy) and their difference.
+   !> @param[in] ijpair  Pair list, shape (npair, 2); iz the type of each atom.
+   !> @param[in] j0      Local J0 per pair (mRy), read at the self pairs; jij the J_ij (mRy) per pair.
+   subroutine write_j0_sum_rule(fname, ijpair, iz, j0, jij)
+      character(len=*), intent(in) :: fname
+      integer, intent(in) :: ijpair(:, :), iz(:)
+      real(rp), intent(in) :: j0(:), jij(:)
+
+      integer :: funit, p, i, np
+      real(rp) :: s
+
+      open (newunit=funit, file=fname, action='write', status='replace')
+      write (funit, '(a)') '# atom type n_pairs j0_local(mRy) sum_J_ij(mRy) difference(mRy)'
+      do p = 1, size(j0)
+         i = ijpair(p, 1)
+         if (ijpair(p, 2) /= i) cycle
+         np = count(ijpair(1:size(j0), 1) == i)
+         s = sum(jij, mask=ijpair(1:size(j0), 1) == i)
+         write (funit, '(3i8,3es24.14)') i, iz(i), np, j0(p), s, j0(p) - s
+      end do
+      close (funit)
+   end subroutine write_j0_sum_rule
 
 end module spin_response_rs_mod
