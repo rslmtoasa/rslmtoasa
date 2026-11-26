@@ -157,6 +157,8 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
   same sign as Gate 1). Consequence: SOC gaps below about 1e-5 Ry cannot be
   measured with the projected vertex; FePt (1–3e-4 Ry) was not attempted.
 
+- 2026-11-26 — Real-space static χ⁰ opened (R1, R2; branch `claude/fervent-allen-k0x69x`): `do_chi0` adds χ⁰_ij of the d channel to the exchange pair loop (`chi0_ij.dat`) and Goldstone diagnostics per atom type (`chi0_types.dat`); results are promoted into the module `spin_response_rs`, with the exchange module holding only the pair-loop hook. The Jülich vertex needs H_ij (G~ = <a|F(H) G F(H)|b>, not F(z) G F(z)) and runs on the real-space Chebyshev route only. No independent reference yet; the checks are route agreement, symmetry and unit tests.
+
 ## GBT k-space restart, from 2026-10-17
 
 - 2026-10-17 — GBT restart opened (spec `cleanup/gbt_kspace_restart_spec.md`, branch `fable_v4b_gbt`); old GBT tests, fixtures and analysis tools archived at tag `gbt-campaign-archive-2026-10`.
