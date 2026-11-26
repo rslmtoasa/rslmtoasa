@@ -99,7 +99,7 @@ Key Procedures by Topic
 
 - ``density_of_states::density()`` - Integrate DOS
 - ``bands::calculate_fermi()``, ``bands::calculate_moments()`` - Fermi level, band moments
-- ``exchange::calculate_exchange()`` - Exchange interactions
+- ``exchange::calculate_pairwise()`` - Exchange, damping and inertia (per-pair kernels)
 - ``conductivity::calculate_conductivity_tensor()`` - Conductivity tensor
 
 Quick Code Navigation
