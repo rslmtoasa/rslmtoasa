@@ -390,7 +390,7 @@ bilinear form in the moments,
 where :math:`c^{(p)}_{mn}` contains the kernel factors of :math:`m` and :math:`n` and the weight
 :math:`-\int f(E) E^p e^{-i(m+n)\theta}/(a^2\sin^2\theta)\, dE`, :math:`E = a\cos\theta + b`. The exchange splitting
 :math:`\Delta(E)` is linear in :math:`E`, :math:`\Delta = \alpha + \beta E`, so each pair needs the weights with
-:math:`p = 0, 1, 2` (``use_onsite_delta``: :math:`p = 0` only). The limits are :math:`[E_{min}, E_F]` for :math:`T = 0` and :math:`f(E)` is the
+:math:`p = 0, 1, 2` (``use_onsite_delta``: :math:`p = 0` only). The moment sums are contracted as traces of all pairs of the 12 families of :math:`X` and :math:`Y`, from which every output is assembled. The limits are :math:`[E_{min}, E_F]` for :math:`T = 0` and :math:`f(E)` is the
 Fermi function for :math:`T > 0`. Damping and inertia use :math:`G` and the analytic :math:`d^2G/dE^2` of the series at :math:`E_F`; the energy-resolved files are not written in this mode.
 
 Comparison: Direct Diagonalization vs. Recursion

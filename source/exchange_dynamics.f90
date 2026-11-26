@@ -66,11 +66,8 @@ contains
                    xcparts(28, this%lattice%njij), source=0.0_rp)
          nodes = real_mesh_nodes(this)
       end if
-      ! Moment space: one node per Chebyshev moment; the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
-      if (moments .and. do_exchange) then
-         call this%green%chebyshev_exchange_weights(h, kernel)
-         nodes = moment_nodes(size(kernel))
-      end if
+      ! Moment space: the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
+      if (moments .and. do_exchange) call this%green%chebyshev_exchange_weights(h, kernel)
       ! Energy-resolved arrays: empty in moment space, where the energy-resolved files are not written
       nres = merge(0, nenergy, moments)
       if (damping) allocate (dtotal(9, nres), dcontrib(9, nres), dpair(19, this%lattice%njij), source=0.0_rp)
@@ -96,11 +93,11 @@ contains
             call this%green%fill_intersite_gf_twoindex_pair(slot)
          end if
          if (do_exchange .and. moments) then
-            call moment_exchange_pair(this, nodes, h, kernel, i, j, xc(:, njij_glob), xcso(:, njij_glob), xcfo(:, njij_glob), &
+            call moment_exchange_pair(this, h, kernel, i, j, xc(:, njij_glob), xcso(:, njij_glob), xcfo(:, njij_glob), &
                                       xcparts(:, njij_glob))
          else if (do_exchange) then
-            call exchange_pair(this, nodes, slot, slot, i, j, xc(:, njij_glob))
-            call exchange_twoindex_pair(this, nodes, slot, slot, i, j, xcso(:, njij_glob), xcfo(:, njij_glob), xcparts(:, njij_glob))
+            call exchange_pair(this, nodes, slot, i, j, xc(:, njij_glob))
+            call exchange_twoindex_pair(this, nodes, slot, i, j, xcso(:, njij_glob), xcfo(:, njij_glob), xcparts(:, njij_glob))
          end if
          if (moments .and. (damping .or. inertia)) then
             call this%green%chebyshev_point_pair(njij_glob, gij0, gji0, gij2, gji2)
@@ -128,18 +125,24 @@ contains
 
    !> J, D, A of pair (i, j) from the raw moments in Green-function slot 1 (see fill_intersite_moments_pair). With
    !> Delta = alpha + beta E the integral is the sum over the E^p terms (alpha_i, alpha_j; beta_i, alpha_j and alpha_i, beta_j;
-   !> beta_i, beta_j) of the kernels run on the raw moments (slot 1, i side) and the p-transformed moments (slot 2, j side).
-   subroutine moment_exchange_pair(this, nodes, h, kernel, i, j, xc, xcso, xcfo, xcparts)
+   !> beta_i, beta_j) of sum_m Tr[Di X_m Dj Y_m], X the raw moments (slot 1, i side) and Y the p-transformed ones (slot 2, j side).
+   !> The sums are contracted as the 12 x 12 family-pair traces T(X, Y); every output is a combination of those.
+   subroutine moment_exchange_pair(this, h, kernel, i, j, xc, xcso, xcfo, xcparts)
       class(exchange) :: this
-      type(energy_nodes), intent(in) :: nodes
       complex(rp), intent(in) :: h(0:, 0:)
       real(rp), intent(in) :: kernel(:)
       integer, intent(in) :: i, j
       real(rp), intent(out) :: xc(13), xcso(13), xcfo(13), xcparts(28)
-      real(rp) :: t(13), tso(13), tfo(13), tparts(28)
-      complex(rp) :: alpha(9, 9, 2), beta(9, 9, 2), dfix(9, 9, 2)
-      integer :: p, ti, tj
+      ! Family index: 1 Gnmag, 1 + k Gk (k = x, y, z), 5 g00, 6 g01, 6 + k gk0, 9 + k gk1
+      integer, parameter :: c0 = 5, c1 = 6, s0 = 6, s1 = 9
+      real(rp), parameter :: f = 1.0e3_rp/(4.0_rp*pi)
+      complex(rp) :: alpha(9, 9, 2), beta(9, 9, 2), tt(12, 12)
+      complex(rp), allocatable :: xf(:, :, :, :), yf(:, :, :, :), yt(:, :), z(:, :)
+      real(rp) :: jcd, jcc, jsd, jsc, dsc, dcc, isd, isc
+      integer :: p, ti, tj, nmom, m, q, k, l, idx
 
+      nmom = size(kernel)
+      allocate (xf(9, 9, nmom, 12), yf(9, 9, nmom, 12), yt(81*nmom, 12), z(12, 81*nmom))
       beta = (0.0_rp, 0.0_rp)
       if (this%use_onsite_delta) then
          alpha(:, :, 1) = onsite_exchange_delta(this, i)
@@ -151,20 +154,89 @@ contains
          call this%symbolic_atom(this%lattice%iz(j))%d_matrix(beta(:, :, 2), 1.0_rp)
          beta = beta - alpha
       end if
-      xc = 0.0_rp; xcso = 0.0_rp; xcfo = 0.0_rp; xcparts = 0.0_rp
+      call stack_families(this, 1, .false., xf)
+      tt = (0.0_rp, 0.0_rp)
       do p = 0, merge(0, 2, this%use_onsite_delta)
          call this%green%transform_intersite_moments(1, 2, h(:, p), kernel)
+         call stack_families(this, 2, .true., yf)
+         ! Tr[A X B Y] = sum_kl (A X B)(k, l) Y(l, k): z is (A X_m B)(k, l), yt is Y_m(l, k), both flattened over (k, l, m)
+         do q = 1, 12
+            do m = 1, nmom
+               yt(81*(m - 1) + 1:81*m, q) = reshape(transpose(yf(:, :, m, q)), [81])
+            end do
+         end do
          do tj = 0, 1
             ti = p - tj
             if (ti < 0 .or. ti > 1) cycle
-            dfix(:, :, 1) = merge(beta(:, :, 1), alpha(:, :, 1), ti == 1)
-            dfix(:, :, 2) = merge(beta(:, :, 2), alpha(:, :, 2), tj == 1)
-            call exchange_pair(this, nodes, 1, 2, i, j, t, dfix)
-            call exchange_twoindex_pair(this, nodes, 1, 2, i, j, tso, tfo, tparts, dfix)
-            xc = xc + t; xcso = xcso + tso; xcfo = xcfo + tfo; xcparts = xcparts + tparts
+            do q = 1, 12
+               do m = 1, nmom
+                  z(q, 81*(m - 1) + 1:81*m) = reshape(matmul(merge(beta(:, :, 1), alpha(:, :, 1), ti == 1), &
+                                                             matmul(xf(:, :, m, q), merge(beta(:, :, 2), alpha(:, :, 2), tj == 1))), [81])
+               end do
+            end do
+            tt = tt + matmul(z, yt)
+         end do
+      end do
+
+      ! J, D, A
+      xc(1) = f*aimag(tt(1, 1) - tt(2, 2) - tt(3, 3) - tt(4, 4))
+      do k = 1, 3
+         xc(1 + k) = f*real(tt(1, 1 + k) - tt(1 + k, 1))
+         do l = 1, 3
+            xc(4 + k + 3*(l - 1)) = f*0.5_rp*aimag(tt(1 + k, 1 + l) + tt(1 + l, 1 + k))
+         end do
+      end do
+      ! Two-index J (charge/spin density and current parts), D, A
+      jcd = aimag(tt(c0, c0)); jcc = aimag(tt(c1, c1))
+      jsd = aimag(tt(s0 + 1, s0 + 1) + tt(s0 + 2, s0 + 2) + tt(s0 + 3, s0 + 3))
+      jsc = aimag(tt(s1 + 1, s1 + 1) + tt(s1 + 2, s1 + 2) + tt(s1 + 3, s1 + 3))
+      xcso(1) = f*(jcd - jsd + jcc - jsc)
+      xcfo(1) = f*(jcd + jsd - jcc - jsc)
+      xcparts(1:4) = f*[jcd, jsd, jcc, jsc]
+      do k = 1, 3
+         dsc = real(tt(c0, s1 + k)); dcc = real(tt(c1, s0 + k))
+         xcso(1 + k) = f*2.0_rp*(dsc + dcc)
+         xcfo(1 + k) = f*2.0_rp*(dsc - dcc)
+         xcparts(4 + k) = f*2.0_rp*dcc
+         xcparts(7 + k) = f*2.0_rp*dsc
+         do l = 1, 3
+            idx = k + 3*(l - 1)
+            isd = aimag(tt(s0 + k, s0 + l)); isc = aimag(tt(s1 + k, s1 + l))
+            xcso(4 + idx) = f*(isd + isc)
+            xcfo(4 + idx) = f*(isc - isd)
+            xcparts(10 + idx) = f*isd
+            xcparts(19 + idx) = f*isc
          end do
       end do
    end subroutine moment_exchange_pair
+
+   !> The 12 families of Green-function slot `slot` (i side and "ij", or with j_side the j side and "ji") for moments 1:size(f, 3).
+   subroutine stack_families(this, slot, j_side, f)
+      class(exchange) :: this
+      integer, intent(in) :: slot
+      logical, intent(in) :: j_side
+      complex(rp), intent(out) :: f(:, :, :, :)
+      integer :: n
+
+      n = size(f, 3)
+      associate (g => this%green)
+         if (j_side) then
+            f(:, :, :, 1) = g%gjnmag(1:9, 1:9, 1:n, slot); f(:, :, :, 2) = g%gjx(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 3) = g%gjy(1:9, 1:9, 1:n, slot); f(:, :, :, 4) = g%gjz(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 5) = g%g00ji(1:9, 1:9, 1:n, slot); f(:, :, :, 6) = g%g01ji(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 7) = g%gx0ji(1:9, 1:9, 1:n, slot); f(:, :, :, 8) = g%gy0ji(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 9) = g%gz0ji(1:9, 1:9, 1:n, slot); f(:, :, :, 10) = g%gx1ji(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 11) = g%gy1ji(1:9, 1:9, 1:n, slot); f(:, :, :, 12) = g%gz1ji(1:9, 1:9, 1:n, slot)
+         else
+            f(:, :, :, 1) = g%ginmag(1:9, 1:9, 1:n, slot); f(:, :, :, 2) = g%gix(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 3) = g%giy(1:9, 1:9, 1:n, slot); f(:, :, :, 4) = g%giz(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 5) = g%g00ij(1:9, 1:9, 1:n, slot); f(:, :, :, 6) = g%g01ij(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 7) = g%gx0ij(1:9, 1:9, 1:n, slot); f(:, :, :, 8) = g%gy0ij(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 9) = g%gz0ij(1:9, 1:9, 1:n, slot); f(:, :, :, 10) = g%gx1ij(1:9, 1:9, 1:n, slot)
+            f(:, :, :, 11) = g%gy1ij(1:9, 1:9, 1:n, slot); f(:, :, :, 12) = g%gz1ij(1:9, 1:9, 1:n, slot)
+         end if
+      end associate
+   end subroutine stack_families
 
    !> Torque-correlation damping tensor of pair (i, j) read from Green-function slot `slot`: pair(1:9) Re and pair(10:18) Im
    !> at energy index ief, pair(19) prefactor; contrib(:, nv) is the pair's energy-resolved contribution.

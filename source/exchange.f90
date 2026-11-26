@@ -45,12 +45,12 @@ module exchange_mod
 
    private
    !> Linked from the exchange_dynamics submodule (calculate_pairwise)
-   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes, moment_nodes, onsite_exchange_delta
+   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes, onsite_exchange_delta
    !> Energy nodes at which G is evaluated and the way an integrand sampled on them is integrated.
    type, public :: energy_nodes
       !> Complex energies z (Ry) at which G is evaluated
       complex(rp), allocatable :: z(:)
-      !> The integrand is already weighted and is integrated by a plain sum (contour and moment nodes); otherwise the real Simpson mesh
+      !> Contour (Gauss-Legendre) nodes; otherwise the real Simpson mesh
       logical :: contour = .false.
       !> Real mesh: the Fermi-function energy, temperature and point count passed to simpson_f
       real(rp) :: ef = 0.0_rp, temperature = 0.0_rp
@@ -185,7 +185,7 @@ contains
             call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, this%en%ene(nv))
             call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, this%en%ene(nv))
             !J
-            jmat = dGdG_Jnc(this, dmat1, dmat2, njij, njij, nv)
+            jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
             jtot(nv) = imtrace9(jmat)
          end do
          call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot, .true., .false., this%en%temperature)
@@ -654,41 +654,41 @@ contains
       return
    end function dGdG
 
-   function dGdG_Jnc(this, di, dj, slot_a, slot_b, nv) result(Jmat)
+   function dGdG_Jnc(this, di, dj, njij, nv) result(Jmat)
 
       implicit none
       class(exchange) :: this
       complex(rp), dimension(9, 9), intent(in) :: di
       complex(rp), dimension(9, 9), intent(in) :: dj
-      integer, intent(in) :: slot_a, slot_b
+      integer, intent(in) :: njij
       integer, intent(in) :: nv
       complex(rp), dimension(9, 9) :: Jmat
 
       complex(rp), dimension(9, 9) :: tmat1, tmat2, tmat3
 
-      tmat1 = matmul(di, this%green%Ginmag(1:9, 1:9, nv, slot_a))
-      tmat2 = matmul(dj, this%green%Gjnmag(1:9, 1:9, nv, slot_b))
+      tmat1 = matmul(di, this%green%Ginmag(1:9, 1:9, nv, njij))
+      tmat2 = matmul(dj, this%green%Gjnmag(1:9, 1:9, nv, njij))
       tmat3 = matmul(tmat1, tmat2)
-      tmat1 = matmul(di, this%green%Gix(1:9, 1:9, nv, slot_a))
-      tmat2 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, slot_b))
+      tmat1 = matmul(di, this%green%Gix(1:9, 1:9, nv, njij))
+      tmat2 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, njij))
       tmat3 = tmat3 - matmul(tmat1, tmat2)
-      tmat1 = matmul(di, this%green%Giy(1:9, 1:9, nv, slot_a))
-      tmat2 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, slot_b))
+      tmat1 = matmul(di, this%green%Giy(1:9, 1:9, nv, njij))
+      tmat2 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, njij))
       tmat3 = tmat3 - matmul(tmat1, tmat2)
-      tmat1 = matmul(di, this%green%Giz(1:9, 1:9, nv, slot_a))
-      tmat2 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, slot_b))
+      tmat1 = matmul(di, this%green%Giz(1:9, 1:9, nv, njij))
+      tmat2 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, njij))
       Jmat = tmat3 - matmul(tmat1, tmat2)
 
       return
    end function dGdG_Jnc
 
-   function dGdG_Dnc(this, di, dj, slot_a, slot_b, nv) result(Dmats)
+   function dGdG_Dnc(this, di, dj, njij, nv) result(Dmats)
 
       implicit none
       class(exchange) :: this
       complex(rp), dimension(9, 9), intent(in) :: di
       complex(rp), dimension(9, 9), intent(in) :: dj
-      integer, intent(in) :: slot_a, slot_b
+      integer, intent(in) :: njij
       integer, intent(in) :: nv
       complex(rp), dimension(9, 9, 3) :: Dmats
 
@@ -696,15 +696,15 @@ contains
       complex(rp), dimension(9, 9) :: tmat1, tmat2, tmat3, tmat4
 
       do k = 1, 3
-         tmat1 = matmul(di, this%green%Ginmag(1:9, 1:9, nv, slot_a))
-         if (k == 1) tmat2 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, slot_b))
-         if (k == 2) tmat2 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, slot_b))
-         if (k == 3) tmat2 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, slot_b))
+         tmat1 = matmul(di, this%green%Ginmag(1:9, 1:9, nv, njij))
+         if (k == 1) tmat2 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, njij))
+         if (k == 2) tmat2 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, njij))
+         if (k == 3) tmat2 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, njij))
          tmat3 = matmul(tmat1, tmat2)
-         tmat1 = matmul(dj, this%green%Gjnmag(1:9, 1:9, nv, slot_b))
-         if (k == 1) tmat2 = matmul(di, this%green%Gix(1:9, 1:9, nv, slot_a))
-         if (k == 2) tmat2 = matmul(di, this%green%Giy(1:9, 1:9, nv, slot_a))
-         if (k == 3) tmat2 = matmul(di, this%green%Giz(1:9, 1:9, nv, slot_a))
+         tmat1 = matmul(dj, this%green%Gjnmag(1:9, 1:9, nv, njij))
+         if (k == 1) tmat2 = matmul(di, this%green%Gix(1:9, 1:9, nv, njij))
+         if (k == 2) tmat2 = matmul(di, this%green%Giy(1:9, 1:9, nv, njij))
+         if (k == 3) tmat2 = matmul(di, this%green%Giz(1:9, 1:9, nv, njij))
          tmat4 = matmul(tmat1, tmat2)
          Dmats(:, :, k) = tmat3 - tmat4
          ! Take the imaginary part of the trace
@@ -713,13 +713,13 @@ contains
       return
    end function dGdG_Dnc
 
-   function dGdG_Anc(this, di, dj, slot_a, slot_b, nv) result(Amats)
+   function dGdG_Anc(this, di, dj, njij, nv) result(Amats)
 
       implicit none
       class(exchange) :: this
       complex(rp), dimension(9, 9), intent(in) :: di
       complex(rp), dimension(9, 9), intent(in) :: dj
-      integer, intent(in) :: slot_a, slot_b
+      integer, intent(in) :: njij
       integer, intent(in) :: nv
       complex(rp), dimension(9, 9, 3, 3) :: Amats
 
@@ -728,19 +728,19 @@ contains
 
       do k = 1, 3
          do l = 1, 3
-            if (k == 1) tmat1 = matmul(di, this%green%Gix(1:9, 1:9, nv, slot_a))
-            if (k == 2) tmat1 = matmul(di, this%green%Giy(1:9, 1:9, nv, slot_a))
-            if (k == 3) tmat1 = matmul(di, this%green%Giz(1:9, 1:9, nv, slot_a))
-            if (l == 1) tmat2 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, slot_b))
-            if (l == 2) tmat2 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, slot_b))
-            if (l == 3) tmat2 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, slot_b))
+            if (k == 1) tmat1 = matmul(di, this%green%Gix(1:9, 1:9, nv, njij))
+            if (k == 2) tmat1 = matmul(di, this%green%Giy(1:9, 1:9, nv, njij))
+            if (k == 3) tmat1 = matmul(di, this%green%Giz(1:9, 1:9, nv, njij))
+            if (l == 1) tmat2 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, njij))
+            if (l == 2) tmat2 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, njij))
+            if (l == 3) tmat2 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, njij))
             tmat3 = matmul(tmat1, tmat2)
-            if (k == 1) tmat1 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, slot_b))
-            if (k == 2) tmat1 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, slot_b))
-            if (k == 3) tmat1 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, slot_b))
-            if (l == 1) tmat2 = matmul(di, this%green%Gix(1:9, 1:9, nv, slot_a))
-            if (l == 2) tmat2 = matmul(di, this%green%Giy(1:9, 1:9, nv, slot_a))
-            if (l == 3) tmat2 = matmul(di, this%green%Giz(1:9, 1:9, nv, slot_a))
+            if (k == 1) tmat1 = matmul(dj, this%green%Gjx(1:9, 1:9, nv, njij))
+            if (k == 2) tmat1 = matmul(dj, this%green%Gjy(1:9, 1:9, nv, njij))
+            if (k == 3) tmat1 = matmul(dj, this%green%Gjz(1:9, 1:9, nv, njij))
+            if (l == 1) tmat2 = matmul(di, this%green%Gix(1:9, 1:9, nv, njij))
+            if (l == 2) tmat2 = matmul(di, this%green%Giy(1:9, 1:9, nv, njij))
+            if (l == 3) tmat2 = matmul(di, this%green%Giz(1:9, 1:9, nv, njij))
             tmat4 = matmul(tmat1, tmat2)
             Amats(:, :, k, l) = 0.5d0*(tmat3 + tmat4)
          end do
@@ -770,14 +770,11 @@ contains
       delta = real(onsite(:9,:9) - onsite(10:,10:), rp)
    end function onsite_exchange_delta
 
-   !> Spin-orbit (so) and first-order (fo) J, D, A and their parts of pair (i, j) in meV; every i-side and "ij" family is read
-   !> from Green-function slot slot_a and every j-side and "ji" family from slot_b. dfix, if present, replaces the exchange
-   !> splittings (dfix(:, :, 1) of atom i, dfix(:, :, 2) of atom j) at all nodes.
-   subroutine exchange_twoindex_pair(this, nodes, slot_a, slot_b, i, j, xcso, xcfo, xcparts, dfix)
+   !> Spin-orbit (so) and first-order (fo) J, D, A and their parts of pair (i, j) read from Green-function slot `slot`, in meV.
+   subroutine exchange_twoindex_pair(this, nodes, slot, i, j, xcso, xcfo, xcparts)
       class(exchange) :: this
       type(energy_nodes), intent(in) :: nodes
-      integer, intent(in) :: slot_a, slot_b, i, j
-      complex(rp), intent(in), optional :: dfix(9, 9, 2)
+      integer, intent(in) :: slot, i, j
       real(rp), intent(out) :: xcso(13), xcfo(13), xcparts(28)
       complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4
       complex(rp), dimension(size(nodes%z)) :: jtotso, jtotfo, jsd, jcd, jsc, jcc
@@ -788,44 +785,41 @@ contains
 
       jtotso = 0.0d0; jtotfo = 0.0d0; jjtotso = 0.0d0; jjtotfo = 0.0d0; itotso = 0.0d0; itotfo = 0.0d0
       jcd = 0.0d0; jsd = 0.0d0; jcc = 0.0d0; jsc = 0.0d0; dsc = 0.0d0; dcc = 0.0d0; isd = 0.0d0; isc = 0.0d0
-      if (present(dfix)) then
-         dmat1 = dfix(:, :, 1)
-         dmat2 = dfix(:, :, 2)
-      else if (this%use_onsite_delta) then
+      if (this%use_onsite_delta) then
          dmat1 = onsite_exchange_delta(this, i)
          dmat2 = onsite_exchange_delta(this, j)
       end if
-      do nv = 1, size(nodes%z)
-         if (.not. this%use_onsite_delta .and. .not. present(dfix)) then
+      do nv = 1, this%en%channels_ldos + 10
+         if (.not. this%use_onsite_delta) then
             call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, real(nodes%z(nv)))
             call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, real(nodes%z(nv)))
          end if
          !J
          ! Charge density part of Jij
          tmat1 = 0.0d0
-         tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot_a), this%green%g00ji(1:9, 1:9, nv, slot_b))
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%g00ji(1:9, 1:9, nv, slot))
          jcd(nv) = imtrace9(tmat1)
          ! Charge current part of jij
          tmat1 = 0.0d0
-         tmat1 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot_a), this%green%g01ji(1:9, 1:9, nv, slot_b))
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%g01ji(1:9, 1:9, nv, slot))
          jcc(nv) = imtrace9(tmat1)
          ! Spin density part of jij
          tmat1 = 0.0d0
-         tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot_a), this%green%gx0ji(1:9, 1:9, nv, slot_b))
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
          tmat2 = 0.0d0
-         tmat2 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot_a), this%green%gy0ji(1:9, 1:9, nv, slot_b))
+         tmat2 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
          tmat3 = 0.0d0
-         tmat3 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot_a), this%green%gz0ji(1:9, 1:9, nv, slot_b))
+         tmat3 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
          tmat4 = 0.0d0
          tmat4 = tmat1 + tmat2 + tmat3
          jsd(nv) = imtrace9(tmat4)
          ! Spin current part of jij
          tmat1 = 0.0d0
-         tmat1 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot_a), this%green%gx1ji(1:9, 1:9, nv, slot_b))
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
          tmat2 = 0.0d0
-         tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot_a), this%green%gy1ji(1:9, 1:9, nv, slot_b))
+         tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
          tmat3 = 0.0d0
-         tmat3 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot_a), this%green%gz1ji(1:9, 1:9, nv, slot_b))
+         tmat3 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
          tmat4 = 0.0d0
          tmat4 = tmat1 + tmat2 + tmat3
          jsc(nv) = imtrace9(tmat4)
@@ -839,16 +833,16 @@ contains
             select case (k)
             case (1) ! Dx
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot_a), this%green%gx1ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot_a), this%green%gx0ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
             case (2) ! Dy
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot_a), this%green%gy1ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot_a), this%green%gy0ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
             case (3) ! Dz
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot_a), this%green%gz1ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot_a), this%green%gz0ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
             end select
             ! Spin current part of the DMI
             dsc(nv, k) = rtrace9(tmat1)
@@ -865,56 +859,56 @@ contains
             select case (k)
             case (1) ! Axx
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot_a), this%green%gx0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot_a), this%green%gx1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
                isd(nv, 1, 1) = imtrace9(tmat1)
                isc(nv, 1, 1) = imtrace9(tmat2)
             case (2) ! Axy
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot_a), this%green%gy0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot_a), this%green%gy1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
                isd(nv, 1, 2) = imtrace9(tmat1)
                isc(nv, 1, 2) = imtrace9(tmat2)
             case (3) ! Axz
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot_a), this%green%gz0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot_a), this%green%gz1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
                isd(nv, 1, 3) = imtrace9(tmat1)
                isc(nv, 1, 3) = imtrace9(tmat2)
             case (4) ! Ayx
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot_a), this%green%gx0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot_a), this%green%gx1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
                isd(nv, 2, 1) = imtrace9(tmat1)
                isc(nv, 2, 1) = imtrace9(tmat2)
             case (5) ! Ayy
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot_a), this%green%gy0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot_a), this%green%gy1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
                isd(nv, 2, 2) = imtrace9(tmat1)
                isc(nv, 2, 2) = imtrace9(tmat2)
             case (6) ! Ayz
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot_a), this%green%gz0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot_a), this%green%gz1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
                isd(nv, 2, 3) = imtrace9(tmat1)
                isc(nv, 2, 3) = imtrace9(tmat2)
             case (7) ! Azx
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot_a), this%green%gx0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot_a), this%green%gx1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
                isd(nv, 3, 1) = imtrace9(tmat1)
                isc(nv, 3, 1) = imtrace9(tmat2)
             case (8) ! Azy
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot_a), this%green%gy0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot_a), this%green%gy1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
                isd(nv, 3, 2) = imtrace9(tmat1)
                isc(nv, 3, 2) = imtrace9(tmat2)
             case (9) ! Azz
                tmat1 = 0.0d0; tmat2 = 0.0d0
-               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot_a), this%green%gz0ji(1:9, 1:9, nv, slot_b))
-               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot_a), this%green%gz1ji(1:9, 1:9, nv, slot_b))
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
                isd(nv, 3, 3) = imtrace9(tmat1)
                isc(nv, 3, 3) = imtrace9(tmat2)
             end select
@@ -1167,14 +1161,11 @@ contains
 
    end subroutine exchange_twoindex_finalize
 
-   !> Jij, Dij, Aij kernel of pair (i, j) in meV, into xc(1:13); i-side families are read from Green-function slot slot_a and
-   !> j-side families from slot_b. dfix, if present, replaces the exchange splittings (dfix(:, :, 1) of atom i, dfix(:, :, 2) of
-   !> atom j) at all nodes.
-   subroutine exchange_pair(this, nodes, slot_a, slot_b, i, j, xc, dfix)
+   !> Jij, Dij, Aij kernel of pair (i, j) read from Green-function slot `slot`, in meV, into xc(1:13).
+   subroutine exchange_pair(this, nodes, slot, i, j, xc)
       class(exchange) :: this
       type(energy_nodes), intent(in) :: nodes
-      integer, intent(in) :: slot_a, slot_b, i, j
-      complex(rp), intent(in), optional :: dfix(9, 9, 2)
+      integer, intent(in) :: slot, i, j
       real(rp), intent(out) :: xc(13)
       complex(rp), dimension(9, 9) :: dmat1, dmat2
       complex(rp), dimension(size(nodes%z)) :: jtot
@@ -1187,30 +1178,27 @@ contains
       complex(rp), dimension(9, 9, 3, 3) :: amats
 
       jtot = 0.0d0; jjtot = 0.0d0
-      if (present(dfix)) then
-         dmat1 = dfix(:, :, 1)
-         dmat2 = dfix(:, :, 2)
-      else if (this%use_onsite_delta) then
+      if (this%use_onsite_delta) then
          dmat1 = onsite_exchange_delta(this, i)
          dmat2 = onsite_exchange_delta(this, j)
       end if
-      do nv = 1, size(nodes%z)
-         if (.not. this%use_onsite_delta .and. .not. present(dfix)) then
+      do nv = 1, this%en%channels_ldos + 10
+         if (.not. this%use_onsite_delta) then
             call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, real(nodes%z(nv)))
             call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, real(nodes%z(nv)))
          end if
          !J
-         jmat = dGdG_Jnc(this, dmat1, dmat2, slot_a, slot_b, nv)
+         jmat = dGdG_Jnc(this, dmat1, dmat2, slot, nv)
          jtot(nv) = imtrace9(jmat)
 
          ! DMI
-         dmmats = dGdG_Dnc(this, dmat1, dmat2, slot_a, slot_b, nv)
+         dmmats = dGdG_Dnc(this, dmat1, dmat2, slot, nv)
          do k = 1, 3
             jjtot(nv, k) = rtrace9(dmmats(:, :, k))
          end do
 
          ! I Tensor
-         amats = dGdG_Anc(this, dmat1, dmat2, slot_a, slot_b, nv)
+         amats = dGdG_Anc(this, dmat1, dmat2, slot, nv)
          do k = 1, 3
             do l = 1, 3
                itot(nv, k, l) = imtrace9(amats(:, :, k, l))
@@ -1398,17 +1386,17 @@ contains
 
          do nv = 1, this%en%channels_ldos + 10
             !J
-            jmat = dGdG_Jnc(this, dmat1, dmat2, njij, njij, nv)
+            jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
             jtot(nv) = imtrace9(jmat)
 
             ! DMI
-            dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, njij, nv)
+            dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, nv)
             do k = 1, 3
                jjtot(nv, k) = rtrace9(dmmats(:, :, k))
             end do
 
             ! I Tensor
-            amats = dGdG_Anc(this, dmat1, dmat2, njij, njij, nv)
+            amats = dGdG_Anc(this, dmat1, dmat2, njij, nv)
             do k = 1, 3
                do l = 1, 3
                   itot(nv, k, l) = imtrace9(amats(:, :, k, l))
@@ -1566,19 +1554,19 @@ contains
 
       do nv = 1, 64
          !J
-         jmat = dGdG_Jnc(this, dmat1, dmat2, njij, njij, nv)
+         jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
          jmat = (jmat*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
          jtot(nv) = rtrace9(jmat)
 
          ! DMI
-         dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, njij, nv)
+         dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, nv)
          dmmats = (dmmats*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
          do k = 1, 3
             jjtot(nv, k) = imtrace9(dmmats(:, :, k))
          end do
 
          ! I Tensor
-         amats = dGdG_Anc(this, dmat1, dmat2, njij, njij, nv)
+         amats = dGdG_Anc(this, dmat1, dmat2, njij, nv)
          amats = (amats*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
          do k = 1, 3
             do l = 1, 3
@@ -1689,15 +1677,6 @@ contains
       nodes%nv1 = this%en%nv1
       nodes%temperature = this%en%temperature
    end function real_mesh_nodes
-
-   !> n nodes, one per Chebyshev moment, integrated by a plain sum of the moment-space terms.
-   function moment_nodes(n) result(nodes)
-      integer, intent(in) :: n
-      type(energy_nodes) :: nodes
-
-      allocate (nodes%z(n), source=(0.0_rp, 0.0_rp))
-      nodes%contour = .true.
-   end function moment_nodes
 
    !> 64 Gauss-Legendre nodes of the contour z = E(fermi_point) + i (1 - x)/x, as in green_block.
    function contour_nodes(this) result(nodes)
