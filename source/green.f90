@@ -76,6 +76,9 @@ module green_mod
       procedure :: block_green_ij_oneshot
       procedure :: calculate_intersite_gf
       procedure :: calculate_intersite_gf_twoindex
+      procedure :: prepare_intersite_gf
+      procedure :: fill_intersite_gf_pair
+      procedure :: fill_intersite_gf_twoindex_pair
       procedure :: calculate_intersite_gf_eta
       procedure :: calculate_intersite_gf_eta_gpu
       procedure :: chebyshev_green_eta
@@ -124,8 +127,9 @@ module green_mod
    !> @brief
    !> Reset all members to default
    !---------------------------------------------------------------------------
-   module subroutine restore_to_default(this)
+   module subroutine restore_to_default(this, pair_slots)
       class(green) :: this
+      integer, intent(in), optional :: pair_slots
    end subroutine restore_to_default
 
    module subroutine chebyshev_green_ij(this, istart)
@@ -204,6 +208,20 @@ module green_mod
    module subroutine calculate_intersite_gf_twoindex(this)
       class(green), intent(inout) :: this
    end subroutine calculate_intersite_gf_twoindex
+
+   module subroutine prepare_intersite_gf(this)
+      class(green), intent(inout) :: this
+   end subroutine prepare_intersite_gf
+
+   module subroutine fill_intersite_gf_pair(this, ia_glob, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob, slot
+   end subroutine fill_intersite_gf_pair
+
+   module subroutine fill_intersite_gf_twoindex_pair(this, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot
+   end subroutine fill_intersite_gf_twoindex_pair
 
    module subroutine calculate_intersite_gf(this)
       class(green), intent(inout) :: this

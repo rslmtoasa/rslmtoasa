@@ -179,43 +179,50 @@ contains
 
    module subroutine calculate_intersite_gf_twoindex(this)
       use mpi_mod
-   use basis_mod, only: norb
-      implicit none
       class(green), intent(inout) :: this
-      integer :: i, j, k, l1, l2, k0, j0, ia_glob, ia
-
-      this%G00ij = 0.0d0; this%G01ij = 0.0d0; this%G00ji = 0.0d0; this%G01ji = 0.0d0;
-      this%Gx1ij = 0.0d0; this%Gy1ij = 0.0d0; this%Gz1ij = 0.0d0; this%Gx0ij = 0.0d0; this%Gy0ij = 0.0d0; this%Gz0ij = 0.0d0;
-      this%Gx1ji = 0.0d0; this%Gy1ji = 0.0d0; this%Gz1ji = 0.0d0; this%Gx0ji = 0.0d0; this%Gy0ji = 0.0d0; this%Gz0ji = 0.0d0
+      integer :: ia_glob
 
       do ia_glob = start_atom, end_atom
-         ia = g2l_map(ia_glob)
-         do j = 1, norb
-            do k = 1, norb
-               l1 = int((k - 0.9)**0.5)
-               l2 = int((j - 0.9)**0.5)
-               k0 = l1*(l1 + 1) + 1
-               j0 = l2*(l2 + 1) + 1
-               this%G00ij(k, j, :, IA) = this%G00ij(k, j, :, IA) + 0.5d0*(this%Ginmag(k, j, :, IA) + (-1)**(k + j)*this%Gjnmag(2*j0 - j, 2*k0 - k, :, IA))
-               this%G01ij(k, j, :, IA) = this%G01ij(k, j, :, IA) + 0.5d0*(this%Ginmag(k, j, :, IA) - (-1)**(k + j)*this%Gjnmag(2*j0 - j, 2*k0 - k, :, IA))
-               this%G00ji(k, j, :, IA) = this%G00ji(k, j, :, IA) + 0.5d0*(this%Gjnmag(k, j, :, IA) + (-1)**(k + j)*this%Ginmag(2*j0 - j, 2*k0 - k, :, IA))
-               this%G01ji(k, j, :, IA) = this%G01ji(k, j, :, IA) + 0.5d0*(this%Gjnmag(k, j, :, IA) - (-1)**(k + j)*this%Ginmag(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gx1ij(k, j, :, IA) = this%Gx1ij(k, j, :, IA) + 0.5d0*(this%Gix(k, j, :, IA) - (-1)**(k + j)*this%Gjx(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gy1ij(k, j, :, IA) = this%Gy1ij(k, j, :, IA) + 0.5d0*(this%Giy(k, j, :, IA) - (-1)**(k + j)*this%Gjy(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gz1ij(k, j, :, IA) = this%Gz1ij(k, j, :, IA) + 0.5d0*(this%Giz(k, j, :, IA) - (-1)**(k + j)*this%Gjz(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gx0ij(k, j, :, IA) = this%Gx0ij(k, j, :, IA) + 0.5d0*(this%Gix(k, j, :, IA) + (-1)**(k + j)*this%Gjx(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gy0ij(k, j, :, IA) = this%Gy0ij(k, j, :, IA) + 0.5d0*(this%Giy(k, j, :, IA) + (-1)**(k + j)*this%Gjy(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gz0ij(k, j, :, IA) = this%Gz0ij(k, j, :, IA) + 0.5d0*(this%Giz(k, j, :, IA) + (-1)**(k + j)*this%Gjz(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gx1ji(k, j, :, IA) = this%Gx1ji(k, j, :, IA) + 0.5d0*(this%Gjx(k, j, :, IA) - (-1)**(k + j)*this%Gix(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gy1ji(k, j, :, IA) = this%Gy1ji(k, j, :, IA) + 0.5d0*(this%Gjy(k, j, :, IA) - (-1)**(k + j)*this%Giy(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gz1ji(k, j, :, IA) = this%Gz1ji(k, j, :, IA) + 0.5d0*(this%Gjz(k, j, :, IA) - (-1)**(k + j)*this%Giz(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gx0ji(k, j, :, IA) = this%Gx0ji(k, j, :, IA) + 0.5d0*(this%Gjx(k, j, :, IA) + (-1)**(k + j)*this%Gix(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gy0ji(k, j, :, IA) = this%Gy0ji(k, j, :, IA) + 0.5d0*(this%Gjy(k, j, :, IA) + (-1)**(k + j)*this%Giy(2*j0 - j, 2*k0 - k, :, IA))
-               this%Gz0ji(k, j, :, IA) = this%Gz0ji(k, j, :, IA) + 0.5d0*(this%Gjz(k, j, :, IA) + (-1)**(k + j)*this%Giz(2*j0 - j, 2*k0 - k, :, IA))
-            end do
-         end do
+         call this%fill_intersite_gf_twoindex_pair(g2l_map(ia_glob))
       end do
    end subroutine calculate_intersite_gf_twoindex
+
+   !> Two-index Green-function families of the pair held in slot `slot` of Ginmag, Gjnmag, Gi{x,y,z}, Gj{x,y,z}.
+   module subroutine fill_intersite_gf_twoindex_pair(this, slot)
+      use basis_mod, only: norb
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot
+      integer :: j, k, l1, l2, k0, j0
+
+      this%G00ij(:, :, :, slot) = 0.0d0; this%G01ij(:, :, :, slot) = 0.0d0; this%G00ji(:, :, :, slot) = 0.0d0; this%G01ji(:, :, :, slot) = 0.0d0;
+      this%Gx1ij(:, :, :, slot) = 0.0d0; this%Gy1ij(:, :, :, slot) = 0.0d0; this%Gz1ij(:, :, :, slot) = 0.0d0; this%Gx0ij(:, :, :, slot) = 0.0d0; this%Gy0ij(:, :, :, slot) = 0.0d0; this%Gz0ij(:, :, :, slot) = 0.0d0;
+      this%Gx1ji(:, :, :, slot) = 0.0d0; this%Gy1ji(:, :, :, slot) = 0.0d0; this%Gz1ji(:, :, :, slot) = 0.0d0; this%Gx0ji(:, :, :, slot) = 0.0d0; this%Gy0ji(:, :, :, slot) = 0.0d0; this%Gz0ji(:, :, :, slot) = 0.0d0
+
+      do j = 1, norb
+         do k = 1, norb
+            l1 = int((k - 0.9)**0.5)
+            l2 = int((j - 0.9)**0.5)
+            k0 = l1*(l1 + 1) + 1
+            j0 = l2*(l2 + 1) + 1
+            this%G00ij(k, j, :, slot) = this%G00ij(k, j, :, slot) + 0.5d0*(this%Ginmag(k, j, :, slot) + (-1)**(k + j)*this%Gjnmag(2*j0 - j, 2*k0 - k, :, slot))
+            this%G01ij(k, j, :, slot) = this%G01ij(k, j, :, slot) + 0.5d0*(this%Ginmag(k, j, :, slot) - (-1)**(k + j)*this%Gjnmag(2*j0 - j, 2*k0 - k, :, slot))
+            this%G00ji(k, j, :, slot) = this%G00ji(k, j, :, slot) + 0.5d0*(this%Gjnmag(k, j, :, slot) + (-1)**(k + j)*this%Ginmag(2*j0 - j, 2*k0 - k, :, slot))
+            this%G01ji(k, j, :, slot) = this%G01ji(k, j, :, slot) + 0.5d0*(this%Gjnmag(k, j, :, slot) - (-1)**(k + j)*this%Ginmag(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gx1ij(k, j, :, slot) = this%Gx1ij(k, j, :, slot) + 0.5d0*(this%Gix(k, j, :, slot) - (-1)**(k + j)*this%Gjx(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gy1ij(k, j, :, slot) = this%Gy1ij(k, j, :, slot) + 0.5d0*(this%Giy(k, j, :, slot) - (-1)**(k + j)*this%Gjy(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gz1ij(k, j, :, slot) = this%Gz1ij(k, j, :, slot) + 0.5d0*(this%Giz(k, j, :, slot) - (-1)**(k + j)*this%Gjz(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gx0ij(k, j, :, slot) = this%Gx0ij(k, j, :, slot) + 0.5d0*(this%Gix(k, j, :, slot) + (-1)**(k + j)*this%Gjx(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gy0ij(k, j, :, slot) = this%Gy0ij(k, j, :, slot) + 0.5d0*(this%Giy(k, j, :, slot) + (-1)**(k + j)*this%Gjy(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gz0ij(k, j, :, slot) = this%Gz0ij(k, j, :, slot) + 0.5d0*(this%Giz(k, j, :, slot) + (-1)**(k + j)*this%Gjz(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gx1ji(k, j, :, slot) = this%Gx1ji(k, j, :, slot) + 0.5d0*(this%Gjx(k, j, :, slot) - (-1)**(k + j)*this%Gix(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gy1ji(k, j, :, slot) = this%Gy1ji(k, j, :, slot) + 0.5d0*(this%Gjy(k, j, :, slot) - (-1)**(k + j)*this%Giy(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gz1ji(k, j, :, slot) = this%Gz1ji(k, j, :, slot) + 0.5d0*(this%Gjz(k, j, :, slot) - (-1)**(k + j)*this%Giz(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gx0ji(k, j, :, slot) = this%Gx0ji(k, j, :, slot) + 0.5d0*(this%Gjx(k, j, :, slot) + (-1)**(k + j)*this%Gix(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gy0ji(k, j, :, slot) = this%Gy0ji(k, j, :, slot) + 0.5d0*(this%Gjy(k, j, :, slot) + (-1)**(k + j)*this%Giy(2*j0 - j, 2*k0 - k, :, slot))
+            this%Gz0ji(k, j, :, slot) = this%Gz0ji(k, j, :, slot) + 0.5d0*(this%Gjz(k, j, :, slot) + (-1)**(k + j)*this%Giz(2*j0 - j, 2*k0 - k, :, slot))
+         end do
+      end do
+   end subroutine fill_intersite_gf_twoindex_pair
 
    module subroutine calculate_intersite_gf(this)
       class(green), intent(inout) :: this
@@ -309,53 +316,69 @@ contains
          return
       end if
 
-      this%gij = 0.0d0; this%gji = 0.0d0; this%ginmag = 0.0d0; this%giz = 0.0d0; this%giy = 0.0d0; this%gix = 0.0d0
-      this%gjnmag = 0.0d0; this%gjx = 0.0d0; this%gjy = 0.0d0; this%gjz = 0.0d0
-
-      if (this%control%recur == 'block') call this%recursion%zsqr()
-
+      call this%prepare_intersite_gf()
       do ia_glob = start_atom, end_atom
-         ia = g2l_map(ia_glob)
-         ja_temp = (ia - 1)*4 + 1
-         select case (this%control%recur)
-         case ('block')
-            if (this%control%intersite_mode == 'one_shot') then
-               call this%block_green_ij_oneshot(ia, cmplx(this%en%ene(1:this%en%channels_ldos + 10), 0.0_rp, rp), this%g0)
-            else if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
-               call this%block_green_ij_gpu(ja_temp)
-            else
-               call this%block_green_ij(ja_temp)
-            end if
-         case ('chebyshev')
-            if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
-               call this%chebyshev_green_ij_gpu(ja_temp)
-            else
-               call this%chebyshev_green_ij(ja_temp)
-            end if
-         end select
-         if (this%lattice%ijpair(ia_glob, 1) .eq. this%lattice%ijpair(ia_glob, 2)) then
-            this%gij(:, :, :, ia) = this%g0(:, :, :, 1)
-            this%gji(:, :, :, ia) = this%g0(:, :, :, 1)
-         else
-            this%gij(:, :, :, ia) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) + (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
-            this%gji(:, :, :, ia) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) - (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
-            this%gij(:, :, :, ia) = this%gij(:, :, :, ia)*0.5d0
-            this%gji(:, :, :, ia) = this%gji(:, :, :, ia)*0.5d0
-         end if
-         do i = 1, norb
-            do j = 1, norb
-               this%Ginmag(j, i, :, iA) = this%Ginmag(j, i, :, iA) + (this%gij(j, i, :, ia) + this%gij(j +spin_off, i +spin_off, :, ia))*0.5d0
-               this%Giz(j, i, :, iA) = this%Giz(j, i, :, iA) + 0.5d0*(this%gij(j, i, :, ia) - this%gij(j +spin_off, i +spin_off, :, ia))
-               this%Giy(j, i, :, iA) = this%Giy(j, i, :, iA) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, ia) - i_unit*this%gij(j +spin_off, i, :, ia))
-               this%Gix(j, i, :, iA) = this%Gix(j, i, :, iA) + 0.5d0*(this%gij(j, i +spin_off, :, ia) + this%gij(j +spin_off, i, :, ia))
-               this%Gjnmag(j, i, :, iA) = this%Gjnmag(j, i, :, iA) + (this%gji(j, i, :, ia) + this%gji(j +spin_off, i +spin_off, :, ia))*0.5d0
-               this%Gjz(j, i, :, iA) = this%Gjz(j, i, :, iA) + 0.5d0*(this%gji(j, i, :, ia) - this%gji(j +spin_off, i +spin_off, :, ia))
-               this%Gjy(j, i, :, iA) = this%Gjy(j, i, :, iA) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, ia) - i_unit*this%gji(j +spin_off, i, :, ia))
-               this%Gjx(j, i, :, iA) = this%Gjx(j, i, :, iA) + 0.5d0*(this%gji(j, i +spin_off, :, ia) + this%gji(j +spin_off, i, :, ia))
-            end do
-         end do
+         call this%fill_intersite_gf_pair(ia_glob, g2l_map(ia_glob))
       end do
    end subroutine calculate_intersite_gf_core
+
+   module subroutine prepare_intersite_gf(this)
+      class(green), intent(inout) :: this
+
+      if (this%control%recur == 'block') call this%recursion%zsqr()
+   end subroutine prepare_intersite_gf
+
+   !> Real-mesh G_ij and G_ji of global pair ia_glob and their Pauli families, written to slot `slot` of the
+   !> green arrays. The recursion data stays indexed by the local pair. Needs prepare_intersite_gf once before.
+   module subroutine fill_intersite_gf_pair(this, ia_glob, slot)
+      use mpi_mod
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob, slot
+      integer :: ia, ja_temp, j, i
+
+      ia = g2l_map(ia_glob)
+      ja_temp = (ia - 1)*4 + 1
+      this%gij(:, :, :, slot) = 0.0d0; this%gji(:, :, :, slot) = 0.0d0
+      this%ginmag(:, :, :, slot) = 0.0d0; this%giz(:, :, :, slot) = 0.0d0; this%giy(:, :, :, slot) = 0.0d0; this%gix(:, :, :, slot) = 0.0d0
+      this%gjnmag(:, :, :, slot) = 0.0d0; this%gjx(:, :, :, slot) = 0.0d0; this%gjy(:, :, :, slot) = 0.0d0; this%gjz(:, :, :, slot) = 0.0d0
+      select case (this%control%recur)
+      case ('block')
+         if (this%control%intersite_mode == 'one_shot') then
+            call this%block_green_ij_oneshot(ia, cmplx(this%en%ene(1:this%en%channels_ldos + 10), 0.0_rp, rp), this%g0)
+         else if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
+            call this%block_green_ij_gpu(ja_temp)
+         else
+            call this%block_green_ij(ja_temp)
+         end if
+      case ('chebyshev')
+         if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
+            call this%chebyshev_green_ij_gpu(ja_temp)
+         else
+            call this%chebyshev_green_ij(ja_temp)
+         end if
+      end select
+      if (this%lattice%ijpair(ia_glob, 1) .eq. this%lattice%ijpair(ia_glob, 2)) then
+         this%gij(:, :, :, slot) = this%g0(:, :, :, 1)
+         this%gji(:, :, :, slot) = this%g0(:, :, :, 1)
+      else
+         this%gij(:, :, :, slot) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) + (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
+         this%gji(:, :, :, slot) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) - (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
+         this%gij(:, :, :, slot) = this%gij(:, :, :, slot)*0.5d0
+         this%gji(:, :, :, slot) = this%gji(:, :, :, slot)*0.5d0
+      end if
+      do i = 1, norb
+         do j = 1, norb
+            this%Ginmag(j, i, :, slot) = this%Ginmag(j, i, :, slot) + (this%gij(j, i, :, slot) + this%gij(j +spin_off, i +spin_off, :, slot))*0.5d0
+            this%Giz(j, i, :, slot) = this%Giz(j, i, :, slot) + 0.5d0*(this%gij(j, i, :, slot) - this%gij(j +spin_off, i +spin_off, :, slot))
+            this%Giy(j, i, :, slot) = this%Giy(j, i, :, slot) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, slot) - i_unit*this%gij(j +spin_off, i, :, slot))
+            this%Gix(j, i, :, slot) = this%Gix(j, i, :, slot) + 0.5d0*(this%gij(j, i +spin_off, :, slot) + this%gij(j +spin_off, i, :, slot))
+            this%Gjnmag(j, i, :, slot) = this%Gjnmag(j, i, :, slot) + (this%gji(j, i, :, slot) + this%gji(j +spin_off, i +spin_off, :, slot))*0.5d0
+            this%Gjz(j, i, :, slot) = this%Gjz(j, i, :, slot) + 0.5d0*(this%gji(j, i, :, slot) - this%gji(j +spin_off, i +spin_off, :, slot))
+            this%Gjy(j, i, :, slot) = this%Gjy(j, i, :, slot) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, slot) - i_unit*this%gji(j +spin_off, i, :, slot))
+            this%Gjx(j, i, :, slot) = this%Gjx(j, i, :, slot) + 0.5d0*(this%gji(j, i +spin_off, :, slot) + this%gji(j +spin_off, i, :, slot))
+         end do
+      end do
+   end subroutine fill_intersite_gf_pair
 
    module subroutine calculate_intersite_gf_eta_gpu(this)
       use mpi_mod

@@ -231,7 +231,7 @@ module calculation_mod
                                                        energy_mesh_before_hamiltonian, &
                                                        control_obj, lattice_obj, charge_obj, mix_obj, energy_obj, &
                                                        hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-                                                       preprocessing_route)
+                                                       preprocessing_route, pair_slots)
          class(calculation), intent(in) :: this
          logical, intent(in) :: use_paoflow, use_exchange_pairs
          logical, intent(in) :: energy_mesh_before_hamiltonian
@@ -246,6 +246,7 @@ module calculation_mod
          type(green), target, intent(inout) :: green_obj
          type(bands), target, intent(inout) :: bands_obj
          character(len=*), intent(in), optional :: preprocessing_route
+         integer, intent(in), optional :: pair_slots
       end subroutine prepare_post_processing_stack
 
       module subroutine run_intersite_moments(control_obj, recursion_obj)
@@ -791,10 +792,19 @@ contains
       type(exchange), target :: exchange_obj
       type(reciprocal), target :: reciprocal_obj
       integer :: i
+      logical :: stream
 
-      call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
-                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
-                                         green_obj, bands_obj)
+      ! The recursion route reconstructs one pair at a time into a single slot of the intersite Green-function arrays
+      stream = trim(this%gf_route) == 'recursion'
+      if (stream) then
+         call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
+                                            charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                            green_obj, bands_obj, pair_slots=1)
+      else
+         call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
+                                            charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                            green_obj, bands_obj)
+      end if
       exchange_obj = exchange(bands_obj)
 
       if (this%exchange_delta == 'onsite') then
@@ -822,7 +832,6 @@ contains
       select case (trim(this%gf_route))
       case ('recursion')
          call run_intersite_moments(control_obj, recursion_obj)
-         call green_obj%calculate_intersite_gf()
       case ('lehmann', 'dyson')
          ! B2.6 (done): the exchange consumer runs UNCHANGED on the k-space-filled
          ! arrays -- it reads the same gij/gji + intersite torque families
@@ -845,23 +854,15 @@ contains
          reciprocal_obj%green_backend = trim(this%gf_route)
          call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ (backend E requirement)
          call reciprocal_obj%fill_green(green_obj)
+         call green_obj%calculate_intersite_gf_twoindex()
       end select
-      call green_obj%calculate_intersite_gf_twoindex()
-      if ((lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0)) then
-         call exchange_obj%calculate_exchange()
-         call exchange_obj%calculate_exchange_twoindex()
-      end if
       ! B5.3: pairwise (on-site and nonlocal) Kamberský torque-correlation Gilbert damping, off by
       ! default. Consumes the same green%gij just filled by gf_route, so it is
       ! route-agnostic (recursion / lehmann / dyson) by construction. Needs SOC
       ! in the potential (xi_p/xi_d); the k-space routes additionally need
       ! kspace_ham_order=’second’.
-      if (this%do_damping) then
-         call exchange_obj%calculate_gilbert_damping()
-      end if
-      if (this%do_inertia) then
-         call exchange_obj%calculate_moment_of_inertia()
-      end if
+      call exchange_obj%calculate_pairwise(stream, (lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0), &
+                                           this%do_damping, this%do_inertia)
    end subroutine post_processing_exchange
 
 

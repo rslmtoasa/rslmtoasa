@@ -27,7 +27,7 @@ contains
    module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
                                                    control_obj, lattice_obj, charge_obj, mix_obj, &
                                                    energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-                                                   preprocessing_route)
+                                                   preprocessing_route, pair_slots)
       class(calculation), intent(in) :: this
       logical, intent(in) :: use_paoflow
       logical, intent(in) :: use_exchange_pairs
@@ -43,6 +43,7 @@ contains
       type(green), target, intent(inout) :: green_obj
       type(bands), target, intent(inout) :: bands_obj
       character(len=*), intent(in), optional :: preprocessing_route
+      integer, intent(in), optional :: pair_slots
       character(len=sl) :: route
       integer :: i, j
       logical :: effective_input, effective_dos, effective_transport, effective_exchange
@@ -245,7 +246,7 @@ contains
       recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
       dos_obj = dos(recursion_obj, energy_obj)
       green_obj = green(dos_obj)
-      call green_obj%restore_to_default()
+      call green_obj%restore_to_default(pair_slots)
       bands_obj = bands(green_obj)
       call bands_obj%restore_to_default()
       if (.not. energy_mesh_before_hamiltonian .and. .not. effective_input) call energy_obj%e_mesh()

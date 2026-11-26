@@ -44,6 +44,8 @@ module exchange_mod
    implicit none
 
    private
+   !> Linked from the exchange_dynamics submodule (calculate_pairwise)
+   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes
    !> Energy nodes at which G is evaluated and the way an integrand sampled on them is integrated.
    type, public :: energy_nodes
       !> Complex energies z (Ry) at which G is evaluated
@@ -99,14 +101,11 @@ module exchange_mod
       procedure :: calculate_jij
       procedure :: calculate_dij
       procedure :: calculate_aij
-      procedure :: calculate_exchange
-      procedure :: calculate_exchange_twoindex
       procedure :: calculate_jij_auxgreen
       procedure :: calculate_jijk
       procedure :: calculate_exchange_gauss_legendre
       procedure :: calculate_exchange_rs2pao
-      procedure :: calculate_gilbert_damping
-      procedure :: calculate_moment_of_inertia
+      procedure :: calculate_pairwise
       procedure :: restore_to_default
       final destructor
    end type
@@ -116,13 +115,10 @@ module exchange_mod
    end interface exchange
 
    interface
-      module subroutine calculate_gilbert_damping(this)
+      module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia)
          class(exchange) :: this
-      end subroutine calculate_gilbert_damping
-
-      module subroutine calculate_moment_of_inertia(this)
-         class(exchange) :: this
-      end subroutine calculate_moment_of_inertia
+         logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
+      end subroutine calculate_pairwise
    end interface
 
 contains
@@ -774,20 +770,239 @@ contains
       delta = real(onsite(:9,:9) - onsite(10:,10:), rp)
    end function onsite_exchange_delta
 
-   subroutine calculate_exchange_twoindex(this)
+   !> Spin-orbit (so) and first-order (fo) J, D, A and their parts of pair (i, j) read from Green-function slot `slot`, in meV.
+   subroutine exchange_twoindex_pair(this, nodes, slot, i, j, xcso, xcfo, xcparts)
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, i, j
+      real(rp), intent(out) :: xcso(13), xcfo(13), xcparts(28)
+      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4
+      complex(rp), dimension(size(nodes%z)) :: jtotso, jtotfo, jsd, jcd, jsc, jcc
+      complex(rp), dimension(size(nodes%z), 3) :: jjtotso, jjtotfo, dsc, dcc
+      complex(rp), dimension(size(nodes%z), 3, 3) :: itotso, itotfo, isd, isc
+      real(rp), dimension(size(nodes%z)) :: y
+      integer :: nv, k, l
+
+      jtotso = 0.0d0; jtotfo = 0.0d0; jjtotso = 0.0d0; jjtotfo = 0.0d0; itotso = 0.0d0; itotfo = 0.0d0
+      jcd = 0.0d0; jsd = 0.0d0; jcc = 0.0d0; jsc = 0.0d0; dsc = 0.0d0; dcc = 0.0d0; isd = 0.0d0; isc = 0.0d0
+      if (this%use_onsite_delta) then
+         dmat1 = onsite_exchange_delta(this, i)
+         dmat2 = onsite_exchange_delta(this, j)
+      end if
+      do nv = 1, this%en%channels_ldos + 10
+         if (.not. this%use_onsite_delta) then
+            call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, real(nodes%z(nv)))
+            call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, real(nodes%z(nv)))
+         end if
+         !J
+         ! Charge density part of Jij
+         tmat1 = 0.0d0
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%g00ji(1:9, 1:9, nv, slot))
+         jcd(nv) = imtrace9(tmat1)
+         ! Charge current part of jij
+         tmat1 = 0.0d0
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%g01ji(1:9, 1:9, nv, slot))
+         jcc(nv) = imtrace9(tmat1)
+         ! Spin density part of jij
+         tmat1 = 0.0d0
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+         tmat2 = 0.0d0
+         tmat2 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+         tmat3 = 0.0d0
+         tmat3 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+         tmat4 = 0.0d0
+         tmat4 = tmat1 + tmat2 + tmat3
+         jsd(nv) = imtrace9(tmat4)
+         ! Spin current part of jij
+         tmat1 = 0.0d0
+         tmat1 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
+         tmat2 = 0.0d0
+         tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
+         tmat3 = 0.0d0
+         tmat3 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
+         tmat4 = 0.0d0
+         tmat4 = tmat1 + tmat2 + tmat3
+         jsc(nv) = imtrace9(tmat4)
+         ! Combining and calculating the first order and second order Jij(E)
+         ! Second order J = CD - SD + CC - SC
+         jtotso(nv) = jcd(nv) - jsd(nv) + jcc(nv) - jsc(nv)
+         ! First order J = CD + SD - CC - SC
+         jtotfo(nv) = jcd(nv) + jsd(nv) - jcc(nv) - jsc(nv)
+         ! DMI
+         do k = 1, 3
+            select case (k)
+            case (1) ! Dx
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+            case (2) ! Dy
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+            case (3) ! Dz
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+            end select
+            ! Spin current part of the DMI
+            dsc(nv, k) = rtrace9(tmat1)
+            ! Charge current part of the DMI
+            dcc(nv, k) = rtrace9(tmat2)
+            ! Combining and calculating the first and second order Dij(E)
+            ! Second order D = SC + CC
+            jjtotso(nv, k) = 2*(dsc(nv, k) + dcc(nv, k))
+            ! First order D = SC - CC
+            jjtotfo(nv, k) = 2*(dsc(nv, k) - dcc(nv, K))
+         end do
+         ! I Tensor
+         do k = 1, 9
+            select case (k)
+            case (1) ! Axx
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
+               isd(nv, 1, 1) = imtrace9(tmat1)
+               isc(nv, 1, 1) = imtrace9(tmat2)
+            case (2) ! Axy
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
+               isd(nv, 1, 2) = imtrace9(tmat1)
+               isc(nv, 1, 2) = imtrace9(tmat2)
+            case (3) ! Axz
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
+               isd(nv, 1, 3) = imtrace9(tmat1)
+               isc(nv, 1, 3) = imtrace9(tmat2)
+            case (4) ! Ayx
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
+               isd(nv, 2, 1) = imtrace9(tmat1)
+               isc(nv, 2, 1) = imtrace9(tmat2)
+            case (5) ! Ayy
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
+               isd(nv, 2, 2) = imtrace9(tmat1)
+               isc(nv, 2, 2) = imtrace9(tmat2)
+            case (6) ! Ayz
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
+               isd(nv, 2, 3) = imtrace9(tmat1)
+               isc(nv, 2, 3) = imtrace9(tmat2)
+            case (7) ! Azx
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gx0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gx1ji(1:9, 1:9, nv, slot))
+               isd(nv, 3, 1) = imtrace9(tmat1)
+               isc(nv, 3, 1) = imtrace9(tmat2)
+            case (8) ! Azy
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gy0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gy1ji(1:9, 1:9, nv, slot))
+               isd(nv, 3, 2) = imtrace9(tmat1)
+               isc(nv, 3, 2) = imtrace9(tmat2)
+            case (9) ! Azz
+               tmat1 = 0.0d0; tmat2 = 0.0d0
+               tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, slot), this%green%gz0ji(1:9, 1:9, nv, slot))
+               tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, slot), this%green%gz1ji(1:9, 1:9, nv, slot))
+               isd(nv, 3, 3) = imtrace9(tmat1)
+               isc(nv, 3, 3) = imtrace9(tmat2)
+            end select
+            ! Combining and calculating the first and second order A(E)
+            ! Second order A = SD + SC
+            itotso(nv, :, :) = isd(nv, :, :) + isc(nv, :, :)
+            ! First order A = - SD + SC
+            itotfo(nv, :, :) = - isd(nv, :, :) + isc(nv, :, :)
+         end do
+      end do
+      ! Jij integration
+      this%jij = 0.0d0
+      call nodes%integrate(real(jtotso), this%jij)
+      xcso(1) = this%jij*1.0d3/4.0d0/pi
+      this%jij = 0.0d0
+      call nodes%integrate(real(jtotfo), this%jij)
+      xcfo(1) = this%jij*1.0d3/4.0d0/pi
+      this%jijcd = 0.0d0 ; this%jijsd = 0.0d0 ; this%jijcc = 0.0d0 ; this%jijsc = 0.0d0 
+      call nodes%integrate(real(jcd), this%jijcd)
+      xcparts(1) = this%jijcd*1.0d3/4.0d0/pi
+      call nodes%integrate(real(jsd), this%jijsd)
+      xcparts(2) = this%jijsd*1.0d3/4.0d0/pi
+      call nodes%integrate(real(jcc), this%jijcc)
+      xcparts(3) = this%jijcc*1.0d3/4.0d0/pi
+      call nodes%integrate(real(jsc), this%jijsc)
+      xcparts(4) = this%jijsc*1.0d3/4.0d0/pi
+
+      ! Dij integration
+      this%dmi = 0.0d0
+      do k = 1, 3
+         y(:) = 0.0d0
+         y(:) = real(jjtotso(:, k))
+         call nodes%integrate(y(:), this%dmi(k))
+      end do
+      xcso(2:4) = this%dmi*1.0d3/4.0d0/pi
+      this%dmi = 0.0d0
+      do k = 1, 3
+         y(:) = 0.0d0
+         y(:) = real(jjtotfo(:, k))
+         call nodes%integrate(y(:), this%dmi(k))
+      end do
+      xcfo(2:4) = this%dmi*1.0d3/4.0d0/pi
+      this%dmicc = 0.0d0 ; this%dmisc = 0.0d0
+      do k = 1, 3
+         y(:) = 0.0d0
+         y(:) = real(dsc(:, k))
+         call nodes%integrate(y(:), this%dmisc(k))
+         y(:) = 0.0d0
+         y(:) = real(dcc(:, k))
+         call nodes%integrate(y(:), this%dmicc(k))
+      end do
+      xcparts(5:7) = this%dmicc*2.0d3/4.0d0/pi
+      xcparts(8:10) = this%dmisc*2.0d3/4.0d0/pi
+
+      ! I tensor integration
+      this%aij = 0.0d0
+      do k = 1, 3
+         do l = 1, 3
+            y(:) = 0.0d0
+            y(:) = real(itotso(:, k, l))
+            call nodes%integrate(y(:), this%aij(k, l))
+         end do
+      end do
+      xcso(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
+      this%aij = 0.0d0
+      do k = 1, 3
+         do l = 1, 3
+            y(:) = 0.0d0
+            y(:) = real(itotfo(:, k, l))
+            call nodes%integrate(y(:), this%aij(k, l))
+         end do
+      end do
+      xcfo(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
+      this%aijsd = 0.0d0 ; this%aijsc = 0.0d0  
+      do k = 1, 3
+         do l = 1, 3
+            y(:) = 0.0d0
+            y(:) = real(isd(:, k, l))
+            call nodes%integrate(y(:), this%aijsd(k, l))
+            y(:) = 0.0d0
+            y(:) = real(isc(:, k, l))
+            call nodes%integrate(y(:), this%aijsc(k, l))
+         end do
+      end do
+      xcparts(11:19) = reshape(this%aijsd*1.0d3/4.0d0/pi, [9])
+      xcparts(20:28) = reshape(this%aijsc*1.0d3/4.0d0/pi, [9])
+   end subroutine exchange_twoindex_pair
+
+   subroutine exchange_twoindex_finalize(this, T_comm_xcso, T_comm_xcfo, T_comm_xcparts)
       use mpi_mod
       class(exchange) :: this
-      type(energy_nodes) :: nodes
+      real(rp), intent(inout) :: T_comm_xcso(:, :), T_comm_xcfo(:, :), T_comm_xcparts(:, :)
       integer :: i, j, njij, njij_glob
       logical :: isopen
-      real(rp), dimension(:, :), allocatable :: T_comm_xcso, T_comm_xcfo, T_comm_xcparts
-
-      ! Communications array for MPI
-      ! row = [ jij dij aij]
-      allocate (T_comm_xcso(13, this%lattice%njij), T_comm_xcfo(13, this%lattice%njij))
-      ! row = [jcd, jsd, jcc, jsc, dcc(3), dsc(3), isd(9), isc(9)]
-      allocate (T_comm_xcparts(28, this%lattice%njij))
-      T_comm_xcso = 0.0_rp; T_comm_xcfo = 0.0_rp; T_comm_xcparts = 0.0_rp
 
       inquire (unit=20, opened=isopen)
       if (isopen) then
@@ -866,255 +1081,6 @@ contains
          open (unit=80, file='aijparts.out')
       end if
 
-
-      nodes = real_mesh_nodes(this)
-
-      do njij_glob = start_atom, end_atom
-         njij = g2l_map(njij_glob)
-         i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
-         j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
-         call exchange_twoindex_pair(this, nodes, njij, i, j, T_comm_xcso(:, njij_glob), &
-                                     T_comm_xcfo(:, njij_glob), T_comm_xcparts(:, njij_glob))
-      end do
-
-      call exchange_twoindex_finalize(this, T_comm_xcso, T_comm_xcfo, T_comm_xcparts)
-      deallocate (T_comm_xcso)
-      deallocate (T_comm_xcfo)
-      deallocate (T_comm_xcparts)
-   end subroutine calculate_exchange_twoindex
-
-   !> Spin-orbit (so) and first-order (fo) J, D, A and their parts of pair (i, j) at local index njij, in meV.
-   subroutine exchange_twoindex_pair(this, nodes, njij, i, j, xcso, xcfo, xcparts)
-      class(exchange) :: this
-      type(energy_nodes), intent(in) :: nodes
-      integer, intent(in) :: njij, i, j
-      real(rp), intent(out) :: xcso(13), xcfo(13), xcparts(28)
-      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4
-      complex(rp), dimension(size(nodes%z)) :: jtotso, jtotfo, jsd, jcd, jsc, jcc
-      complex(rp), dimension(size(nodes%z), 3) :: jjtotso, jjtotfo, dsc, dcc
-      complex(rp), dimension(size(nodes%z), 3, 3) :: itotso, itotfo, isd, isc
-      real(rp), dimension(size(nodes%z)) :: y
-      integer :: nv, k, l
-
-      jtotso = 0.0d0; jtotfo = 0.0d0; jjtotso = 0.0d0; jjtotfo = 0.0d0; itotso = 0.0d0; itotfo = 0.0d0
-      jcd = 0.0d0; jsd = 0.0d0; jcc = 0.0d0; jsc = 0.0d0; dsc = 0.0d0; dcc = 0.0d0; isd = 0.0d0; isc = 0.0d0
-         if (this%use_onsite_delta) then
-            dmat1 = onsite_exchange_delta(this, i)
-            dmat2 = onsite_exchange_delta(this, j)
-         end if
-         do nv = 1, this%en%channels_ldos + 10
-            if (.not. this%use_onsite_delta) then
-               call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, real(nodes%z(nv)))
-               call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, real(nodes%z(nv)))
-            end if
-            !J
-            ! Charge density part of Jij
-            tmat1 = 0.0d0
-            tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, njij), this%green%g00ji(1:9, 1:9, nv, njij))
-            jcd(nv) = imtrace9(tmat1)
-            ! Charge current part of jij
-            tmat1 = 0.0d0
-            tmat1 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, njij), this%green%g01ji(1:9, 1:9, nv, njij))
-            jcc(nv) = imtrace9(tmat1)
-            ! Spin density part of jij
-            tmat1 = 0.0d0
-            tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, njij), this%green%gx0ji(1:9, 1:9, nv, njij))
-            tmat2 = 0.0d0
-            tmat2 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, njij), this%green%gy0ji(1:9, 1:9, nv, njij))
-            tmat3 = 0.0d0
-            tmat3 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, njij), this%green%gz0ji(1:9, 1:9, nv, njij))
-            tmat4 = 0.0d0
-            tmat4 = tmat1 + tmat2 + tmat3
-            jsd(nv) = imtrace9(tmat4)
-            ! Spin current part of jij
-            tmat1 = 0.0d0
-            tmat1 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, njij), this%green%gx1ji(1:9, 1:9, nv, njij))
-            tmat2 = 0.0d0
-            tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, njij), this%green%gy1ji(1:9, 1:9, nv, njij))
-            tmat3 = 0.0d0
-            tmat3 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, njij), this%green%gz1ji(1:9, 1:9, nv, njij))
-            tmat4 = 0.0d0
-            tmat4 = tmat1 + tmat2 + tmat3
-            jsc(nv) = imtrace9(tmat4)
-            ! Combining and calculating the first order and second order Jij(E)
-            ! Second order J = CD - SD + CC - SC
-            jtotso(nv) = jcd(nv) - jsd(nv) + jcc(nv) - jsc(nv)
-            ! First order J = CD + SD - CC - SC
-            jtotfo(nv) = jcd(nv) + jsd(nv) - jcc(nv) - jsc(nv)
-            ! DMI
-            do k = 1, 3
-               select case (k)
-               case (1) ! Dx
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, njij), this%green%gx1ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, njij), this%green%gx0ji(1:9, 1:9, nv, njij))
-               case (2) ! Dy
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, njij), this%green%gy1ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, njij), this%green%gy0ji(1:9, 1:9, nv, njij))
-               case (3) ! Dz
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%g00ij(1:9, 1:9, nv, njij), this%green%gz1ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%g01ij(1:9, 1:9, nv, njij), this%green%gz0ji(1:9, 1:9, nv, njij))
-               end select
-               ! Spin current part of the DMI
-               dsc(nv, k) = rtrace9(tmat1)
-               ! Charge current part of the DMI
-               dcc(nv, k) = rtrace9(tmat2)
-               ! Combining and calculating the first and second order Dij(E)
-               ! Second order D = SC + CC
-               jjtotso(nv, k) = 2*(dsc(nv, k) + dcc(nv, k))
-               ! First order D = SC - CC
-               jjtotfo(nv, k) = 2*(dsc(nv, k) - dcc(nv, K))
-            end do
-            ! I Tensor
-            do k = 1, 9
-               select case (k)
-               case (1) ! Axx
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, njij), this%green%gx0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, njij), this%green%gx1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 1, 1) = imtrace9(tmat1)
-                  isc(nv, 1, 1) = imtrace9(tmat2)
-               case (2) ! Axy
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, njij), this%green%gy0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, njij), this%green%gy1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 1, 2) = imtrace9(tmat1)
-                  isc(nv, 1, 2) = imtrace9(tmat2)
-               case (3) ! Axz
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gx0ij(1:9, 1:9, nv, njij), this%green%gz0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gx1ij(1:9, 1:9, nv, njij), this%green%gz1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 1, 3) = imtrace9(tmat1)
-                  isc(nv, 1, 3) = imtrace9(tmat2)
-               case (4) ! Ayx
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, njij), this%green%gx0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, njij), this%green%gx1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 2, 1) = imtrace9(tmat1)
-                  isc(nv, 2, 1) = imtrace9(tmat2)
-               case (5) ! Ayy
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, njij), this%green%gy0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, njij), this%green%gy1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 2, 2) = imtrace9(tmat1)
-                  isc(nv, 2, 2) = imtrace9(tmat2)
-               case (6) ! Ayz
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gy0ij(1:9, 1:9, nv, njij), this%green%gz0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gy1ij(1:9, 1:9, nv, njij), this%green%gz1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 2, 3) = imtrace9(tmat1)
-                  isc(nv, 2, 3) = imtrace9(tmat2)
-               case (7) ! Azx
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, njij), this%green%gx0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, njij), this%green%gx1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 3, 1) = imtrace9(tmat1)
-                  isc(nv, 3, 1) = imtrace9(tmat2)
-               case (8) ! Azy
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, njij), this%green%gy0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, njij), this%green%gy1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 3, 2) = imtrace9(tmat1)
-                  isc(nv, 3, 2) = imtrace9(tmat2)
-               case (9) ! Azz
-                  tmat1 = 0.0d0; tmat2 = 0.0d0
-                  tmat1 = dGdG(this, dmat1, dmat2, this%green%gz0ij(1:9, 1:9, nv, njij), this%green%gz0ji(1:9, 1:9, nv, njij))
-                  tmat2 = dGdG(this, dmat1, dmat2, this%green%gz1ij(1:9, 1:9, nv, njij), this%green%gz1ji(1:9, 1:9, nv, njij))
-                  isd(nv, 3, 3) = imtrace9(tmat1)
-                  isc(nv, 3, 3) = imtrace9(tmat2)
-               end select
-               ! Combining and calculating the first and second order A(E)
-               ! Second order A = SD + SC
-               itotso(nv, :, :) = isd(nv, :, :) + isc(nv, :, :)
-               ! First order A = - SD + SC
-               itotfo(nv, :, :) = - isd(nv, :, :) + isc(nv, :, :)
-            end do
-         end do
-         ! Jij integration
-         this%jij = 0.0d0
-         call nodes%integrate(real(jtotso), this%jij)
-         xcso(1) = this%jij*1.0d3/4.0d0/pi
-         this%jij = 0.0d0
-         call nodes%integrate(real(jtotfo), this%jij)
-         xcfo(1) = this%jij*1.0d3/4.0d0/pi
-         this%jijcd = 0.0d0 ; this%jijsd = 0.0d0 ; this%jijcc = 0.0d0 ; this%jijsc = 0.0d0 
-         call nodes%integrate(real(jcd), this%jijcd)
-         xcparts(1) = this%jijcd*1.0d3/4.0d0/pi
-         call nodes%integrate(real(jsd), this%jijsd)
-         xcparts(2) = this%jijsd*1.0d3/4.0d0/pi
-         call nodes%integrate(real(jcc), this%jijcc)
-         xcparts(3) = this%jijcc*1.0d3/4.0d0/pi
-         call nodes%integrate(real(jsc), this%jijsc)
-         xcparts(4) = this%jijsc*1.0d3/4.0d0/pi
-
-         ! Dij integration
-         this%dmi = 0.0d0
-         do k = 1, 3
-            y(:) = 0.0d0
-            y(:) = real(jjtotso(:, k))
-            call nodes%integrate(y(:), this%dmi(k))
-         end do
-         xcso(2:4) = this%dmi*1.0d3/4.0d0/pi
-         this%dmi = 0.0d0
-         do k = 1, 3
-            y(:) = 0.0d0
-            y(:) = real(jjtotfo(:, k))
-            call nodes%integrate(y(:), this%dmi(k))
-         end do
-         xcfo(2:4) = this%dmi*1.0d3/4.0d0/pi
-         this%dmicc = 0.0d0 ; this%dmisc = 0.0d0
-         do k = 1, 3
-            y(:) = 0.0d0
-            y(:) = real(dsc(:, k))
-            call nodes%integrate(y(:), this%dmisc(k))
-            y(:) = 0.0d0
-            y(:) = real(dcc(:, k))
-            call nodes%integrate(y(:), this%dmicc(k))
-         end do
-         xcparts(5:7) = this%dmicc*2.0d3/4.0d0/pi
-         xcparts(8:10) = this%dmisc*2.0d3/4.0d0/pi
-
-         ! I tensor integration
-         this%aij = 0.0d0
-         do k = 1, 3
-            do l = 1, 3
-               y(:) = 0.0d0
-               y(:) = real(itotso(:, k, l))
-               call nodes%integrate(y(:), this%aij(k, l))
-            end do
-         end do
-         xcso(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
-         this%aij = 0.0d0
-         do k = 1, 3
-            do l = 1, 3
-               y(:) = 0.0d0
-               y(:) = real(itotfo(:, k, l))
-               call nodes%integrate(y(:), this%aij(k, l))
-            end do
-         end do
-         xcfo(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
-         this%aijsd = 0.0d0 ; this%aijsc = 0.0d0  
-         do k = 1, 3
-            do l = 1, 3
-               y(:) = 0.0d0
-               y(:) = real(isd(:, k, l))
-               call nodes%integrate(y(:), this%aijsd(k, l))
-               y(:) = 0.0d0
-               y(:) = real(isc(:, k, l))
-               call nodes%integrate(y(:), this%aijsc(k, l))
-            end do
-         end do
-         xcparts(11:19) = reshape(this%aijsd*1.0d3/4.0d0/pi, [9])
-         xcparts(20:28) = reshape(this%aijsc*1.0d3/4.0d0/pi, [9])
-   end subroutine exchange_twoindex_pair
-
-   subroutine exchange_twoindex_finalize(this, T_comm_xcso, T_comm_xcfo, T_comm_xcparts)
-      use mpi_mod
-      class(exchange) :: this
-      real(rp), intent(inout) :: T_comm_xcso(:, :), T_comm_xcfo(:, :), T_comm_xcparts(:, :)
-      integer :: i, j, njij, njij_glob
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm_xcso, product(shape(T_comm_xcso)), &
@@ -1195,22 +1161,85 @@ contains
 
    end subroutine exchange_twoindex_finalize
 
-   subroutine calculate_exchange(this)
-      use mpi_mod
+   !> Jij, Dij, Aij kernel of pair (i, j) read from Green-function slot `slot`, in meV, into xc(1:13).
+   subroutine exchange_pair(this, nodes, slot, i, j, xc)
       class(exchange) :: this
-      type(energy_nodes) :: nodes
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, i, j
+      real(rp), intent(out) :: xc(13)
+      complex(rp), dimension(9, 9) :: dmat1, dmat2
+      complex(rp), dimension(size(nodes%z)) :: jtot
+      complex(rp), dimension(size(nodes%z), 3) :: jjtot
+      complex(rp), dimension(size(nodes%z), 3, 3) :: itot
+      real(rp), dimension(size(nodes%z)) :: y
+      integer :: nv, k, l
+      complex(rp), dimension(9, 9) :: jmat
+      complex(rp), dimension(9, 9, 3) :: dmmats
+      complex(rp), dimension(9, 9, 3, 3) :: amats
+
+      jtot = 0.0d0; jjtot = 0.0d0
+      if (this%use_onsite_delta) then
+         dmat1 = onsite_exchange_delta(this, i)
+         dmat2 = onsite_exchange_delta(this, j)
+      end if
+      do nv = 1, this%en%channels_ldos + 10
+         if (.not. this%use_onsite_delta) then
+            call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, real(nodes%z(nv)))
+            call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, real(nodes%z(nv)))
+         end if
+         !J
+         jmat = dGdG_Jnc(this, dmat1, dmat2, slot, nv)
+         jtot(nv) = imtrace9(jmat)
+
+         ! DMI
+         dmmats = dGdG_Dnc(this, dmat1, dmat2, slot, nv)
+         do k = 1, 3
+            jjtot(nv, k) = rtrace9(dmmats(:, :, k))
+         end do
+
+         ! I Tensor
+         amats = dGdG_Anc(this, dmat1, dmat2, slot, nv)
+         do k = 1, 3
+            do l = 1, 3
+               itot(nv, k, l) = imtrace9(amats(:, :, k, l))
+            end do
+         end do
+      end do
+      ! Jij integration
+      this%jij = 0.0d0
+      call nodes%integrate(real(jtot), this%jij)
+      xc(1) = this%jij*1.0d3/4.0d0/pi
+
+      ! Dij integration
+      this%dmi = 0.0d0
+      do k = 1, 3
+         y(:) = 0.0d0
+         y(:) = real(jjtot(:, k))
+         call nodes%integrate(y(:), this%dmi(k))
+      end do
+      xc(2:4) = this%dmi*1.0d3/4.0d0/pi
+
+      ! I tensor integration
+      this%aij = 0.0d0
+      do k = 1, 3
+         do l = 1, 3
+            y(:) = 0.0d0
+            y(:) = real(itot(:, k, l))
+            call nodes%integrate(y(:), this%aij(k, l))
+         end do
+      end do
+      xc(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
+
+   end subroutine exchange_pair
+
+   subroutine exchange_finalize(this, T_comm_xc)
+      use mpi_mod
+      use Parameters
+      class(exchange) :: this
+      real(rp), intent(inout) :: T_comm_xc(:, :)
+      real(rp), dimension(3, 3) :: jtens
       integer :: i, j, njij, njij_glob
       logical :: isopen
-      real(rp), dimension(:, :), allocatable :: T_comm_xc
-
-      ! Communications array for MPI
-      ! row = [ jij dij aij]
-      allocate (T_comm_xc(13, this%lattice%njij))
-      T_comm_xc = 0.0_rp
-
-      ! The self SCF loop owns constraint updates.  Exchange consumes the
-      ! already-built Hamiltonian and must not advance or apply the field a
-      ! second time.
 
       inquire (unit=20, opened=isopen)
       if (isopen) then
@@ -1236,98 +1265,6 @@ contains
       else
          open (unit=60, file='jtens.out')
       end if
-
-      nodes = real_mesh_nodes(this)
-
-      do njij_glob = start_atom, end_atom
-         njij = g2l_map(njij_glob)
-         i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
-         j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
-         call exchange_pair(this, nodes, njij, i, j, T_comm_xc(:, njij_glob))
-      end do
-
-      call exchange_finalize(this, T_comm_xc)
-      deallocate (T_comm_xc)
-   end subroutine calculate_exchange
-
-   !> Jij, Dij, Aij kernel of pair (i, j) at local index njij, in meV, into xc(1:13).
-   subroutine exchange_pair(this, nodes, njij, i, j, xc)
-      class(exchange) :: this
-      type(energy_nodes), intent(in) :: nodes
-      integer, intent(in) :: njij, i, j
-      real(rp), intent(out) :: xc(13)
-      complex(rp), dimension(9, 9) :: dmat1, dmat2
-      complex(rp), dimension(size(nodes%z)) :: jtot
-      complex(rp), dimension(size(nodes%z), 3) :: jjtot
-      complex(rp), dimension(size(nodes%z), 3, 3) :: itot
-      real(rp), dimension(size(nodes%z)) :: y
-      integer :: nv, k, l
-      complex(rp), dimension(9, 9) :: jmat
-      complex(rp), dimension(9, 9, 3) :: dmmats
-      complex(rp), dimension(9, 9, 3, 3) :: amats
-
-      jtot = 0.0d0; jjtot = 0.0d0
-         if (this%use_onsite_delta) then
-            dmat1 = onsite_exchange_delta(this, i)
-            dmat2 = onsite_exchange_delta(this, j)
-         end if
-         do nv = 1, this%en%channels_ldos + 10
-            if (.not. this%use_onsite_delta) then
-               call this%symbolic_atom(this%lattice%iz(i))%d_matrix(dmat1, real(nodes%z(nv)))
-               call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dmat2, real(nodes%z(nv)))
-            end if
-            !J
-            jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
-            jtot(nv) = imtrace9(jmat)
-
-            ! DMI
-            dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, nv)
-            do k = 1, 3
-               jjtot(nv, k) = rtrace9(dmmats(:, :, k))
-            end do
-
-            ! I Tensor
-            amats = dGdG_Anc(this, dmat1, dmat2, njij, nv)
-            do k = 1, 3
-               do l = 1, 3
-                  itot(nv, k, l) = imtrace9(amats(:, :, k, l))
-               end do
-            end do
-         end do
-         ! Jij integration
-         this%jij = 0.0d0
-         call nodes%integrate(real(jtot), this%jij)
-         xc(1) = this%jij*1.0d3/4.0d0/pi
-
-         ! Dij integration
-         this%dmi = 0.0d0
-         do k = 1, 3
-            y(:) = 0.0d0
-            y(:) = real(jjtot(:, k))
-            call nodes%integrate(y(:), this%dmi(k))
-         end do
-         xc(2:4) = this%dmi*1.0d3/4.0d0/pi
-
-         ! I tensor integration
-         this%aij = 0.0d0
-         do k = 1, 3
-            do l = 1, 3
-               y(:) = 0.0d0
-               y(:) = real(itot(:, k, l))
-               call nodes%integrate(y(:), this%aij(k, l))
-            end do
-         end do
-         xc(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
-
-   end subroutine exchange_pair
-
-   subroutine exchange_finalize(this, T_comm_xc)
-      use mpi_mod
-      use Parameters
-      class(exchange) :: this
-      real(rp), intent(inout) :: T_comm_xc(:, :)
-      real(rp), dimension(3, 3) :: jtens
-      integer :: i, j, njij, njij_glob
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm_xc, product(shape(T_comm_xc)), &
@@ -1610,55 +1547,55 @@ contains
       complex(rp), dimension(9, 9, 3, 3) :: amats
 
       jtot = 0.0d0; jjtot = 0.0d0
-         dmat1 = real(this%hamiltonian%ee(1:9, 1:9, 1, this%lattice%iz(i)) - this%hamiltonian%ee(10:18, 10:18, 1, this%lattice%iz(i)))
-         dmat2 = real(this%hamiltonian%ee(1:9, 1:9, 1, this%lattice%iz(j)) - this%hamiltonian%ee(10:18, 10:18, 1, this%lattice%iz(j)))
+      dmat1 = real(this%hamiltonian%ee(1:9, 1:9, 1, this%lattice%iz(i)) - this%hamiltonian%ee(10:18, 10:18, 1, this%lattice%iz(i)))
+      dmat2 = real(this%hamiltonian%ee(1:9, 1:9, 1, this%lattice%iz(j)) - this%hamiltonian%ee(10:18, 10:18, 1, this%lattice%iz(j)))
 
-         jtot = 0.0d0
+      jtot = 0.0d0
 
-         do nv = 1, 64
-            !J
-            jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
-            jmat = (jmat*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
-            jtot(nv) = rtrace9(jmat)
-
-            ! DMI
-            dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, nv)
-            dmmats = (dmmats*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
-            do k = 1, 3
-               jjtot(nv, k) = imtrace9(dmmats(:, :, k))
-            end do
-
-            ! I Tensor
-            amats = dGdG_Anc(this, dmat1, dmat2, njij, nv)
-            amats = (amats*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
-            do k = 1, 3
-               do l = 1, 3
-                  itot(nv, k, l) = rtrace9(amats(:, :, k, l))
-               end do
-            end do
-
-         end do
-
-         ! Jij summation
-         call nodes%integrate(real(jtot), this%jij)
-         this%jij = -this%jij
-         xc(1) = this%jij*1.0d3/4.0d0/pi
+      do nv = 1, 64
+         !J
+         jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
+         jmat = (jmat*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
+         jtot(nv) = rtrace9(jmat)
 
          ! DMI
+         dmmats = dGdG_Dnc(this, dmat1, dmat2, njij, nv)
+         dmmats = (dmmats*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
          do k = 1, 3
-            call nodes%integrate(real(jjtot(:, k)), this%dmi(k))
+            jjtot(nv, k) = imtrace9(dmmats(:, :, k))
          end do
-         xc(2:4) = this%dmi*1.0d3/4.0d0/pi
 
-         ! I tensor integration
-         this%aij = 0.0d0
+         ! I Tensor
+         amats = dGdG_Anc(this, dmat1, dmat2, njij, nv)
+         amats = (amats*nodes%w(nv))/(nodes%x(nv)*nodes%x(nv))
          do k = 1, 3
             do l = 1, 3
-               call nodes%integrate(real(itot(:, k, l)), this%aij(k, l))
-               this%aij(k, l) = -this%aij(k, l)
+               itot(nv, k, l) = rtrace9(amats(:, :, k, l))
             end do
          end do
-         xc(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
+
+      end do
+
+      ! Jij summation
+      call nodes%integrate(real(jtot), this%jij)
+      this%jij = -this%jij
+      xc(1) = this%jij*1.0d3/4.0d0/pi
+
+      ! DMI
+      do k = 1, 3
+         call nodes%integrate(real(jjtot(:, k)), this%dmi(k))
+      end do
+      xc(2:4) = this%dmi*1.0d3/4.0d0/pi
+
+      ! I tensor integration
+      this%aij = 0.0d0
+      do k = 1, 3
+         do l = 1, 3
+            call nodes%integrate(real(itot(:, k, l)), this%aij(k, l))
+            this%aij(k, l) = -this%aij(k, l)
+         end do
+      end do
+      xc(5:13) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
 
    end subroutine exchange_contour_pair
 
