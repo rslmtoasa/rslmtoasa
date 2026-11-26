@@ -1755,6 +1755,32 @@ contains
       call zgemm('N', 'N', nm, n, n, (1.0_rp, 0.0_rp), mu, nm, c, n, (0.0_rp, 0.0_rp), nt, nm)
    end subroutine cheb_bilinear_transform
 
+   !> g0_m(E) = w_m k_m F_m(E) and its second E-derivative at E = e, m = 0..n-1, with
+   !> F_m = -i exp(-i m theta)/(a sin(theta)), theta = acos((E-b)/a), w_0 = 1, w_m = 2.
+   !> With N = i m + cot(theta), d/dE = -1/(a sin(theta)) d/dtheta gives
+   !> F' = F N/(a sin), F'' = F [N^2 + N cot + 1/sin^2]/(a sin)^2.
+   subroutine cheb_green_point_weights(kernel, a, b, e, g0, g2)
+      real(rp), intent(in) :: kernel(:)
+      real(rp), intent(in) :: a, b, e
+      complex(rp), intent(out) :: g0(:), g2(:)
+      integer :: m
+      real(rp) :: th, s, c, wk
+      complex(rp) :: f, nn
+
+      if (e <= b - a .or. e >= b + a) error stop 'cheb_green_point_weights: e outside (b-a, b+a)'
+      th = acos((e - b)/a)
+      s = sin(th)
+      c = cos(th)/s
+      do m = 0, size(kernel) - 1
+         wk = 2.0_rp*kernel(m + 1)
+         if (m == 0) wk = kernel(1)
+         f = -i_unit*exp(-i_unit*m*th)/(a*s)
+         nn = i_unit*m + c
+         g0(m + 1) = wk*f
+         g2(m + 1) = wk*f*(nn*nn + nn*c + 1.0_rp/(s*s))/(a*s)**2
+      end do
+   end subroutine cheb_green_point_weights
+
    !> Calculates the imaginary part of the trace
    !> of a square matrix of any dimension.
    !> Implemented by Ivan Miranda on 04.10.2023
