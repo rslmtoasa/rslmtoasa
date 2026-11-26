@@ -136,6 +136,8 @@ contains
       n3 = this%n3
       pbc = this%pbc
       morton_sfc = this%morton_sfc
+      pair_radius = this%pair_radius
+      pair_unique = this%pair_unique
 
       if (.not. allocated(this%izp) .or. size(this%izp) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
@@ -405,6 +407,8 @@ contains
       if (this%strux_solve_scale <= 0.0_rp) this%strux_solve_scale = 9.0_rp
       this%pbc = pbc
       this%morton_sfc = morton_sfc
+      this%pair_radius = pair_radius
+      this%pair_unique = pair_unique
       this%b1 = b1
       this%b2 = b2
       this%b3 = b3
@@ -927,6 +931,8 @@ contains
       this%b3 = .false.
       this%pbc = .false.
       this%morton_sfc = .false.
+      this%pair_radius = 0.0_rp
+      this%pair_unique = .false.
       this%n1 = 0
       this%n2 = 0
       this%n3 = 0

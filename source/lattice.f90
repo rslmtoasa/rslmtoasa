@@ -390,6 +390,14 @@ module lattice_mod
       integer, dimension(:, :), allocatable :: ijpair
       !> Number of pairs
       integer :: njij
+      !> Radius (units of alat) of the generated pair list around each recursion atom; 0 reads njij and ijpair
+      real(rp) :: pair_radius
+      !> Keep one pair per symmetry star of the generated list (nsp = 1)
+      logical :: pair_unique
+      !> Full generated pair list (all pairs inside pair_radius) when pair_unique is set
+      integer, dimension(:, :), allocatable :: pair_full
+      !> For every row of pair_full, the row of ijpair holding its star representative
+      integer, dimension(:), allocatable :: pair_rep
 
       !> Trio of atoms to calculate the spin-lattice interactions
       real(rp), dimension(:, :), allocatable :: ijktrio

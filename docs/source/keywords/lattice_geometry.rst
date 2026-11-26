@@ -363,6 +363,24 @@ rarely set by hand. Where the code documents no further meaning, the table says 
      - Wigner-Seitz radius (Å).
    * - ``njij``, ``ijpair``
      - Number of atom pairs and the pairs (i, j) for exchange interactions.
+   * - ``pair_radius``
+     - Real, in the units of the cluster coordinates (alat), default 0 (off). With a value above 0 the
+       exchange post-processing (``exchange``, ``exchange_import``, ``exchange_p2rs``) generates its pair list instead of reading ``njij`` and
+       ``ijpair`` (giving both is fatal). For every recursion atom ``irec(k)`` the list holds all cluster atoms
+       j with :math:`|r_j - r_i| \le` ``pair_radius`` (+ 1e-6), the self pair first, then by distance and atom
+       index. The sphere must lie inside the cluster, :math:`|r_i - r_1|` + ``pair_radius`` :math:`\le \sqrt{r2}`,
+       otherwise the run stops. A plain scalar: it may stand anywhere in ``&lattice`` (only ``njij`` and
+       ``ijpair`` must follow ``ntype``, ``ct`` and ``r2``).
+   * - ``pair_unique``
+     - Logical, default ``.false.``. With ``pair_radius``, keep one representative per symmetry star of the pairs of
+       each recursion atom: (i, j') is equivalent to (i, j) when a space-group operation of the crystal (spglib) that
+       leaves the site i invariant maps :math:`r_j - r_i` onto :math:`r_{j'} - r_i` and j, j' have the same
+       type. Needs spglib, ``calctype = 'B'`` and ``nsp = 1`` (collinear, no spin-orbit: the pair quantities are scalars,
+       and a stop otherwise; with spin-orbit the D vector and the anisotropic tensor of a representative do not carry over to
+       the other members of its star in general). ``ijpair`` and ``njij`` then hold the representatives, so ``jij.out`` and the other
+       exchange outputs list one pair per star; the full list is kept in ``lattice%pair_full`` with the representative of
+       each member in ``lattice%pair_rep``, and the log prints the multiplicity of each star. With ``do_chi0`` the
+       lattice sums, the type sums and the J0 sum run over the full stars (see ``do_chi0``).
    * - ``njijk``, ``ijktrio``
      - Number of atom trios and the trios (i, j, k) for spin-lattice interactions.
    * - ``nclu``, ``inclu``

@@ -323,6 +323,8 @@ contains
       call nml%add('surftype', this%surftype)
       call nml%add('njij', this%njij)
       call nml%add('njijk', this%njijk)
+      call nml%add('pair_radius', this%pair_radius)
+      call nml%add('pair_unique', this%pair_unique)
       call nml%add('strux_backend', trim(this%strux_backend))
       call nml%add('screening', trim(this%screening))
       call nml%add('strux_want_sdot', this%strux_want_sdot)
