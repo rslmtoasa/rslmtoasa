@@ -647,7 +647,7 @@ contains
    !> and the charge/moment integrations all consume the same physical density.
    !> Eta-shifted and intersite Green functions are intentionally excluded.
    !> With cheb_lp the clipped weight is taken out again: each atom, orbital and
-   !> spin channel is rescaled so that its integrated weight equals the weight
+   !> spin channel is rescaled so that its integrated weight (node-weighted on moment-space SCF nodes) equals the weight
    !> before the projection (the coherence by the geometric mean of the two
    !> factors, which keeps the 2x2 block positive semidefinite). The extended
    !> moments fix the zeroth moment, so the clipping would otherwise add charge
@@ -660,7 +660,7 @@ contains
       complex(rp) :: a_ud, a_ud_before, guu, gdd, gud, gdu, h_ud
       logical :: corrected
       real(rp), dimension(norb) :: dq_uu, dq_dd, q_uu, q_dd, s_uu, s_dd
-      real(rp) :: s_ud, max_rescale
+      real(rp) :: s_ud, max_rescale, wt
 
       corrections = 0
       max_adjustment = 0.0_rp
@@ -672,6 +672,9 @@ contains
          q_uu = 0.0_rp
          q_dd = 0.0_rp
          do ie = 1, nv
+            ! Integration weight of the point: the moment-space SCF nodes carry quadrature weights, the mesh is uniform
+            wt = 1.0_rp
+            if (allocated(this%en%node_w)) wt = this%en%node_w(ie)
             do orbital = 1, norb
                guu = this%g0(orbital, orbital, ie, n)
                gdd = this%g0(orbital + spin_off, orbital + spin_off, ie, n)
@@ -685,12 +688,12 @@ contains
                a_dd_before = a_dd
                a_ud_before = a_ud
                call project_spectral_density_2x2(a_uu, a_ud, a_dd, corrected)
-               q_uu(orbital) = q_uu(orbital) + a_uu
-               q_dd(orbital) = q_dd(orbital) + a_dd
+               q_uu(orbital) = q_uu(orbital) + wt*a_uu
+               q_dd(orbital) = q_dd(orbital) + wt*a_dd
                if (.not. corrected) cycle
 
-               dq_uu(orbital) = dq_uu(orbital) + a_uu - a_uu_before
-               dq_dd(orbital) = dq_dd(orbital) + a_dd - a_dd_before
+               dq_uu(orbital) = dq_uu(orbital) + wt*a_uu - wt*a_uu_before
+               dq_dd(orbital) = dq_dd(orbital) + wt*a_dd - wt*a_dd_before
                corrections = corrections + 1
                max_adjustment = max(max_adjustment, abs(a_uu - a_uu_before), &
                                     abs(a_dd - a_dd_before), abs(a_ud - a_ud_before))

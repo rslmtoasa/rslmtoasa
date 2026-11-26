@@ -232,6 +232,8 @@ contains
       if (allocated(this%ene)) deallocate (this%ene)
       allocate (this%ene(this%channels_ldos + 10))
 #endif
+      ! Back on the uniform mesh: the moment-space node weights no longer apply
+      if (allocated(this%node_w)) deallocate (this%node_w)
 
       this%edel = (this%energy_max - this%energy_min)/this%channels_ldos
       this%enpt = nint((this%fermi - this%energy_min)/this%edel)
