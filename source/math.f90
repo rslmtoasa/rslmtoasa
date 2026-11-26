@@ -1825,6 +1825,23 @@ contains
       end do
    end subroutine cheb_green_point_weights
 
+   !> Linear moment-space weights c(m+1) = sum_q w(q) g0_m(e(q)) on cheb_energy_nodes(size(kernel), a, b, e_lo, e_f, kbt):
+   !> int_{e_lo}^{inf} f(E) G(E) dE ~= sum_m c(m+1) mu_m for the damped series G = sum_m g0_m mu_m (cheb_green_point_weights).
+   subroutine cheb_linear_weights(kernel, a, b, e_lo, e_f, kbt, c)
+      real(rp), intent(in) :: kernel(:), a, b, e_lo, e_f, kbt
+      complex(rp), intent(out) :: c(:)
+      real(rp), allocatable :: e(:), w(:)
+      complex(rp) :: g0(size(kernel)), g2(size(kernel))
+      integer :: q
+
+      call cheb_energy_nodes(size(kernel), a, b, e_lo, e_f, kbt, e, w)
+      c = (0.0_rp, 0.0_rp)
+      do q = 1, size(e)
+         call cheb_green_point_weights(kernel, a, b, e(q), g0, g2)
+         c = c + w(q)*g0
+      end do
+   end subroutine cheb_linear_weights
+
    !> Calculates the imaginary part of the trace
    !> of a square matrix of any dimension.
    !> Implemented by Ivan Miranda on 04.10.2023

@@ -13,7 +13,7 @@ submodule (green_mod) green_chebyshev
    use math_mod, only: i_unit, pi, jackson_kernel, lorentz_kernel, &
                        hubbard_spectral_density_element, project_spectral_density_2x2, &
                        cheb_bilinear_weights, cheb_bilinear_transform, kB_simpson_f, &
-                       cheb_energy_nodes, cheb_green_point_weights
+                       cheb_energy_nodes, cheb_green_point_weights, cheb_linear_weights
    use basis_mod, only: norb, spin_off
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
@@ -157,10 +157,12 @@ contains
 
    !> Weights h(0:2*nmom-2, 0:2) of the bilinear moment-space energy integral over [energy_min, fermi] (Fermi function
    !> for temperature > 0), with the window map of chebyshev_reconstruct_block, and the damping kernel(nmom).
-   module subroutine chebyshev_exchange_weights(this, h, kernel)
+   !> Optional lin(nmom): the linear weights of cheb_linear_weights on the same interval, window and kernel.
+   module subroutine chebyshev_exchange_weights(this, h, kernel, lin)
       class(green), intent(inout) :: this
       complex(rp), allocatable, intent(out) :: h(:, :)
       real(rp), allocatable, intent(out) :: kernel(:)
+      complex(rp), allocatable, intent(out), optional :: lin(:)
       real(rp) :: a, b, emin_win, emax_win
       integer :: nmom
 
@@ -171,6 +173,10 @@ contains
       allocate (h(0:2*nmom - 2, 0:2), kernel(nmom))
       call cheb_bilinear_weights(nmom, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, h)
       call cheb_kernel_vector(this, nmom, kernel)
+      if (present(lin)) then
+         allocate (lin(nmom))
+         call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, lin)
+      end if
    end subroutine chebyshev_exchange_weights
 
    !> Raw moments mij, mji(nb, nb, nmom) of G_ij and G_ji of global pair ia_glob (one_shot, pairs or self-pair source).
@@ -409,7 +415,6 @@ contains
       real(rp), intent(in) :: valence
       logical, intent(in) :: solve_fermi
       real(rp), allocatable :: kernel(:), e(:), w(:)
-      complex(rp), allocatable :: g0(:), g2(:)
       real(rp) :: a, b, emin_win, emax_win, lo, hi, mid, kbt
       integer :: n, it
 
@@ -418,7 +423,7 @@ contains
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
       kbt = kB_simpson_f*this%en%temperature
-      allocate (kernel(n), g0(n), g2(n))
+      allocate (kernel(n))
       call cheb_kernel_vector(this, n, kernel)
 
       if (solve_fermi) then
@@ -449,14 +454,8 @@ contains
          real(rp), intent(in) :: ef
          real(rp) :: ne
          complex(rp) :: c(n)
-         integer :: q
 
-         call cheb_energy_nodes(n, a, b, this%en%energy_min, ef, kbt, e, w)
-         c = (0.0_rp, 0.0_rp)
-         do q = 1, size(e)
-            call cheb_green_point_weights(kernel, a, b, e(q), g0, g2)
-            c = c + w(q)*g0
-         end do
+         call cheb_linear_weights(kernel, a, b, this%en%energy_min, ef, kbt, c)
          ne = -aimag(sum(t*c))/pi
       end function electrons
    end subroutine chebyshev_scf_nodes
