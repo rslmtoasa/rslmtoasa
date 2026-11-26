@@ -248,7 +248,11 @@ contains
       green_obj = green(dos_obj)
       call green_obj%restore_to_default(pair_slots)
       bands_obj = bands(green_obj)
-      call bands_obj%restore_to_default()
+      if (use_exchange_pairs) then
+         call bands_obj%restore_to_default(pair_slots=0)
+      else
+         call bands_obj%restore_to_default()
+      end if
       if (.not. energy_mesh_before_hamiltonian .and. .not. effective_input) call energy_obj%e_mesh()
    end subroutine prepare_post_processing_stack
 

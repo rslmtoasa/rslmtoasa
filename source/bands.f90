@@ -212,11 +212,17 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Reset all members to default
+   !> Reset all members to default. pair_slots sets the last dimension of g0_x/y/z and d_orb
+   !> (default atoms_per_process); the exchange-pair stacks pass 0 because they never use these arrays.
    !---------------------------------------------------------------------------
-   subroutine restore_to_default(this)
+   subroutine restore_to_default(this, pair_slots)
       use mpi_mod
       class(bands) :: this
+      integer, intent(in), optional :: pair_slots
+      integer :: nslot
+
+      nslot = atoms_per_process
+      if (present(pair_slots)) nslot = pair_slots
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('bands.dtot', this%dtot, (/this%en%channels_ldos + 10/))
@@ -224,10 +230,10 @@ contains
       call g_safe_alloc%allocate('bands.dx', this%dx, (/this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.dy', this%dy, (/this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.dz', this%dz, (/this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.g0_x', this%g0_x, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.g0_x', this%g0_x, (/norb, norb, this%en%channels_ldos + 10, nslot/))
+      call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/norb, norb, this%en%channels_ldos + 10, nslot/))
+      call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/norb, norb, this%en%channels_ldos + 10, nslot/))
+      call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/norb, norb, 3, this%en%channels_ldos + 10, nslot/))
       call g_safe_alloc%allocate('bands.mag_for', this%mag_for, (/3, atoms_per_process/))
       call g_safe_alloc%allocate('bands.hubbard_u_eff_old', this%hubbard_u_eff_old, (/max(1, this%lattice%ntype), 4/))
 #else
@@ -236,10 +242,10 @@ contains
       allocate (this%dx(this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%dy(this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%dz(this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g0_x(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g0_y(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g0_z(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%d_orb(norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g0_x(norb, norb, this%en%channels_ldos + 10, nslot))
+      allocate (this%g0_y(norb, norb, this%en%channels_ldos + 10, nslot))
+      allocate (this%g0_z(norb, norb, this%en%channels_ldos + 10, nslot))
+      allocate (this%d_orb(norb, norb, 3, this%en%channels_ldos + 10, nslot))
       allocate (this%mag_for(3, atoms_per_process))
       allocate (this%hubbard_u_eff_old(max(1, this%lattice%ntype), 4))
 #endif
