@@ -330,6 +330,18 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
 
+### `&self soc_scale` has no effect in the exchange post-processing — 2026-11-26
+- **Measured (bcc Fe exchange deck, nsp = 2, block):** the `xi_d` printed by `build_lsham` is the same for `soc_scale` = 1.0, 0.5 and 0.0.
+- **Suspected, from reading:** the scaling is applied in `self%build_from_file` (`source/self.f90`, the `soc_scale` lines), and the exchange
+  post-processing stack may not build a `self` object. Not checked. Workaround used: scale `xi_p`, `xi_d` in the potential file.
+
+### Real-space chi0 with SOC is not smooth in the SOC strength at the 1e-3 level — 2026-11-26
+- **Measured (bcc Fe, nsp = 2, block, lld = 21, 59 pairs, `xi_p`/`xi_d` scaled in Fe.nml by 0, 0.001, 0.1, 0.5, 1):** the q = 0 sum of chi0^{+-}
+  is -11.96915, -11.96914, -11.96645, -11.98157, -11.98207 1/Ry and m_d is 2.199247, 2.199254, 2.201647, 2.199536, 2.199610 muB (a +2.4e-3 step
+  at scale 0.1 that falls back), so 1 + U chi0^{+-} moves by about 1e-3, far above an O(xi^2) gap of order 1e-5 Ry.
+- **Not diagnosed.** Suspects: the block recursion at lld = 21 with SOC (see the block-recursion rotation entry), truncation. A larger lld
+  was not tried. Consequence: the real-space route is not usable as a gap oracle for NC-2 at these settings.
+
 ### SOC gap in cubic bcc Fe carries an O(xi^2) bias (NC-2, Gate 1) — 2026-10-14
 - **Measured (`tests/validation/spin_response_fe_soc`, `nsp = 2`, q = 0, omega = 0):** omega_adiabatic -8.0e-6 (12^3) to -2.3e-5 Ry (48^3), scaling as
   xi^2 (log-slope 1.995, 1.998); symmetry expects fourth order (K_1 about 1e-10 Ry) and a gap below 1e-8 Ry. SOC runs print a warning.
