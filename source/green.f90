@@ -80,6 +80,7 @@ module green_mod
       procedure :: fill_intersite_gf_pair
       procedure :: fill_intersite_gf_twoindex_pair
       procedure :: chebyshev_exchange_weights
+      procedure :: chebyshev_linear_weights
       procedure :: fill_intersite_moments_pair
       procedure :: pair_hamiltonian_block
       procedure :: chebyshev_point_pair
@@ -262,6 +263,13 @@ module green_mod
       real(rp), allocatable, intent(out) :: kernel(:)
       complex(rp), allocatable, intent(out), optional :: lin(:), lin1(:)
    end subroutine chebyshev_exchange_weights
+
+   module subroutine chebyshev_linear_weights(this, nmom, c, c1)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: nmom
+      complex(rp), intent(out) :: c(nmom)
+      complex(rp), intent(out), optional :: c1(nmom)
+   end subroutine chebyshev_linear_weights
 
    module subroutine fill_intersite_moments_pair(this, ia_glob, slot)
       class(green), intent(inout) :: this

@@ -485,6 +485,8 @@ nonlocal_dm
 - Requires ``recur = 'chebyshev'`` and ``scf_integration = 'moments'`` (fatal otherwise).
 - The on-site moments are computed in double precision with the Hamiltonian action of the one-shot route, whatever ``cheb_backend`` is, and cost about :math:`2\times` the product-identity recursion.
 - Off, the SCF is bit-identical to a run without the keyword.
+- Each SCF step, after :math:`E_F` is set, writes ``nonlocal_dm.out`` (overwritten): one header line, then for every recursion site ``i`` and each pair ``(i, j)`` (self pair first, then the structure-constant neighbours) a line ``site_i atom_j Rx Ry Rz`` (:math:`R` = ``cr(:,j) - cr(:,i)`` in units of ``alat``) followed by ``nb`` lines of ``nb`` (Re, Im) values of the density matrix block :math:`n_{ij}` (electrons).
+- :math:`n_{ij} = -\frac{1}{\pi}\sum_m \mathrm{Im}(c_m)\, M_{ji}(m)^\dagger`, with :math:`M_{ji}(m) = \langle j|T_m(\tilde H)|i\rangle` the one-shot moments and :math:`c_m = \int f(E)\, g_m(E)\, dE` the linear weights of the moment-space SCF (same window, kernel, :math:`E_F` and temperature).
 
 **Related code:** ``source/nonlocal_density.f90``, ``source/recursion_chebyshev.f90``, ``source/recursion_transport.f90``
 

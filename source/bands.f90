@@ -459,7 +459,7 @@ contains
       character(len=256) :: fname_total, fname_dos, fname_orb_dos, fname_magnetic
       logical :: moments
       integer :: nen
-      complex(rp), allocatable :: tmom(:)
+      complex(rp), allocatable :: tmom(:), cw(:)
 
       moments = this%control%scf_integration == 'moments'
 
@@ -483,6 +483,13 @@ contains
          call this%green%chebyshev_scf_nodes(tmom, this%qqv, &
             .not. this%en%fix_fermi .and. (this%control%calctype == 'B' .or. this%control%calctype == 'L'))
          deallocate (tmom)
+         if (this%control%nonlocal_dm) then
+            allocate (cw(size(this%recursion%os_mu, 3)))
+            call this%green%chebyshev_linear_weights(size(cw), cw)
+            call this%recursion%nld%integrate(this%recursion%req, this%recursion%os_mu, cw)
+            call this%recursion%nld%write(this%lattice)
+            deallocate (cw)
+         end if
       end if
 
       nen = size(this%en%ene)
