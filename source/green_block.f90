@@ -384,18 +384,20 @@ contains
    module subroutine pauli_pair(this, slot)
       class(green), intent(inout) :: this
       integer, intent(in) :: slot
-      integer :: i, j
+      integer :: i, j, ie
 
-      do i = 1, norb
-         do j = 1, norb
-            this%Ginmag(j, i, :, slot) = this%Ginmag(j, i, :, slot) + (this%gij(j, i, :, slot) + this%gij(j +spin_off, i +spin_off, :, slot))*0.5d0
-            this%Giz(j, i, :, slot) = this%Giz(j, i, :, slot) + 0.5d0*(this%gij(j, i, :, slot) - this%gij(j +spin_off, i +spin_off, :, slot))
-            this%Giy(j, i, :, slot) = this%Giy(j, i, :, slot) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, slot) - i_unit*this%gij(j +spin_off, i, :, slot))
-            this%Gix(j, i, :, slot) = this%Gix(j, i, :, slot) + 0.5d0*(this%gij(j, i +spin_off, :, slot) + this%gij(j +spin_off, i, :, slot))
-            this%Gjnmag(j, i, :, slot) = this%Gjnmag(j, i, :, slot) + (this%gji(j, i, :, slot) + this%gji(j +spin_off, i +spin_off, :, slot))*0.5d0
-            this%Gjz(j, i, :, slot) = this%Gjz(j, i, :, slot) + 0.5d0*(this%gji(j, i, :, slot) - this%gji(j +spin_off, i +spin_off, :, slot))
-            this%Gjy(j, i, :, slot) = this%Gjy(j, i, :, slot) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, slot) - i_unit*this%gji(j +spin_off, i, :, slot))
-            this%Gjx(j, i, :, slot) = this%Gjx(j, i, :, slot) + 0.5d0*(this%gji(j, i +spin_off, :, slot) + this%gji(j +spin_off, i, :, slot))
+      do ie = 1, size(this%gij, 3)
+         do i = 1, norb
+            do j = 1, norb
+               this%Ginmag(j, i, ie, slot) = this%Ginmag(j, i, ie, slot) + (this%gij(j, i, ie, slot) + this%gij(j +spin_off, i +spin_off, ie, slot))*0.5d0
+               this%Giz(j, i, ie, slot) = this%Giz(j, i, ie, slot) + 0.5d0*(this%gij(j, i, ie, slot) - this%gij(j +spin_off, i +spin_off, ie, slot))
+               this%Giy(j, i, ie, slot) = this%Giy(j, i, ie, slot) + 0.5d0*(i_unit*this%gij(j, i +spin_off, ie, slot) - i_unit*this%gij(j +spin_off, i, ie, slot))
+               this%Gix(j, i, ie, slot) = this%Gix(j, i, ie, slot) + 0.5d0*(this%gij(j, i +spin_off, ie, slot) + this%gij(j +spin_off, i, ie, slot))
+               this%Gjnmag(j, i, ie, slot) = this%Gjnmag(j, i, ie, slot) + (this%gji(j, i, ie, slot) + this%gji(j +spin_off, i +spin_off, ie, slot))*0.5d0
+               this%Gjz(j, i, ie, slot) = this%Gjz(j, i, ie, slot) + 0.5d0*(this%gji(j, i, ie, slot) - this%gji(j +spin_off, i +spin_off, ie, slot))
+               this%Gjy(j, i, ie, slot) = this%Gjy(j, i, ie, slot) + 0.5d0*(i_unit*this%gji(j, i +spin_off, ie, slot) - i_unit*this%gji(j +spin_off, i, ie, slot))
+               this%Gjx(j, i, ie, slot) = this%Gjx(j, i, ie, slot) + 0.5d0*(this%gji(j, i +spin_off, ie, slot) + this%gji(j +spin_off, i, ie, slot))
+            end do
          end do
       end do
    end subroutine pauli_pair
