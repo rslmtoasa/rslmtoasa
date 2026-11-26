@@ -32,12 +32,21 @@
 !> chi0_ij exp(+2 pi i q.r_ij), r_ij = r_j - r_i in direct coordinates; with every pair included this is the chi0_ab(q)
 !> of the k-space spin_response (its Bloch gauge carries the phase exp(2 pi i k.(r_j - r_i))). Then
 !> Omega(q) = -N (chi0(q)^-1 + U) with N = diag(m) and the Goldstone U (adiabatic_frequencies of spin_response).
+!>
+!> Dynamic chi0_ij(omega) on a uniform real energy mesh (Lehmann form, retarded G, A = (G - G^A)/(-2 pi i), G^A_ji = G_ij^H):
+!>
+!>   chi0_ij(w) = int f(E) Tr_d[A^up_ji(E) G^dn_ij(E + w)] dE + int f(E) Tr_d[G^{up,A}_ji(E - w) A^dn_ij(E)] dE,
+!>
+!> which at w = 0 is algebraically the static expression above. Poles at w = e^dn - e^up (a positive w for a majority-up
+!> moment). Each w is rounded to k dE and a term whose second energy lies outside the mesh is dropped. For a self pair
+!> int dw (-1/pi) Im chi0_ii(w) over all w is the d moment m_d (the sum over the intermediate states is the identity).
+!> The RPA spectrum per q uses chi = (I + chi0 K)^-1 chi0, K = diag(U) with the Goldstone U of the static type sums.
 !------------------------------------------------------------------------------
 module spin_response_rs_mod
    use precision_mod, only: rp
    use math_mod, only: pi, i_unit
    use basis_mod, only: spin_off
-   use spin_response_mod, only: u_juelich, u_mills, mills_residual, adiabatic_frequencies
+   use spin_response_mod, only: u_juelich, u_mills, mills_residual, adiabatic_frequencies, solve_dyson, spectral_trace
    implicit none
    private
 
@@ -52,6 +61,9 @@ module spin_response_rs_mod
    public :: juelich_moments
    public :: type_sums_q
    public :: write_chi0_adiabatic
+   public :: chi0_dynamic_traces
+   public :: write_chi0_dynamic
+   public :: write_chi_rs_q
 
    !> Angular momentum of the response channel.
    integer, parameter :: l_d = 2
@@ -381,5 +393,107 @@ contains
          text = buf
       end function frequencies
    end subroutine write_chi0_adiabatic
+
+
+   !> @brief Integrands of the dynamic chi0_ij(omega) on a uniform mesh E_n, for the shift k = omega/dE (mesh points). With
+   !>        A_ji = (G_ji - G_ij^H)/(-2 pi i) and G^A_ji = G_ij^H (d blocks):
+   !>          column 1: Tr_d[A^up_ji(E_n) G^dn_ij(E_(n+k))],  column 2: Tr_d[G^{up,A}_ji(E_(n-k)) A^dn_ij(E_n)].
+   !>        chi0_ij(omega) = int f(E) (column 1 + column 2) dE. A term whose second energy lies outside 1..n is 0.
+   !> @param[in] gij, gji  Spinor blocks G_ij(E_n), G_ji(E_n), shape (nb, nb, n); k the shift (any sign).
+   pure function chi0_dynamic_traces(gij, gji, k) result(t)
+      complex(rp), intent(in) :: gij(:, :, :), gji(:, :, :)
+      integer, intent(in) :: k
+      complex(rp) :: t(size(gij, 3), 2)
+
+      integer :: n, mm, u0, u1, d0, d1
+      complex(rp) :: a(2*l_d + 1, 2*l_d + 1)
+
+      u0 = l_d**2 + 1
+      u1 = (l_d + 1)**2
+      d0 = u0 + spin_off
+      d1 = u1 + spin_off
+      t = (0.0_rp, 0.0_rp)
+      do n = 1, size(gij, 3)
+         mm = n + k
+         if (mm >= 1 .and. mm <= size(gij, 3)) then
+            a = (gji(u0:u1, u0:u1, n) - conjg(transpose(gij(u0:u1, u0:u1, n))))/(-2.0_rp*pi*i_unit)
+            t(n, 1) = sum(transpose(a)*gij(d0:d1, d0:d1, mm))
+         end if
+         mm = n - k
+         if (mm >= 1 .and. mm <= size(gij, 3)) then
+            a = (gij(d0:d1, d0:d1, n) - conjg(transpose(gji(d0:d1, d0:d1, n))))/(-2.0_rp*pi*i_unit)
+            ! Tr[X a] with X = G^{up,A}_ji = (G^up_ij)^H: sum(transpose(X)*a) = sum(conjg(G^up_ij)*a)
+            t(n, 2) = sum(conjg(gij(u0:u1, u0:u1, mm))*a)
+         end if
+      end do
+   end function chi0_dynamic_traces
+
+   !> @brief Write one row per pair and omega: i, j, omega (Ry), Re and Im chi0_ij(omega) (1/Ry).
+   !> @param[in] omega  Frequencies (Ry), shape (nw); chi0w shape (npair, nw).
+   subroutine write_chi0_dynamic(fname, ijpair, omega, chi0w)
+      character(len=*), intent(in) :: fname
+      integer, intent(in) :: ijpair(:, :)
+      real(rp), intent(in) :: omega(:)
+      complex(rp), intent(in) :: chi0w(:, :)
+
+      integer :: funit, p, iw
+
+      open (newunit=funit, file=fname, action='write', status='replace')
+      write (funit, '(a)') '# i j omega(Ry) re_chi0(1/Ry) im_chi0(1/Ry)'
+      do p = 1, size(chi0w, 1)
+         do iw = 1, size(omega)
+            write (funit, '(2i8,f14.8,2es24.14)') ijpair(p, 1), ijpair(p, 2), omega(iw), real(chi0w(p, iw), rp), aimag(chi0w(p, iw))
+         end do
+      end do
+      close (funit)
+   end subroutine write_chi0_dynamic
+
+   !> @brief RPA spectrum per q from the dynamic pair list: chi0_ab(q, omega) = type_sums_q at each omega, chi from
+   !>        solve_dyson with K = diag(U), U the Goldstone U of chi0s and m (as chi0_types.dat), and tr L = -Im tr chi/pi.
+   !>        One row per q and omega: iq, q_direct(3), omega, Re and Im tr chi0, Re and Im tr chi, tr L. At q = 0 and
+   !>        omega = 0 I + chi0 K is singular (Goldstone): chi and tr L are n/a there. No file and written = .false. unless
+   !>        every type has a seed and |m| >= m_tol.
+   !> @param[in] chi0w  chi0_ij(omega), shape (npair, nw); omega (Ry); chi0s, m the static type sums (type_sums).
+   subroutine write_chi_rs_q(fname, q, ijpair, iz, seed, rdir, omega, chi0w, chi0s, m, written)
+      character(len=*), intent(in) :: fname
+      real(rp), intent(in) :: q(:, :), rdir(:, :), omega(:), chi0s(:, :), m(:)
+      integer, intent(in) :: ijpair(:, :), iz(:), seed(:)
+      complex(rp), intent(in) :: chi0w(:, :)
+      logical, intent(out) :: written
+
+      integer :: funit, iq, iw, a
+      real(rp) :: u(size(m))
+      complex(rp) :: cq(size(m), size(m), size(q, 2), size(omega)), chi(size(m), size(m), 1), tr0, trc
+      character(len=24), parameter :: na = repeat(' ', 21)//'n/a'
+
+      written = all(seed > 0) .and. all(abs(m) >= m_tol)
+      if (.not. written) return
+      call u_juelich(chi0s, m, u)
+      do iw = 1, size(omega)
+         cq(:, :, :, iw) = type_sums_q(ijpair, iz, seed, chi0w(:, iw), rdir, q)
+      end do
+      open (newunit=funit, file=fname, action='write', status='replace')
+      write (funit, '(a)') '# iq q_direct(3) omega(Ry) re_tr_chi0(1/Ry) im_tr_chi0(1/Ry) re_tr_chi(1/Ry) im_tr_chi(1/Ry) tr_L(1/Ry)'
+      do iq = 1, size(q, 2)
+         do iw = 1, size(omega)
+            tr0 = (0.0_rp, 0.0_rp)
+            do a = 1, size(m)
+               tr0 = tr0 + cq(a, a, iq, iw)
+            end do
+            if (all(q(:, iq) == 0.0_rp) .and. omega(iw) == 0.0_rp) then
+               write (funit, '(i6,3f12.6,f14.8,2es24.14,3a24)') iq, q(:, iq), omega(iw), real(tr0, rp), aimag(tr0), na, na, na
+               cycle
+            end if
+            call solve_dyson(cq(:, :, iq, iw:iw), u, chi)
+            trc = (0.0_rp, 0.0_rp)
+            do a = 1, size(m)
+               trc = trc + chi(a, a, 1)
+            end do
+            write (funit, '(i6,3f12.6,f14.8,6es24.14)') iq, q(:, iq), omega(iw), real(tr0, rp), aimag(tr0), real(trc, rp), &
+               aimag(trc), spectral_trace(chi)
+         end do
+      end do
+      close (funit)
+   end subroutine write_chi_rs_q
 
 end module spin_response_rs_mod

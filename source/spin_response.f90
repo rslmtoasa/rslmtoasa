@@ -49,6 +49,7 @@ module spin_response_mod
    public :: spectral_trace
    public :: pole_estimates
    public :: read_q_points
+   public :: read_omega_grid
 
    !> Energy difference (Ry) below which the static value uses the Fermi divided difference.
    real(rp), parameter :: degenerate_tol = 1.0e-10_rp
@@ -1046,6 +1047,32 @@ contains
 
       m = minval(real(eig_one_plus(chi0, kmat), rp))
    end function min_real_eig
+
+   !> @brief omega grid (Ry) of the &spin_response namelist of file fname: n_omega points from omega_min to omega_max (defaults 0,
+   !>        0.05, 201).
+   subroutine read_omega_grid(fname, omega)
+      character(len=*), intent(in) :: fname
+      real(rp), allocatable, intent(out) :: omega(:)
+
+      integer :: funit, iostatus, i
+
+      include 'include_codes/namelists/spin_response.f90'
+
+      omega_min = 0.0_rp
+      omega_max = 0.05_rp
+      n_omega = 201
+      open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
+      if (iostatus /= 0) call g_logger%fatal('file '//trim(fname)//' not found', __FILE__, __LINE__)
+      read (funit, nml=spin_response, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. is_iostat_end(iostatus)) then
+         call g_logger%fatal('error while reading namelist spin_response, iostat = '//int2str(iostatus), __FILE__, __LINE__)
+      end if
+      close (funit)
+      if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min)) then
+         call g_logger%fatal('spin_response needs n_omega >= 1 and omega_max > omega_min for n_omega > 1', __FILE__, __LINE__)
+      end if
+      omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(max(n_omega - 1, 1), rp), i=1, n_omega)]
+   end subroutine read_omega_grid
 
    !> @brief Solve (I + chi0 K) chi = chi0 at each omega by LU, with K a matrix over kappa.
    !> @details Never call at eta = 0 for q = 0: the Goldstone condition makes I + chi0 K singular there.
