@@ -81,6 +81,7 @@ module green_mod
       procedure :: fill_intersite_gf_twoindex_pair
       procedure :: chebyshev_exchange_weights
       procedure :: fill_intersite_moments_pair
+      procedure :: pair_hamiltonian_block
       procedure :: chebyshev_point_pair
       procedure :: transform_intersite_moments
       procedure :: calculate_intersite_gf_eta
@@ -266,6 +267,13 @@ module green_mod
       class(green), intent(inout) :: this
       integer, intent(in) :: ia_glob, slot
    end subroutine fill_intersite_moments_pair
+
+   module subroutine pair_hamiltonian_block(this, ia_glob, hij, hji, a, b)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob
+      complex(rp), intent(out) :: hij(:, :), hji(:, :)
+      real(rp), intent(out) :: a, b
+   end subroutine pair_hamiltonian_block
 
    module subroutine chebyshev_point_pair(this, ia_glob, gij0, gji0, gij2, gji2)
       class(green), intent(inout) :: this

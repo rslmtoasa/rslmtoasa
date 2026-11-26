@@ -53,13 +53,15 @@ contains
       ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
       real(rp), allocatable :: dpair(:, :), dtotal(:, :), dcontrib(:, :)
       real(rp), allocatable :: ipair(:, :), ipair_b(:, :, :), itotal(:, :), icontrib(:, :)
-      complex(rp), allocatable :: chi0(:), lin(:)
-      real(rp), allocatable :: md(:)
+      complex(rp), allocatable :: chi0(:), lin(:), chi0j(:)
+      real(rp), allocatable :: md(:), mdj(:)
+      logical :: juelich
 
       damping = do_damping
       if (damping) damping = damping_ready(this)
       inertia = do_inertia
       moments = this%control%exchange_integration == 'moments'
+      juelich = .false.
       if (inertia) inertia = inertia_ready(this, step_size, moments)
       nenergy = size(this%en%ene)
       ief = fermi_index(this%en%ene, this%en%fermi)
@@ -73,6 +75,10 @@ contains
          call chi0_check(this)
          allocate (chi0(this%lattice%njij), source=(0.0_rp, 0.0_rp))
          allocate (md(this%lattice%njij), source=0.0_rp)
+         ! Juelich vertex: needs the raw moments of each pair (H_ij from mu_1), so the real-space Chebyshev route only
+         juelich = stream .and. this%control%recur == 'chebyshev'
+         if (juelich) allocate (chi0j(this%lattice%njij), source=(0.0_rp, 0.0_rp))
+         if (juelich) allocate (mdj(this%lattice%njij), source=0.0_rp)
          if (.not. do_exchange) nodes = real_mesh_nodes(this)
       end if
       ! Moment space: the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
@@ -109,8 +115,10 @@ contains
          if (do_chi0) then
             if (moments) then
                call chi0_pair_moments(this, h, kernel, lin, i == j, chi0(njij_glob), md(njij_glob))
+               if (juelich) call juelich_pair_moments(this, h, kernel, lin, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
             else
                call chi0_pair_mesh(this, nodes, slot, i == j, chi0(njij_glob), md(njij_glob))
+               if (juelich) call juelich_pair_mesh(this, nodes, slot, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
             end if
          end if
          if (do_exchange .and. moments) then
@@ -140,7 +148,13 @@ contains
          call exchange_finalize(this, xc)
          call exchange_twoindex_finalize(this, xcso, xcfo, xcparts)
       end if
-      if (do_chi0) call chi0_finalize(this, chi0, md)
+      if (do_chi0) then
+         if (juelich) then
+            call chi0_finalize(this, chi0, md, chi0j, mdj)
+         else
+            call chi0_finalize(this, chi0, md)
+         end if
+      end if
       if (damping) call damping_finalize(this, dpair, dtotal, ief, moments)
       if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief, moments)
    end subroutine calculate_pairwise
@@ -213,31 +227,124 @@ contains
       chi0 = chi0_from_traces(sum(t(:, 1)), sum(t(:, 2)))
    end subroutine chi0_pair_moments
 
-   !> Sum chi0 and md over the ranks; on rank 0 write chi0_ij.dat and the type diagnostics chi0_types.dat.
-   subroutine chi0_finalize(this, chi0, md)
+   !> Juelich coefficients of cluster atom iat (its type's d channel E_nu and ppar, E_F = en%fermi).
+   subroutine site_juelich(this, iat, alpha, beta)
+      use spin_response_rs_mod, only: juelich_vectors
+      class(exchange) :: this
+      integer, intent(in) :: iat
+      real(rp), intent(out) :: alpha(:), beta(:)
+
+      associate (pot => this%symbolic_atom(this%lattice%iz(iat))%potential)
+         call juelich_vectors(pot%enu(2, 1:2), pot%ppar(2, 1:2), this%en%fermi, alpha, beta)
+      end associate
+   end subroutine site_juelich
+
+   !> Juelich chi0_ij of global pair ia_glob (atoms i, j) on the real mesh from slot `slot`, with G~ of juelich_green and
+   !> H_ij from the raw moments; for a self pair also its Juelich d moment (0 otherwise).
+   subroutine juelich_pair_mesh(this, nodes, slot, ia_glob, i, j, chi0, md)
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, juelich_green
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      integer, intent(in) :: slot, ia_glob, i, j
+      complex(rp), intent(out) :: chi0
+      real(rp), intent(out) :: md
+      complex(rp), allocatable :: gt_ij(:, :, :), gt_ji(:, :, :), hij(:, :), hji(:, :), t(:, :)
+      real(rp), allocatable :: ai(:), bi(:), aj(:), bj(:)
+      real(rp) :: a, b, re(2), im(2)
+      integer :: n, nb_, k
+
+      n = size(nodes%z)
+      nb_ = size(this%green%gij, 1)
+      allocate (gt_ij(nb_, nb_, n), gt_ji(nb_, nb_, n), hij(nb_, nb_), hji(nb_, nb_), ai(nb_), bi(nb_), aj(nb_), bj(nb_))
+      call this%green%pair_hamiltonian_block(ia_glob, hij, hji, a, b)
+      call site_juelich(this, i, ai, bi)
+      call site_juelich(this, j, aj, bj)
+      call juelich_green(this%green%gij(:, :, 1:n, slot), hij, real(nodes%z), ai, bi, aj, bj, i == j, gt_ij)
+      call juelich_green(this%green%gji(:, :, 1:n, slot), hji, real(nodes%z), aj, bj, ai, bi, i == j, gt_ji)
+      t = chi0_traces(gt_ij, gt_ji)
+      do k = 1, 2
+         call nodes%integrate(real(t(:, k), rp), re(k))
+         call nodes%integrate(aimag(t(:, k)), im(k))
+      end do
+      chi0 = chi0_from_traces(cmplx(re(1), im(1), rp), cmplx(re(2), im(2), rp))
+      md = 0.0_rp
+      if (i == j) then
+         call nodes%integrate(aimag(d_moment_trace(gt_ij)), md)
+         md = -md/pi
+      end if
+   end subroutine juelich_pair_mesh
+
+   !> Juelich chi0_ij of global pair ia_glob (atoms i, j) in moment space: the raw moments in slot 1 become mu~ of
+   !> juelich_moments (two fewer moments), and int f Tr[A B] dE = sum_m Tr[A~_m B~t_m] with the p = 0 transform of the
+   !> j side; for a self pair also its Juelich d moment from the linear weights (0 otherwise).
+   subroutine juelich_pair_moments(this, h, kernel, lin, ia_glob, i, j, chi0, md)
+      use math_mod, only: cheb_bilinear_transform
+      use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, juelich_moments
+      class(exchange) :: this
+      complex(rp), intent(in) :: h(0:, 0:), lin(:)
+      real(rp), intent(in) :: kernel(:)
+      integer, intent(in) :: ia_glob, i, j
+      complex(rp), intent(out) :: chi0
+      real(rp), intent(out) :: md
+      complex(rp), allocatable :: mt_ij(:, :, :), mt_ji(:, :, :), tt_ji(:, :, :), hij(:, :), hji(:, :), t(:, :)
+      real(rp), allocatable :: ai(:), bi(:), aj(:), bj(:)
+      real(rp) :: a, b
+      integer :: n, nb_
+
+      n = size(kernel) - 2
+      nb_ = size(this%green%gij, 1)
+      allocate (mt_ij(nb_, nb_, n), mt_ji(nb_, nb_, n), tt_ji(nb_, nb_, n), hij(nb_, nb_), hji(nb_, nb_), &
+                ai(nb_), bi(nb_), aj(nb_), bj(nb_))
+      call this%green%pair_hamiltonian_block(ia_glob, hij, hji, a, b)
+      call site_juelich(this, i, ai, bi)
+      call site_juelich(this, j, aj, bj)
+      call juelich_moments(this%green%gij(:, :, 1:n + 2, 1), a, b, ai, bi, aj, bj, mt_ij)
+      call juelich_moments(this%green%gji(:, :, 1:n + 2, 1), a, b, aj, bj, ai, bi, mt_ji)
+      call cheb_bilinear_transform(h(:, 0), kernel(1:n), mt_ji, tt_ji)
+      t = chi0_traces(mt_ij, tt_ji)
+      chi0 = chi0_from_traces(sum(t(:, 1)), sum(t(:, 2)))
+      md = 0.0_rp
+      if (i == j) md = -aimag(sum(lin(1:n)*d_moment_trace(mt_ij)))/pi
+   end subroutine juelich_pair_moments
+
+   !> Sum chi0, md (and the Juelich chi0j, mdj when present) over the ranks; on rank 0 write chi0_ij.dat and the type
+   !> diagnostics chi0_types.dat.
+   subroutine chi0_finalize(this, chi0, md, chi0j, mdj)
       use mpi_mod
       use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types
       class(exchange) :: this
       complex(rp), intent(inout) :: chi0(:)
       real(rp), intent(inout) :: md(:)
+      complex(rp), intent(inout), optional :: chi0j(:)
+      real(rp), intent(inout), optional :: mdj(:)
       integer :: nt, it
       integer, allocatable :: seed(:), npair(:)
-      real(rp), allocatable :: m(:), chi0s(:, :), c_up(:), c_dn(:)
+      real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:)
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, chi0, size(chi0), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, md, size(md), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      if (present(chi0j)) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, chi0j, size(chi0j), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, mdj, size(mdj), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
 #endif
       if (rank /= 0) return
-      call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0)
       nt = this%lattice%ntype
-      allocate (seed(nt), npair(nt), m(nt), chi0s(nt, nt), c_up(nt), c_dn(nt))
+      allocate (seed(nt), npair(nt), m(nt), chi0s(nt, nt), mj(nt), chi0sj(nt, nt), c_up(nt), c_dn(nt))
       call type_sums(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, nt, chi0, md, seed, npair, m, chi0s)
       do it = 1, nt
          c_up(it) = this%symbolic_atom(it)%potential%center_band(3, 1)
          c_dn(it) = this%symbolic_atom(it)%potential%center_band(3, 2)
       end do
-      call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn)
+      if (present(chi0j)) then
+         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0, chi0j)
+         call type_sums(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, nt, chi0j, mdj, seed, npair, mj, chi0sj)
+         call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn, mj, chi0sj)
+      else
+         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0)
+         call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn)
+      end if
    end subroutine chi0_finalize
 
    !> J, D, A of pair (i, j) from the raw moments in Green-function slot 1 (see fill_intersite_moments_pair). With

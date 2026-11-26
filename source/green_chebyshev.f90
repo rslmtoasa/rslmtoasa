@@ -222,6 +222,24 @@ contains
       call fill_slot_families(this, slot)
    end subroutine fill_intersite_moments_pair
 
+   !> Hamiltonian blocks H_ij = a mu_1 + b mu_0 and H_ji of global pair ia_glob from its raw moments mu_m = <i|T_m(Ht)|j>, and
+   !> the window map H = a Ht + b of chebyshev_exchange_weights.
+   module subroutine pair_hamiltonian_block(this, ia_glob, hij, hji, a, b)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob
+      complex(rp), intent(out) :: hij(:, :), hji(:, :)
+      real(rp), intent(out) :: a, b
+      complex(rp), allocatable :: mij(:, :, :), mji(:, :, :)
+      real(rp) :: emin_win, emax_win
+
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      call pair_moment_sources(this, ia_glob, mij, mji)
+      hij = a*mij(:, :, 2) + b*mij(:, :, 1)
+      hji = a*mji(:, :, 2) + b*mji(:, :, 1)
+   end subroutine pair_hamiltonian_block
+
    !> G_ij, G_ji and their second energy derivatives (nb x nb) at E = en%fermi of global pair ia_glob, summed
    !> from the moments with the window and kernel of chebyshev_exchange_weights.
    module subroutine chebyshev_point_pair(this, ia_glob, gij0, gji0, gij2, gji2)

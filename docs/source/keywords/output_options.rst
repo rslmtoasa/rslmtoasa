@@ -269,6 +269,17 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   1e-6 :math:`\mu_B`. The definitions follow ``spin_response`` with ``method = 'mills'``.
 - In moment space (``exchange_integration = 'moments'``) :math:`m_d` uses the linear
   Chebyshev weights on the same interval, window and kernel as the bilinear ones.
+- Jülich vertex (as ``spin_response`` with ``method = 'juelich'``): the d amplitudes are
+  weighted by :math:`F(e) = \alpha + \beta e = (1 + (e - E_\nu)(E_F - E_\nu)p)/\sqrt{1 + (E_F - E_\nu)^2 p}`,
+  :math:`p = 1/\mathrm{ppar}^2`, at the energy of each state, i.e. :math:`G` is replaced by
+  :math:`\tilde G_{ab} = \langle a|F_a(H)\,G\,F_b(H)|b\rangle = F_a(z)F_b(z)G_{ab} - \beta_a\beta_b H_{ab}
+  - (\alpha_a\beta_b + \beta_a\alpha_b + \beta_a\beta_b z)\delta_{ab}`. Multiplying :math:`G` by
+  :math:`F(z)` alone is not equivalent. :math:`H_{ab}` comes from the first Chebyshev moment, so the
+  Jülich columns of ``chi0_ij.dat`` and ``chi0_types.dat`` are filled on the real-space Chebyshev
+  route only (``recur = 'chebyshev'``, ``gf_route = 'recursion'``) and are ``n/a`` otherwise. In moment
+  space :math:`\tilde G` is expanded in its own moments :math:`\langle a|F_a T_m F_b|b\rangle` (two fewer
+  than computed); on the energy mesh the identity above is applied to the damped :math:`G`, so the two
+  integration modes differ at the level of the expansion error.
 
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
 (``chi0_pair_mesh``, ``chi0_pair_moments``)

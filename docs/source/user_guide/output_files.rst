@@ -170,13 +170,15 @@ Dzyaloshinskii-Moriya vector (same first five columns, three components, distanc
 
 Static transverse bare susceptibility of the d channel, one row per pair, after a one-line header:
 atoms ``i``, ``j``, their types, :math:`\mathbf{r}_j - \mathbf{r}_i` (three components, cluster
-coordinates), its length, and the real and imaginary parts of :math:`\chi^0_{ij}` (1/Ry).
+coordinates), its length, the real and imaginary parts of :math:`\chi^0_{ij}` (1/Ry), and the same with
+the Jülich vertex (``n/a`` off the real-space Chebyshev route).
 
 **chi0_types.dat** (with ``do_chi0 = .true.``)
 
 One row per atom type with a self pair, after a one-line header: type, seed atom, number of its pairs,
-d moment (:math:`\mu_B`), Goldstone :math:`U` (Ry, by construction), Mills :math:`U` (Ry), Mills
-residual, and :math:`\chi^0(q = 0)` towards every type (1/Ry), summed over the listed pairs. See
+d moment and Jülich d moment (:math:`\mu_B`), Goldstone :math:`U` with each vertex (Ry, by
+construction), Mills :math:`U` (Ry), Mills residual, and :math:`\chi^0(q = 0)` towards every type (1/Ry),
+summed over the listed pairs, first with the coefficient vertex and then with the Jülich vertex. See
 ``do_chi0`` in :ref:`keywords/output_options`.
 
 Transport Properties

@@ -21,6 +21,12 @@
 !> m_a = -(1/pi) Im int f Tr_d[G^upup_ii - G^dndn_ii] dE, and chi0(q = 0)_ab = sum of Re chi0_ij over the listed pairs
 !> of that seed with type(j) = b (truncated to the pair list). As in spin_response: U from the Goldstone condition
 !> sum_b chi0_ab U_b m_b = -m_a (by construction), U_Mills = (C_dn - C_up)_d/m and the Mills residual.
+!>
+!> Juelich vertex: the amplitudes of the d orbitals are multiplied by F(e) = alpha + beta e at the energy e of each state,
+!> F = (1 + (e - E_nu)(E_F - E_nu) p)/sqrt(1 + (E_F - E_nu)^2 p), p = 1/ppar^2 (as d_amplitudes_juelich in spin_response).
+!> In Green-function form G is replaced by G~_ab = <a|F_a(H) G F_b(H)|b>, which with HG = GH = zG - 1 is
+!>   G~_ab = F_a(z) F_b(z) G_ab - beta_a beta_b H_ab - (alpha_a beta_b + beta_a alpha_b + beta_a beta_b z) delta_ab,
+!> and in Chebyshev moments (H = a Ht + b, F = alpha' + beta' Ht) mu~_m = <a|F(Ht) T_m(Ht) F(Ht)|b>.
 !------------------------------------------------------------------------------
 module spin_response_rs_mod
    use precision_mod, only: rp
@@ -36,6 +42,9 @@ module spin_response_rs_mod
    public :: d_moment_trace
    public :: type_sums
    public :: write_chi0_types
+   public :: juelich_vectors
+   public :: juelich_green
+   public :: juelich_moments
 
    !> Angular momentum of the response channel.
    integer, parameter :: l_d = 2
@@ -71,26 +80,35 @@ contains
       chi0 = -(x - conjg(y))/(2.0_rp*pi*i_unit)
    end function chi0_from_traces
 
-   !> @brief Write one row per pair: atoms, types, r_j - r_i and |r_j - r_i| (cluster coordinates), Re and Im chi0_ij.
+   !> @brief Write one row per pair: atoms, types, r_j - r_i and |r_j - r_i| (cluster coordinates), Re and Im chi0_ij, and
+   !>        Re and Im of the Juelich chi0_ij (n/a when chi0j is absent).
    !> @param[in] ijpair  Pair list, shape (npair, 2).
    !> @param[in] iz      Type of each cluster atom.
    !> @param[in] cr      Cluster coordinates, shape (3, natom).
-   !> @param[in] chi0    chi0_ij (1/Ry), shape (npair).
-   subroutine write_chi0_pairs(fname, ijpair, iz, cr, chi0)
+   !> @param[in] chi0    chi0_ij (1/Ry), shape (npair); chi0j optional, the same with the Juelich vertex.
+   subroutine write_chi0_pairs(fname, ijpair, iz, cr, chi0, chi0j)
       character(len=*), intent(in) :: fname
       integer, intent(in) :: ijpair(:, :), iz(:)
       real(rp), intent(in) :: cr(:, :)
       complex(rp), intent(in) :: chi0(:)
+      complex(rp), intent(in), optional :: chi0j(:)
 
       integer :: funit, p, i, j
+      character(len=48) :: jcols
 
       open (newunit=funit, file=fname, action='write', status='replace')
-      write (funit, '(a)') '# i j type_i type_j r_ij(3, cluster coordinates) |r_ij| re_chi0(1/Ry) im_chi0(1/Ry)'
+      write (funit, '(a)') '# i j type_i type_j r_ij(3, cluster coordinates) |r_ij| re_chi0(1/Ry) im_chi0(1/Ry) '// &
+         're_chi0_juelich(1/Ry) im_chi0_juelich(1/Ry)'
       do p = 1, size(chi0)
          i = ijpair(p, 1)
          j = ijpair(p, 2)
-         write (funit, '(4i8,4f12.6,2es24.14)') i, j, iz(i), iz(j), cr(:, j) - cr(:, i), norm2(cr(:, j) - cr(:, i)), &
-            real(chi0(p), rp), aimag(chi0(p))
+         if (present(chi0j)) then
+            write (jcols, '(2es24.14)') real(chi0j(p), rp), aimag(chi0j(p))
+         else
+            write (jcols, '(2a24)') 'n/a', 'n/a'
+         end if
+         write (funit, '(4i8,4f12.6,2es24.14,a)') i, j, iz(i), iz(j), cr(:, j) - cr(:, i), norm2(cr(:, j) - cr(:, i)), &
+            real(chi0(p), rp), aimag(chi0(p)), jcols
       end do
       close (funit)
    end subroutine write_chi0_pairs
@@ -109,6 +127,76 @@ contains
          end do
       end do
    end function d_moment_trace
+
+   !> @brief Juelich coefficients alpha(nb), beta(nb) of one site: F = alpha + beta e on the d orbitals of each spin block,
+   !>        alpha = 1, beta = 0 on all other orbitals.
+   !> @param[in] enu, ppar  E_nu (Ry) and ppar of the d channel per physical spin, shape (2); ef the Fermi level (Ry).
+   pure subroutine juelich_vectors(enu, ppar, ef, alpha, beta)
+      real(rp), intent(in) :: enu(2), ppar(2), ef
+      real(rp), intent(out) :: alpha(:), beta(:)
+
+      integer :: s, mu
+      real(rp) :: x, p, d
+
+      alpha = 1.0_rp
+      beta = 0.0_rp
+      do s = 1, 2
+         x = ef - enu(s)
+         p = 1.0_rp/ppar(s)**2
+         d = sqrt(1.0_rp + x*x*p)
+         do mu = (s - 1)*spin_off + l_d**2 + 1, (s - 1)*spin_off + (l_d + 1)**2
+            alpha(mu) = (1.0_rp - enu(s)*x*p)/d
+            beta(mu) = x*p/d
+         end do
+      end do
+   end subroutine juelich_vectors
+
+   !> @brief G~ = <a|F_a(H) G F_b(H)|b> on real energies z from G, the Hamiltonian block h = H_ab and the row (a) and
+   !>        column (b) Juelich coefficients; the delta_ab term only for a self pair.
+   !> @param[in] g  G_ab, shape (nb, nb, n); z the energies (Ry), shape (n).
+   pure subroutine juelich_green(g, h, z, alpha_a, beta_a, alpha_b, beta_b, self_pair, gt)
+      complex(rp), intent(in) :: g(:, :, :), h(:, :)
+      real(rp), intent(in) :: z(:), alpha_a(:), beta_a(:), alpha_b(:), beta_b(:)
+      logical, intent(in) :: self_pair
+      complex(rp), intent(out) :: gt(:, :, :)
+
+      integer :: n, k, l
+
+      do n = 1, size(g, 3)
+         do l = 1, size(g, 2)
+            do k = 1, size(g, 1)
+               gt(k, l, n) = (alpha_a(k) + beta_a(k)*z(n))*(alpha_b(l) + beta_b(l)*z(n))*g(k, l, n) - beta_a(k)*beta_b(l)*h(k, l)
+            end do
+            if (self_pair) gt(l, l, n) = gt(l, l, n) - (alpha_a(l)*beta_b(l) + beta_a(l)*alpha_b(l) + beta_a(l)*beta_b(l)*z(n))
+         end do
+      end do
+   end subroutine juelich_green
+
+   !> @brief Moments mu~_m = <a|F_a T_m(Ht) F_b|b>, m = 0..n-3, from the raw moments mu_m = <a|T_m(Ht)|b>, m = 0..n-1, with
+   !>        H = a_win Ht + b_win: F = alpha' + beta' Ht, alpha' = alpha + beta b_win, beta' = beta a_win, and
+   !>        Ht T_m = (T_m+1 + T_|m-1|)/2, Ht^2 T_m = (T_m+2 + 2 T_m + T_|m-2|)/4.
+   pure subroutine juelich_moments(mu, a_win, b_win, alpha_a, beta_a, alpha_b, beta_b, mt)
+      complex(rp), intent(in) :: mu(:, :, :)
+      real(rp), intent(in) :: a_win, b_win, alpha_a(:), beta_a(:), alpha_b(:), beta_b(:)
+      complex(rp), intent(out) :: mt(:, :, :)
+
+      integer :: m, k, l
+      real(rp) :: aa(size(alpha_a)), ba(size(alpha_a)), ab(size(alpha_b)), bb(size(alpha_b))
+
+      aa = alpha_a + beta_a*b_win
+      ba = beta_a*a_win
+      ab = alpha_b + beta_b*b_win
+      bb = beta_b*a_win
+      do m = 0, size(mu, 3) - 3
+         do l = 1, size(mu, 2)
+            do k = 1, size(mu, 1)
+               mt(k, l, m + 1) = aa(k)*ab(l)*mu(k, l, m + 1) &
+                                 + 0.5_rp*(aa(k)*bb(l) + ba(k)*ab(l))*(mu(k, l, m + 2) + mu(k, l, abs(m - 1) + 1)) &
+                                 + 0.25_rp*ba(k)*bb(l)*(mu(k, l, m + 3) + 2.0_rp*mu(k, l, m + 1) + mu(k, l, abs(m - 2) + 1))
+            end do
+         end do
+      end do
+   end subroutine juelich_moments
 
    !> @brief Type sums of the pair list. seed(a) is the first atom i of a self pair (i, i) of type a (0: none), m(a) its
    !>        d moment md, npair(a) the number of pairs with first atom seed(a) and chi0s(a, b) the sum of Re chi0 over
@@ -143,36 +231,57 @@ contains
       end do
    end subroutine type_sums
 
-   !> @brief Write one row per type with a seed: type, seed atom, pair count, m_d, U_Goldstone, U_Mills, Mills residual and
-   !>        chi0(q = 0)(a, b) for every b. The three U columns are n/a unless every type has a seed and |m| >= m_tol.
+   !> @brief Write one row per type with a seed: type, seed atom, pair count, m_d and m_d Juelich, U_Goldstone (coefficient and
+   !>        Juelich vertex), U_Mills, Mills residual, chi0(q = 0)(a, b) for every b, and the same with the Juelich vertex.
+   !>        The U columns of a vertex are n/a unless every type has a seed and |m| >= m_tol; Juelich columns are n/a when
+   !>        mj is absent.
    !> @param[in] c_up, c_dn  d band centres (Ry) of each type, shape (ntype).
-   subroutine write_chi0_types(fname, seed, npair, m, chi0s, c_up, c_dn)
+   !> @param[in] mj, chi0sj  Optional: m and chi0s with the Juelich vertex.
+   subroutine write_chi0_types(fname, seed, npair, m, chi0s, c_up, c_dn, mj, chi0sj)
       character(len=*), intent(in) :: fname
       integer, intent(in) :: seed(:), npair(:)
       real(rp), intent(in) :: m(:), chi0s(:, :), c_up(:), c_dn(:)
+      real(rp), intent(in), optional :: mj(:), chi0sj(:, :)
 
-      integer :: funit, a
-      real(rp) :: ug(size(m)), um(size(m)), delta(size(m))
-      character(len=72) :: ucols
-      logical :: have_u
+      integer :: funit, a, b
+      real(rp) :: ug(size(m)), uj(size(m)), um(size(m)), delta(size(m))
+      character(len=24), parameter :: na = repeat(' ', 21)//'n/a'
+      character(len=24) :: c_mj, c_ug, c_uj, c_um, c_delta
+      character(len=24), allocatable :: c_sj(:)
+      logical :: have_u, have_uj
 
       have_u = all(seed > 0) .and. all(abs(m) >= m_tol)
+      have_uj = present(mj)
+      if (have_uj) have_uj = all(seed > 0) .and. all(abs(mj) >= m_tol)
       if (have_u) then
          call u_juelich(chi0s, m, ug)
          um = u_mills(c_up, c_dn, m)
          delta = mills_residual(chi0s, um, m)
       end if
+      if (have_uj) call u_juelich(chi0sj, mj, uj)
+      allocate (c_sj(size(m)))
       open (newunit=funit, file=fname, action='write', status='replace')
-      write (funit, '(a)') '# type seed_atom n_pairs m_d(mu_B) u_goldstone(Ry, by construction) u_mills(Ry) mills_residual '// &
-         'chi0_q0(type, b)(1/Ry) for b = 1..ntype'
+      write (funit, '(a)') '# type seed_atom n_pairs m_d(mu_B) m_d_juelich(mu_B) u_goldstone(Ry, by construction) '// &
+         'u_goldstone_juelich(Ry, by construction) u_mills(Ry) mills_residual chi0_q0(type, b)(1/Ry) for b = 1..ntype '// &
+         'chi0_q0_juelich(type, b)(1/Ry) for b = 1..ntype'
       do a = 1, size(m)
          if (seed(a) == 0) cycle
-         if (have_u) then
-            write (ucols, '(3es24.14)') ug(a), um(a), delta(a)
-         else
-            write (ucols, '(3a24)') 'n/a', 'n/a', 'n/a'
+         c_mj = na; c_ug = na; c_uj = na; c_um = na; c_delta = na; c_sj = na
+         if (present(mj)) then
+            write (c_mj, '(es24.14)') mj(a)
+            do b = 1, size(m)
+               write (c_sj(b), '(es24.14)') chi0sj(a, b)
+            end do
          end if
-         write (funit, '(3i8,es24.14,a,*(es24.14))') a, seed(a), npair(a), m(a), ucols, chi0s(a, :)
+         if (have_u) then
+            write (c_ug, '(es24.14)') ug(a)
+            write (c_um, '(es24.14)') um(a)
+            write (c_delta, '(es24.14)') delta(a)
+         end if
+         if (have_uj) write (c_uj, '(es24.14)') uj(a)
+         write (funit, '(3i8,es24.14,5a24,*(es24.14))', advance='no') a, seed(a), npair(a), m(a), c_mj, c_ug, c_uj, c_um, &
+            c_delta, chi0s(a, :)
+         write (funit, '(*(a24))') c_sj
       end do
       close (funit)
    end subroutine write_chi0_types

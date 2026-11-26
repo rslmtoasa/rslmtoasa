@@ -7,18 +7,25 @@
 ! wrong sign in chi0_from_traces; in d_moment_trace a wrong orbital range or spin
 ! sign; in type_sums a seed taken from a non-self pair or from a later self pair,
 ! pairs of another seed summed in, grouping by the wrong atom, or the imaginary
-! part included. Plumbing only: no physics is checked here.
+! part included; in juelich_vectors the spin blocks, orbitals or p = 1/ppar^2
+! mixed up; in juelich_green and juelich_moments a wrong or missing correction
+! term (H_ab, delta_ab, z dependence) or a wrong moment shift. The Juelich
+! references are spectral sums over the eigenpairs of a small Hermitian H, a
+! route independent of the resolvent identity and the Chebyshev recurrence the
+! kernels use. Plumbing only: no physics is checked here.
 !------------------------------------------------------------------------------
 program test_spin_response_rs
    use precision_mod, only: rp
    use math_mod, only: pi
    use basis_mod, only: basis_init, nb
-   use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums
+   use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums, juelich_vectors, &
+                                   juelich_green, juelich_moments
    implicit none
    complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), dm(:)
    complex(rp) :: t(2, 2), c
    integer :: mu, ijpair(8, 2), seed(2), npair(2)
    real(rp) :: m(2), chi0s(2, 2)
+   real(rp), allocatable :: av(:), bv(:)
    logical :: failed
 
    failed = .false.
@@ -78,6 +85,19 @@ program test_spin_response_rs
    call require(all(abs(chi0s - reshape([-5.625_rp, -0.25_rp, -1.0_rp, -4.0_rp], [2, 2])) < 1.0e-14_rp), &
                 'type_sums chi0s = [-5.625 -1; -0.25 -4]')
 
+   ! juelich_vectors, closed form: up E_nu = 0, ppar = 1, E_F = 1 gives alpha = beta = 1/sqrt(2); down E_nu = 0.5, ppar = 2
+   ! gives x = 0.5, p = 0.25, alpha = 0.9375/sqrt(1.0625), beta = 0.125/sqrt(1.0625); s, p, f orbitals alpha = 1, beta = 0
+   allocate (av(nb), bv(nb))
+   call juelich_vectors([0.0_rp, 0.5_rp], [1.0_rp, 2.0_rp], 1.0_rp, av, bv)
+   call require(all(abs(av(5:9) - 1.0_rp/sqrt(2.0_rp)) < 1.0e-15_rp) .and. all(abs(bv(5:9) - 1.0_rp/sqrt(2.0_rp)) < 1.0e-15_rp), &
+                'juelich_vectors up d')
+   call require(all(abs(av(21:25) - 0.9375_rp/sqrt(1.0625_rp)) < 1.0e-15_rp) .and. &
+                all(abs(bv(21:25) - 0.125_rp/sqrt(1.0625_rp)) < 1.0e-15_rp), 'juelich_vectors down d')
+   call require(all(av(1:4) == 1.0_rp) .and. all(av(10:20) == 1.0_rp) .and. all(av(26:32) == 1.0_rp) .and. &
+                all(bv(1:4) == 0.0_rp) .and. all(bv(10:20) == 0.0_rp) .and. all(bv(26:32) == 0.0_rp), 'juelich_vectors other orbitals')
+
+   call check_juelich_kernels()
+
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
       error stop 1
@@ -86,6 +106,57 @@ program test_spin_response_rs
    end if
 
 contains
+   !> Two sites of two orbitals: H (4x4, Hermitian, spectrum inside (b_win - a_win, b_win + a_win)) from fixed numbers.
+   !> Reference G~_ab(z) = sum_n F_a(e_n) F_b(e_n) v_an conj(v_bn)/(z - e_n) and mu~_m = sum_n F_a F_b T_m((e_n - b)/a) v v*.
+   subroutine check_juelich_kernels()
+      integer, parameter :: n = 4, nz = 3, nm = 8
+      real(rp), parameter :: a_win = 2.0_rp, b_win = 0.3_rp
+      complex(rp) :: h(n, n), v(n, n), work(4*n), g(n, n, nz), gt(n, n, nz), gref(n, n, nz)
+      complex(rp) :: mu(n, n, nm), mt(n, n, nm - 2), mref(n, n, nm - 2)
+      real(rp) :: e(n), rwork(3*n), z(nz), alpha(n), beta(n), fa, fb, x, tm
+      integer :: info, k, l, q, mm
+
+      h = reshape([(0.31_rp, 0.0_rp), (0.12_rp, -0.05_rp), (-0.07_rp, 0.02_rp), (0.04_rp, 0.09_rp), &
+                   (0.12_rp, 0.05_rp), (-0.22_rp, 0.0_rp), (0.06_rp, -0.11_rp), (0.08_rp, 0.0_rp), &
+                   (-0.07_rp, -0.02_rp), (0.06_rp, 0.11_rp), (0.45_rp, 0.0_rp), (-0.13_rp, 0.03_rp), &
+                   (0.04_rp, -0.09_rp), (0.08_rp, 0.0_rp), (-0.13_rp, -0.03_rp), (0.02_rp, 0.0_rp)], [n, n])
+      alpha = [1.04_rp, 0.97_rp, 1.10_rp, 0.92_rp]
+      beta = [0.27_rp, -0.15_rp, 0.33_rp, 0.08_rp]
+      z = [-0.3_rp, 0.05_rp, 0.4_rp]
+      v = h
+      call zheev('V', 'U', n, v, n, e, work, size(work), rwork, info)
+      if (info /= 0) error stop 'zheev failed'
+      ! exact G and spectral references
+      g = 0.0_rp
+      gref = 0.0_rp
+      mu = 0.0_rp
+      mref = 0.0_rp
+      do q = 1, n
+         x = (e(q) - b_win)/a_win
+         do l = 1, n
+            do k = 1, n
+               fa = alpha(k) + beta(k)*e(q)
+               fb = alpha(l) + beta(l)*e(q)
+               g(k, l, :) = g(k, l, :) + v(k, q)*conjg(v(l, q))/(z - e(q))
+               gref(k, l, :) = gref(k, l, :) + fa*fb*v(k, q)*conjg(v(l, q))/(z - e(q))
+               do mm = 0, nm - 1
+                  tm = cos(mm*acos(x))
+                  mu(k, l, mm + 1) = mu(k, l, mm + 1) + tm*v(k, q)*conjg(v(l, q))
+                  if (mm <= nm - 3) mref(k, l, mm + 1) = mref(k, l, mm + 1) + fa*fb*tm*v(k, q)*conjg(v(l, q))
+               end do
+            end do
+         end do
+      end do
+      ! self pair: the whole 4x4 block, with delta_ab
+      call juelich_green(g, h, z, alpha, beta, alpha, beta, .true., gt)
+      call require(maxval(abs(gt - gref)) < 1.0e-13_rp, 'juelich_green self pair = spectral sum')
+      ! pair between site 1 (orbitals 1, 2) and site 2 (orbitals 3, 4): no delta term
+      call juelich_green(g(1:2, 3:4, :), h(1:2, 3:4), z, alpha(1:2), beta(1:2), alpha(3:4), beta(3:4), .false., gt(1:2, 1:2, :))
+      call require(maxval(abs(gt(1:2, 1:2, :) - gref(1:2, 3:4, :))) < 1.0e-13_rp, 'juelich_green inter-site block = spectral sum')
+      call juelich_moments(mu, a_win, b_win, alpha, beta, alpha, beta, mt)
+      call require(maxval(abs(mt - mref)) < 1.0e-13_rp, 'juelich_moments = spectral sum, m = 0..5')
+   end subroutine check_juelich_kernels
+
    subroutine require(ok, label)
       logical, intent(in) :: ok
       character(len=*), intent(in) :: label
