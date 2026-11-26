@@ -12,14 +12,15 @@
 ! term (H_ab, delta_ab, z dependence) or a wrong moment shift. The Juelich
 ! references are spectral sums over the eigenpairs of a small Hermitian H, a
 ! route independent of the resolvent identity and the Chebyshev recurrence the
-! kernels use. Plumbing only: no physics is checked here.
+! kernels use. In type_sums_q a wrong phase sign, pairs of another seed or a
+! wrong pair-type grouping. Plumbing only: no physics is checked here.
 !------------------------------------------------------------------------------
 program test_spin_response_rs
    use precision_mod, only: rp
    use math_mod, only: pi
    use basis_mod, only: basis_init, nb
    use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums, juelich_vectors, &
-                                   juelich_green, juelich_moments
+                                   juelich_green, juelich_moments, type_sums_q
    implicit none
    complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), dm(:)
    complex(rp) :: t(2, 2), c
@@ -97,6 +98,7 @@ program test_spin_response_rs
                 all(bv(1:4) == 0.0_rp) .and. all(bv(10:20) == 0.0_rp) .and. all(bv(26:32) == 0.0_rp), 'juelich_vectors other orbitals')
 
    call check_juelich_kernels()
+   call check_type_sums_q()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -156,6 +158,21 @@ contains
       call juelich_moments(mu, a_win, b_win, alpha, beta, alpha, beta, mt)
       call require(maxval(abs(mt - mref)) < 1.0e-13_rp, 'juelich_moments = spectral sum, m = 0..5')
    end subroutine check_juelich_kernels
+
+   !> One type, seed 1. Pairs (1,1) -10 at r = 0, (1,2) -1 at r = (1/2, 0, 0), (1,3) -2 at r = (0, 1/4, 0), and (3,2) 100 of
+   !> another first atom. q = (1,0,0): phases -1, 1 give -10 + 1 - 2 = -11; q = (0,1,0): phases 1, exp(+i pi/2) = i give -11 - 2i.
+   subroutine check_type_sums_q()
+      complex(rp) :: cq(1, 1, 2)
+      integer :: pairs(4, 2)
+
+      pairs(:, 1) = [1, 1, 1, 3]
+      pairs(:, 2) = [1, 2, 3, 2]
+      cq = type_sums_q(pairs, [1, 1, 1], [1], [(-10.0_rp, 0.0_rp), (-1.0_rp, 0.0_rp), (-2.0_rp, 0.0_rp), (100.0_rp, 0.0_rp)], &
+                       reshape([0.0_rp, 0.0_rp, 0.0_rp, 0.5_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.25_rp, 0.0_rp, 0.3_rp, 0.3_rp, 0.3_rp], [3, 4]), &
+                       reshape([1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp], [3, 2]))
+      call require(abs(cq(1, 1, 1) - (-11.0_rp, 0.0_rp)) < 1.0e-13_rp, 'type_sums_q q = (1,0,0) gives -11')
+      call require(abs(cq(1, 1, 2) - (-11.0_rp, -2.0_rp)) < 1.0e-13_rp, 'type_sums_q q = (0,1,0) gives -11 - 2i')
+   end subroutine check_type_sums_q
 
    subroutine require(ok, label)
       logical, intent(in) :: ok

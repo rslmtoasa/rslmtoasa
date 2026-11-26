@@ -181,6 +181,13 @@ construction), Mills :math:`U` (Ry), Mills residual, and :math:`\chi^0(q = 0)` t
 summed over the listed pairs, first with the coefficient vertex and then with the Jülich vertex. See
 ``do_chi0`` in :ref:`keywords/output_options`.
 
+**chi0_adiabatic.dat** (with ``do_chi0 = .true.``)
+
+One row per q point of ``&spin_response``, after a one-line header: q (direct and Cartesian, units
+:math:`2\pi/a`), :math:`|\mathbf q|` (1/Å), then for each vertex the adiabatic frequencies (Ry, one per
+type), the largest imaginary part of their eigenvalues and the force-theorem frequencies, from the lattice
+sum over the listed pairs. See ``do_chi0`` in :ref:`keywords/output_options`.
+
 Transport Properties
 ====================
 

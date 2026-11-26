@@ -27,12 +27,17 @@
 !> In Green-function form G is replaced by G~_ab = <a|F_a(H) G F_b(H)|b>, which with HG = GH = zG - 1 is
 !>   G~_ab = F_a(z) F_b(z) G_ab - beta_a beta_b H_ab - (alpha_a beta_b + beta_a alpha_b + beta_a beta_b z) delta_ab,
 !> and in Chebyshev moments (H = a Ht + b, F = alpha' + beta' Ht) mu~_m = <a|F(Ht) T_m(Ht) F(Ht)|b>.
+!>
+!> Adiabatic spectrum: chi0_ab(q) = sum over the listed pairs (i, j) of seed(a) with type(j) = b of
+!> chi0_ij exp(+2 pi i q.r_ij), r_ij = r_j - r_i in direct coordinates; with every pair included this is the chi0_ab(q)
+!> of the k-space spin_response (its Bloch gauge carries the phase exp(2 pi i k.(r_j - r_i))). Then
+!> Omega(q) = -N (chi0(q)^-1 + U) with N = diag(m) and the Goldstone U (adiabatic_frequencies of spin_response).
 !------------------------------------------------------------------------------
 module spin_response_rs_mod
    use precision_mod, only: rp
    use math_mod, only: pi, i_unit
    use basis_mod, only: spin_off
-   use spin_response_mod, only: u_juelich, u_mills, mills_residual
+   use spin_response_mod, only: u_juelich, u_mills, mills_residual, adiabatic_frequencies
    implicit none
    private
 
@@ -45,6 +50,8 @@ module spin_response_rs_mod
    public :: juelich_vectors
    public :: juelich_green
    public :: juelich_moments
+   public :: type_sums_q
+   public :: write_chi0_adiabatic
 
    !> Angular momentum of the response channel.
    integer, parameter :: l_d = 2
@@ -285,5 +292,94 @@ contains
       end do
       close (funit)
    end subroutine write_chi0_types
+
+   !> @brief chi0_ab(q) = sum over the pairs p with ijpair(p, 1) = seed(a) and iz(ijpair(p, 2)) = b of chi0(p) exp(2 pi i q.r(p)).
+   !> @param[in] rdir  r_j - r_i of each pair in direct coordinates, shape (3, npair).
+   !> @param[in] q     q points in direct coordinates, shape (3, nq).
+   !> @return    cq    shape (ntype, ntype, nq); rows of types without a seed stay 0.
+   pure function type_sums_q(ijpair, iz, seed, chi0, rdir, q) result(cq)
+      integer, intent(in) :: ijpair(:, :), iz(:), seed(:)
+      complex(rp), intent(in) :: chi0(:)
+      real(rp), intent(in) :: rdir(:, :), q(:, :)
+      complex(rp) :: cq(size(seed), size(seed), size(q, 2))
+
+      integer :: p, a, b, iq
+
+      cq = (0.0_rp, 0.0_rp)
+      do p = 1, size(chi0)
+         a = iz(ijpair(p, 1))
+         if (seed(a) == 0 .or. ijpair(p, 1) /= seed(a)) cycle
+         b = iz(ijpair(p, 2))
+         do iq = 1, size(q, 2)
+            cq(a, b, iq) = cq(a, b, iq) + chi0(p)*exp(2.0_rp*pi*i_unit*dot_product(q(:, iq), rdir(:, p)))
+         end do
+      end do
+   end function type_sums_q
+
+   !> @brief Write one row per q: q (direct, Cartesian in 2 pi/a), |q| (1/Angstrom), then for each vertex (coefficient, then
+   !>        Juelich) the adiabatic frequencies (Ry, ascending, one per type), the largest |Im| of their eigenvalues (Ry) and
+   !>        the force-theorem frequencies N U (I + chi0 U) (Ry, ascending). U is the Goldstone U of chi0s and m (by
+   !>        construction Omega(0) m = 0). A vertex whose U is not defined (a type without a seed, |m| < m_tol, or the
+   !>        Juelich vertex absent) gives n/a.
+   !> @param[in] cq, chi0s, m        chi0(q) (ntype, ntype, nq), chi0(q = 0) (ntype, ntype) and m (ntype), coefficient vertex.
+   !> @param[in] cqj, chi0sj, mj     Optional: the same with the Juelich vertex.
+   subroutine write_chi0_adiabatic(fname, q, qcart, qabs, seed, cq, chi0s, m, cqj, chi0sj, mj)
+      character(len=*), intent(in) :: fname
+      real(rp), intent(in) :: q(:, :), qcart(:, :), qabs(:)
+      integer, intent(in) :: seed(:)
+      complex(rp), intent(in) :: cq(:, :, :)
+      real(rp), intent(in) :: chi0s(:, :), m(:)
+      complex(rp), intent(in), optional :: cqj(:, :, :)
+      real(rp), intent(in), optional :: chi0sj(:, :), mj(:)
+
+      integer :: funit, iq, nt
+      character(len=:), allocatable :: line
+      character(len=24), parameter :: na = repeat(' ', 21)//'n/a'
+      logical :: have_u, have_uj
+
+      nt = size(m)
+      have_u = all(seed > 0) .and. all(abs(m) >= m_tol)
+      have_uj = present(mj)
+      if (have_uj) have_uj = all(seed > 0) .and. all(abs(mj) >= m_tol)
+      open (newunit=funit, file=fname, action='write', status='replace')
+      write (funit, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) omega_adiabatic(Ry, ascending, one per type) '// &
+         'max_abs_imag(Ry) omega_force(Ry, ascending) ; the same three groups with the Juelich vertex'
+      do iq = 1, size(q, 2)
+         line = ''
+         if (have_u) then
+            line = line//frequencies(cq(:, :, iq), chi0s, m)
+         else
+            line = line//repeat(na, 2*nt + 1)
+         end if
+         if (have_uj) then
+            line = line//frequencies(cqj(:, :, iq), chi0sj, mj)
+         else
+            line = line//repeat(na, 2*nt + 1)
+         end if
+         write (funit, '(7es16.8,a)') q(:, iq), qcart(:, iq), qabs(iq), line
+      end do
+      close (funit)
+
+   contains
+
+      !> Omega, max |Im| and the force-theorem frequencies at one q as text, with the Goldstone U of chi0_static and mm.
+      function frequencies(chi0q, chi0_static, mm) result(text)
+         complex(rp), intent(in) :: chi0q(:, :)
+         real(rp), intent(in) :: chi0_static(:, :), mm(:)
+         character(len=:), allocatable :: text
+         real(rp) :: u(size(mm)), kmat(size(mm), size(mm)), omega(size(mm)), omega_force(size(mm)), imag_max
+         character(len=24*(2*size(mm) + 1)) :: buf
+         integer :: k
+
+         call u_juelich(chi0_static, mm, u)
+         kmat = 0.0_rp
+         do k = 1, size(mm)
+            kmat(k, k) = u(k)
+         end do
+         call adiabatic_frequencies(chi0q, kmat, mm, omega, imag_max, omega_force)
+         write (buf, '(*(es24.14))') omega, imag_max, omega_force
+         text = buf
+      end function frequencies
+   end subroutine write_chi0_adiabatic
 
 end module spin_response_rs_mod

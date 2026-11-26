@@ -280,6 +280,16 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   space :math:`\tilde G` is expanded in its own moments :math:`\langle a|F_a T_m F_b|b\rangle` (two fewer
   than computed); on the energy mesh the identity above is applied to the damped :math:`G`, so the two
   integration modes differ at the level of the expansion error.
+- Also writes ``chi0_adiabatic.dat``, the adiabatic spectrum at the q points of the
+  ``&spin_response`` namelist (``n_q``, ``q_list``, ``q_file``; q = 0 when the namelist is absent):
+  :math:`\chi^0_{ab}(\mathbf q) = \sum \chi^0_{ij}\, e^{2\pi i\, \mathbf q\cdot \mathbf r_{ij}}` over the listed
+  pairs of the seed of type :math:`a` with :math:`j` of type :math:`b` (:math:`\mathbf r_{ij}` in direct
+  coordinates; with every pair included this is the :math:`\chi^0_{ab}(\mathbf q)` of ``spin_response``), and
+  :math:`\Omega(\mathbf q) = -N(\chi^0(\mathbf q)^{-1} + U)` with :math:`N = \mathrm{diag}(m)` and the Goldstone
+  :math:`U`, so :math:`\Omega(0) = 0` by construction. Columns as ``<prefix>_adiabatic.dat`` of
+  ``spin_response`` (frequencies, largest imaginary part, force-theorem frequencies), first with the
+  coefficient vertex, then with the Jülich vertex (``n/a`` where its :math:`U` is not defined). The
+  lattice sum is truncated to the pair list: list every atom within the radius to include.
 
 **Related code:** ``source/spin_response_rs.f90``, ``source/exchange_dynamics.f90``
 (``chi0_pair_mesh``, ``chi0_pair_moments``)

@@ -307,19 +307,22 @@ contains
       if (i == j) md = -aimag(sum(lin(1:n)*d_moment_trace(mt_ij)))/pi
    end subroutine juelich_pair_moments
 
-   !> Sum chi0, md (and the Juelich chi0j, mdj when present) over the ranks; on rank 0 write chi0_ij.dat and the type
-   !> diagnostics chi0_types.dat.
+   !> Sum chi0, md (and the Juelich chi0j, mdj when present) over the ranks; on rank 0 write chi0_ij.dat, the type
+   !> diagnostics chi0_types.dat and the adiabatic spectrum chi0_adiabatic.dat at the q points of &spin_response.
    subroutine chi0_finalize(this, chi0, md, chi0j, mdj)
       use mpi_mod
-      use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types
+      use spin_response_rs_mod, only: write_chi0_pairs, type_sums, write_chi0_types, type_sums_q, write_chi0_adiabatic
+      use spin_response_mod, only: read_q_points
       class(exchange) :: this
       complex(rp), intent(inout) :: chi0(:)
       real(rp), intent(inout) :: md(:)
       complex(rp), intent(inout), optional :: chi0j(:)
       real(rp), intent(inout), optional :: mdj(:)
-      integer :: nt, it
+      integer :: nt, it, p, iq
       integer, allocatable :: seed(:), npair(:)
-      real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:)
+      real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:), rdir(:, :), q(:, :), qcart(:, :), &
+                               qabs(:)
+      real(rp) :: cell_inverse(3, 3)
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, chi0, size(chi0), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -344,6 +347,27 @@ contains
       else
          call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0)
          call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn)
+      end if
+
+      ! Adiabatic spectrum: r_j - r_i in direct coordinates, as site_offset in spin_response; q_cart = C^T q (2 pi/a)
+      cell_inverse = merge(this%lattice%a_cart_inv, inverse_3x3(this%lattice%a), this%lattice%a_cart_inv_ready)
+      allocate (rdir(3, size(chi0)))
+      do p = 1, size(chi0)
+         rdir(:, p) = matmul(cell_inverse, this%lattice%cr(:, this%lattice%ijpair(p, 2)) - this%lattice%cr(:, this%lattice%ijpair(p, 1)))
+      end do
+      call read_q_points(this%lattice%control%fname, q)
+      qcart = matmul(transpose(cell_inverse), q)
+      allocate (qabs(size(q, 2)))
+      do iq = 1, size(q, 2)
+         qabs(iq) = 2.0_rp*pi*norm2(qcart(:, iq))/this%lattice%alat
+      end do
+      if (present(chi0j)) then
+         call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
+                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m, &
+                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0j, rdir, q), chi0sj, mj)
+      else
+         call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
+                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m)
       end if
    end subroutine chi0_finalize
 

@@ -108,4 +108,7 @@ Output files
 
 Each file starts with a one-line header naming its columns and units.
 
+The q points (``n_q``, ``q_list``, ``q_file``) are also read by the real-space adiabatic spectrum of
+``do_chi0`` (:ref:`keywords/output_options`); the other keys are not used there.
+
 **Related code:** ``source/spin_response.f90``, ``source/calculation_reciprocal.f90``.

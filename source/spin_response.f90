@@ -48,6 +48,7 @@ module spin_response_mod
    public :: peak_estimate
    public :: spectral_trace
    public :: pole_estimates
+   public :: read_q_points
 
    !> Energy difference (Ry) below which the static value uses the Fermi divided difference.
    real(rp), parameter :: degenerate_tol = 1.0e-10_rp
@@ -181,8 +182,7 @@ contains
    subroutine build_from_file(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iostatus, funit, i, nlines, l
-      real(rp) :: qtmp(3)
+      integer :: iostatus, funit, i, l
 
       include 'include_codes/namelists/spin_response.f90'
 
@@ -242,6 +242,19 @@ contains
       this%eta = eta
       this%omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(max(n_omega - 1, 1), rp), i=1, n_omega)]
 
+      call q_points(n_q, q_list, q_file, this%q_direct)
+   end subroutine build_from_file
+
+   !> @brief q points (direct coordinates, shape (3, nq)) from q_file (one q per line) when it is set, else q_list(:, 1:n_q).
+   subroutine q_points(n_q, q_list, q_file, q_direct)
+      integer, intent(in) :: n_q
+      real(rp), intent(in) :: q_list(:, :)
+      character(len=*), intent(in) :: q_file
+      real(rp), allocatable, intent(out) :: q_direct(:, :)
+
+      integer :: funit, iostatus, nlines, i
+      real(rp) :: qtmp(3)
+
       if (len_trim(q_file) > 0) then
          open (newunit=funit, file=trim(q_file), action='read', iostat=iostatus, status='old')
          if (iostatus /= 0) call g_logger%fatal('q_file '//trim(q_file)//' not found', __FILE__, __LINE__)
@@ -252,16 +265,38 @@ contains
             nlines = nlines + 1
          end do
          rewind (funit)
-         allocate (this%q_direct(3, nlines))
+         allocate (q_direct(3, nlines))
          do i = 1, nlines
-            read (funit, *) this%q_direct(:, i)
+            read (funit, *) q_direct(:, i)
          end do
          close (funit)
       else
          if (n_q < 1 .or. n_q > max_q) call g_logger%fatal('spin_response n_q must be in 1..'//int2str(max_q), __FILE__, __LINE__)
-         this%q_direct = q_list(:, 1:n_q)
+         q_direct = q_list(:, 1:n_q)
       end if
-   end subroutine build_from_file
+   end subroutine q_points
+
+   !> @brief q points of the &spin_response namelist of file fname (n_q, q_list, q_file; default q = 0), see q_points.
+   subroutine read_q_points(fname, q_direct)
+      character(len=*), intent(in) :: fname
+      real(rp), allocatable, intent(out) :: q_direct(:, :)
+
+      integer :: funit, iostatus
+
+      include 'include_codes/namelists/spin_response.f90'
+
+      n_q = 1
+      q_list = 0.0_rp
+      q_file = ''
+      open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
+      if (iostatus /= 0) call g_logger%fatal('file '//trim(fname)//' not found', __FILE__, __LINE__)
+      read (funit, nml=spin_response, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. is_iostat_end(iostatus)) then
+         call g_logger%fatal('error while reading namelist spin_response, iostat = '//int2str(iostatus), __FILE__, __LINE__)
+      end if
+      close (funit)
+      call q_points(n_q, q_list, q_file, q_direct)
+   end subroutine read_q_points
 
    !> @brief Eigenpairs at k+q for mesh points first:last, from the reciprocal arbitrary-k service, in the gauge of H(k+q).
    !> @details H(k) is assembled at the folded k with phases exp(i 2 pi k.(r_j - r_i)), r_j - r_i the neighbour minus centre
