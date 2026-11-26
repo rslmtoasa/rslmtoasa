@@ -45,7 +45,7 @@ module exchange_mod
 
    private
    !> Linked from the exchange_dynamics submodule (calculate_pairwise)
-   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes
+   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes, onsite_exchange_delta
    !> Energy nodes at which G is evaluated and the way an integrand sampled on them is integrated.
    type, public :: energy_nodes
       !> Complex energies z (Ry) at which G is evaluated

@@ -41,7 +41,7 @@ program transport_driver
   if (ambiguous) error stop 'Unique image marked ambiguous'
   cr(1,2)=2
   lat%cr=cr; nn=0; lat%nn=nn; lat%nn(:,1)=2; lat%nn(1,2)=2; lat%nn(2,2)=1
-  t%lattice=>lat
+  t%lattice=>lat; t%hamiltonian=>ham
   call t%setup_kubo_bonds()
   error stop 'Ambiguous cache unexpectedly accepted'
  end if

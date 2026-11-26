@@ -79,6 +79,10 @@ module green_mod
       procedure :: prepare_intersite_gf
       procedure :: fill_intersite_gf_pair
       procedure :: fill_intersite_gf_twoindex_pair
+      procedure :: chebyshev_exchange_weights
+      procedure :: fill_intersite_moments_pair
+      procedure :: chebyshev_point_pair
+      procedure :: transform_intersite_moments
       procedure :: calculate_intersite_gf_eta
       procedure :: calculate_intersite_gf_eta_gpu
       procedure :: chebyshev_green_eta
@@ -88,6 +92,7 @@ module green_mod
       procedure :: chebyshev_green_ij_oneshot
       procedure :: chebyshev_green_ij_eta_oneshot
       procedure :: chebyshev_dos_dispatch
+      procedure :: chebyshev_scf_nodes
       procedure :: cheb_damping
       procedure :: restore_to_default
       procedure :: auxiliary_gij
@@ -169,6 +174,13 @@ module green_mod
       class(green), intent(inout) :: this
    end subroutine chebyshev_dos_dispatch
 
+   module subroutine chebyshev_scf_nodes(this, t, valence, solve_fermi)
+      class(green), intent(inout) :: this
+      complex(rp), intent(in) :: t(:)
+      real(rp), intent(in) :: valence
+      logical, intent(in) :: solve_fermi
+   end subroutine chebyshev_scf_nodes
+
    module subroutine chebyshev_green_eta(this, eta, fermi_point, g_ef)
       use mpi_mod, only: atoms_per_process
       class(green), intent(inout) :: this
@@ -237,6 +249,35 @@ module green_mod
       class(green), intent(inout) :: this
       integer, intent(in) :: slot
    end subroutine fill_intersite_gf_twoindex_pair
+
+   module subroutine pauli_pair(this, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot
+   end subroutine pauli_pair
+
+   module subroutine chebyshev_exchange_weights(this, h, kernel)
+      class(green), intent(inout) :: this
+      complex(rp), allocatable, intent(out) :: h(:, :)
+      real(rp), allocatable, intent(out) :: kernel(:)
+   end subroutine chebyshev_exchange_weights
+
+   module subroutine fill_intersite_moments_pair(this, ia_glob, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob, slot
+   end subroutine fill_intersite_moments_pair
+
+   module subroutine chebyshev_point_pair(this, ia_glob, gij0, gji0, gij2, gji2)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob
+      complex(rp), intent(out), dimension(:, :) :: gij0, gji0, gij2, gji2
+   end subroutine chebyshev_point_pair
+
+   module subroutine transform_intersite_moments(this, slot_raw, slot_t, hp, kernel)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot_raw, slot_t
+      complex(rp), intent(in) :: hp(0:)
+      real(rp), intent(in) :: kernel(:)
+   end subroutine transform_intersite_moments
 
    module subroutine calculate_intersite_gf(this)
       class(green), intent(inout) :: this

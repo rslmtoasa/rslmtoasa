@@ -792,14 +792,20 @@ contains
       type(exchange), target :: exchange_obj
       type(reciprocal), target :: reciprocal_obj
       integer :: i
-      logical :: stream
+      logical :: stream, moments
 
       ! The recursion route reconstructs one pair at a time into a single slot of the intersite Green-function arrays
       stream = trim(this%gf_route) == 'recursion'
+      ! The moment-space integral keeps the raw and the transformed moments of a pair in two slots
+      control_obj = control(this%fname)
+      moments = control_obj%exchange_integration == 'moments'
+      if (moments .and. .not. stream) &
+         call g_logger%fatal('exchange_integration = ''moments'' needs gf_route = ''recursion''.', &
+                             __FILE__, __LINE__)
       if (stream) then
          call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
                                             charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
-                                            green_obj, bands_obj, pair_slots=1)
+                                            green_obj, bands_obj, pair_slots=merge(2, 1, moments))
       else
          call prepare_post_processing_stack(this, .false., .true., .true., control_obj, lattice_obj, &
                                             charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &

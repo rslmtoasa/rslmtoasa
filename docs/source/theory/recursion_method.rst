@@ -377,6 +377,29 @@ by all its targets, against four recursions per pair in the pairs route. On
 bcc Fe with eight pairs sharing one first atom, the Chebyshev run took 15 s
 against 124 s. Memory is currently the same as in the pairs route.
 
+**Moment-space exchange integral** (``exchange_integration = 'moments'``, ``recur = 'chebyshev'``). Every exchange integrand is a sum of terms
+:math:`\mathrm{Tr}[\Delta_i(E)\, X(E)\, \Delta_j(E)\, Y(E)]`, with :math:`X` built linearly from :math:`G_{ij}, G_{ji}` and
+likewise :math:`Y`. With :math:`G(E)` the kernel-damped series of the stored moments :math:`\mu_n`, the energy integral is a
+bilinear form in the moments,
+
+.. math::
+
+   \int f(E)\, E^p\, \mathrm{Tr}[A\, X(E)\, B\, Y(E)]\, dE = \sum_m \mathrm{Tr}[A\, X_m\, B\, \tilde Y^{(p)}_m], \qquad
+   \tilde Y^{(p)}_m = \sum_n c^{(p)}_{mn} Y_n,
+
+where :math:`c^{(p)}_{mn}` contains the kernel factors of :math:`m` and :math:`n` and the weight
+:math:`-\int f(E) E^p e^{-i(m+n)\theta}/(a^2\sin^2\theta)\, dE`, :math:`E = a\cos\theta + b`. The exchange splitting
+:math:`\Delta(E)` is linear in :math:`E`, :math:`\Delta = \alpha + \beta E`, so each pair needs the weights with
+:math:`p = 0, 1, 2` (``use_onsite_delta``: :math:`p = 0` only). The moment sums are contracted as traces of all pairs of the 12 families of :math:`X` and :math:`Y`, from which every output is assembled. The limits are :math:`[E_{min}, E_F]` for :math:`T = 0` and :math:`f(E)` is the
+Fermi function for :math:`T > 0`. Damping and inertia use :math:`G` and the analytic :math:`d^2G/dE^2` of the series at :math:`E_F`; the energy-resolved files are not written in this mode.
+
+**Moment-space SCF integrals** (``scf_integration = 'moments'``, ``recur = 'chebyshev'``). The on-site integrals keep their
+formulas :math:`\int f(E) E^p y(E)\,dE` with :math:`y` built from :math:`G`; only the points and the rule change. The
+points are the Gauss-Legendre nodes in :math:`\theta` of ``cheb_energy_nodes`` on :math:`[E_{min}, E_F]` (Fermi function in the
+weights for ``temperature > 0``), so :math:`\int f E^p y\,dE \approx \sum_q w_q e_q^p y(e_q)`. The Fermi level solves
+:math:`N(E_F) = -\tfrac{1}{\pi}\mathrm{Im}\sum_m t_m \sum_q w_q g_m(e_q) = N_{val}`, with :math:`t_m` the diagonal on-site moments summed over atoms
+and spins, :math:`g_m` the kernel-damped basis functions of the series.
+
 Comparison: Direct Diagonalization vs. Recursion
 =================================================
 

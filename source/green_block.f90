@@ -189,34 +189,38 @@ contains
       use basis_mod, only: norb
       class(green), intent(inout) :: this
       integer, intent(in) :: slot
-      integer :: j, k, l1, l2, k0, j0
+      integer :: j, k, l1, ie, s, pm(norb)
 
       this%G00ij(:, :, :, slot) = 0.0d0; this%G01ij(:, :, :, slot) = 0.0d0; this%G00ji(:, :, :, slot) = 0.0d0; this%G01ji(:, :, :, slot) = 0.0d0;
       this%Gx1ij(:, :, :, slot) = 0.0d0; this%Gy1ij(:, :, :, slot) = 0.0d0; this%Gz1ij(:, :, :, slot) = 0.0d0; this%Gx0ij(:, :, :, slot) = 0.0d0; this%Gy0ij(:, :, :, slot) = 0.0d0; this%Gz0ij(:, :, :, slot) = 0.0d0;
       this%Gx1ji(:, :, :, slot) = 0.0d0; this%Gy1ji(:, :, :, slot) = 0.0d0; this%Gz1ji(:, :, :, slot) = 0.0d0; this%Gx0ji(:, :, :, slot) = 0.0d0; this%Gy0ji(:, :, :, slot) = 0.0d0; this%Gz0ji(:, :, :, slot) = 0.0d0
 
-      do j = 1, norb
-         do k = 1, norb
-            l1 = int((k - 0.9)**0.5)
-            l2 = int((j - 0.9)**0.5)
-            k0 = l1*(l1 + 1) + 1
-            j0 = l2*(l2 + 1) + 1
-            this%G00ij(k, j, :, slot) = this%G00ij(k, j, :, slot) + 0.5d0*(this%Ginmag(k, j, :, slot) + (-1)**(k + j)*this%Gjnmag(2*j0 - j, 2*k0 - k, :, slot))
-            this%G01ij(k, j, :, slot) = this%G01ij(k, j, :, slot) + 0.5d0*(this%Ginmag(k, j, :, slot) - (-1)**(k + j)*this%Gjnmag(2*j0 - j, 2*k0 - k, :, slot))
-            this%G00ji(k, j, :, slot) = this%G00ji(k, j, :, slot) + 0.5d0*(this%Gjnmag(k, j, :, slot) + (-1)**(k + j)*this%Ginmag(2*j0 - j, 2*k0 - k, :, slot))
-            this%G01ji(k, j, :, slot) = this%G01ji(k, j, :, slot) + 0.5d0*(this%Gjnmag(k, j, :, slot) - (-1)**(k + j)*this%Ginmag(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gx1ij(k, j, :, slot) = this%Gx1ij(k, j, :, slot) + 0.5d0*(this%Gix(k, j, :, slot) - (-1)**(k + j)*this%Gjx(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gy1ij(k, j, :, slot) = this%Gy1ij(k, j, :, slot) + 0.5d0*(this%Giy(k, j, :, slot) - (-1)**(k + j)*this%Gjy(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gz1ij(k, j, :, slot) = this%Gz1ij(k, j, :, slot) + 0.5d0*(this%Giz(k, j, :, slot) - (-1)**(k + j)*this%Gjz(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gx0ij(k, j, :, slot) = this%Gx0ij(k, j, :, slot) + 0.5d0*(this%Gix(k, j, :, slot) + (-1)**(k + j)*this%Gjx(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gy0ij(k, j, :, slot) = this%Gy0ij(k, j, :, slot) + 0.5d0*(this%Giy(k, j, :, slot) + (-1)**(k + j)*this%Gjy(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gz0ij(k, j, :, slot) = this%Gz0ij(k, j, :, slot) + 0.5d0*(this%Giz(k, j, :, slot) + (-1)**(k + j)*this%Gjz(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gx1ji(k, j, :, slot) = this%Gx1ji(k, j, :, slot) + 0.5d0*(this%Gjx(k, j, :, slot) - (-1)**(k + j)*this%Gix(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gy1ji(k, j, :, slot) = this%Gy1ji(k, j, :, slot) + 0.5d0*(this%Gjy(k, j, :, slot) - (-1)**(k + j)*this%Giy(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gz1ji(k, j, :, slot) = this%Gz1ji(k, j, :, slot) + 0.5d0*(this%Gjz(k, j, :, slot) - (-1)**(k + j)*this%Giz(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gx0ji(k, j, :, slot) = this%Gx0ji(k, j, :, slot) + 0.5d0*(this%Gjx(k, j, :, slot) + (-1)**(k + j)*this%Gix(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gy0ji(k, j, :, slot) = this%Gy0ji(k, j, :, slot) + 0.5d0*(this%Gjy(k, j, :, slot) + (-1)**(k + j)*this%Giy(2*j0 - j, 2*k0 - k, :, slot))
-            this%Gz0ji(k, j, :, slot) = this%Gz0ji(k, j, :, slot) + 0.5d0*(this%Gjz(k, j, :, slot) + (-1)**(k + j)*this%Giz(2*j0 - j, 2*k0 - k, :, slot))
+      ! m -> -m partner of each orbital (l, m): pm(k) = 2 k0 - k, k0 the m = 0 index of shell l
+      do k = 1, norb
+         l1 = int((k - 0.9)**0.5)
+         pm(k) = 2*(l1*(l1 + 1) + 1) - k
+      end do
+      do ie = 1, size(this%G00ij, 3)
+         do j = 1, norb
+            do k = 1, norb
+               s = (-1)**(k + j)
+               this%G00ij(k, j, ie, slot) = this%G00ij(k, j, ie, slot) + 0.5d0*(this%Ginmag(k, j, ie, slot) + s*this%Gjnmag(pm(j), pm(k), ie, slot))
+               this%G01ij(k, j, ie, slot) = this%G01ij(k, j, ie, slot) + 0.5d0*(this%Ginmag(k, j, ie, slot) - s*this%Gjnmag(pm(j), pm(k), ie, slot))
+               this%G00ji(k, j, ie, slot) = this%G00ji(k, j, ie, slot) + 0.5d0*(this%Gjnmag(k, j, ie, slot) + s*this%Ginmag(pm(j), pm(k), ie, slot))
+               this%G01ji(k, j, ie, slot) = this%G01ji(k, j, ie, slot) + 0.5d0*(this%Gjnmag(k, j, ie, slot) - s*this%Ginmag(pm(j), pm(k), ie, slot))
+               this%Gx1ij(k, j, ie, slot) = this%Gx1ij(k, j, ie, slot) + 0.5d0*(this%Gix(k, j, ie, slot) - s*this%Gjx(pm(j), pm(k), ie, slot))
+               this%Gy1ij(k, j, ie, slot) = this%Gy1ij(k, j, ie, slot) + 0.5d0*(this%Giy(k, j, ie, slot) - s*this%Gjy(pm(j), pm(k), ie, slot))
+               this%Gz1ij(k, j, ie, slot) = this%Gz1ij(k, j, ie, slot) + 0.5d0*(this%Giz(k, j, ie, slot) - s*this%Gjz(pm(j), pm(k), ie, slot))
+               this%Gx0ij(k, j, ie, slot) = this%Gx0ij(k, j, ie, slot) + 0.5d0*(this%Gix(k, j, ie, slot) + s*this%Gjx(pm(j), pm(k), ie, slot))
+               this%Gy0ij(k, j, ie, slot) = this%Gy0ij(k, j, ie, slot) + 0.5d0*(this%Giy(k, j, ie, slot) + s*this%Gjy(pm(j), pm(k), ie, slot))
+               this%Gz0ij(k, j, ie, slot) = this%Gz0ij(k, j, ie, slot) + 0.5d0*(this%Giz(k, j, ie, slot) + s*this%Gjz(pm(j), pm(k), ie, slot))
+               this%Gx1ji(k, j, ie, slot) = this%Gx1ji(k, j, ie, slot) + 0.5d0*(this%Gjx(k, j, ie, slot) - s*this%Gix(pm(j), pm(k), ie, slot))
+               this%Gy1ji(k, j, ie, slot) = this%Gy1ji(k, j, ie, slot) + 0.5d0*(this%Gjy(k, j, ie, slot) - s*this%Giy(pm(j), pm(k), ie, slot))
+               this%Gz1ji(k, j, ie, slot) = this%Gz1ji(k, j, ie, slot) + 0.5d0*(this%Gjz(k, j, ie, slot) - s*this%Giz(pm(j), pm(k), ie, slot))
+               this%Gx0ji(k, j, ie, slot) = this%Gx0ji(k, j, ie, slot) + 0.5d0*(this%Gjx(k, j, ie, slot) + s*this%Gix(pm(j), pm(k), ie, slot))
+               this%Gy0ji(k, j, ie, slot) = this%Gy0ji(k, j, ie, slot) + 0.5d0*(this%Gjy(k, j, ie, slot) + s*this%Giy(pm(j), pm(k), ie, slot))
+               this%Gz0ji(k, j, ie, slot) = this%Gz0ji(k, j, ie, slot) + 0.5d0*(this%Gjz(k, j, ie, slot) + s*this%Giz(pm(j), pm(k), ie, slot))
+            end do
          end do
       end do
    end subroutine fill_intersite_gf_twoindex_pair
@@ -377,21 +381,23 @@ contains
 
    !> Pauli families Ginmag, Giz, Giy, Gix (i side) and Gjnmag, Gjz, Gjy, Gjx (j side) of the pair in slot `slot`
    !> from gij, gji; the target slices must be zero on entry.
-   subroutine pauli_pair(this, slot)
+   module subroutine pauli_pair(this, slot)
       class(green), intent(inout) :: this
       integer, intent(in) :: slot
-      integer :: i, j
+      integer :: i, j, ie
 
-      do i = 1, norb
-         do j = 1, norb
-            this%Ginmag(j, i, :, slot) = this%Ginmag(j, i, :, slot) + (this%gij(j, i, :, slot) + this%gij(j +spin_off, i +spin_off, :, slot))*0.5d0
-            this%Giz(j, i, :, slot) = this%Giz(j, i, :, slot) + 0.5d0*(this%gij(j, i, :, slot) - this%gij(j +spin_off, i +spin_off, :, slot))
-            this%Giy(j, i, :, slot) = this%Giy(j, i, :, slot) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, slot) - i_unit*this%gij(j +spin_off, i, :, slot))
-            this%Gix(j, i, :, slot) = this%Gix(j, i, :, slot) + 0.5d0*(this%gij(j, i +spin_off, :, slot) + this%gij(j +spin_off, i, :, slot))
-            this%Gjnmag(j, i, :, slot) = this%Gjnmag(j, i, :, slot) + (this%gji(j, i, :, slot) + this%gji(j +spin_off, i +spin_off, :, slot))*0.5d0
-            this%Gjz(j, i, :, slot) = this%Gjz(j, i, :, slot) + 0.5d0*(this%gji(j, i, :, slot) - this%gji(j +spin_off, i +spin_off, :, slot))
-            this%Gjy(j, i, :, slot) = this%Gjy(j, i, :, slot) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, slot) - i_unit*this%gji(j +spin_off, i, :, slot))
-            this%Gjx(j, i, :, slot) = this%Gjx(j, i, :, slot) + 0.5d0*(this%gji(j, i +spin_off, :, slot) + this%gji(j +spin_off, i, :, slot))
+      do ie = 1, size(this%gij, 3)
+         do i = 1, norb
+            do j = 1, norb
+               this%Ginmag(j, i, ie, slot) = this%Ginmag(j, i, ie, slot) + (this%gij(j, i, ie, slot) + this%gij(j +spin_off, i +spin_off, ie, slot))*0.5d0
+               this%Giz(j, i, ie, slot) = this%Giz(j, i, ie, slot) + 0.5d0*(this%gij(j, i, ie, slot) - this%gij(j +spin_off, i +spin_off, ie, slot))
+               this%Giy(j, i, ie, slot) = this%Giy(j, i, ie, slot) + 0.5d0*(i_unit*this%gij(j, i +spin_off, ie, slot) - i_unit*this%gij(j +spin_off, i, ie, slot))
+               this%Gix(j, i, ie, slot) = this%Gix(j, i, ie, slot) + 0.5d0*(this%gij(j, i +spin_off, ie, slot) + this%gij(j +spin_off, i, ie, slot))
+               this%Gjnmag(j, i, ie, slot) = this%Gjnmag(j, i, ie, slot) + (this%gji(j, i, ie, slot) + this%gji(j +spin_off, i +spin_off, ie, slot))*0.5d0
+               this%Gjz(j, i, ie, slot) = this%Gjz(j, i, ie, slot) + 0.5d0*(this%gji(j, i, ie, slot) - this%gji(j +spin_off, i +spin_off, ie, slot))
+               this%Gjy(j, i, ie, slot) = this%Gjy(j, i, ie, slot) + 0.5d0*(i_unit*this%gji(j, i +spin_off, ie, slot) - i_unit*this%gji(j +spin_off, i, ie, slot))
+               this%Gjx(j, i, ie, slot) = this%Gjx(j, i, ie, slot) + 0.5d0*(this%gji(j, i +spin_off, ie, slot) + this%gji(j +spin_off, i, ie, slot))
+            end do
          end do
       end do
    end subroutine pauli_pair
