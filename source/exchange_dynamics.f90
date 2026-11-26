@@ -43,7 +43,7 @@ contains
       class(exchange) :: this
       logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
       type(energy_nodes) :: nodes
-      integer :: i, j, njij_glob, slot, ief, nenergy, nb
+      integer :: i, j, njij_glob, slot, ief, nenergy, nres, nb
       real(rp) :: step_size
       logical :: damping, inertia, moments
       complex(rp), allocatable :: h(:, :), gij0(:, :), gji0(:, :), gij2(:, :), gji2(:, :)
@@ -71,10 +71,11 @@ contains
          call this%green%chebyshev_exchange_weights(h, kernel)
          nodes = moment_nodes(size(kernel))
       end if
-      if (damping) allocate (dtotal(9, nenergy), dpair(19, this%lattice%njij), source=0.0_rp)
-      if (damping .and. .not. moments) allocate (dcontrib(9, nenergy))
-      if (inertia) allocate (itotal(9, nenergy), ipair_b(4, nenergy, this%lattice%njij), ipair(18, this%lattice%njij), source=0.0_rp)
-      if (inertia .and. .not. moments) allocate (icontrib(9, nenergy))
+      ! Energy-resolved arrays: empty in moment space, where the energy-resolved files are not written
+      nres = merge(0, nenergy, moments)
+      if (damping) allocate (dtotal(9, nres), dcontrib(9, nres), dpair(19, this%lattice%njij), source=0.0_rp)
+      if (inertia) allocate (itotal(9, nres), icontrib(9, nres), ipair_b(4, nres, this%lattice%njij), &
+                             ipair(18, this%lattice%njij), source=0.0_rp)
 
       if (moments .and. (damping .or. inertia)) then
          nb = size(this%green%gij, 1)
