@@ -72,7 +72,6 @@ contains
          nodes = real_mesh_nodes(this)
       end if
       if (do_chi0) then
-         call chi0_check(this)
          allocate (chi0(this%lattice%njij), source=(0.0_rp, 0.0_rp))
          allocate (md(this%lattice%njij), source=0.0_rp)
          ! Juelich vertex: needs the raw moments of each pair (H_ij from mu_1), so the real-space Chebyshev route only
@@ -170,24 +169,6 @@ contains
       if (damping) call damping_finalize(this, dpair, dtotal, ief, moments)
       if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief, moments)
    end subroutine calculate_pairwise
-
-   !> Stop unless the run is collinear (nsp = 1, or nsp = 2 with every moment along +-z) and has a d channel: the spin
-   !> blocks of G are then the up and down states of the transverse response of spin_response_rs.
-   subroutine chi0_check(this)
-      class(exchange) :: this
-      integer :: it
-      real(rp) :: m(3)
-
-      if (this%control%nsp /= 1 .and. this%control%nsp /= 2) &
-         call g_logger%fatal('do_chi0 needs nsp = 1 or 2 (collinear, with or without SOC)', __FILE__, __LINE__)
-      if (lmax_basis < 2) call g_logger%fatal('do_chi0 needs lmax >= 2 (d channel)', __FILE__, __LINE__)
-      if (this%control%nsp == 1) return
-      do it = 1, this%lattice%ntype
-         m = this%symbolic_atom(it)%potential%mom
-         if (norm2(m(1:2)) > 1.0e-8_rp*norm2(m)) &
-            call g_logger%fatal('do_chi0 with nsp = 2 needs every moment along +-z (type '//int2str(it)//')', __FILE__, __LINE__)
-      end do
-   end subroutine chi0_check
 
    !> chi0_ij of the pair in Green-function slot `slot` on the real energy mesh (Simpson with the Fermi function), and for a
    !> self pair its d moment md = -(1/pi) Im int f Tr_d[G^upup - G^dndn] dE (0 otherwise).

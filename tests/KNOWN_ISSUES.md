@@ -224,6 +224,24 @@ are not tracked here; see `docs/DECISIONS.md`.
   to 6e-6 Ry. Block recursion at `nsp = 4` breaks down at large lld (|m| 2.104, 2.087, 1.776 muB at lld 21, 31, 41), consistent with the lld <= 28
   bound in `docs/DECISIONS.md`; cause not diagnosed.
 
+### Chebyshev and block routes give different d moments and first-neighbour J on bcc Fe (`do_chi0`) — 2026-11-26
+- **Measured (bcc Fe `tests/postproc/cases/exchange/bccFe`, `nsp = 1`, `lld = 21`):** the d moment of the self pair from G_ii (coefficient basis, `m_d`
+  of `chi0_types.dat`) is 1.80273 muB on the Chebyshev route (pairs and one-shot, energy mesh and moment space agree to 3e-11) and 2.19925 muB on the
+  block route. First-neighbour J is -0.160 (Chebyshev) against 0.739 (block); first-neighbour chi0 is +0.0637 against -0.0414 1/Ry.
+- **Measured, one extra run (Chebyshev, one-shot, moment space, `lld = 61`, otherwise the same deck):** `m_d` = 2.14902 muB, J_1 = 0.7242, first-neighbour
+  chi0 = -0.0431 1/Ry. The Chebyshev numbers move strongly with depth, toward the block values; no further depth was run, so the converged values and
+  whether the routes meet are not known.
+- **Not diagnosed:** whether `lld = 21` is simply under-converged on the Chebyshev route (the lld = 61 run points that way), and why the two routes differ by
+  this much at equal `lld`. No other deck was tried.
+
+### Block-route static chi0 differs between symmetry-equivalent neighbours — 2026-11-26
+- **Measured (`do_chi0`, block route, bcc Fe):** the spread of chi0 over symmetry-equivalent pairs is 1.8e-7 (8 first neighbours) and 4.0e-5 (6 second
+  neighbours) at `nsp = 1`, and 3.3e-4 for the second neighbours at `nsp = 2`. On the Chebyshev route (`lld = 21`) they agree to 11 digits.
+- **Suspected, not tested:** the finite-depth rotation non-invariance of block Haydock (the `lld`-dependent entry "RS block recursion at `nsp = 2` is not
+  invariant under spin-axis rotation" above; the documented finite-depth non-invariance of block Haydock). Not tested here: that the spread shrinks with
+  `lld`. Note that the one Chebyshev run at `lld = 61` (15 pairs) shows spreads of 1.4e-7 (8 first neighbours) and 1.3e-7 (6 second neighbours),
+  so the 11-digit agreement holds at `lld = 21` only.
+
 ### CPU Chebyshev DOS reconstruction is single precision for every `cheb_backend` — 2026-10-21
 - **Read:** `chebyshev_green_core` (`source/green_chebyshev.f90`) reconstructs the DOS on the CPU with `cheb_green_fast` (single precision) in every
   branch without `eta`; `cheb_backend` is not consulted. So `legacy` is not an fp64 oracle for the SCF energy.
@@ -300,10 +318,6 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Measured (24^3 and 60^3, scripts not committed):** the q = 0 mode stays gapped with spd (smallest eigenvalue of 1 + chi0 U -3.3e-3 Juelich,
   -2.1e-2 Mills at 24^3); Fe at 60^3 has delta_q < 0 for `alsda_scaled` spd at several xi (-0.022 to -0.112 for Mills). Per-channel scaling not
   pursued.
-
-### `source/spin_response.f90` is past the 1,000-line guideline — 2026-10-12
-- **Verified:** 1187 lines now (1146 when recorded). The developer decided not to split now. Proposal: move the pure kernels (`accumulate_chi0`,
-  `u_juelich`, `solve_dyson`, `adiabatic_frequencies`) to a submodule (about 600 lines).
 
 ### bcc Cr antiferromagnet: response frequencies 1.6 to 2.4 times LSWT — 2026-10-13
 - **Measured (32^3, `tests/validation/spin_response_cr`, 94 q):** the adiabatic frequency over the LSWT `omega_plus` of `oracles/cr_lswt.dat` is 1.626

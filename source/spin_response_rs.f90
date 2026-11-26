@@ -51,9 +51,12 @@ module spin_response_rs_mod
    use math_mod, only: pi, i_unit
    use basis_mod, only: spin_off
    use spin_response_mod, only: u_juelich, u_mills, mills_residual, adiabatic_frequencies
+   use logger_mod, only: g_logger
+   use string_mod, only: int2str
    implicit none
    private
 
+   public :: check_chi0_input
    public :: chi0_traces
    public :: chi0_from_traces
    public :: write_chi0_pairs
@@ -77,6 +80,27 @@ module spin_response_rs_mod
    real(rp), parameter :: m_tol = 1.0e-6_rp
 
 contains
+
+   !> @brief Stop unless the run is collinear (nsp = 1, or nsp = 2 with every moment along +-z) and has a d channel: the
+   !>        spin blocks of G are then the up and down states of the transverse response.
+   !> @param[in] nsp   Spin-block count of the Hamiltonian.
+   !> @param[in] lmax  Highest angular momentum of the basis.
+   !> @param[in] mom   Moment vector of each type, shape (3, ntype).
+   subroutine check_chi0_input(nsp, lmax, mom)
+      integer, intent(in) :: nsp, lmax
+      real(rp), intent(in) :: mom(:, :)
+
+      integer :: it
+
+      if (nsp /= 1 .and. nsp /= 2) &
+         call g_logger%fatal('do_chi0 needs nsp = 1 or 2 (collinear, with or without SOC)', __FILE__, __LINE__)
+      if (lmax < 2) call g_logger%fatal('do_chi0 needs lmax >= 2 (d channel)', __FILE__, __LINE__)
+      if (nsp == 1) return
+      do it = 1, size(mom, 2)
+         if (norm2(mom(1:2, it)) > 1.0e-8_rp*norm2(mom(:, it))) &
+            call g_logger%fatal('do_chi0 with nsp = 2 needs every moment along +-z (type '//int2str(it)//')', __FILE__, __LINE__)
+      end do
+   end subroutine check_chi0_input
 
    !> @brief Tr_d[G^upup_ji G^dndn_ij] (column 1) and Tr_d[G^dndn_ji G^upup_ij] (column 2) for each index n of the third
    !>        dimension (energy point or moment).
