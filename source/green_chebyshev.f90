@@ -48,8 +48,8 @@ contains
       real(rp), dimension(:), allocatable :: wscale
       complex(rp), dimension(:, :, :), allocatable :: mug
       real(rp) :: a, b, emin_win, emax_win
-      complex(rp) :: exp_factor
-      integer :: ie, i, l, m
+      complex(rp), dimension(:, :), allocatable :: ecoef, gs
+      integer :: ie, i, l, m, n, nv
 
       allocate (kernel(size(mu, 3)), wscale(this%en%channels_ldos + 10))
       allocate (mug(nb, nb, size(mu, 3)))
@@ -71,26 +71,23 @@ contains
       end do
       mug(:, :, 2:size(kernel)) = mug(:, :, 2:size(kernel))*2.0_rp
 
-      ! Calculate the density of states
-      !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-      do ie = 1, this%en%channels_ldos + 10
-         do i = 1, size(kernel)
-            exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
-            do l = 1, nb
-               do m = 1, nb
-                  g(l, m, ie) = g(l, m, ie) + mug(l, m, i)*exp_factor
-               end do
-            end do
-         end do
-         do l = 1, nb
-            do m = 1, nb
-               g(l, m, ie) = g(l, m, ie)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
-            end do
+      ! g(:,ie) = (g(:,ie) + sum_m mug(:,m) E(m,ie)) / sqrt(a^2-(E_ie-b)^2), E(m,ie) = -i exp(-i (m-1) acos(x_ie))
+      nv = this%en%channels_ldos + 10
+      n = size(kernel)
+      allocate (ecoef(n, nv), gs(nb*nb, nv))
+      !$omp parallel do default(shared) private(ie, i)
+      do ie = 1, nv
+         do i = 1, n
+            ecoef(i, ie) = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
          end do
       end do
       !$omp end parallel do
+      call zgemm('N', 'N', nb*nb, nv, n, (1.0_rp, 0.0_rp), mug, nb*nb, ecoef, n, (0.0_rp, 0.0_rp), gs, nb*nb)
+      do ie = 1, nv
+         g(:, :, ie) = (g(:, :, ie) + reshape(gs(:, ie), [nb, nb]))/(sqrt((a**2) - ((this%en%ene(ie) - b)**2)))
+      end do
 
-      deallocate (kernel, wscale, mug)
+      deallocate (kernel, wscale, mug, ecoef, gs)
    end subroutine chebyshev_reconstruct_block
 
    !> M_ij(m) = M_ji(m)^H for every moment order m.
