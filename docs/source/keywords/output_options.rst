@@ -264,7 +264,11 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   Mills residual :math:`1 + \sum_b \chi^0_{ab} U^\mathrm{Mills}_b m_b / m_a`, and
   :math:`\chi^0_{ab}(q=0)`, the sum of :math:`\mathrm{Re}\,\chi^0_{ij}` over the listed pairs of
   the seed with :math:`j` of type :math:`b`. The sum runs over the pair list as given:
-  list every atom of the shells to include, not one per shell. The three :math:`U`
+  list every atom of the shells to include, not one per shell. With ``pair_unique`` the
+  per-pair values of the representatives are copied to every member of their star before
+  the type sums, the lattice sums (``chi0_adiabatic.dat``, ``chi_rs_q.dat``), the cluster
+  and the J0 sum, so these sums run over complete stars; ``chi0_ij.dat`` lists the
+  representatives only. The three :math:`U`
   columns are ``n/a`` unless every type has a seed and a moment of at least
   1e-6 :math:`\mu_B`. The definitions follow ``spin_response`` with ``method = 'mills'``.
 - In moment space (``exchange_integration = 'moments'``) :math:`m_d` uses the linear
