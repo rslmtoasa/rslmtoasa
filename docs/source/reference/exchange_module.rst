@@ -100,7 +100,14 @@ This represents the energy cost of flipping the spin at site :math:`i`.
 Implemented Kernels
 ===================
 
-``calculate_exchange`` evaluates three separate kernels at every energy point
+``exchange%calculate_pairwise`` (``exchange_dynamics.f90``) loops over the local pairs. For each pair it runs the
+enabled per-pair kernels (``exchange_pair``, ``exchange_twoindex_pair``, ``damping_pair``, ``inertia_pair``) on that
+pair's Green functions; afterwards the ``*_finalize`` routines reduce over MPI ranks and write the output files. On
+the real-space recursion route the Green functions are reconstructed one pair at a time into a single slot
+(``green%fill_intersite_gf_pair``), so their memory does not grow with the number of pairs; the k-space routes fill
+all pairs first. The complex-contour route (``calculate_exchange_gauss_legendre``) uses ``exchange_contour_pair``.
+
+``exchange_pair`` evaluates three separate kernels at every energy point
 of the mesh (``dGdG_Jnc``, ``dGdG_Dnc``, ``dGdG_Anc``). With
 :math:`\Delta_i` the ``d_matrix`` of the type of atom :math:`i`,
 :math:`G^0` the charge part (``Ginmag``, ``Gjnmag``) and :math:`G^\alpha`
@@ -123,8 +130,8 @@ the Fermi weight at ``en%temperature`` and multiplied by
 ``jtens.out`` holds :math:`J\,\mathbb{1}` plus the skew-symmetric matrix of
 :math:`\mathbf{D}` plus :math:`A`.
 
-calculate_exchange_twoindex
----------------------------
+exchange_twoindex_pair
+----------------------
 
 Splits each kernel into four parts built from the two-index Green functions
 (``g00ij``/``g00ji``, ``g01ij``/``g01ji``, ``gx0ij``... ``gz1ji``):
@@ -199,8 +206,8 @@ standard output. For tensor components it uses rotation angles:
 
 where :math:`T` represents the traces of Green's function products.
 
-calculate_gilbert_damping
--------------------------
+damping_pair
+------------
 
 Torque-correlation Gilbert damping (``exchange_dynamics.f90``; see
 PRM 2, 013801 (2018)). Runs only when ``control%nsp == 2``; otherwise it
@@ -219,8 +226,8 @@ where :math:`E_k` is the energy-mesh point nearest to :math:`E_F` (no energy
 integral) and :math:`S_i = \sum_l (q_{l}^{\uparrow} - q_{l}^{\downarrow})`
 is taken from ``potential%ql`` of atom :math:`i`. No g factor is applied.
 
-calculate_moment_of_inertia
----------------------------
+inertia_pair
+------------
 
 Torque-correlation moment-of-inertia kernel (Sci. Rep. 7, 931 (2017)),
 called when ``&calculation do_inertia = .true.``; requires ``nsp = 2``.
@@ -266,13 +273,13 @@ Each record is:
 where ``type_i``, ``type_j`` are the atom types (``iz``), ``dx dy dz`` is
 :math:`\mathbf{r}_j - \mathbf{r}_i` and ``distance`` its norm.
 
-- From ``calculate_exchange``: ``jij.out`` (J), ``dij.out`` (3 D
+- From ``exchange_pair``/``exchange_finalize``: ``jij.out`` (J), ``dij.out`` (3 D
   components), ``aij.out`` (9 A components), ``jtens.out``.
-- From ``calculate_exchange_twoindex``: ``jijso.out``, ``jijfo.out``,
+- From ``exchange_twoindex_pair``/``exchange_twoindex_finalize``: ``jijso.out``, ``jijfo.out``,
   ``dijso.out``, ``dijfo.out``, ``aijso.out``, ``aijfo.out``,
   ``jtensso.out``, ``jtensfo.out``, ``jijparts.out``, ``dijparts.out``,
   ``aijparts.out``.
-- From ``calculate_gilbert_damping``: ``alldampings.out`` (per pair, atom
+- From ``damping_pair``/``damping_finalize``: ``alldampings.out`` (per pair, atom
   indices i, j) and ``damping-energy.out`` (energy-resolved sum; first
   column :math:`E - E_F` in Ry; sum over all listed pairs, each with its
   own prefactor, so at :math:`E_F` it equals the sum of the ``alldampings.out`` rows).
@@ -294,8 +301,8 @@ Integration and Usage
       ijpair(2,:) = 1, 3
    /
 
-3. ``post_processing_exchange`` calls ``calculate_exchange`` and
-   ``calculate_exchange_twoindex`` when ``njij /= 0`` and ``njijk == 0``.
+3. ``post_processing_exchange`` calls ``exchange%calculate_pairwise``, which runs the J/D/A and two-index kernels
+   when ``njij /= 0`` and ``njijk == 0``, plus damping and inertia when ``do_damping`` / ``do_inertia`` are set.
 
 Connection to Spin Dynamics
 ----------------------------
@@ -366,10 +373,11 @@ Provenance
 
 **Key procedures:**
 
-- ``calculate_exchange()`` - J, D, A kernels
-- ``calculate_exchange_twoindex()`` - CD/CC/SD/SC decomposition
-- ``calculate_gilbert_damping()`` - Torque-correlation damping
-- ``calculate_moment_of_inertia()`` - Torque-correlation inertia kernel
+- ``calculate_pairwise()`` - Pair loop over the per-pair kernels, then the finalize routines
+- ``exchange_pair()`` - J, D, A kernels
+- ``exchange_twoindex_pair()`` - CD/CC/SD/SC decomposition
+- ``damping_pair()`` - Torque-correlation damping
+- ``inertia_pair()`` - Torque-correlation inertia kernel
 - ``calculate_jij_auxgreen()`` - LKAG formula with auxiliary GFs (no caller)
 - ``calculate_jijk()`` - Spin-lattice coupling (no caller)
 

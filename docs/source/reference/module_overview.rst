@@ -299,10 +299,11 @@ Procedures:
 
 Procedures:
 
-- ``calculate_exchange()`` - J, D, A
-- ``calculate_exchange_twoindex()`` - CD/CC/SD/SC decomposition
-- ``calculate_gilbert_damping()`` - Gilbert damping
-- ``calculate_moment_of_inertia()`` - Moment of inertia
+- ``calculate_pairwise()`` - Pair loop over the per-pair kernels and their finalize routines
+- ``exchange_pair()`` - J, D, A
+- ``exchange_twoindex_pair()`` - CD/CC/SD/SC decomposition
+- ``damping_pair()`` - Gilbert damping
+- ``inertia_pair()`` - Moment of inertia
 
 Key members:
 

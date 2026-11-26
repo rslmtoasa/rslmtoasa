@@ -200,6 +200,16 @@ int rsrec_op_apply(rsrec_ctx *ctx, int which, const void *x, void *y,
 int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
                             double a, double b, void *mu_out);
 
+/* One-shot inter-site Chebyshev moments: plain recursion V_{m+1} = 2 Ht V_m
+ * - V_{m-1} from psi0 (nb, nb, kk); returns the blocks V_m(:,:,targets(t)).
+ *   targets : ntarget 1-based site ids
+ *   nmom    : number of orders (nmom-1 Hamiltonian applications)
+ *   mu_out  : (nb, nb, nmom, ntarget)
+ * Block-ELL path only; the structured backend returns an error.            */
+int rsrec_chebyshev_moments_targets(rsrec_ctx *ctx, const void *psi0,
+                                    int ntarget, const int *targets, int nmom,
+                                    double a, double b, void *mu_out);
+
 /* Block Lanczos (Haydock) recursion, mirrors crecal_b/hop_b.
  *   psi0   : (nb, nb, kk) starting block state
  *   lld    : recursion steps (control%lld)
@@ -207,6 +217,15 @@ int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
  *   b2_b   : (nb, nb, lld) out, = b2temp_b  (B^2 BEFORE zsqr, like the CPU) */
 int rsrec_block_lanczos(rsrec_ctx *ctx, const void *psi0, int lld,
                         void *a_b, void *b2_b, int prec);
+
+/* One-shot block Lanczos: a_b, b2_b as rsrec_block_lanczos, plus the
+ * normalised Q_ll blocks (ll = 1..lld-1, captured before the H apply of step
+ * ll) at the 1-based sites targets[0..ntarget):
+ *   slices : (nb, nb, lld-1, ntarget) complex128, Fortran order
+ *   prec   : 0 = fp32 (fp64 B-sqrt), 1 = fp64; honoured with and without hoh. */
+int rsrec_block_lanczos_targets(rsrec_ctx *ctx, const void *psi0, int lld,
+                                int ntarget, const int *targets, void *a_b,
+                                void *b2_b, void *slices, int prec);
 
 /* Scalar Lanczos, mirrors recur()/crecal()/hop() but runs all nb orbital
  * chains of one site simultaneously as independent columns.

@@ -188,6 +188,17 @@ if(RUN_REG_TESTS)
         "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
   endif()
 
+  if(ENABLE_MPI)
+    rslmto_add_test(NAME OneShotExchange_MPI TIER standard TIMEOUT 1800 LABELS regression mpi
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_exchange.py" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_exchange"
+        "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
+    rslmto_add_test(NAME OneShotContour_MPI TIER standard TIMEOUT 1800 LABELS regression mpi
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_contour.py" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_contour"
+        "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
+  endif()
+
   # --- Kubo transport operators and backends (pytest) -----------------------------------------
   # The compile-based suites build Debug dense-reference drivers themselves (about 75 s for both);
   # test_transport_backend.py runs the executable of this build (RSLMTO_EXE).
@@ -245,6 +256,8 @@ if(RUN_UNIT_TESTS)
 
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
+  add_fortran_unit_test(UnitIntersiteRequest quick SOURCES ${TestDIR}/unit/test_intersite_request.f90)
+  add_fortran_unit_test(UnitBlockTridiag quick SOURCES ${TestDIR}/unit/test_block_tridiag.f90)
   add_fortran_unit_test(UnitEffectiveHamiltonian quick SOURCES ${TestDIR}/unit/test_effective_hamiltonian.f90 LABELS hamiltonian_export)
   add_executable(HamiltonianActionProbe ${TestDIR}/hamiltonian_export/probe_native_action.f90)
   target_link_libraries(HamiltonianActionProbe PRIVATE ${PROJECT_NAME})
@@ -515,6 +528,14 @@ if(RUN_UNIT_TESTS)
     add_fortran_unit_test(CudaMpiDeviceMapping standard SOURCES ${TestDIR}/unit/test_cuda_mpi_device_mapping.f90
       LABELS cuda mpi PROPERTIES SKIP_RETURN_CODE 77)
     target_link_libraries(CudaMpiDeviceMapping rsrec_cuda)
+    rslmto_add_test(NAME OneShotExchange_GPU TIER standard TIMEOUT 1800 LABELS regression cuda
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_exchange.py" "--gpu" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_exchange_gpu")
+    set_tests_properties(OneShotExchange_GPU PROPERTIES SKIP_RETURN_CODE 77)
+    rslmto_add_test(NAME OneShotContour_GPU TIER standard TIMEOUT 1800 LABELS regression cuda
+      COMMAND "${PY}" "${TestDIR}/regression/test_oneshot_contour.py" "--gpu" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/regression/oneshot_contour_gpu")
+    set_tests_properties(OneShotContour_GPU PROPERTIES SKIP_RETURN_CODE 77)
   endif()
   if(ENABLE_CUDA_RECIPROCAL)
     add_executable(ReciprocalCudaArbitraryK ${TestDIR}/unit/test_reciprocal_cuda_arbitrary_k.f90)

@@ -415,10 +415,13 @@ contains
    !>          and stores temporary A_n/B_n blocks for the caller.
    !> @param[inout] this Recursion object with psi_b initialized for one atom or pair.
    !> @note Uses LAPACK zheev and mutates psi_b, pmn_b, atemp_b, and b2temp_b.
-   module subroutine crecal_b(this)
+   module subroutine crecal_b(this, targets, slices)
       use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
                              ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       class(recursion), intent(inout) :: this
+      !> Optional sites whose block of the normalized Q_ll is stored in slices(:,:,ll,:), ll = 1..lld-1
+      integer, intent(in), optional :: targets(:)
+      complex(rp), intent(inout), optional :: slices(:, :, :, :)
       ! Local variables
       integer :: i, j, k, l, m, info, lwork
       integer :: ll, llmax ! Recursion step
@@ -452,6 +455,13 @@ contains
             call this%hop_b(ll)     ! a_n=<PSI_n|H|PSI_n>
          end if
          call g_timer%stop('H|PSI_n>')
+
+         ! hop_b leaves psi_b untouched: here it is the normalized Q_ll that belongs to atemp_b(:,:,ll)
+         if (present(targets)) then
+            do i = 1, size(targets)
+               slices(:, :, ll, i) = this%psi_b(:, :, targets(i))
+            end do
+         end if
 
          !psi_t(:,:,:) = this%psi_b(:,:,:)
          !call zcopy(nb*nb*this%lattice%kk,this%psi_b,1,psi_t,1)
@@ -534,36 +544,44 @@ contains
    !> @note Uses MPI partition sizes and LAPACK zheev; no collective communication occurs here.
    module subroutine zsqr(this)
       use mpi_mod
-      use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
-                                               ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       implicit none
       class(recursion), intent(inout) :: this
-      !
-      integer :: na, LDIM, I, J, K, L, N, M, info, n_glob
-      real(rp), dimension(nb) :: ev
-      real(rp), dimension(3*nb - 2) ::rwork
-      complex(rp), dimension(nb*nb) ::zwork
-      complex(rp), dimension(nb, nb) :: U, DUM, lam
-      logical :: halt_divide_by_zero
 
       if (this%b2_b_is_sqrt) return
 
-      !
-      if (this%lattice%njij == 0) then
-         na = atoms_per_process !this%lattice%nrec
+      if (allocated(this%os_b2)) then
+         ! One-shot route: B^2 stored once per seed
+         call zsqr_blocks(this%os_b2, size(this%os_b2, 4))
       else
-         na = atoms_per_process*4 !4*this%lattice%njij
+         if (this%lattice%njij == 0) then
+            call zsqr_blocks(this%b2_b, atoms_per_process)
+         else
+            call zsqr_blocks(this%b2_b, atoms_per_process*4)
+         end if
       end if
-      !call get_mpi_variables(rank,na)
+      this%b2_b_is_sqrt = .true.
+   end subroutine zsqr
+
+   !> Overwrite the Hermitian blocks b2(:,:,:,1:na) by their positive matrix square roots.
+   subroutine zsqr_blocks(b2, na)
+      use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
+                                               ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
+      complex(rp), intent(inout) :: b2(:, :, :, :)
+      integer, intent(in) :: na
+      integer :: LDIM, I, J, L, N, info
+      real(rp), dimension(nb) :: ev
+      real(rp), dimension(3*nb - 2) ::rwork
+      complex(rp), dimension(nb*nb) ::zwork
+      complex(rp), dimension(nb, nb) :: U, DUM, lam, bsq
+      logical :: halt_divide_by_zero
+
       lam = 0.0d0
       LDIM = nb
-      ! do n_glob=start_atom, end_atom
-      !  N = g2l_map(n_glob)
       do N = 1, na
-         do L = 1, this%lattice%control%lld
+         do L = 1, size(b2, 3)
             do I = 1, LDIM
                do J = 1, LDIM
-                  U(J, I) = this%B2_b(J, I, L, N)
+                  U(J, I) = b2(J, I, L, N)
                end do
             end do
             ! replace sqrt with eigen solver to get lamda^2 and U
@@ -583,11 +601,12 @@ contains
             end do
             ! calc. U*lamda*U´= B
             call zgemm('n', 'n', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), U, LDIM, lam, LDIM, (0.0d0, 0.0d0), DUM, LDIM)
-            call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), this%B2_b(1, 1, L, N), LDIM)
+            call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), bsq, LDIM)
+            ! Through a local block: b2 is assumed-shape, so its elements cannot be passed to the implicit-interface zgemm
+            b2(:, :, L, N) = bsq
          end do
       end do
-      this%b2_b_is_sqrt = .true.
-   end subroutine zsqr
+   end subroutine zsqr_blocks
 
    !> @brief Estimate scalar terminator coefficients for continued fractions.
    !> @details Reduces finite Lanczos alpha/beta sequences to asymptotic constants

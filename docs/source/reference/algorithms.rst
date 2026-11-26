@@ -217,7 +217,7 @@ Density Mixing
 Exchange Interaction Calculation
 =================================
 
-For each pair :math:`(i, j)` in ``ijpair``, ``calculate_exchange``
+For each pair :math:`(i, j)` in ``ijpair``, the kernel ``exchange_pair``
 integrates
 
 .. math::
@@ -232,8 +232,9 @@ the ``Ginmag``/``Gjnmag`` and ``Gix``... ``Gjz`` arrays). See
 
 **Implementation:**
 
-- ``source/exchange.f90::calculate_exchange()`` - Main routine
-- Uses ``green.f90`` for inter-site Green's functions
+- ``source/exchange_dynamics.f90::calculate_pairwise()`` - Pair loop: runs the per-pair kernels, then the finalize routines that write the outputs
+- ``source/exchange.f90::exchange_pair()`` - J/D/A kernel of one pair; ``exchange_finalize()`` - MPI reduction and output
+- Uses ``green.f90`` for inter-site Green's functions (on the recursion route reconstructed one pair at a time, ``fill_intersite_gf_pair``)
 
 Conductivity Calculation
 ========================

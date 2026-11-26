@@ -71,6 +71,15 @@ are not tracked here; see `docs/DECISIONS.md`.
   1)`), with `enpt` = 141 the E_F point is the centre of a Simpson panel, with f = 0.5 there. Whether the integral up to E_F is accurate, and how it
   depends on the parity of `enpt` or on `channels_ldos`, was not measured. The fixed lehmann J[1_335] moved +0.4% (0.257612 to 0.255696); neither
   value is known to be the correct J.
+- **Measured 2026-11-25 (parity of `enpt`):** triad deck, `recur = 'chebyshev'`, lld = 150, `intersite_mode = 'one_shot'` (equal to 'pairs' to
+  1e-12), T = 0, window [-1.2, 1.2] Ry, J[1_335] against 8002 channels (even `enpt`, 0.5004726136): even `enpt` gives -4.3e-5 (500 channels),
+  -2.8e-6 (1002), -1.8e-7 (2000), -1e-8 (4004) relative; odd `enpt` gives +1.5e-3 (1000), +3.8e-4 (2002), +1.7e-4 (3000), +9.5e-5 (4000), about
+  134*edel^2 absolute. With odd `enpt` E_F is the midpoint of a Simpson triplet (f = 0.5 there), which matches an O(h^2) error. Not checked at T > 0.
+  Proposal, not done (a few lines): force even `enpt` in `energy%e_mesh`, or treat the last panel in `simpson_f`. The fix would change J at the
+  1e-4 to 1e-3 level for odd-`enpt` inputs, including the triad deck (`enpt` = 141).
+- **Measured 2026-11-25 (block, real axis):** same deck with `recur = 'block'`, lld = 40, one_shot: J[1_335] scatters with a standard deviation of
+  1.9% over even-`enpt` channels from 500 to 8002 and does not converge with the mesh. Not diagnosed; suspected, not tested: poles of the finite
+  chain outside the terminator band [ebot, etop], where the terminator has no imaginary part.
 - **Suspected, not tested:** the original residual dependence came from `energy_min + edel*i` (`source/energy.f90:214`) contracted to FMA at `-O2`;
   the regression tests were not rebuilt with `-ffp-contract=off`. Tests: `tests/regression/triad_bccFe_exchange` (`Triad_triad_bccFe_jij`,
   `golden_rtol` 1e-2).
@@ -600,3 +609,17 @@ Found during the main_rc release-candidate review (2026-11-15), by reading the c
 
 ### Exchange kernels form dense products with the diagonal d_matrix — 2026-11-25
 - **Read, not run:** `dGdG_Jnc`, `dGdG_Dnc`, `dGdG_Anc` (`exchange.f90`) multiply by `d_matrix` (diagonal) with `matmul` and recompute the same `matmul(di, G)` / `matmul(dj, G)` inside their k/l loops (`dGdG_Anc` forms 8 products per (k,l)). **Proposal (deferred):** scale rows by the diagonal, form each product once, take traces as `sum(P*transpose(Q))` as in `torque_trace` (about 60 lines; changes results at rounding level).
+
+### Contour inter-site Green function halves self-pairs (i == j) — 2026-11-25
+- **Read, not run:** the eta (complex-contour) branch of `calculate_intersite_gf_core` (`green_block.f90`) applies `gij = 0.5*[(y1 - y2) - i(y3 - y4)]` to every pair. For a self-pair only slot 1 is filled (unit seed; slots 2–4 are skipped by `recur_b_ij` / `chebyshev_recur_ij`), so `gij = gji = 0.5*G_ii`, provided slots 2–4 hold zeros (not checked). The real-mesh branch special-cases i == j (`gij = gji = g0(:,:,:,1)`).
+- The one-shot routes (`intersite_mode = 'one_shot'`) return G_ii and the contour branch applies the same 0.5 for i = j to match the pairs route. No contour test uses a self-pair. Proposal: copy the real-mesh special case into the eta branch (a few lines).
+
+
+### Exchange two-index outputs differ in the last bits with OpenMP (pairs route) — 2026-11-25
+- **Measured:** triad exchange deck, Chebyshev, `intersite_mode = 'pairs'`, `OMP_NUM_THREADS = 4`, two identical runs: `dij.out` (a `-0.000000` sign), `dijso/dijfo/dijparts/jijparts/aijparts.out` and the full-precision pair lines differ by up to 3.7e-15; `jij.out` is identical. With `OMP_NUM_THREADS = 1`, and with `one_shot` at 4 threads, the runs were bit-identical. Not diagnosed.
+
+### PAOFLOW exchange input: pair list before `ntype`/`ct` fails to read — 2026-11-25
+- **Observed, not triaged:** in `tests/postproc/cases/paoflow/bccFe_exchange/input.nml`, placing `njij`/`ijpair` before `ntype`/`ct` in `&lattice` gives "Invalid &lattice namelist, iostat=5010"; placing them after works.
+
+### GPU on-site Chebyshev DOS slices mu_n with global atom indices under MPI — 2026-11-25
+- **Read, not run:** `chebyshev_green_core` (`source/green_chebyshev.f90`, GPU branch ~line 245) passes `mu_n(:,:,:,start_atom:end_atom)` and `g0(:,:,:,start_atom:end_atom)` to `chebyshev_dos`, while the per-atom recursion (`chebyshev_recur`) stores the moments of atom `ia_glob` at the local slot `g2l_map(ia_glob)`. On rank 0 the two coincide; on ranks above 0 the slice would read slots that the rank did not fill (or exceed the local count if the arrays are sized locally). Affects `gpu_plugin` runs with MPI on the Chebyshev DOS/SCF path only; the CPU path and the exchange (pair) routes use local slots. Not reproduced. Proposal: slice `1:atoms_per_process` (a few lines), with a 2-rank GPU check.

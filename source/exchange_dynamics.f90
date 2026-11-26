@@ -17,64 +17,142 @@ contains
    !> Implemented by Ivan Miranda on 14.11.2023
    !> Revised by Ivan Miranda on 29.04.2025
    !---------------------------------------------------------------------------
-   module subroutine calculate_gilbert_damping(this)
-      use mpi_mod
-      !
+   function damping_ready(this) result(ready)
       class(exchange) :: this
-      !
-      complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
-      complex(rp) :: c(3, 3)
-      integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nb_ij, nenergy, unit_e, unit_p
-      real(rp) :: spin_i, factor, distance_alat, alpha(3, 3), mhat(3)
-      ! pair(1:9) Re tensor at E_F, pair(10:18) Im tensor at E_F, pair(19) prefactor
-      real(rp), allocatable :: pair(:, :), total_damping(:, :)
+      logical :: ready
 
-      if (this%control%nsp /= 2) then
+      ready = this%control%nsp == 2
+      if (.not. ready) then
          call g_logger%warning('calculate_gilbert_damping: needs nsp = 2 (collinear with l.s); skipped.', __FILE__, __LINE__)
          return
       end if
-
       call this%hamiltonian%torque_operator_collinear()
+   end function damping_ready
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Pair loop of the exchange consumers (J/D/A, two-index J/D/A, Gilbert damping, moment of inertia).
+   !> @details Every enabled consumer runs its per-pair kernel on the Green functions of the pair, then its finalize
+   !>          writes the outputs. With stream = .false. the Green functions of all local pairs are already filled
+   !>          (k-space routes) and the kernels read slot = local pair index. With stream = .true. (real-space recursion
+   !>          route) the Green-function arrays hold one slot: each pair is reconstructed into slot 1 before the kernels.
+   !---------------------------------------------------------------------------
+   module subroutine calculate_pairwise(this, stream, do_exchange, do_damping, do_inertia)
+      use mpi_mod
+      class(exchange) :: this
+      logical, intent(in) :: stream, do_exchange, do_damping, do_inertia
+      type(energy_nodes) :: nodes
+      integer :: i, j, njij_glob, slot, ief, nenergy
+      real(rp) :: step_size
+      logical :: damping, inertia
+      real(rp), allocatable :: xc(:, :), xcso(:, :), xcfo(:, :), xcparts(:, :)
+      ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
+      real(rp), allocatable :: dpair(:, :), dtotal(:, :), dcontrib(:, :)
+      real(rp), allocatable :: ipair(:, :), ipair_b(:, :, :), itotal(:, :), icontrib(:, :)
+
+      damping = do_damping
+      if (damping) damping = damping_ready(this)
+      inertia = do_inertia
+      if (inertia) inertia = inertia_ready(this, step_size)
+      nenergy = size(this%en%ene)
+      ief = fermi_index(this%en%ene, this%en%fermi)
+      if (do_exchange) then
+         ! row = [jij dij aij]; xcparts row = [jcd, jsd, jcc, jsc, dcc(3), dsc(3), isd(9), isc(9)]
+         allocate (xc(13, this%lattice%njij), xcso(13, this%lattice%njij), xcfo(13, this%lattice%njij), &
+                   xcparts(28, this%lattice%njij), source=0.0_rp)
+         nodes = real_mesh_nodes(this)
+      end if
+      if (damping) allocate (dtotal(9, nenergy), dpair(19, this%lattice%njij), source=0.0_rp)
+      if (damping) allocate (dcontrib(9, nenergy))
+      if (inertia) allocate (itotal(9, nenergy), ipair_b(4, nenergy, this%lattice%njij), ipair(18, this%lattice%njij), source=0.0_rp)
+      if (inertia) allocate (icontrib(9, nenergy))
+
+      if (stream) call this%green%prepare_intersite_gf()
+      ! Each rank holds the pairs start_atom..end_atom (local index g2l_map)
+      do njij_glob = start_atom, end_atom
+         i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
+         j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
+         slot = g2l_map(njij_glob)
+         if (stream) then
+            slot = 1
+            call this%green%fill_intersite_gf_pair(njij_glob, slot)
+            call this%green%fill_intersite_gf_twoindex_pair(slot)
+         end if
+         if (do_exchange) then
+            call exchange_pair(this, nodes, slot, i, j, xc(:, njij_glob))
+            call exchange_twoindex_pair(this, nodes, slot, i, j, xcso(:, njij_glob), xcfo(:, njij_glob), xcparts(:, njij_glob))
+         end if
+         if (damping) then
+            call damping_pair(this, slot, i, j, ief, dpair(:, njij_glob), dcontrib)
+            dtotal = dtotal + dcontrib
+         end if
+         if (inertia) then
+            call inertia_pair(this, slot, i, j, ief, step_size, ipair(:, njij_glob), ipair_b(:, :, njij_glob), icontrib)
+            itotal = itotal + icontrib
+         end if
+      end do
+
+      if (do_exchange) then
+         call exchange_finalize(this, xc)
+         call exchange_twoindex_finalize(this, xcso, xcfo, xcparts)
+      end if
+      if (damping) call damping_finalize(this, dpair, dtotal, ief)
+      if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief)
+   end subroutine calculate_pairwise
+
+   !> Torque-correlation damping tensor of pair (i, j) read from Green-function slot `slot`: pair(1:9) Re and pair(10:18) Im
+   !> at energy index ief, pair(19) prefactor; contrib(:, nv) is the pair's energy-resolved contribution.
+   subroutine damping_pair(this, slot, i, j, ief, pair, contrib)
+      class(exchange) :: this
+      integer, intent(in) :: slot, i, j, ief
+      real(rp), intent(out) :: pair(19), contrib(:, :)
+      complex(rp), allocatable :: Aij(:, :), Aji(:, :), tjd(:, :, :)
+      complex(rp) :: c(3, 3)
+      integer :: k, l, m, nv, nb_ij, nenergy
+      real(rp) :: spin_i
+
       nenergy = size(this%en%ene)
       nb_ij = size(this%green%gij, 1)
-      allocate (total_damping(9, nenergy), pair(19, this%lattice%njij), source=0.0_rp)
       allocate (Aij(nb_ij, nb_ij), Aji(nb_ij, nb_ij), tjd(nb_ij, nb_ij, 3))
-      ief = fermi_index(this%en%ene, this%en%fermi)
-
-      ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
-      do njij_glob = start_atom, end_atom
-         njij = g2l_map(njij_glob)
-         i = this%lattice%ijpair(njij_glob, 1)
-         j = this%lattice%ijpair(njij_glob, 2)
-         ! Spin magnetic moment of atom i
-         spin_i = 0.0_rp
-         do k = 0, this%symbolic_atom(this%lattice%iz(i))%potential%lmax
-            spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
-                     this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
-         end do
-         pair(19, njij_glob) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
-         do l = 1, 3
-            tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
-         end do
-         do nv = 1, nenergy
-            ! Anti-Hermitian parts of the intersite Green functions (times 2i)
-            Aij = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
-            Aji = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
-            c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij, tjd, Aji)
-            m = 0
-            do k = 1, 3
-               do l = 1, 3
-                  m = m + 1
-                  total_damping(m, nv) = total_damping(m, nv) + pair(19, njij_glob)*real(c(k, l), rp)
-                  if (nv == ief) then
-                     pair(m, njij_glob) = real(c(k, l), rp)
-                     pair(9 + m, njij_glob) = aimag(c(k, l))
-                  end if
-               end do
+      ! Spin magnetic moment of atom i
+      spin_i = 0.0_rp
+      do k = 0, this%symbolic_atom(this%lattice%iz(i))%potential%lmax
+         spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
+                  this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
+      end do
+      pair(19) = (-0.25_rp)*(2.0_rp/(pi*spin_i))
+      do l = 1, 3
+         tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
+      end do
+      do nv = 1, nenergy
+         ! Anti-Hermitian parts of the intersite Green functions (times 2i)
+         Aij = this%green%gij(:, :, nv, slot) - transpose(conjg(this%green%gji(:, :, nv, slot)))
+         Aji = this%green%gji(:, :, nv, slot) - transpose(conjg(this%green%gij(:, :, nv, slot)))
+         c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij, tjd, Aji)
+         m = 0
+         do k = 1, 3
+            do l = 1, 3
+               m = m + 1
+               contrib(m, nv) = pair(19)*real(c(k, l), rp)
+               if (nv == ief) then
+                  pair(m) = real(c(k, l), rp)
+                  pair(9 + m) = aimag(c(k, l))
+               end if
             end do
          end do
       end do
+   end subroutine damping_pair
 
+   subroutine damping_finalize(this, pair, total_damping, ief)
+      use mpi_mod
+      class(exchange) :: this
+      real(rp), intent(inout) :: pair(:, :), total_damping(:, :)
+      integer, intent(in) :: ief
+      integer :: i, j, njij_glob, nv, nenergy, unit_e, unit_p
+      real(rp) :: factor, distance_alat, alpha(3, 3), mhat(3)
+
+      nenergy = size(this%en%ene)
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, total_damping, size(total_damping), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, pair, size(pair), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -114,7 +192,7 @@ contains
          close (unit_p)
       end if
 
-   end subroutine calculate_gilbert_damping
+   end subroutine damping_finalize
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -126,24 +204,18 @@ contains
    !> The following calculation works better with hoh.
    !> Implemented by Ivan Miranda on 22.11.2023
    !---------------------------------------------------------------------------
-   module subroutine calculate_moment_of_inertia(this)
-      use mpi_mod
-      !
+   function inertia_ready(this, step_size) result(ready)
       class(exchange) :: this
-      !
+      real(rp), intent(out) :: step_size
+      logical :: ready
+      integer :: nenergy
+
       ! This is the experimental torque-correlation kernel described in
       ! Sci. Rep. 7, 931 (2017).  It is deliberately reported as the raw
       ! production kernel: unlike Gilbert damping above, this routine has no
       ! independently established normalization or production relation.
-      complex(rp), allocatable :: Aij(:, :, :), Aji(:, :, :), Bij(:, :, :), Bji(:, :, :)
-      complex(rp), allocatable :: sBij(:, :, :), sBji(:, :, :)
-      complex(rp), allocatable :: tjd(:, :, :)
-      complex(rp) :: c(3, 3)
-      ! pair(1:9) Re kernel at E_F, pair(10:18) Im kernel at E_F
-      real(rp), allocatable :: total_inertia(:, :), pair_b(:, :, :), pair(:, :)
-      integer :: i, j, k, l, m, njij, njij_glob, nv, ief, nenergy, nb_ij, u_re, u_im, u_e, u_p
-      real(rp) :: distance_alat, step_size
-
+      ready = .false.
+      step_size = 0.0_rp
       if (this%control%nsp /= 2) then
          call g_logger%warning('calculate_moment_of_inertia: needs nsp = 2 (collinear with l.s); skipped.', __FILE__, __LINE__)
          return
@@ -158,59 +230,76 @@ contains
          write (*, *) 'Moment of inertia skipped: zero energy step.'
          return
       end if
-
       call this%hamiltonian%torque_operator_collinear()
+      ready = .true.
+   end function inertia_ready
+
+   !> Raw inertia kernel of pair (i, j) read from Green-function slot `slot`: pair(1:9) Re and pair(10:18) Im at energy index ief,
+   !> pair_b the Bij(1, 1) trace and its second derivative, contrib(:, nv) the energy-resolved real part.
+   subroutine inertia_pair(this, slot, i, j, ief, step_size, pair, pair_b, contrib)
+      class(exchange) :: this
+      integer, intent(in) :: slot, i, j, ief
+      real(rp), intent(in) :: step_size
+      real(rp), intent(out) :: pair(18), pair_b(:, :), contrib(:, :)
+      complex(rp), allocatable :: Aij(:, :, :), Aji(:, :, :), Bij(:, :, :), Bji(:, :, :)
+      complex(rp), allocatable :: sBij(:, :, :), sBji(:, :, :)
+      complex(rp), allocatable :: tjd(:, :, :)
+      complex(rp) :: c(3, 3)
+      integer :: k, l, m, nv, nenergy, nb_ij
+
+      nenergy = size(this%en%ene)
       nb_ij = size(this%green%gij, 1)
-      allocate (total_inertia(9, nenergy), pair_b(4, nenergy, this%lattice%njij), pair(18, this%lattice%njij), source=0.0_rp)
       allocate (Aij(nb_ij, nb_ij, nenergy), Aji(nb_ij, nb_ij, nenergy), Bij(nb_ij, nb_ij, nenergy), Bji(nb_ij, nb_ij, nenergy))
       allocate (sBij(nb_ij, nb_ij, nenergy), sBji(nb_ij, nb_ij, nenergy))
       allocate (tjd(nb_ij, nb_ij, 3))
-      ief = fermi_index(this%en%ene, this%en%fermi)
 
-      ! Each rank holds the Green functions of its pairs start_atom..end_atom (local index g2l_map)
-      do njij_glob = start_atom, end_atom
-         njij = g2l_map(njij_glob)
-         i = this%lattice%ijpair(njij_glob, 1)
-         j = this%lattice%ijpair(njij_glob, 2)
-
-         do nv = 1, nenergy
-            Aij(:, :, nv) = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
-            Aji(:, :, nv) = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
-            Bij(:, :, nv) = this%green%gij(:, :, nv, njij) + transpose(conjg(this%green%gji(:, :, nv, njij)))
-            Bji(:, :, nv) = this%green%gji(:, :, nv, njij) + transpose(conjg(this%green%gij(:, :, nv, njij)))
-         end do
-         sBij = czero; sBji = czero
-         do k = 1, nb_ij
-            do l = 1, nb_ij
-               sBij(k, l, 2:nenergy - 1) = cmplx(second_derivative(real(Bij(k, l, :)), step_size), &
-                                                 second_derivative(aimag(Bij(k, l, :)), step_size), kind=rp)
-               sBji(k, l, 2:nenergy - 1) = cmplx(second_derivative(real(Bji(k, l, :)), step_size), &
-                                                 second_derivative(aimag(Bji(k, l, :)), step_size), kind=rp)
-            end do
-         end do
-
-         pair_b(1, :, njij_glob) = real(Bij(1, 1, :)); pair_b(2, :, njij_glob) = real(sBij(1, 1, :))
-         pair_b(3, :, njij_glob) = aimag(Bij(1, 1, :)); pair_b(4, :, njij_glob) = aimag(sBij(1, 1, :))
-         do l = 1, 3
-            tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
-         end do
-         do nv = 1, nenergy
-            c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij(:, :, nv), tjd, sBji(:, :, nv)) + &
-                torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), sBij(:, :, nv), tjd, Aji(:, :, nv))
-            m = 0
-            do k = 1, 3
-               do l = 1, 3
-                  m = m + 1
-                  total_inertia(m, nv) = total_inertia(m, nv) + real(c(k, l), rp)
-                  if (nv == ief) then
-                     pair(m, njij_glob) = real(c(k, l), rp)
-                     pair(9 + m, njij_glob) = aimag(c(k, l))
-                  end if
-               end do
-            end do
+      do nv = 1, nenergy
+         Aij(:, :, nv) = this%green%gij(:, :, nv, slot) - transpose(conjg(this%green%gji(:, :, nv, slot)))
+         Aji(:, :, nv) = this%green%gji(:, :, nv, slot) - transpose(conjg(this%green%gij(:, :, nv, slot)))
+         Bij(:, :, nv) = this%green%gij(:, :, nv, slot) + transpose(conjg(this%green%gji(:, :, nv, slot)))
+         Bji(:, :, nv) = this%green%gji(:, :, nv, slot) + transpose(conjg(this%green%gij(:, :, nv, slot)))
+      end do
+      sBij = czero; sBji = czero
+      do k = 1, nb_ij
+         do l = 1, nb_ij
+            sBij(k, l, 2:nenergy - 1) = cmplx(second_derivative(real(Bij(k, l, :)), step_size), &
+                                              second_derivative(aimag(Bij(k, l, :)), step_size), kind=rp)
+            sBji(k, l, 2:nenergy - 1) = cmplx(second_derivative(real(Bji(k, l, :)), step_size), &
+                                              second_derivative(aimag(Bji(k, l, :)), step_size), kind=rp)
          end do
       end do
 
+      pair_b(1, :) = real(Bij(1, 1, :)); pair_b(2, :) = real(sBij(1, 1, :))
+      pair_b(3, :) = aimag(Bij(1, 1, :)); pair_b(4, :) = aimag(sBij(1, 1, :))
+      do l = 1, 3
+         tjd(:, :, l) = transpose(conjg(this%hamiltonian%tmat(:, :, l, this%lattice%iz(j))))
+      end do
+      do nv = 1, nenergy
+         c = torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), Aij(:, :, nv), tjd, sBji(:, :, nv)) + &
+             torque_trace(this%hamiltonian%tmat(:, :, :, this%lattice%iz(i)), sBij(:, :, nv), tjd, Aji(:, :, nv))
+         m = 0
+         do k = 1, 3
+            do l = 1, 3
+               m = m + 1
+               contrib(m, nv) = real(c(k, l), rp)
+               if (nv == ief) then
+                  pair(m) = real(c(k, l), rp)
+                  pair(9 + m) = aimag(c(k, l))
+               end if
+            end do
+         end do
+      end do
+   end subroutine inertia_pair
+
+   subroutine inertia_finalize(this, pair, pair_b, total_inertia, ief)
+      use mpi_mod
+      class(exchange) :: this
+      real(rp), intent(inout) :: pair(:, :), pair_b(:, :, :), total_inertia(:, :)
+      integer, intent(in) :: ief
+      integer :: i, j, njij_glob, nv, nenergy, u_re, u_im, u_e, u_p
+      real(rp) :: distance_alat
+
+      nenergy = size(this%en%ene)
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, total_inertia, size(total_inertia), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, pair_b, size(pair_b), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -245,7 +334,7 @@ contains
          end do
          close (u_re); close (u_im); close (u_e); close (u_p)
       end if
-   end subroutine calculate_moment_of_inertia
+   end subroutine inertia_finalize
 
    !> Index of the energy-grid point closest to the Fermi level.
    pure integer function fermi_index(ene, fermi) result(ief)

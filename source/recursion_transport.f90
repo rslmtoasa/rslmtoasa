@@ -1429,6 +1429,54 @@ contains
       !end do
    end subroutine recur_b_ij
 
+   !> @brief One-shot block Haydock for intersite pairs: one block-Lanczos recursion per seed site.
+   !> @details Block Lanczos from Q_1 = P_i (identity block at the seed site) through crecal_b (legacy FP64 path).
+   !>          Per (seed, target) entry it stores S_m(j) = P_j^H Q_m in os_s(:,:,m,entry), m = 1..lld-1, and per seed
+   !>          the A_m, B_m^2 (m = 1..lld; A_lld is not computed by crecal_b) in os_a, os_b2. B_m^2 sits at index m:
+   !>          os_b2(:,:,m,seed) = B_m^2 couples blocks m-1 and m. The request is kept in this%req.
+   !> @param[inout] this Recursion object; MPI ranks use start_atom..end_atom, no communication.
+   module subroutine recur_b_ij_oneshot(this)
+      use mpi_mod, only: rank, start_atom, end_atom
+      class(recursion), intent(inout) :: this
+      integer :: s, l, i, ntg, p0, llmax
+      logical :: on_gpu
+
+      this%b2_b_is_sqrt = .false.
+      llmax = this%lattice%control%lld
+      call this%req%build(this%lattice%ijpair, start_atom, end_atom)
+      if (this%req%npair == 0) return
+      on_gpu = gpu_plugin_ready(this, 'recur_b_ij_oneshot()', allow_hoh=.true.)
+      if (on_gpu) call gpu_plugin_upload_hamiltonian(this)
+      if (allocated(this%os_s)) deallocate (this%os_s, this%os_a, this%os_b2)
+      allocate (this%os_s(nb, nb, llmax - 1, size(this%req%target_site)))
+      allocate (this%os_a(nb, nb, llmax, this%req%nseed), this%os_b2(nb, nb, llmax, this%req%nseed))
+
+      do s = 1, this%req%nseed
+         i = this%req%seed_site(s)
+         p0 = this%req%target_ptr(s)
+         ntg = this%req%target_ptr(s + 1) - p0
+         call g_logger%info(int2str(rank)//': one-shot block recursion from seed atom '//int2str(i), __FILE__, __LINE__)
+         this%izero(:) = 0
+         this%izero(i) = 1
+         this%psi_b(:, :, :) = (0.0_rp, 0.0_rp)
+         this%pmn_b(:, :, :) = (0.0_rp, 0.0_rp)
+         this%atemp_b(:, :, :) = (0.0_rp, 0.0_rp)
+         this%b2temp_b(:, :, :) = (0.0_rp, 0.0_rp)
+         do l = 1, nb
+            this%psi_b(l, l, i) = (1.0_rp, 0.0_rp)
+            this%b2temp_b(l, l, 1) = (1.0_rp, 0.0_rp)
+         end do
+         if (on_gpu) then
+            call this%gpu_backend%block_lanczos_targets(this%psi_b, llmax, this%req%target_site(p0:p0 + ntg - 1), &
+               this%atemp_b, this%b2temp_b, this%os_s(:, :, :, p0:p0 + ntg - 1), this%gpu_precision_code(block=.true.))
+         else
+            call this%crecal_b(this%req%target_site(p0:p0 + ntg - 1), this%os_s(:, :, :, p0:p0 + ntg - 1))
+         end if
+         this%os_a(:, :, :, s) = this%atemp_b(:, :, 1:llmax)
+         this%os_b2(:, :, :, s) = this%b2temp_b(:, :, 1:llmax)
+      end do
+   end subroutine recur_b_ij_oneshot
+
    !> @brief Generate Chebyshev moments for intersite atom pairs.
    !> @details Runs four phase-combination moment recursions per ij pair so
    !>          green%chebyshev_green_ij can reconstruct intersite Green functions
@@ -1578,6 +1626,101 @@ contains
       end subroutine extend_moments
 
    end subroutine chebyshev_recur_ij
+
+   !> @brief One-shot Chebyshev moments for intersite pairs: one recursion per seed site.
+   !> @details For each distinct first atom i of the local pair range, propagates V_m = T_m(Ht) P_i once and
+   !>          gathers M_ji(m) = P_j^H T_m P_i at every target j of that seed into os_mu(:,:,m,entry), one block set
+   !>          per unique (seed, target) entry. M_ij = M_ji^H is formed by the reconstruction. The request is kept in this%req.
+   !> @param[inout] this Recursion object; fills os_mu (FP64; linear prediction on the host when enabled).
+   module subroutine chebyshev_recur_ij_oneshot(this)
+      use mpi_mod, only: rank, start_atom, end_atom
+      class(recursion), intent(inout) :: this
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: s, k, m, i, nmom, ntot, ntg, p0, kk
+      complex(rp), allocatable :: prev(:, :, :), cur(:, :, :), nxt(:, :, :), work(:, :, :, :)
+      logical :: on_gpu
+
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      nmom = 2*this%lattice%control%lld + 2
+      ntot = this%lp%n_total(this%lattice%control%lld)
+      kk = this%lattice%kk
+
+      call this%req%build(this%lattice%ijpair, start_atom, end_atom)
+      if (this%req%npair == 0) return
+      on_gpu = gpu_plugin_ready(this, 'chebyshev_recur_ij_oneshot()', allow_hoh=.true.)
+      if (on_gpu) then
+         call gpu_plugin_upload_hamiltonian(this)
+      else
+         allocate (prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), work(nb, nb, kk, 6))
+      end if
+      if (allocated(this%os_mu)) deallocate (this%os_mu)
+      allocate (this%os_mu(nb, nb, ntot, size(this%req%target_site)), source=(0.0_rp, 0.0_rp))
+      call g_logger%info('Chebyshev one-shot moments: '//int2str(ntot)//' orders x '//int2str(size(this%os_mu, 4))// &
+                         ' entries; os_mu = '//real2str(16.0_rp*real(size(this%os_mu), rp)/1.0e6_rp, '(f10.1)')//' MB', &
+                         __FILE__, __LINE__)
+
+      do s = 1, this%req%nseed
+         i = this%req%seed_site(s)
+         p0 = this%req%target_ptr(s)
+         ntg = this%req%target_ptr(s + 1) - p0
+         call g_logger%info(int2str(rank)//': one-shot Chebyshev recursion from seed atom '//int2str(i), __FILE__, __LINE__)
+
+         ! V_0 = P_i; the light cone starts at the seed site only.
+         if (on_gpu) then
+            this%psi0(:, :, :) = (0.0_rp, 0.0_rp)
+            do k = 1, nb
+               this%psi0(k, k, i) = (1.0_rp, 0.0_rp)
+            end do
+            call this%gpu_backend%chebyshev_moments_targets(this%psi0, this%req%target_site(p0:p0 + ntg - 1), nmom, a, b, &
+                                                            this%os_mu(:, :, 1:nmom, p0:p0 + ntg - 1))
+         else
+            prev(:, :, :) = (0.0_rp, 0.0_rp)
+            do k = 1, nb
+               prev(k, k, i) = (1.0_rp, 0.0_rp)
+            end do
+            this%izero(:) = 0
+            this%izero(i) = 1
+            call gather(1, prev)
+            ! T_0..T_{nmom-1}: nmom-1 Hamiltonian applications (bra and ket differ, no product identity).
+            call this%kubo_ham_vec_matmul(prev, cur, work, a=a, b=b)
+            this%izero(:) = this%idum(:)
+            call gather(2, cur)
+            do m = 3, nmom
+               call this%kubo_ham_vec_matmul(cur, nxt, work, a=a, b=b)
+               this%izero(:) = this%idum(:)
+               nxt(:, :, :) = 2*nxt(:, :, :) - prev(:, :, :)
+               prev(:, :, :) = cur(:, :, :)
+               cur(:, :, :) = nxt(:, :, :)
+               call gather(m, cur)
+            end do
+         end if
+         if (any(real(sum(sum(this%os_mu(:, :, this%lattice%control%lld + 2, p0:p0 + ntg - 1), 1), 1)) > 1000.d0)) &
+            call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
+
+         ! Linear prediction of M_ji only: its real shared coefficients keep Mij = Mji^H exact for the extension.
+         if (this%lp%enabled) then
+            do k = 1, ntg
+               call this%lp%apply(this%os_mu(:, :, :, p0 + k - 1), nmom, 'one-shot seed '//int2str(i)//' target '// &
+                                  int2str(this%req%target_site(p0 + k - 1)))
+            end do
+         end if
+      end do
+
+   contains
+
+      !> Store V(:,:,j) of every target j of the current seed as the order-m moment.
+      subroutine gather(order, v)
+         integer, intent(in) :: order
+         complex(rp), intent(in) :: v(:, :, :)
+         integer :: t
+         do t = 1, ntg
+            this%os_mu(:, :, order, p0 + t - 1) = v(:, :, this%req%target_site(p0 + t - 1))
+         end do
+      end subroutine gather
+
+   end subroutine chebyshev_recur_ij_oneshot
 
    !> @brief Compute Chebyshev orbital-moment response data.
    !> @details Builds angular-momentum operator insertions and evaluates

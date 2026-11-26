@@ -114,6 +114,55 @@ contains
       call this%bgreen_complex(g_out(:, :, ie_start:ie_start+ie_len-1), i_site, z_grid, a_inf, b_inf, .true.)
    end subroutine bgreen
 
+   !> @brief Diagonal terminal self-energy Q of the block continued fraction (semicircle band edges from a_inf, b_inf).
+   !> @details sym_term: one orbital-independent semicircle from a_diag, b_diag; otherwise orbital dependent with the
+   !>          1.025 broadening of the s channels. legacy_mode evaluates the square root at Re z and adds Im z linearly.
+   module subroutine bgreen_terminal_q(sym_term, legacy_mode, z_eval, a_inf, b_inf, Q)
+      logical, intent(in) :: sym_term, legacy_mode
+      complex(rp), intent(in) :: z_eval
+      real(rp), dimension(nb, nb), intent(in) :: a_inf, b_inf
+      complex(rp), dimension(nb, nb), intent(out) :: Q
+      integer :: i
+      real(rp) :: a_diag, b_diag
+      complex(rp) :: etop, ebot, zoff, ze, eta_local
+      complex(rp), parameter :: im = (0.0d0, 1.0d0)
+
+      if (nb >= 10) then
+         a_diag = (a_inf(1, 1) + a_inf(10, 10))*0.5d0
+         b_diag = (b_inf(1, 1) + b_inf(10, 10))*0.5d0
+      else
+         a_diag = a_inf(1, 1)
+         b_diag = b_inf(1, 1)
+      end if
+      ze = z_eval
+      eta_local = cmplx(0.0_rp, 0.0_rp, rp)
+      if (legacy_mode) then
+         ze = cmplx(real(z_eval, rp), 0.0_rp, rp)
+         eta_local = z_eval - ze
+      end if
+      Q = (0.0d0, 0.0d0)
+      do i = 1, nb
+         if (sym_term) then
+            etop = a_diag + 2.0d0*b_diag
+            ebot = a_diag - 2.0d0*b_diag
+         else if (i == 1 .or. (nb >= 10 .and. i == 10)) then
+            etop = a_inf(i, i) + 2*b_inf(i, i)*1.025d0
+            ebot = a_inf(i, i) - 2*b_inf(i, i)*1.025d0
+         else
+            etop = a_inf(i, i) + 2*b_inf(i, i)
+            ebot = a_inf(i, i) - 2*b_inf(i, i)
+         end if
+         zoff = sqrt((ze - etop)*(ze - ebot))
+         if (sym_term) then
+            Q(i, i) = (ze + eta_local - a_diag - zoff)*0.5d0
+         else if (legacy_mode) then
+            Q(i, i) = (ze + eta_local - a_inf(i, i) - real(zoff) - aimag(zoff)*im)*0.5d0
+         else
+            Q(i, i) = (ze - a_inf(i, i) - zoff)*0.5d0
+         end if
+      end do
+   end subroutine bgreen_terminal_q
+
    !> Shared block-recursion core for the legacy energy mesh and arbitrary
    !> complex energies.  The optional legacy flag preserves the historical
    !> real-axis terminator and output spelling for existing consumers; the
@@ -141,15 +190,13 @@ contains
       logical :: found_nan
       complex(rp) :: vv
       integer, dimension(nb) :: ipiv
-      complex(rp) :: etop, ebot, ea, eb
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
       complex(rp), dimension(nb, nb) :: Q, Z, one, W, B2z, P
-      complex(rp) :: zoff, cone, czero, ze, zterm, det, im
+      complex(rp) :: cone, czero, zterm, im
       complex(rp) :: coff
       complex(rp), dimension(nb*nb) :: work
       real(rp), dimension(this%en%channels_ldos + 10) :: ene
       complex(rp), dimension(nb, nb) :: Dfac_mat, Cshi_mat
-      real(rp) :: a_diag, b_diag
       complex(rp) :: z_eval, eta_local
       logical :: legacy_mode
       !
@@ -176,7 +223,6 @@ contains
       cone = (1.0d0, 0.0d0)
       czero = (0.0d0, 0.0d0)
       im = (0.0d0, 1.0d0)
-      zoff = (0.0d0, 0.01d0)*0.0d0
       coff = 0.000d0*(0.0d0, 1.0d0)
       one = (0.0d0, 0.0d0)
 
@@ -191,13 +237,6 @@ contains
       do i = 1, ldim
          one(i, i) = (1.0d0, 0.0d0)
       end do
-      if (ldim >= 10) then
-         a_diag = (a_inf(1, 1) + a_inf(10, 10))*0.5d0
-         b_diag = (b_inf(1, 1) + b_inf(10, 10))*0.5d0
-      else
-         a_diag = a_inf(1, 1)
-         b_diag = b_inf(1, 1)
-      end if
       ! Standard semi-circle construction of Greens functions
       !write(12334,´(18f8.4)´) a_inf
       !write(12335,´(18f8.4)´) b_inf
@@ -206,67 +245,21 @@ contains
       !write(12337,´(18f8.4)´) this%recursion%b2_b(:,:,2,i_site)
     !!!$omp parallel do default(shared) private(ei, Z, Ze, Q, B2z, i, ea, eb, det, zoff, l, ln, j, P , ipiv, info, work, lwork, W)
       !$omp parallel do default(shared) &
-      !$omp          private(ei, Z, Ze, Q, B2z, i, etop, ebot, ea, eb, det, zoff, l, ln, j, P, ipiv, info, work, lwork, W, &
+      !$omp          private(ei, Z, Q, B2z, i, l, ln, j, P, ipiv, info, work, lwork, W, &
       !$omp                  found_nan, qHasNaN, qMax, qval, ii, jj, &
       !$omp                  recMaxA, recMaxB, recNaN, valrec, vv, maxQ, maxB2r, z_eval, eta_local)
       do ei = 1, size(z_grid)
          z_eval = z_grid(ei)
          if (legacy_mode) then
             Z = real(z_eval, rp)*one
-            ze = cmplx(real(z_eval, rp), 0.0_rp, rp)
-            eta_local = z_eval-ze
+            eta_local = z_eval - cmplx(real(z_eval, rp), 0.0_rp, rp)
          else
             Z = z_eval*one
-            ze = z_eval
             eta_local = cmplx(0.0_rp, 0.0_rp, rp)
          end if
-         Q = (0.0d0, 0.0d0)
          B2z = 0.0d0
          found_nan = .false.
-         if (this%control%sym_term) then
-            do i = 1, ldim !  Orbital-independent
-               etop = a_diag + 2.0d0*b_diag
-               ebot = a_diag - 2.0d0*b_diag
-               if (legacy_mode) then
-                  ea = real(z_eval, rp) - etop
-                  eb = real(z_eval, rp) - ebot
-               else
-                  ea = z_eval - etop
-                  eb = z_eval - ebot
-               end if
-               det = ea*eb
-               zoff = sqrt(det)
-               Q(i, i) = (ze + eta_local - a_diag - zoff)*0.5d0
-            end do
-         else
-            do i = 1, ldim  ! Orbital-dependent
-               if (i == 1 .or. (ldim >= 10 .and. i == 10)) then  !(now the s-bands are broadened earlier)
-                  etop = a_inf(i, i) - Cshi_mat(i, i) + 2*b_inf(i, i)*1.025d0/Dfac_mat(i, i)
-                  ebot = a_inf(i, i) - Cshi_mat(i, i) - 2*b_inf(i, i)*1.025d0/Dfac_mat(i, i)
-               else
-                  etop = a_inf(i, i) - Cshi_mat(i, i) + 2*b_inf(i, i)!*1.01d0/Dfac_mat(i,i)
-                  ebot = a_inf(i, i) - Cshi_mat(i, i) - 2*b_inf(i, i)!*1.01d0/Dfac_mat(i,i)
-               end if
-               if (legacy_mode) then
-                  ea = real(z_eval, rp)/Dfac_mat(i, i) - etop - 1.0d0*Cshi_mat(i, i)
-                  eb = real(z_eval, rp)/Dfac_mat(i, i) - ebot - 1.0d0*Cshi_mat(i, i)
-               else
-                  ea = z_eval/Dfac_mat(i, i) - etop - 1.0d0*Cshi_mat(i, i)
-                  eb = z_eval/Dfac_mat(i, i) - ebot - 1.0d0*Cshi_mat(i, i)
-               end if
-               det = ea*eb
-               zoff = sqrt(det)!*0.5d0
-               zoff = zoff*(1.0)**ei
-           !!! if(nv<=10) zoff=zoff*1.0d-3   ! Hack for Efermi evaluation
-               ! Below for orbital dependent terminator
-               if (legacy_mode) then
-                  Q(i, i) = ((real(z_eval, rp) + eta_local)/Dfac_mat(i, i) - 1.0d0*Cshi_mat(i, i) - &
-                     a_inf(i, i) - real(zoff) - aimag(zoff)*factor_z*im)*0.5d0
-               else
-                  Q(i, i) = (z_eval/Dfac_mat(i, i) - 1.0d0*Cshi_mat(i, i) - a_inf(i, i) - zoff)*0.5d0
-               end if
-            end do
-         end if
+         call bgreen_terminal_q(this%control%sym_term, legacy_mode, z_eval, a_inf, b_inf, Q)
          do l = llinf - 1, 1, -1
             ln = min(l, ll)
             do j = 1, ldim
