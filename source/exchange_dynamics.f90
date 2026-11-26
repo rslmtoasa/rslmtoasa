@@ -45,7 +45,9 @@ contains
       type(energy_nodes) :: nodes
       integer :: i, j, njij_glob, slot, ief, nenergy
       real(rp) :: step_size
-      logical :: damping, inertia
+      logical :: damping, inertia, moments
+      complex(rp), allocatable :: h(:, :)
+      real(rp), allocatable :: kernel(:)
       real(rp), allocatable :: xc(:, :), xcso(:, :), xcfo(:, :), xcparts(:, :)
       ! damping: dpair(1:9) Re tensor at E_F, dpair(10:18) Im tensor at E_F, dpair(19) prefactor
       real(rp), allocatable :: dpair(:, :), dtotal(:, :), dcontrib(:, :)
@@ -63,6 +65,12 @@ contains
                    xcparts(28, this%lattice%njij), source=0.0_rp)
          nodes = real_mesh_nodes(this)
       end if
+      ! Moment space: one node per Chebyshev moment; the stream slot 1 holds the raw moments of the pair, slot 2 the transformed ones
+      moments = this%control%exchange_integration == 'moments'
+      if (moments .and. do_exchange) then
+         call this%green%chebyshev_exchange_weights(h, kernel)
+         nodes = moment_nodes(size(kernel))
+      end if
       if (damping) allocate (dtotal(9, nenergy), dpair(19, this%lattice%njij), source=0.0_rp)
       if (damping) allocate (dcontrib(9, nenergy))
       if (inertia) allocate (itotal(9, nenergy), ipair_b(4, nenergy, this%lattice%njij), ipair(18, this%lattice%njij), source=0.0_rp)
@@ -74,14 +82,20 @@ contains
          i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
          j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
          slot = g2l_map(njij_glob)
-         if (stream) then
+         if (moments) then
+            slot = 1
+            call this%green%fill_intersite_moments_pair(njij_glob, slot)
+         else if (stream) then
             slot = 1
             call this%green%fill_intersite_gf_pair(njij_glob, slot)
             call this%green%fill_intersite_gf_twoindex_pair(slot)
          end if
-         if (do_exchange) then
-            call exchange_pair(this, nodes, slot, i, j, xc(:, njij_glob))
-            call exchange_twoindex_pair(this, nodes, slot, i, j, xcso(:, njij_glob), xcfo(:, njij_glob), xcparts(:, njij_glob))
+         if (do_exchange .and. moments) then
+            call moment_exchange_pair(this, nodes, h, kernel, i, j, xc(:, njij_glob), xcso(:, njij_glob), xcfo(:, njij_glob), &
+                                      xcparts(:, njij_glob))
+         else if (do_exchange) then
+            call exchange_pair(this, nodes, slot, slot, i, j, xc(:, njij_glob))
+            call exchange_twoindex_pair(this, nodes, slot, slot, i, j, xcso(:, njij_glob), xcfo(:, njij_glob), xcparts(:, njij_glob))
          end if
          if (damping) then
             call damping_pair(this, slot, i, j, ief, dpair(:, njij_glob), dcontrib)
@@ -100,6 +114,46 @@ contains
       if (damping) call damping_finalize(this, dpair, dtotal, ief)
       if (inertia) call inertia_finalize(this, ipair, ipair_b, itotal, ief)
    end subroutine calculate_pairwise
+
+   !> J, D, A of pair (i, j) from the raw moments in Green-function slot 1 (see fill_intersite_moments_pair). With
+   !> Delta = alpha + beta E the integral is the sum over the E^p terms (alpha_i, alpha_j; beta_i, alpha_j and alpha_i, beta_j;
+   !> beta_i, beta_j) of the kernels run on the raw moments (slot 1, i side) and the p-transformed moments (slot 2, j side).
+   subroutine moment_exchange_pair(this, nodes, h, kernel, i, j, xc, xcso, xcfo, xcparts)
+      class(exchange) :: this
+      type(energy_nodes), intent(in) :: nodes
+      complex(rp), intent(in) :: h(0:, 0:)
+      real(rp), intent(in) :: kernel(:)
+      integer, intent(in) :: i, j
+      real(rp), intent(out) :: xc(13), xcso(13), xcfo(13), xcparts(28)
+      real(rp) :: t(13), tso(13), tfo(13), tparts(28)
+      complex(rp) :: alpha(9, 9, 2), beta(9, 9, 2), dfix(9, 9, 2)
+      integer :: p, ti, tj
+
+      beta = (0.0_rp, 0.0_rp)
+      if (this%use_onsite_delta) then
+         alpha(:, :, 1) = onsite_exchange_delta(this, i)
+         alpha(:, :, 2) = onsite_exchange_delta(this, j)
+      else
+         call this%symbolic_atom(this%lattice%iz(i))%d_matrix(alpha(:, :, 1), 0.0_rp)
+         call this%symbolic_atom(this%lattice%iz(j))%d_matrix(alpha(:, :, 2), 0.0_rp)
+         call this%symbolic_atom(this%lattice%iz(i))%d_matrix(beta(:, :, 1), 1.0_rp)
+         call this%symbolic_atom(this%lattice%iz(j))%d_matrix(beta(:, :, 2), 1.0_rp)
+         beta = beta - alpha
+      end if
+      xc = 0.0_rp; xcso = 0.0_rp; xcfo = 0.0_rp; xcparts = 0.0_rp
+      do p = 0, merge(0, 2, this%use_onsite_delta)
+         call this%green%transform_intersite_moments(1, 2, h(:, p), kernel)
+         do tj = 0, 1
+            ti = p - tj
+            if (ti < 0 .or. ti > 1) cycle
+            dfix(:, :, 1) = merge(beta(:, :, 1), alpha(:, :, 1), ti == 1)
+            dfix(:, :, 2) = merge(beta(:, :, 2), alpha(:, :, 2), tj == 1)
+            call exchange_pair(this, nodes, 1, 2, i, j, t, dfix)
+            call exchange_twoindex_pair(this, nodes, 1, 2, i, j, tso, tfo, tparts, dfix)
+            xc = xc + t; xcso = xcso + tso; xcfo = xcfo + tfo; xcparts = xcparts + tparts
+         end do
+      end do
+   end subroutine moment_exchange_pair
 
    !> Torque-correlation damping tensor of pair (i, j) read from Green-function slot `slot`: pair(1:9) Re and pair(10:18) Im
    !> at energy index ief, pair(19) prefactor; contrib(:, nv) is the pair's energy-resolved contribution.

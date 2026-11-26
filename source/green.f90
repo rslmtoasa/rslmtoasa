@@ -79,6 +79,9 @@ module green_mod
       procedure :: prepare_intersite_gf
       procedure :: fill_intersite_gf_pair
       procedure :: fill_intersite_gf_twoindex_pair
+      procedure :: chebyshev_exchange_weights
+      procedure :: fill_intersite_moments_pair
+      procedure :: transform_intersite_moments
       procedure :: calculate_intersite_gf_eta
       procedure :: calculate_intersite_gf_eta_gpu
       procedure :: chebyshev_green_eta
@@ -237,6 +240,29 @@ module green_mod
       class(green), intent(inout) :: this
       integer, intent(in) :: slot
    end subroutine fill_intersite_gf_twoindex_pair
+
+   module subroutine pauli_pair(this, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot
+   end subroutine pauli_pair
+
+   module subroutine chebyshev_exchange_weights(this, h, kernel)
+      class(green), intent(inout) :: this
+      complex(rp), allocatable, intent(out) :: h(:, :)
+      real(rp), allocatable, intent(out) :: kernel(:)
+   end subroutine chebyshev_exchange_weights
+
+   module subroutine fill_intersite_moments_pair(this, ia_glob, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob, slot
+   end subroutine fill_intersite_moments_pair
+
+   module subroutine transform_intersite_moments(this, slot_raw, slot_t, hp, kernel)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot_raw, slot_t
+      complex(rp), intent(in) :: hp(0:)
+      real(rp), intent(in) :: kernel(:)
+   end subroutine transform_intersite_moments
 
    module subroutine calculate_intersite_gf(this)
       class(green), intent(inout) :: this

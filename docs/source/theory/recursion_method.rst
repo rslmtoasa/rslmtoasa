@@ -377,6 +377,22 @@ by all its targets, against four recursions per pair in the pairs route. On
 bcc Fe with eight pairs sharing one first atom, the Chebyshev run took 15 s
 against 124 s. Memory is currently the same as in the pairs route.
 
+**Moment-space exchange integral** (``exchange_integration = 'moments'``, ``recur = 'chebyshev'``). Every exchange integrand is a sum of terms
+:math:`\mathrm{Tr}[\Delta_i(E)\, X(E)\, \Delta_j(E)\, Y(E)]`, with :math:`X` built linearly from :math:`G_{ij}, G_{ji}` and
+likewise :math:`Y`. With :math:`G(E)` the kernel-damped series of the stored moments :math:`\mu_n`, the energy integral is a
+bilinear form in the moments,
+
+.. math::
+
+   \int f(E)\, E^p\, \mathrm{Tr}[A\, X(E)\, B\, Y(E)]\, dE = \sum_m \mathrm{Tr}[A\, X_m\, B\, \tilde Y^{(p)}_m], \qquad
+   \tilde Y^{(p)}_m = \sum_n c^{(p)}_{mn} Y_n,
+
+where :math:`c^{(p)}_{mn}` contains the kernel factors of :math:`m` and :math:`n` and the weight
+:math:`-\int f(E) E^p e^{-i(m+n)\theta}/(a^2\sin^2\theta)\, dE`, :math:`E = a\cos\theta + b`. The exchange splitting
+:math:`\Delta(E)` is linear in :math:`E`, :math:`\Delta = \alpha + \beta E`, so each pair needs the weights with
+:math:`p = 0, 1, 2` (``use_onsite_delta``: :math:`p = 0` only). The limits are :math:`[E_{min}, E_F]` for :math:`T = 0` and :math:`f(E)` is the
+Fermi function for :math:`T > 0`. Damping and inertia are not yet available in this mode.
+
 Comparison: Direct Diagonalization vs. Recursion
 =================================================
 

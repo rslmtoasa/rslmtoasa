@@ -11,7 +11,8 @@ submodule (green_mod) green_chebyshev
 
    use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_dp, cheb_green_complex
    use math_mod, only: i_unit, pi, jackson_kernel, lorentz_kernel, &
-                       hubbard_spectral_density_element, project_spectral_density_2x2
+                       hubbard_spectral_density_element, project_spectral_density_2x2, &
+                       cheb_bilinear_weights, cheb_bilinear_transform, kB_simpson_f
    use basis_mod, only: norb, spin_off
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
@@ -143,6 +144,95 @@ contains
       end if
       if (self_pair) gij = gji
    end subroutine chebyshev_green_ij_oneshot
+
+   !> Number of stored moments of the inter-site recursion data (cheb_lp extension included).
+   function intersite_moment_count(this) result(nmom)
+      class(green), intent(in) :: this
+      integer :: nmom
+
+      if (this%control%intersite_mode == 'one_shot') then
+         nmom = size(this%recursion%os_mu, 3)
+      else
+         nmom = size(this%recursion%mu_n, 3)
+      end if
+   end function intersite_moment_count
+
+   !> Weights h(0:2*nmom-2, 0:2) of the bilinear moment-space energy integral over [energy_min, fermi] (Fermi function
+   !> for temperature > 0), with the window map of chebyshev_reconstruct_block, and the damping kernel(nmom).
+   module subroutine chebyshev_exchange_weights(this, h, kernel)
+      class(green), intent(inout) :: this
+      complex(rp), allocatable, intent(out) :: h(:, :)
+      real(rp), allocatable, intent(out) :: kernel(:)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: nmom
+
+      nmom = intersite_moment_count(this)
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      allocate (h(0:2*nmom - 2, 0:2), kernel(nmom))
+      call cheb_bilinear_weights(nmom, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, h)
+      call cheb_kernel_vector(this, nmom, kernel)
+   end subroutine chebyshev_exchange_weights
+
+   !> Raw moments of G_ij and G_ji of global pair ia_glob in gij/gji(:, :, 1:nmom, slot), from the same moments as
+   !> fill_intersite_gf_pair, then the Pauli and two-index families of the slot (linear in gij, gji, so also moments).
+   module subroutine fill_intersite_moments_pair(this, ia_glob, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: ia_glob, slot
+      complex(rp), allocatable :: mij(:, :, :), mji(:, :, :), m4(:, :, :, :)
+      integer :: ia, ja_temp, nmom
+      logical :: self_pair
+
+      ia = g2l_map(ia_glob)
+      ja_temp = (ia - 1)*4 + 1
+      nmom = intersite_moment_count(this)
+      self_pair = this%lattice%ijpair(ia_glob, 1) == this%lattice%ijpair(ia_glob, 2)
+      if (this%control%intersite_mode == 'one_shot') then
+         mji = this%recursion%os_mu(:, :, :, this%recursion%req%pair_entry(ia))
+         mij = mji
+         if (.not. self_pair) mij = moments_dagger(mji)
+      else if (self_pair) then
+         mji = this%recursion%mu_n(:, :, :, ja_temp)
+         mij = mji
+      else
+         m4 = this%recursion%mu_n(:, :, :, ja_temp:ja_temp + 3)
+         mij = 0.5_rp*((m4(:, :, :, 1) - m4(:, :, :, 2)) + (1.0_rp/i_unit)*(m4(:, :, :, 3) - m4(:, :, :, 4)))
+         mji = 0.5_rp*((m4(:, :, :, 1) - m4(:, :, :, 2)) - (1.0_rp/i_unit)*(m4(:, :, :, 3) - m4(:, :, :, 4)))
+      end if
+      this%gij(:, :, :, slot) = 0.0_rp
+      this%gji(:, :, :, slot) = 0.0_rp
+      this%gij(:, :, 1:nmom, slot) = mij
+      this%gji(:, :, 1:nmom, slot) = mji
+      call fill_slot_families(this, slot)
+   end subroutine fill_intersite_moments_pair
+
+   !> gij, gji of slot_t = bilinear transform (weights column hp) of the raw moments in slot_raw, and their families.
+   module subroutine transform_intersite_moments(this, slot_raw, slot_t, hp, kernel)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot_raw, slot_t
+      complex(rp), intent(in) :: hp(0:)
+      real(rp), intent(in) :: kernel(:)
+      integer :: nmom
+
+      nmom = size(kernel)
+      this%gij(:, :, :, slot_t) = 0.0_rp
+      this%gji(:, :, :, slot_t) = 0.0_rp
+      call cheb_bilinear_transform(hp, kernel, this%gij(:, :, 1:nmom, slot_raw), this%gij(:, :, 1:nmom, slot_t))
+      call cheb_bilinear_transform(hp, kernel, this%gji(:, :, 1:nmom, slot_raw), this%gji(:, :, 1:nmom, slot_t))
+      call fill_slot_families(this, slot_t)
+   end subroutine transform_intersite_moments
+
+   !> Pauli and two-index families of the slot from its gij, gji.
+   subroutine fill_slot_families(this, slot)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: slot
+
+      this%ginmag(:, :, :, slot) = 0.0_rp; this%giz(:, :, :, slot) = 0.0_rp; this%giy(:, :, :, slot) = 0.0_rp; this%gix(:, :, :, slot) = 0.0_rp
+      this%gjnmag(:, :, :, slot) = 0.0_rp; this%gjx(:, :, :, slot) = 0.0_rp; this%gjy(:, :, :, slot) = 0.0_rp; this%gjz(:, :, :, slot) = 0.0_rp
+      call pauli_pair(this, slot)
+      call this%fill_intersite_gf_twoindex_pair(slot)
+   end subroutine fill_slot_families
 
    !---------------------------------------------------------------------------
    !> @brief GPU drop-in for chebyshev_green_ij (intersite Chebyshev GF).

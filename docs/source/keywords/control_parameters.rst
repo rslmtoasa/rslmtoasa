@@ -435,6 +435,24 @@ intersite_mode
 
 **Related code:** ``source/intersite_request.f90``, ``source/recursion_transport.f90`` (``chebyshev_recur_ij_oneshot``, ``recur_b_ij_oneshot``), ``source/green_block.f90`` (``block_green_ij_oneshot``), ``source/block_tridiag.f90``, ``source/calculation_reciprocal.f90``
 
+exchange_integration
+--------------------
+
+**Type:** Character string
+
+**Purpose:** How the energy integral of the exchange observables (``J_ij``, ``D_ij``, ``A_ij`` and the two-index ``so``/``fo`` parts) is evaluated on the real-space recursion route (``post_processing = 'exchange'``, ``gf_route = 'recursion'``).
+
+**Allowed values:** ``'dos'``, ``'moments'``
+
+**Default:** ``'dos'``
+
+**Notes:**
+
+- ``'dos'``: ``G_ij`` is reconstructed on the energy mesh and integrated with the Simpson rule.
+- ``'moments'``: the integral over :math:`[E_{min}, E_F]` (Fermi function for ``temperature > 0``) is evaluated from the Chebyshev moments of ``G_ij`` and ``G_ji``. Requires ``recur = 'chebyshev'`` and ``gf_route = 'recursion'``; ``do_damping`` and ``do_inertia`` are not available with it. See :ref:`theory/recursion_method` (section "Inter-site Green functions: pairs and one-shot").
+
+**Related code:** ``source/green_chebyshev.f90``, ``source/exchange_dynamics.f90``
+
 cheb_backend
 ------------
 

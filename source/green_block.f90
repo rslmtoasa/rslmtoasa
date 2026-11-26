@@ -377,7 +377,7 @@ contains
 
    !> Pauli families Ginmag, Giz, Giy, Gix (i side) and Gjnmag, Gjz, Gjy, Gjx (j side) of the pair in slot `slot`
    !> from gij, gji; the target slices must be zero on entry.
-   subroutine pauli_pair(this, slot)
+   module subroutine pauli_pair(this, slot)
       class(green), intent(inout) :: this
       integer, intent(in) :: slot
       integer :: i, j
