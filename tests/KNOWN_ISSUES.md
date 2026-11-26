@@ -319,10 +319,6 @@ are not tracked here; see `docs/DECISIONS.md`.
   -2.1e-2 Mills at 24^3); Fe at 60^3 has delta_q < 0 for `alsda_scaled` spd at several xi (-0.022 to -0.112 for Mills). Per-channel scaling not
   pursued.
 
-### `source/spin_response.f90` is past the 1,000-line guideline — 2026-10-12
-- **Verified:** 1187 lines now (1146 when recorded). The developer decided not to split now. Proposal: move the pure kernels (`accumulate_chi0`,
-  `u_juelich`, `solve_dyson`, `adiabatic_frequencies`) to a submodule (about 600 lines).
-
 ### bcc Cr antiferromagnet: response frequencies 1.6 to 2.4 times LSWT — 2026-10-13
 - **Measured (32^3, `tests/validation/spin_response_cr`, 94 q):** the adiabatic frequency over the LSWT `omega_plus` of `oracles/cr_lswt.dat` is 1.626
   to 2.374 (median 1.727; 64^3 the same); the force-theorem route is within 0.968 to 1.087 of LSWT for q >= 1/8, and Omega_RPA / Omega_force equals
