@@ -289,10 +289,6 @@ are not tracked here; see `docs/DECISIONS.md`.
   `0.633362019d-5` (`kB_simpson_f`), a relative 9.7e-6 different, not unified because `simpson_f` is on the bit-identical exchange path.
   Proposal: one definition (about 5 lines; a 1e-5 relative change in kT at finite T).
 
-### `<prefix>_dispersion.dat` rows run `n/a` into the previous number — 2026-10-07
-- **Verified:** with no peak or crossing, rows read `2.19599654E-01n/a` (format `(7es16.8,2a24)` with left-justified texts); seen for every row with
-  `n_omega = 1`. Proposal: a leading `1x` before the two `a24` items (one line in `run`); not applied.
-
 ### Radial data at r = 0 — 2026-10-11
 - **Verified (bcc Fe):** `radial_ground_state` holds `vxc_up(1) = vxc_down(1) = 0` at r = 0 while `n_up(1) - n_down(1) = -0.8069` bohr^-3
   (`source/radial_ground_state.f90:257`), so dV/m is 0 there, not its limit; `radial_kernel_matrix` starts every sum at the second point.

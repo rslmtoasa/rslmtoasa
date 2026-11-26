@@ -636,7 +636,7 @@ contains
          crossing_text = 'n/a'
          if (has_peak) write (peak_text, '(es22.14)') peak
          if (has_crossing) write (crossing_text, '(es22.14)') crossing
-         write (fdisp, '(7es16.8,2a24,es16.8)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
+         write (fdisp, '(7es16.8,2(1x,a24),es16.8)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
             peak_text, crossing_text, min_real_eig(chi0(:, :, 1, iq), this%kmat)
          call adiabatic_frequencies(chi0_static(:, :, iq), this%kmat, moment_row, omega_ad, imag_max, omega_force)
          write (fadia, '(7es16.8,*(es22.14))') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
