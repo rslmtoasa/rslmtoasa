@@ -37,6 +37,7 @@ UnitChebyshevKernel,quick,chebyshev;lp;unit,0.05,unit core,
 UnitChebyshevDamping,quick,chebyshev;green;unit,0.01,unit core,
 UnitDysonEquivalence,quick,green;unit,0.01,unit core,
 UnitGammaSupercell,quick,unit,0.01,unit core,
+UnitIntersiteRequest,quick,unit,0.00,unit core,
 UnitBsfSumRule,quick,unit,0.04,unit core,
 UnitMomentKernel,quick,unit,0.00,unit core,
 UnitKpmTransport,quick,kpm;transport;unit,0.01,unit core,
@@ -98,6 +99,7 @@ SpinResponseSocZeroIdentity,standard,spin-response,36.95,spin response,tests;tes
 SpinResponseInversionOdd,standard,spin-response,19.75,spin response,tests;tests/spin_response;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/inversion_odd.py;tests/spin_response/oracles/tolerances.nml
 SpinResponseBaselineRepro,standard,regression;spin-response,57.32,spin response,tests;tests/spin_response;tests/spin_response/baseline/spin_response_q001.dat;tests/spin_response/baseline/spin_response_q002.dat;tests/spin_response/baseline/spin_response_q003.dat;tests/spin_response/baseline/spin_response_state.dat;tests/spin_response/baseline_repro.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/oracles/tolerances.nml
 SpinResponseIsolation,quick,spin-response;tooling,0.04,spin response,source;source/spin_response.f90;tests/spin_response_isolation.cmake
+UnitSpinResponseRs,quick,spin-response;unit,0.01,spin response,
 UnitGbtKspaceForceTheorem,quick,gbt;unit,2.14,GBT,tests/gbt/oracles/o1_one_band.nml;tests/gbt/oracles/o2_force_theorem.nml;tests/gbt/oracles/tolerances.nml
 UnitGbtKspaceHorth,quick,gbt;unit,0.02,GBT,tests/gbt/oracles/o3_hgamma/o3_fe_bcc.nml;tests/gbt/oracles/tolerances.nml
 UnitGbtWp02GaugeShiftedK,quick,gbt;unit,0.01,GBT,
