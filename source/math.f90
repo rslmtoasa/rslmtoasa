@@ -58,7 +58,7 @@ module math_mod
    real(rp), parameter :: kB_simpson_f = 0.633362019d-5
    !> Extra Gauss-Legendre nodes on the Fermi panel [e_f-40kbt, e_f+40kbt] of the Chebyshev energy integrals:
    !> f is analytic within pi kbt of the real axis, so 80 kbt need about 200 nodes for 1e-14, independent of n.
-   integer, parameter, private :: cheb_fermi_nodes = 192
+   integer, parameter :: cheb_fermi_nodes = 192
 
    ! Irrational
    !> \f$ \sqrt{2} \f$

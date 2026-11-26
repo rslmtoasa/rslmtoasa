@@ -201,6 +201,8 @@ module control_mod
       character(len=16) :: intersite_mode
       !> Energy integration of the exchange observables: 'dos' (real-mesh Simpson) or 'moments' (Chebyshev moment space, recur = 'chebyshev').
       character(len=16) :: exchange_integration
+      !> Energy integration of the SCF on-site integrals: 'dos' (real-mesh Simpson) or 'moments' (Chebyshev moment space, recur = 'chebyshev').
+      character(len=16) :: scf_integration
       !> Chebyshev engine for the transport moments: 'legacy' (matrix-free loops), 'fast_sp' or 'gpu'.
       character(len=16) :: transport_backend
       !> CPU transport reconstruction precision. The default preserves the
@@ -405,6 +407,7 @@ contains
       cheb_backend = this%cheb_backend
       intersite_mode = this%intersite_mode
       exchange_integration = this%exchange_integration
+      scf_integration = this%scf_integration
       transport_backend = this%transport_backend
       cpu_reconstruction_precision = this%cpu_reconstruction_precision
       random_vec_num = this%random_vec_num
@@ -470,6 +473,7 @@ contains
       this%cheb_backend = cheb_backend(:len(this%cheb_backend))
       this%intersite_mode = intersite_mode(:len(this%intersite_mode))
       this%exchange_integration = exchange_integration(:len(this%exchange_integration))
+      this%scf_integration = scf_integration(:len(this%scf_integration))
       this%transport_backend = transport_backend(:len(this%transport_backend))
       this%cpu_reconstruction_precision = cpu_reconstruction_precision(:len(this%cpu_reconstruction_precision))
       this%random_vec_num = random_vec_num
@@ -602,6 +606,7 @@ contains
       this%cheb_backend = 'fast_dp'
       this%intersite_mode = 'pairs'
       this%exchange_integration = 'dos'
+      this%scf_integration = 'dos'
       this%transport_backend = 'legacy'
       this%cpu_reconstruction_precision = 'fp64'
       this%fname = ''
@@ -688,6 +693,7 @@ contains
       cheb_backend = this%cheb_backend
       intersite_mode = this%intersite_mode
       exchange_integration = this%exchange_integration
+      scf_integration = this%scf_integration
       transport_backend = this%transport_backend
       cpu_reconstruction_precision = this%cpu_reconstruction_precision
 
@@ -758,6 +764,7 @@ contains
       call nml%add('cheb_backend', this%cheb_backend)
       call nml%add('intersite_mode', this%intersite_mode)
       call nml%add('exchange_integration', this%exchange_integration)
+      call nml%add('scf_integration', this%scf_integration)
       call nml%add('transport_backend', this%transport_backend)
       call nml%add('cpu_reconstruction_precision', this%cpu_reconstruction_precision)
       call nml%add('ruban', this%ruban)
@@ -835,6 +842,12 @@ contains
       end if
       if (this%exchange_integration == 'moments' .and. this%recur /= 'chebyshev') then
          call g_logger%fatal('control%exchange_integration = ''moments'' requires recur = ''chebyshev''.', __FILE__, __LINE__)
+      end if
+      if (this%scf_integration /= 'dos' .and. this%scf_integration /= 'moments') then
+         call g_logger%fatal('control%scf_integration must be ''dos'' or ''moments''.', __FILE__, __LINE__)
+      end if
+      if (this%scf_integration == 'moments' .and. this%recur /= 'chebyshev') then
+         call g_logger%fatal('control%scf_integration = ''moments'' requires recur = ''chebyshev''.', __FILE__, __LINE__)
       end if
       if (this%cheb_lp .and. this%recur /= 'chebyshev') then
          call g_logger%fatal('control%cheb_lp requires recur = ''chebyshev''.', __FILE__, __LINE__)

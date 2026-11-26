@@ -12,7 +12,8 @@ submodule (green_mod) green_chebyshev
    use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_dp, cheb_green_complex
    use math_mod, only: i_unit, pi, jackson_kernel, lorentz_kernel, &
                        hubbard_spectral_density_element, project_spectral_density_2x2, &
-                       cheb_bilinear_weights, cheb_bilinear_transform, kB_simpson_f
+                       cheb_bilinear_weights, cheb_bilinear_transform, kB_simpson_f, &
+                       cheb_energy_nodes, cheb_green_point_weights
    use basis_mod, only: norb, spin_off
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
@@ -398,6 +399,68 @@ contains
 
    end subroutine chebyshev_dos_dispatch
 
+   !> Moment-space SCF energy points. With t_m the diagonal on-site moments summed over atoms and spins,
+   !> N(E) = -Im sum_m t_m c_m(E)/pi, c_m(E) = sum_q w_q g0_m(e_q), (e_q, w_q) = cheb_energy_nodes(e_f = E).
+   !> If solve_fermi, en%fermi is the root of N(E) = valence (bisection on [energy_min, upper window edge], 1e-12 Ry).
+   !> The nodes at en%fermi replace en%ene (weights in en%node_w) and the on-site G is rebuilt on them.
+   module subroutine chebyshev_scf_nodes(this, t, valence, solve_fermi)
+      class(green), intent(inout) :: this
+      complex(rp), intent(in) :: t(:)
+      real(rp), intent(in) :: valence
+      logical, intent(in) :: solve_fermi
+      real(rp), allocatable :: kernel(:), e(:), w(:)
+      complex(rp), allocatable :: g0(:), g2(:)
+      real(rp) :: a, b, emin_win, emax_win, lo, hi, mid, kbt
+      integer :: n, it
+
+      n = size(t)
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      kbt = kB_simpson_f*this%en%temperature
+      allocate (kernel(n), g0(n), g2(n))
+      call cheb_kernel_vector(this, n, kernel)
+
+      if (solve_fermi) then
+         lo = this%en%energy_min
+         hi = emax_win
+         if (electrons(hi) < valence) call g_logger%fatal('chebyshev_scf_nodes: valence not reached below the window top', &
+                                                          __FILE__, __LINE__)
+         do it = 1, 100
+            if (hi - lo <= 1.0e-12_rp) exit
+            mid = 0.5_rp*(lo + hi)
+            if (electrons(mid) < valence) then
+               lo = mid
+            else
+               hi = mid
+            end if
+         end do
+         this%en%fermi = 0.5_rp*(lo + hi)
+      end if
+
+      call cheb_energy_nodes(n, a, b, this%en%energy_min, this%en%fermi, kbt, e, w)
+      call move_alloc(e, this%en%ene)
+      call move_alloc(w, this%en%node_w)
+      call this%chebyshev_dos_dispatch()
+
+   contains
+
+      function electrons(ef) result(ne)
+         real(rp), intent(in) :: ef
+         real(rp) :: ne
+         complex(rp) :: c(n)
+         integer :: q
+
+         call cheb_energy_nodes(n, a, b, this%en%energy_min, ef, kbt, e, w)
+         c = (0.0_rp, 0.0_rp)
+         do q = 1, size(e)
+            call cheb_green_point_weights(kernel, a, b, e(q), g0, g2)
+            c = c + w(q)*g0
+         end do
+         ne = -aimag(sum(t*c))/pi
+      end function electrons
+   end subroutine chebyshev_scf_nodes
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -425,7 +488,7 @@ contains
       logical, intent(in), optional :: use_gpu
       ! Local variables
       real(rp), dimension(size(this%recursion%mu_n, 3)) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10) :: wscale
+      real(rp), dimension(size(this%en%ene)) :: wscale
       real(rp) :: a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, l, m, n, nv, n_glob, n_local
@@ -464,7 +527,7 @@ contains
       b = (emax_win + emin_win)/2.0_rp
 
       ! Number of DOS points
-      nv = this%en%channels_ldos + 10
+      nv = size(this%en%ene)
 
       if (.not. present(eta) .and. do_gpu) then
          gpu_backend => get_gpu_context(1, nb, 1, 1, 1)

@@ -23,6 +23,7 @@ module energy_mod
 
    use lattice_mod
    use control_mod
+   use cheb_lp_mod, only: cheb_lp
    use logger_mod, only: g_logger
    use math_mod
    use precision_mod
@@ -52,6 +53,8 @@ module energy_mod
       !> Energy mesh
       real(rp) :: edel
       real(rp), dimension(:), allocatable :: ene
+      !> Quadrature weights of the nodes held in ene (moment-space SCF only; Fermi factor included)
+      real(rp), dimension(:), allocatable :: node_w
       integer :: ik1, nv1
       integer :: enpt
       !> Logical fix fermi level
@@ -63,6 +66,7 @@ module energy_mod
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: e_mesh
+      procedure :: scf_energy_points
    end type energy
 
    ! Constructor
@@ -101,6 +105,7 @@ contains
 #else
       if (allocated(this%ene)) deallocate (this%ene)
 #endif
+      if (allocated(this%node_w)) deallocate (this%node_w)
    end subroutine destructor
 
    !---------------------------------------------------------------------------
@@ -183,6 +188,23 @@ contains
          this%channels_ldos = 6000
       end select
    end subroutine restore_to_default
+
+   !> Length of the energy dimension of the SCF arrays: the mesh points, or in moment-space SCF
+   !> (scf_integration = 'moments') at least the node count of cheb_energy_nodes: n+64 at T = 0 and
+   !> (n+64) + (n+64+cheb_fermi_nodes) at T > 0, n = stored on-site moments.
+   function scf_energy_points(this, ctrl) result(n)
+      class(energy), intent(in) :: this
+      class(control), intent(in) :: ctrl
+      integer :: n, nmom
+      type(cheb_lp) :: lp
+
+      n = this%channels_ldos + 10
+      if (ctrl%scf_integration /= 'moments') return
+      lp = cheb_lp(ctrl)
+      nmom = lp%n_total(ctrl%lld)
+      n = max(n, nmom + 64)
+      if (this%temperature > 0.0_rp) n = max(n, 2*nmom + 128 + cheb_fermi_nodes)
+   end function scf_energy_points
 
    subroutine e_mesh(this)
       class(energy), intent(inout) :: this

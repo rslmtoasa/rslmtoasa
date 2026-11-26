@@ -114,9 +114,9 @@ contains
 
 #ifdef USE_SAFE_ALLOC
       if (this%lattice%njij == 0) then
-         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
+         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%scf_energy_points(this%control), atoms_per_process/))
       else
-         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%channels_ldos + 10, 4/))
+         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%scf_energy_points(this%control), 4/))
       end if
       call g_safe_alloc%allocate('green.gij', this%gij, (/nb, nb, nen, nslot/))
       call g_safe_alloc%allocate('green.gji', this%gji, (/nb, nb, nen, nslot/))
@@ -156,9 +156,9 @@ contains
       call g_safe_alloc%allocate('green.gjz_eta', this%gjz_eta, (/64, norb, norb, atoms_per_process/))
 #else
       if (this%lattice%njij == 0) then
-         allocate (this%g0(nb, nb, this%en%channels_ldos + 10, this%lattice%nrec))
+         allocate (this%g0(nb, nb, this%en%scf_energy_points(this%control), this%lattice%nrec))
       else
-         allocate (this%g0(nb, nb, this%en%channels_ldos + 10, 4))
+         allocate (this%g0(nb, nb, this%en%scf_energy_points(this%control), 4))
       end if
       allocate (this%gij(nb, nb, nen, nslot))
       allocate (this%gji(nb, nb, nen, nslot))

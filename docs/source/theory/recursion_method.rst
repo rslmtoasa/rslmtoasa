@@ -393,6 +393,13 @@ where :math:`c^{(p)}_{mn}` contains the kernel factors of :math:`m` and :math:`n
 :math:`p = 0, 1, 2` (``use_onsite_delta``: :math:`p = 0` only). The moment sums are contracted as traces of all pairs of the 12 families of :math:`X` and :math:`Y`, from which every output is assembled. The limits are :math:`[E_{min}, E_F]` for :math:`T = 0` and :math:`f(E)` is the
 Fermi function for :math:`T > 0`. Damping and inertia use :math:`G` and the analytic :math:`d^2G/dE^2` of the series at :math:`E_F`; the energy-resolved files are not written in this mode.
 
+**Moment-space SCF integrals** (``scf_integration = 'moments'``, ``recur = 'chebyshev'``). The on-site integrals keep their
+formulas :math:`\int f(E) E^p y(E)\,dE` with :math:`y` built from :math:`G`; only the points and the rule change. The
+points are the Gauss-Legendre nodes in :math:`\theta` of ``cheb_energy_nodes`` on :math:`[E_{min}, E_F]` (Fermi function in the
+weights for ``temperature > 0``), so :math:`\int f E^p y\,dE \approx \sum_q w_q e_q^p y(e_q)`. The Fermi level solves
+:math:`N(E_F) = -\tfrac{1}{\pi}\mathrm{Im}\sum_m t_m \sum_q w_q g_m(e_q) = N_{val}`, with :math:`t_m` the diagonal on-site moments summed over atoms
+and spins, :math:`g_m` the kernel-damped basis functions of the series.
+
 Comparison: Direct Diagonalization vs. Recursion
 =================================================
 

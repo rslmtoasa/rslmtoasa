@@ -453,6 +453,24 @@ exchange_integration
 
 **Related code:** ``source/green_chebyshev.f90``, ``source/exchange_dynamics.f90``
 
+scf_integration
+---------------
+
+**Type:** Character string
+
+**Purpose:** How the on-site energy integrals of the real-space SCF (charges, spin and orbital moments, band energy, density matrices) are evaluated.
+
+**Allowed values:** ``'dos'``, ``'moments'``
+
+**Default:** ``'dos'``
+
+**Notes:**
+
+- ``'dos'``: ``G`` is reconstructed on the energy mesh and integrated with the Simpson rule.
+- ``'moments'``: ``E_F`` solves :math:`N(E_F)` = valence from the on-site Chebyshev moments (bisection, 1e-12 Ry), ``G`` is reconstructed at Gauss-Legendre nodes of :math:`[E_{min}, E_F]` and the integrals are weighted sums over the nodes (Fermi function at the ``&energy`` ``temperature``; 0 gives the step). Requires ``recur = 'chebyshev'``. The energy-resolved DOS and cumulative-moment files are not written. See :ref:`theory/recursion_method`.
+
+**Related code:** ``source/bands.f90`` (``calculate_fermi``, ``integrate``), ``source/green_chebyshev.f90`` (``chebyshev_scf_nodes``)
+
 cheb_backend
 ------------
 

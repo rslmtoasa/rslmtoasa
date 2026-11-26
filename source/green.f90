@@ -92,6 +92,7 @@ module green_mod
       procedure :: chebyshev_green_ij_oneshot
       procedure :: chebyshev_green_ij_eta_oneshot
       procedure :: chebyshev_dos_dispatch
+      procedure :: chebyshev_scf_nodes
       procedure :: cheb_damping
       procedure :: restore_to_default
       procedure :: auxiliary_gij
@@ -172,6 +173,13 @@ module green_mod
    module subroutine chebyshev_dos_dispatch(this)
       class(green), intent(inout) :: this
    end subroutine chebyshev_dos_dispatch
+
+   module subroutine chebyshev_scf_nodes(this, t, valence, solve_fermi)
+      class(green), intent(inout) :: this
+      complex(rp), intent(in) :: t(:)
+      real(rp), intent(in) :: valence
+      logical, intent(in) :: solve_fermi
+   end subroutine chebyshev_scf_nodes
 
    module subroutine chebyshev_green_eta(this, eta, fermi_point, g_ef)
       use mpi_mod, only: atoms_per_process

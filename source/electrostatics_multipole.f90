@@ -28,7 +28,7 @@ module electrostatics_multipole_mod
 #endif
    use bands_mod, only: bands
    use precision_mod, only: rp
-   use math_mod, only: simpson_m, pi
+   use math_mod, only: pi
    use basis_mod, only: spin_off
    implicit none
 
@@ -92,7 +92,7 @@ contains
       integer :: na_glob, na_loc, plusbulk, isp, soff, nrec
       real(rp) :: d_spz, d_pzd, r_sp, r_pd, q10, q10_old
       real(rp), dimension(:), allocatable :: q10_all
-      real(rp), dimension(bnd%en%channels_ldos + 10) :: y
+      real(rp), dimension(size(bnd%en%ene)) :: y
 #ifdef USE_MPI
       integer :: ierr
 #endif
@@ -114,13 +114,13 @@ contains
 
             ! Symmetrized cross-l density-matrix elements (factor 2 accounts for
             ! the (L1,L2) and (L2,L1) orderings of the Hermitian on-site block).
-            y(:) = -aimag(bnd%green%g0(idx_s + soff, idx_pz + soff, :, na_loc) + &
-                          bnd%green%g0(idx_pz + soff, idx_s + soff, :, na_loc))/pi
-            call simpson_m(d_spz, bnd%en%edel, bnd%en%fermi, bnd%nv1, y, bnd%e1, 0, bnd%en%ene)
+            y(:) = -aimag(bnd%green%g0(idx_s + soff, idx_pz + soff, 1:size(bnd%en%ene), na_loc) + &
+                          bnd%green%g0(idx_pz + soff, idx_s + soff, 1:size(bnd%en%ene), na_loc))/pi
+            d_spz = bnd%integrate(y, 0)
 
-            y(:) = -aimag(bnd%green%g0(idx_pz + soff, idx_dz2 + soff, :, na_loc) + &
-                          bnd%green%g0(idx_dz2 + soff, idx_pz + soff, :, na_loc))/pi
-            call simpson_m(d_pzd, bnd%en%edel, bnd%en%fermi, bnd%nv1, y, bnd%e1, 0, bnd%en%ene)
+            y(:) = -aimag(bnd%green%g0(idx_pz + soff, idx_dz2 + soff, 1:size(bnd%en%ene), na_loc) + &
+                          bnd%green%g0(idx_dz2 + soff, idx_pz + soff, 1:size(bnd%en%ene), na_loc))/pi
+            d_pzd = bnd%integrate(y, 0)
 
             q10 = q10 + c_sp*d_spz*r_sp + c_pd*d_pzd*r_pd
          end do
