@@ -168,8 +168,8 @@ Details and measurements are in ``tests/KNOWN_ISSUES.md``, entry "Orbital basis
 audit".
 
 * ``paoflow2rs`` takes its file in the spherical basis without a transform.
-* ``disp_matrix`` (``symbolic_atom.f90``) is in cubic or real m order and is
-  multiplied with spherical-basis Green functions in ``calculate_jijk``; its
-  header comment lists the cubic order only.
+* ``disp_matrix`` (``symbolic_atom.f90``) is in cubic order for l <= 2 and in
+  real m order for f; ``calculate_jijk`` converts it for l <= 2 and stops with
+  a fatal for an f shell.
 * The metadata strings ``..._l_then_m_increasing`` in the export files name the
   opposite in-shell order; the files are in the order given above.

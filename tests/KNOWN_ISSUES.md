@@ -681,6 +681,7 @@ Measured basis (Hamiltonian export blocks rotated by the cubic symmetries, fit t
 
 #### `disp_matrix` (real cubic order) used with spherical-basis Green functions in `calculate_jijk`
 - **Measured (scratch call):** for a displacement along z, `disp_matrix` couples s-z, x-zx, y-yz, z-3z2 (cubic order, indices (1,4), (2,7), (3,6), (4,9)), which violate dm = 0 if read as the code's basis; after `hcpx('cart2sph')` all elements obey the selection rules. The f block (lmax = 3) is in real m order, not the structure-constant f order, and `hcpx` does not fix it. `udisp_matrix` uses transpose, not conjugate transpose. `calculate_jijk` has no caller (no driver dispatches it; no deck sets `njijk`). Proposal: convert in `disp_matrix`'s callers when the route is revived.
+- **Fixed (l <= 2):** `calculate_jijk` builds U in the cubic basis (`hcpx` before and after `udisp_matrix`) and stops with a fatal for lmax > 2. `UnitJijkDispBasis` calls `udisp_matrix` and the conversion for a z displacement: elements with Delta m /= 0 are 1.6e-16 after, 1.55 before. `calculate_jijk` itself still has no caller and was not run.
 
 #### Smaller items
 - `Coulomb_mat_spherical` callers label the shell m = -l..l by index against descending storage; inferred (not run) to be harmless because the Liechtenstein tensor is invariant under m -> -m with (-1)^m.
