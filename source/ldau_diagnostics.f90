@@ -1802,7 +1802,7 @@ contains
             orbital = mod(i, spin_off)
             spin = i/spin_off
             ell = int(sqrt(real(orbital, rp)))
-            m = orbital - ell*ell - ell ! = -m of the stored function (storage is m = +l..-l)
+            m = ell + ell*ell - orbital
             call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'RS_GREEN', ia - 1, &
                this%lattice%iz(ia), ell, spin, -1, -1, i, m, 0, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
          end do
