@@ -60,7 +60,7 @@ r2
 
 **Typical range:** 10-30 Å²
 
-**Default:** none (not set in ``lattice%restore_to_default``); give it, or ``ct``.
+**Default:** 0 (not given): with a built-in ``crystal_sym`` it becomes ``ct(1)**2``, where ``ct`` defaults to ``alat + 0.1``.
 
 **Meaning:**
 

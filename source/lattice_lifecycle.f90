@@ -933,6 +933,9 @@ contains
       this%morton_sfc = .false.
       this%pair_radius = 0.0_rp
       this%pair_unique = .false.
+      ! 0 = not given: build_data then takes ct(1)**2 (without this r2 kept whatever the memory held, e.g. huge from an
+      ! earlier buffer, and every cluster atom became a neighbour of the structure constants)
+      this%r2 = 0.0_rp
       this%n1 = 0
       this%n2 = 0
       this%n3 = 0
