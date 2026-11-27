@@ -249,6 +249,23 @@ extern "C" int rsrec_cuda_chebyshev_moments_targets(
     return status;
 }
 
+extern "C" int rsrec_cuda_chebyshev_sigma_batch(
+    rsrec_cuda_ctx *ctx, int seed, int nz, int nmom_max, const int *nmom,
+    const double *a, const double *b_re, const void *dmat, void *mu_out, double *logscale_out) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_chebyshev_sigma_batch: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_chebyshev_sigma_batch(
+        ctx->inner, seed, nz, nmom_max, nmom, a, b_re, dmat, mu_out, logscale_out);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_chebyshev_sigma_batch: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0,
                                         int lld, void *a_b, void *b2_b,
                                         int prec) {

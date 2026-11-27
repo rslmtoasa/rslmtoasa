@@ -6,5 +6,7 @@ logical :: verbose
 logical :: do_damping
 logical :: do_inertia
 logical :: do_chi0
+logical :: do_sigma
+real(rp) :: sigma_tol
 
-namelist /calculation/ verbose, pre_processing, processing, post_processing, gf_route, exchange_delta, do_damping, do_inertia, do_chi0
+namelist /calculation/ verbose, pre_processing, processing, post_processing, gf_route, exchange_delta, do_damping, do_inertia, do_chi0, do_sigma, sigma_tol

@@ -155,6 +155,8 @@ module recursion_mod
       procedure :: setup_kubo_operators
       procedure :: set_kubo_operator_slot
       procedure :: gpu_precision_code
+      procedure :: gpu_plugin_ready
+      procedure :: gpu_plugin_upload_hamiltonian
       procedure :: restore_to_default
       final :: destructor
    end type recursion

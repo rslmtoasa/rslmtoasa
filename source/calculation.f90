@@ -132,6 +132,12 @@ module calculation_mod
       !> (spin_response_rs). Collinear runs only (nsp = 1, or nsp = 2 with moments along z). Default .false.
       logical :: do_chi0
 
+      !> One-shot G_ii(z) for a site-local self-energy read from sigma.dat, written to gloc_sigma.dat. Default .false.
+      logical :: do_sigma
+
+      !> Relative tail bound that marks a G_ii(z) of the do_sigma run as converged. Default 1.0e-6
+      real(rp) :: sigma_tol
+
       !> Controller for preprocessing verbosity.
       !>
       !> Controller for preprocessing verbosity. If true, call the subroutines:
@@ -311,6 +317,8 @@ contains
       do_damping = this%do_damping
       do_inertia = this%do_inertia
       do_chi0 = this%do_chi0
+      do_sigma = this%do_sigma
+      sigma_tol = this%sigma_tol
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -355,6 +363,8 @@ contains
       this%do_damping = do_damping
       this%do_inertia = do_inertia
       this%do_chi0 = do_chi0
+      this%do_sigma = do_sigma
+      this%sigma_tol = sigma_tol
 
       close (funit)
    end subroutine build_from_file
@@ -1853,6 +1863,8 @@ contains
       this%do_damping = .false.
       this%do_inertia = .false.
       this%do_chi0 = .false.
+      this%do_sigma = .false.
+      this%sigma_tol = 1.0e-6_rp
    end subroutine restore_to_default
 
    !> Check availability for post-processing

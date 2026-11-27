@@ -199,6 +199,11 @@ if(RUN_REG_TESTS)
         "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
   endif()
 
+  # do_sigma: G_ii(z) with a site-local Sigma on bcc Fe; Sigma = sigma*I at z against Sigma = 0 at z - sigma, and the 1/z limit.
+  rslmto_add_test(NAME SigmaGloc_bccFe TIER quick LABELS sigma scf functional
+    COMMAND "${PY}" "${TestDIR}/sigma/test_sigma_gloc.py" "--binary" "${TestBinary}"
+      "--workdir" "${CMAKE_BINARY_DIR}/Testing/sigma/bccFe")
+
   # --- Kubo transport operators and backends (pytest) -----------------------------------------
   # The compile-based suites build Debug dense-reference drivers themselves (about 75 s for both);
   # test_transport_backend.py runs the executable of this build (RSLMTO_EXE).
@@ -302,6 +307,7 @@ if(RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitChebyshevGreenPrecision quick SOURCES ${TestDIR}/unit/test_chebyshev_green_precision.f90 LABELS green chebyshev)
   add_fortran_unit_test(UnitChebyshevSpectralPositivity quick SOURCES ${TestDIR}/unit/test_chebyshev_spectral_positivity.f90 LABELS green chebyshev)
   add_fortran_unit_test(UnitChebyshevLP quick SOURCES ${TestDIR}/unit/test_cheb_lp.f90 LABELS chebyshev lp)
+  add_fortran_unit_test(UnitChebSigma quick SOURCES ${TestDIR}/unit/test_cheb_sigma.f90 LABELS chebyshev sigma)
   add_fortran_unit_test(UnitChebyshevKernel quick SOURCES ${TestDIR}/unit/test_cheb_kernel.f90 LABELS chebyshev lp)
   add_fortran_unit_test(UnitChebBilinearWeights quick SOURCES ${TestDIR}/unit/test_cheb_bilinear_weights.f90 LABELS chebyshev)
   add_fortran_unit_test(UnitChebGreenPoint quick SOURCES ${TestDIR}/unit/test_cheb_green_point.f90 LABELS chebyshev)

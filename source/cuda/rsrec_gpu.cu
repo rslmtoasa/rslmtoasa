@@ -2020,6 +2020,316 @@ extern "C" int rsrec_chebyshev_moments_targets(rsrec_ctx *c, const void *psi0,
                                            b);
 }
 
+/* --------------------------------------------------------------------------
+ * Batched Chebyshev moments of Kt = (H + Sigma(z) - b_z)/a_z for nz energies
+ * from one seed site. Field (ld x nb*nz), site-major; column group g holds the
+ * nb columns of energy g. H is applied unscaled once per step for all groups.
+ * ------------------------------------------------------------------------ */
+
+/* y = alpha*((u - bre[g]*x1)*inva[g] + D(:,:,type(k),g)*x1) + beta*x0, with
+ * g = col/nb, u = H*x1 (unscaled) and D (nb, nb, ntype, nz).                */
+template <class CT, class RT>
+__global__ void k_sigma_step(int kk, int nb, int ntype, size_t ld, int col0,
+                             int ncols, const int *__restrict__ iz,
+                             const CT *__restrict__ D,
+                             const RT *__restrict__ inva,
+                             const RT *__restrict__ bre,
+                             const CT *__restrict__ u,
+                             const CT *__restrict__ x1,
+                             const CT *__restrict__ x0, CT *__restrict__ y,
+                             RT alpha, RT beta) {
+    const int k = blockIdx.x;
+    const int l = threadIdx.x, cc = threadIdx.y;
+    if (k >= kk || l >= nb || cc >= ncols) return;
+    const int col = col0 + cc, g = col / nb;
+    const size_t bb = (size_t)nb * nb;
+    const CT *Dk = D + bb * ((size_t)(iz[k] - 1) + (size_t)ntype * g);
+    const CT *xk = x1 + (size_t)nb * k + ld * col;
+    CT acc = czero_v<CT>();
+    for (int m = 0; m < nb; ++m) acc = cfma(Dk[l + nb * m], xk[m], acc);
+    const size_t idx = (size_t)l + (size_t)nb * k + ld * col;
+    RT vx = (u[idx].x - bre[g] * x1[idx].x) * inva[g] + acc.x;
+    RT vy = (u[idx].y - bre[g] * x1[idx].y) * inva[g] + acc.y;
+    CT r;
+    if (beta != (RT)0) {
+        r.x = alpha * vx + beta * x0[idx].x;
+        r.y = alpha * vy + beta * x0[idx].y;
+    } else {
+        r.x = alpha * vx;
+        r.y = alpha * vy;
+    }
+    y[idx] = r;
+}
+
+/* gmax[g] = max |v| over group g (ng contiguous entries), as the bit pattern
+ * of a non-negative double so atomicMax orders it correctly.                */
+template <class CT>
+__global__ void k_group_absmax(size_t ng, const CT *__restrict__ v,
+                               unsigned long long *gmax) {
+    __shared__ double s[256];
+    const CT *vg = v + ng * blockIdx.y;
+    double m = 0.0;
+    for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < ng;
+         i += (size_t)gridDim.x * blockDim.x)
+        m = fmax(m, hypot((double)vg[i].x, (double)vg[i].y));
+    s[threadIdx.x] = m;
+    __syncthreads();
+    for (int h = blockDim.x / 2; h > 0; h >>= 1) {
+        if (threadIdx.x < h) s[threadIdx.x] = fmax(s[threadIdx.x], s[threadIdx.x + h]);
+        __syncthreads();
+    }
+    if (threadIdx.x == 0)
+        atomicMax(gmax + blockIdx.y, (unsigned long long)__double_as_longlong(s[0]));
+}
+
+/* Divide groups whose max exceeds thr by that max, in both p and q.         */
+template <class CT>
+__global__ void k_group_rescale(size_t ng, const unsigned long long *gmax,
+                                double thr, CT *p, CT *q) {
+    const double m = __longlong_as_double((long long)gmax[blockIdx.y]);
+    if (!(m > thr)) return;
+    CT *pg = p + ng * blockIdx.y, *qg = q + ng * blockIdx.y;
+    for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < ng;
+         i += (size_t)gridDim.x * blockDim.x) {
+        pg[i].x /= m; pg[i].y /= m;
+        qg[i].x /= m; qg[i].y /= m;
+    }
+}
+
+/* Add log(max) to the group log scale where max > thr, record it for order m
+ * in logs (nm, nz), and reset gmax.                                          */
+__global__ void k_group_log(int nz, size_t nm, size_t m, double thr,
+                            unsigned long long *gmax, double *lsc,
+                            double *logs) {
+    const int g = blockIdx.x * blockDim.x + threadIdx.x;
+    if (g >= nz) return;
+    const double mx = __longlong_as_double((long long)gmax[g]);
+    if (mx > thr) lsc[g] += log(mx);
+    logs[m + nm * g] = lsc[g];
+    gmax[g] = 0ull;
+}
+
+/* out(:,:,m,g) = seed block of column group g; out is (nb, nb, nm, nz).     */
+template <class CT>
+__global__ void k_gather_seed(int nb, size_t ld, int nz, size_t nm, size_t m,
+                              int seed, const CT *__restrict__ v,
+                              CT *__restrict__ out) {
+    const size_t bb = (size_t)nb * nb;
+    const size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= bb * nz) return;
+    const int l = (int)(i % nb), col = (int)((i / nb) % nb);
+    const size_t g = i / bb;
+    out[(size_t)l + nb * ((size_t)col + nb * (m + nm * g))] =
+        v[(size_t)l + (size_t)nb * seed + ld * (g * nb + col)];
+}
+
+/* Identity block at the seed site in every column group of a zeroed field.  */
+template <class CT>
+__global__ void k_seed_identity(int nb, size_t ld, int ncol, int seed, CT *v) {
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= ncol) return;
+    CT one = czero_v<CT>();
+    one.x = 1;
+    v[(size_t)(col % nb) + (size_t)nb * seed + ld * col] = one;
+}
+
+template <class CT, class RT>
+static int cheb_sigma_engine(rsrec_ctx *c, int seed, int nz, int nm,
+                             const int *nmom_h, const double *a_h, const double *bre_h,
+                             const cplx *d_h, cplx *mu_h, double *logs_h,
+                             const CT *bt, const CT *bh,
+                             const CT *h_bare = nullptr,
+                             const CT *h_bare_imp = nullptr,
+                             const CT *h_eeo = nullptr,
+                             const CT *h_eeo_imp = nullptr,
+                             const CT *h_hons = nullptr) {
+    const int nb = c->nb, kk = c->kk, nt = c->ntype;
+    const size_t bb = (size_t)nb * nb;
+    const size_t ld = (size_t)nb * kk;
+    const size_t ng = ld * nb;                     /* one column group       */
+    const bool do_hoh = c->have_hoh;
+    const double thr = sizeof(RT) == 4 ? 1.0e30 : 1.0e100;
+
+    size_t freeb, totalb;
+    CUCHK(cudaMemGetInfo(&freeb, &totalb));
+    const size_t per_z = (do_hoh ? 7 : 4) * ng * sizeof(CT) +
+                         bb * (nt + nm) * sizeof(CT) + nm * sizeof(double);
+    const int nzc = (int)std::min((size_t)nz, freeb * 9 / 10 / per_z);
+    if (nzc < 1) FAIL("chebyshev_sigma_batch: one energy does not fit");
+
+    const size_t nf = ng * nzc;
+    CT *p0, *p1, *p2, *u, *dD, *dmu;
+    CT *t_hoh = nullptr, *e_hoh = nullptr, *o_hoh = nullptr;
+    RT *dinva, *dbre;
+    double *dlogs, *dlsc;
+    unsigned long long *dgmax;
+    CUCHK(cudaMalloc(&p0, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&p1, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&p2, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&u, nf * sizeof(CT)));
+    if (do_hoh) {
+        CUCHK(cudaMalloc(&t_hoh, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&e_hoh, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&o_hoh, nf * sizeof(CT)));
+    }
+    CUCHK(cudaMalloc(&dD, bb * nt * nzc * sizeof(CT)));
+    CUCHK(cudaMalloc(&dmu, bb * nm * nzc * sizeof(CT)));
+    CUCHK(cudaMalloc(&dinva, nzc * sizeof(RT)));
+    CUCHK(cudaMalloc(&dbre, nzc * sizeof(RT)));
+    CUCHK(cudaMalloc(&dlogs, (size_t)nm * nzc * sizeof(double)));
+    CUCHK(cudaMalloc(&dlsc, nzc * sizeof(double)));
+    CUCHK(cudaMalloc(&dgmax, nzc * sizeof(unsigned long long)));
+
+    const int tpb = 256;
+    const int gx = (int)std::min<size_t>((ng + tpb - 1) / tpb, 1024);
+    const int cs = std::max(1, 1024 / nb);
+    int nact = 0, ncol = 0;                       /* active groups, columns */
+
+    auto hop = [&](const CT *x1, const CT *x0, CT *y, RT al, RT be) -> int {
+        if (do_hoh) {
+            if (step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo, h_eeo_imp,
+                                       h_hons, t_hoh, e_hoh, o_hoh, x1,
+                                       nullptr, u, ncol, (RT)1, (RT)0, (RT)1,
+                                       (RT)0)) return 1;
+        } else if (step_apply<CT, RT>(c, bt, bh, 1, x1, nullptr, u, ncol,
+                                      (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+        for (int c0 = 0; c0 < ncol; c0 += cs) {
+            const int nc = std::min(cs, ncol - c0);
+            k_sigma_step<CT, RT><<<kk, dim3(nb, nc)>>>(
+                kk, nb, nt, ld, c0, nc, c->d_iz, dD, dinva, dbre, u, x1, x0, y,
+                al, be);
+            CUCHK(cudaGetLastError());
+        }
+        return 0;
+    };
+    /* order m: optional per-group rescale of (next, cur), then record */
+    auto record = [&](CT *next, CT *cur, size_t m, bool check) -> int {
+        if (check) {
+            k_group_absmax<CT><<<dim3(gx, nact), tpb>>>(ng, next, dgmax);
+            k_group_rescale<CT><<<dim3(gx, nact), tpb>>>(ng, dgmax, thr, next, cur);
+        }
+        k_group_log<<<(nact + tpb - 1) / tpb, tpb>>>(nact, (size_t)nm, m,
+                                                     check ? thr : HUGE_VAL,
+                                                     dgmax, dlsc, dlogs);
+        k_gather_seed<CT><<<(int)((bb * nact + tpb - 1) / tpb), tpb>>>(
+            nb, ld, nact, (size_t)nm, m, seed - 1, next, dmu);
+        CUCHK(cudaGetLastError());
+        return 0;
+    };
+
+    /* Groups sorted by decreasing order count: at order m the groups with
+     * nmom > m are a leading block of columns, and only those are updated.  */
+    std::vector<int> perm(nz);
+    for (int z = 0; z < nz; ++z) perm[z] = z;
+    std::stable_sort(perm.begin(), perm.end(),
+                     [&](int x, int y) { return nmom_h[x] > nmom_h[y]; });
+    std::vector<CT> hbuf(bb * std::max(nt, nm) * nzc);
+    std::vector<double> hlogs((size_t)nm * nzc);
+    std::vector<RT> hinva(nzc), hbre(nzc);
+    int err = 0;
+    for (int z0 = 0; z0 < nz && !err; z0 += nzc) {
+        const int nzk = std::min(nzc, nz - z0);
+        const int *pk = perm.data() + z0;
+        auto activate = [&](int m) {
+            while (nact > 0 && nmom_h[pk[nact - 1]] <= m) --nact;
+            ncol = nb * nact;
+        };
+        for (int g = 0; g < nzk; ++g) {
+            const cplx *dz = d_h + bb * nt * pk[g];
+            for (size_t i = 0; i < bb * nt; ++i) {
+                hbuf[bb * nt * g + i].x = (RT)dz[i].real();
+                hbuf[bb * nt * g + i].y = (RT)dz[i].imag();
+            }
+            hinva[g] = (RT)(1.0 / a_h[pk[g]]);
+            hbre[g] = (RT)bre_h[pk[g]];
+        }
+        CUCHK(cudaMemcpy(dD, hbuf.data(), bb * nt * nzk * sizeof(CT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(dinva, hinva.data(), nzk * sizeof(RT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(dbre, hbre.data(), nzk * sizeof(RT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemset(p0, 0, ng * nzk * sizeof(CT)));
+        CUCHK(cudaMemset(dmu, 0, bb * nm * nzk * sizeof(CT)));
+        CUCHK(cudaMemset(dlogs, 0, (size_t)nm * nzk * sizeof(double)));
+        CUCHK(cudaMemset(dlsc, 0, nzk * sizeof(double)));
+        CUCHK(cudaMemset(dgmax, 0, nzk * sizeof(unsigned long long)));
+        nact = nzk;
+        ncol = nb * nact;
+        k_seed_identity<CT><<<(ncol + tpb - 1) / tpb, tpb>>>(nb, ld, ncol, seed - 1, p0);
+        CUCHK(cudaGetLastError());
+
+        err = record(p0, nullptr, 0, false);
+        activate(1);
+        if (!err && nact > 0) err = hop(p0, nullptr, p1, (RT)1, (RT)0);
+        if (!err && nact > 0) err = record(p1, nullptr, 1, false);
+        for (int m = 2; !err; ++m) {
+            activate(m);
+            if (nact == 0) break;
+            err = hop(p1, p0, p2, (RT)2, (RT)-1);
+            if (!err) err = record(p2, p1, (size_t)m, true);
+            CT *t = p0; p0 = p1; p1 = p2; p2 = t;
+        }
+        if (err) break;
+        CUCHK(cudaMemcpy(hbuf.data(), dmu, bb * nm * nzk * sizeof(CT), cudaMemcpyDeviceToHost));
+        CUCHK(cudaMemcpy(hlogs.data(), dlogs, (size_t)nm * nzk * sizeof(double),
+                         cudaMemcpyDeviceToHost));
+        for (int g = 0; g < nzk; ++g) {
+            cplx *mz = mu_h + bb * nm * pk[g];
+            for (size_t i = 0; i < bb * nm; ++i)
+                mz[i] = cplx(hbuf[bb * nm * g + i].x, hbuf[bb * nm * g + i].y);
+            std::copy(hlogs.begin() + (size_t)nm * g, hlogs.begin() + (size_t)nm * (g + 1),
+                      logs_h + (size_t)nm * pk[g]);
+        }
+    }
+    cudaFree(p0); cudaFree(p1); cudaFree(p2); cudaFree(u);
+    if (t_hoh) cudaFree(t_hoh);
+    if (e_hoh) cudaFree(e_hoh);
+    if (o_hoh) cudaFree(o_hoh);
+    cudaFree(dD); cudaFree(dmu); cudaFree(dinva); cudaFree(dbre);
+    cudaFree(dlogs); cudaFree(dlsc); cudaFree(dgmax);
+    return err;
+}
+
+/* Batched self-energy Chebyshev moments for one 1-based seed site; see
+ * rsrec.h. Block-ELL path only (hoh included); precision from set_precision. */
+extern "C" int rsrec_chebyshev_sigma_batch(rsrec_ctx *c, int seed, int nz,
+                                           int nmom_max, const int *nmom,
+                                           const double *a, const double *b_re,
+                                           const void *dmat, void *mu_out,
+                                           double *logscale_out) {
+    if (!c->have_h) FAIL("chebyshev_sigma_batch: Hamiltonian not set");
+    if (nz < 1 || nmom_max < 1)
+        FAIL("chebyshev_sigma_batch: nz and nmom_max must be positive");
+    if (seed < 1 || seed > c->kk)
+        FAIL("chebyshev_sigma_batch: seed site out of range");
+    if (c->use_struct && !c->have_hoh)
+        FAIL("chebyshev_sigma_batch: structured backend not supported");
+    for (int z = 0; z < nz; ++z)
+        if (nmom[z] < 1 || nmom[z] > nmom_max)
+            FAIL("chebyshev_sigma_batch: nmom must lie in [1, nmom_max]");
+    const cplx *d = (const cplx *)dmat;
+    cplx *mu = (cplx *)mu_out;
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c)) return 1;
+            return cheb_sigma_engine<fc, float>(
+                c, seed, nz, nmom_max, nmom, a, b_re, d, mu, logscale_out,
+                c->f_ee_bare, c->f_hall_bare, c->f_ee_bare, c->f_hall_bare,
+                c->f_eeo, c->f_hallo, c->f_hons);
+        }
+        return cheb_sigma_engine<zc, double>(
+            c, seed, nz, nmom_max, nmom, a, b_re, d, mu, logscale_out, c->d_ee_bare,
+            c->d_hall_bare, c->d_ee_bare, c->d_hall_bare, c->d_eeo,
+            c->d_hallo, c->d_hons);
+    }
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_ham(c, 1.0, 0.0)) return 1;
+        return cheb_sigma_engine<fc, float>(c, seed, nz, nmom_max, nmom, a, b_re, d,
+                                            mu, logscale_out, c->f_ee,
+                                            c->f_hall);
+    }
+    return cheb_sigma_engine<zc, double>(c, seed, nz, nmom_max, nmom, a, b_re, d, mu,
+                                         logscale_out, c->d_ee, c->d_hall);
+}
+
 /* Device-side capture of the nb x nb blocks of the 1-based sites targets[0..nt)
  * of a site-major field into slot m of nm, downloaded once by finish() into the
  * host array out(nb, nb, nm, nt) (complex128, Fortran order). Targets are

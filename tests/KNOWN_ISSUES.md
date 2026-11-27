@@ -271,6 +271,20 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not verified:** nothing else was checked beyond the grep over `source/`.
 - **Proposal:** delete those two legacy routines in a separate task.
 
+### Self-energy moment count can leave the tail bound just above `sigma_tol` (fixed) — 2026-11-27
+- Fixed: the a-priori moment estimate in `self_energy%compute_gloc` now includes the factor 2 of the n >= 1 coefficients (bcc Fe offset 2.1049i: 13 moments, tail bound 1.02e-6 before; covered by block D of `SigmaGloc_bccFe`).
+
+### `Example_impurity_B2FeCo_block_hoh_mpi` fails intermittently under `ctest -j 8` — 2026-11-27
+- **Verified:** in 5 quick-tier runs with `-j 8` (CUDA build and CPU-only build, RTX A4000 workstation) it failed twice, once per build; it passed
+  each time it was rerun alone and on each full rerun. The failure output was not kept.
+- **Suspected, not tested:** MPI rank oversubscription or a timeout when it runs alongside other tests.
+
+### Real-space Chebyshev SCF: Fermi level differs between serial and 2 ranks after one step — 2026-11-27
+- **Verified:** `tests/scf/cases/bulk/diamondSi` (2 types, `recur = 'chebyshev'`, `nstep = 1`, same input files) with `do_sigma = .true.`:
+  "Free Fermi energy" 0.018224 serial, 0.018233 with `mpirun -np 2`. With `fix_fermi = .true.` and the same potential, `gloc_sigma.dat`
+  agrees to 5e-16 between 1 and 2 ranks, so the difference is upstream of the self-energy step.
+- **Suspected, not tested:** last-bit differences in the DOS under MPI ending the Fermi-level search at a different point within its tolerance.
+
 ## Layered (`calctype = 'L'`) and surface findings
 
 ### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap

@@ -1,4 +1,5 @@
 submodule(calculation_mod) calculation_preprocessing
+   use self_energy_mod, only: self_energy
 
 contains
 
@@ -269,6 +270,7 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
+      type(self_energy) :: sigma_obj
       integer :: i
 
       ! Constructing control object
@@ -327,6 +329,17 @@ contains
 
       call save_state(lattice_obj%symbolic_atoms)
       call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
+
+      if (this%do_sigma .and. self_obj%use_kspace) then
+         if (rank == 0) call g_logger%warning( &
+            'Skipping do_sigma: the self-energy Green function is available on the real-space route only.', __FILE__, __LINE__)
+      else if (this%do_sigma) then
+         sigma_obj = self_energy()
+         sigma_obj%tol = this%sigma_tol
+         call sigma_obj%read('sigma.dat')
+         call sigma_obj%compute_gloc(recursion_obj, energy_obj%fermi)
+         call sigma_obj%write('gloc_sigma.dat')
+      end if
 
       if (self_obj%use_kspace) then
          if (rank == 0) call g_logger%warning( &
