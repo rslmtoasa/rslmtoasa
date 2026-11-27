@@ -54,6 +54,9 @@ contains
       if (control_obj%response_projection == 'local' .or. control_obj%linear_out == 'spin_torque_onsite') then
          select case (this%post_processing)
          case ('conductivity')
+            if (control_obj%constraints_enable) &
+               call g_logger%fatal('Stage 1 frozen transport cannot restore SCF constraining fields before assembly', &
+                                   __FILE__, __LINE__)
             if (this%gf_route /= 'recursion') &
                call g_logger%fatal('Stage 1 requires gf_route=recursion', __FILE__, __LINE__)
          case ('conductivity_p2rs', 'conductivity_import', 'conductivity_effective')

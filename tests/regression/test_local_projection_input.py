@@ -16,6 +16,7 @@ FIXTURE = Path(__file__).resolve().parents[1]/"postproc/cases/conductivity/fccPt
     ({"response_projection":"sideways"}, "response_projection must be"),
     ({"cond_calctype":"random_vec"}, "per_type and charge"),
     ({"recur":"block"}, "requires Chebyshev"),
+    ({"constraints_enable":True,"constraints_i_cons":2}, "restore SCF constraining fields"),
     ({"linear_in":"spin_torque_onsite"}, "output operator"),
     ({"linear_in":"spin"}, "per_type and charge"),
     ({"linear_out":"spin_torque"}, "onsite observable"),
@@ -24,7 +25,10 @@ FIXTURE = Path(__file__).resolve().parents[1]/"postproc/cases/conductivity/fccPt
 def test_invalid_request(tmp_path, override, diagnostic):
     nml = f90nml.read(FIXTURE/"input.nml")
     nml["control"].update(response_projection="local", linear_out="spin_torque_onsite")
-    nml["control"].update(override)
+    if "constraints_enable" in override:
+        nml["constraints"] = override
+    else:
+        nml["control"].update(override)
     nml.write(tmp_path/"input.nml")
     shutil.copy(FIXTURE/"Pt.nml", tmp_path)
     run = subprocess.run([EXE], cwd=tmp_path, capture_output=True, text=True,
