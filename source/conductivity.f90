@@ -1007,12 +1007,19 @@ contains
       integer :: pe, pl, rank, pie, pil, ri
       character(len=160) :: units
       character(len=80) :: filename
+      integer :: csv
+      logical :: stage1
 
       ntrace = this%lattice%ntype
       if (trim(this%control%cond_calctype) == 'random_vec') ntrace = this%control%random_vec_num
       if (ntrace < 1) call g_logger%fatal('Response trace count must be positive', __FILE__, __LINE__)
       allocate(weights(ntrace), y(size(x), 2*nb), integrated(size(x), 2*nb), type_y(size(x), 2), type_integrated(size(x), 2))
       call this%response_normalization(weights, conversion, units)
+      stage1 = this%control%response_projection == 'local' .or. this%control%linear_out == 'spin_torque_onsite'
+      if (stage1) then
+         open(newunit=csv, file='local_projection_by_type.csv', status='replace')
+         write(csv, '(a)') 'type,element,representative_site,projection,observable,energy_eV,real,imag,cell_measure,units'
+      end if
       y = 0.0_rp
       if (trim(this%control%cond_calctype) == 'per_type') then
          do it = 1, ntrace
@@ -1029,6 +1036,10 @@ contains
             open(newunit=type_unit, file=trim(filename), status='replace')
             write(type_unit, '(a)') '# E-Ef [eV], Re, Im; additive type contribution; units: '//trim(units)
             do i = 1, size(x)
+               if (stage1) write(csv, '(*(g0,:,","))') it, trim(this%lattice%symbolic_atoms(it)%element%symbol), &
+                  this%lattice%atlist(it), trim(this%control%response_projection), trim(this%control%linear_out), &
+                  (a*x(i)+b-this%en%fermi)*ry2ev, conversion*type_integrated(i, 1), conversion*type_integrated(i, 2), &
+                  1.0_rp/weights(it), trim(units)
                write(type_unit, '(3es25.16)') (a*x(i)+b-this%en%fermi)*ry2ev, &
                   conversion*type_integrated(i, 1), conversion*type_integrated(i, 2)
             end do
@@ -1049,6 +1060,20 @@ contains
       write(info, '(a,i0,a,i0)') 'raw kernel units = Ry^', pe+pie-2, ' Angstrom^', pl+pil
       write(info, '(a)') 'linear_in = '//trim(this%control%linear_in)
       write(info, '(a)') 'linear_out = '//trim(this%control%linear_out)
+      if (stage1) then
+         close(csv)
+         write(info, '(a)') 'response_projection = '//trim(this%control%response_projection)
+         write(info, '(a)') 'moment backend = legacy FP64, global spin frame'
+         write(info, '(a,i0)') 'cond_ll = ', this%control%cond_ll
+         write(info, '(a,l1)') 'hoh = ', this%recursion%hamiltonian%hoh
+         write(info, '(a,l1)') 'ccor_2c = ', this%recursion%hamiltonian%ccor_2c
+         write(info, '(a,l1)') 'constraints_enable = ', this%control%constraints_enable
+         write(info, '(a,3(1x,l1))') 'Hubbard U general/impurity and V = ', &
+            this%recursion%hamiltonian%hubbard_u_general_check, this%recursion%hamiltonian%hubbard_u_impurity_check, &
+            this%recursion%hamiltonian%hubbard_v_check
+         if (this%control%linear_out == 'spin_torque_onsite') &
+            write(info, '(a)') 'Electronic effective onsite torque -i[S,Hii_nonSOC], including assembled magnetic terms'
+      end if
       write(info, '(a)') 'geometry = '//trim(this%response_geometry)
       write(info, '(a)') 'units = '//trim(units)
       write(info, '(a)') 'energy column = E-Ef in eV; raw cond_* energy remains Ry'

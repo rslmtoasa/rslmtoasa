@@ -944,6 +944,9 @@ contains
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
       call g_kpm_profile%stop('P_stack_setup')
+      if (.not. rec_moments .and. (control_obj%response_projection == 'local' .or. &
+            control_obj%linear_out == 'spin_torque_onsite')) &
+         call g_logger%fatal('Stage 1 requires gf_route=recursion', __FILE__, __LINE__)
       if (rec_moments) call recursion_obj%compute_moments_stochastic()
       if (.not. rec_moments) then
          ! Exact k-space moments on the SAME Chebyshev window the recursion route
