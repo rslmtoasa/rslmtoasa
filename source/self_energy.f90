@@ -161,7 +161,7 @@ contains
                                      int2str(j)//'); not computed', __FILE__, __LINE__)
                cycle
             end if
-            x = log(this%tol*(1.0_rp - rz(iz))/rz(iz))/log(rz(iz))
+            x = log(this%tol*(1.0_rp - rz(iz))/(2.0_rp*rz(iz)))/log(rz(iz))
             nmz(iz) = min(lld, max(2, ceiling(min(real(lld, rp), x)) + 1))
 
             ! On-site part of Kt: (Sigma_t - i Im b)/a; the Hamiltonian part is (H - Re b)/a.

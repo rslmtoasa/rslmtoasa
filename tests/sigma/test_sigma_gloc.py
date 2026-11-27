@@ -7,6 +7,7 @@ Closed form: (z - H - sigma)^-1 = (z - sigma - H)^-1, so block A must equal bloc
   (z = E_F - offset) makes A differ from B, because A runs with a complex centre b and on-site blocks, B with real b and none.
 C: Sigma = 0 at offset 0.0 + 20.0i: G -> I/z, so |z G - I|_max < 0.1 with z = E_F + 20i.
   Bug caught: a missing 1/a factor in the sum or a wrong E_F offset (E_F = -0.06 Ry here; only a gross error is caught at this tolerance) moves z G away from I.
+D: Sigma = sigma*I at 0 + 2.1049i must not be n/a (bug caught: a priori moment count below the tail bound, KNOWN_ISSUES 2026-11-27).
 """
 import argparse
 import re
@@ -53,8 +54,8 @@ def main():
         print(run.stdout[-3000:])
         raise SystemExit(f"ERROR: run exited {run.returncode}")
     fermi = float(re.findall(r"Free Fermi energy:\s*([-+0-9.eE]+)", run.stdout)[-1])
-    ga, gb, gc = read_gloc(work / "gloc_sigma.dat")
-    if ga is None or gb is None or gc is None:
+    ga, gb, gc, gd = read_gloc(work / "gloc_sigma.dat")
+    if ga is None or gb is None or gc is None or gd is None:
         raise SystemExit("ERROR: gloc_sigma.dat holds n/a for a block that must converge")
     ab = np.abs(ga - gb).max() / np.abs(gb).max()
     c = np.abs((fermi + 20j) * gc - np.eye(gc.shape[0])).max()
