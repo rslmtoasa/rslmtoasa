@@ -129,11 +129,11 @@ contains
       integer :: m1_val, m2_val, m3_val, m4_val
       real(rp) :: f0, f2, f4, f6
       real(rp) :: ubar, jbar, ueff, d1, d2, eps_den, tr_n1mn
-      real(rp) :: num_u, num_j, sum_occ_opposite, sum_occ_same_excl
-      real(rp) :: common_pref, sum_u_aux, sum_j_aux, dUdn, dJdn, dUeff_dn
+      real(rp) :: sum_occ_opposite, sum_occ_same_excl, common_pref
+      complex(rp) :: num_u, num_j, sum_u_aux, sum_j_aux, dUdn, dJdn, dUeff_dn
       real(rp) :: vdiag_up_avg, vdiag_dn_avg, vdiag_split
       real(rp), dimension(2, 7) :: occ_m
-      real(rp), dimension(2, 7, 7) :: pbar
+      complex(rp), dimension(2, 7, 7) :: pbar
       logical :: use_acbn0, emit_logs, type_has_uj
       real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
       real(rp), dimension(this%lattice%ntype, 4, 4) :: f
@@ -148,7 +148,6 @@ contains
       integer :: cntr
       real(rp) :: ldm_trace_up, ldm_trace_dn, ldm_max_abs, hup_max_abs
       real(rp) :: ql_occ_up, ql_occ_dn
-      real(rp) :: imag_ldm_max
       complex(rp) :: t_spinor(5, 5, 5, 5), p_spinor(10, 10), v_spinor(10, 10)
       real(rp) :: e_int_s, e_dc_s, e_hub_s, u_spinor, j_spinor, axis_ref(3), axis_norm, axis_first(3)
       logical :: have_axis
@@ -348,20 +347,6 @@ contains
       use_acbn0 = (trim(lower(this%hubbard_u_potential_form)) == 'acbn0')
       eps_den = 1.0e-12_rp
 
-      if (use_acbn0) then
-         do na = 1, this%lattice%ntype
-            do l = 1, size(l_arr(na)%val)
-               l_index = l_arr(na)%val(l)
-               m_max = 2*l_index - 1
-               imag_ldm_max = maxval(abs(aimag(ldm(na, l_index, :, 1:m_max, 1:m_max))))
-               if (imag_ldm_max > 1.0e-10_rp) then
-                  call g_logger%fatal('ACBN0 LDA+U does not support complex orbital occupations; use fixed Liechtenstein form.', &
-                     __FILE__, __LINE__)
-               end if
-            end do
-         end do
-      end if
-
       do na = 1, this%lattice%ntype
          do l = 1, size(l_arr(na)%val)
             l_index = l_arr(na)%val(l)
@@ -378,7 +363,7 @@ contains
                do ispin = 1, 2
                   do m1 = 1, m_max
                      do m2 = 1, m_max
-                        pbar(ispin, m1, m2) = (occ_m(ispin, m1) + occ_m(ispin, m2))*real(ldm(na, l_index, ispin, m1, m2), rp)
+                        pbar(ispin, m1, m2) = (occ_m(ispin, m1) + occ_m(ispin, m2))*ldm(na, l_index, ispin, m1, m2)
                      end do
                   end do
                end do
@@ -411,8 +396,8 @@ contains
                                  m2_val = ms(l_index)%val(m2)
                                  m3_val = ms(l_index)%val(m3)
                                  m4_val = ms(l_index)%val(m4)
-                                 num_u = num_u + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)* &
-                                         pbar(ispin, m1, m2)*pbar(i, m3, m4)
+                                 num_u = num_u + Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6)* &
+                                         pbar(ispin, m2, m1)*pbar(i, m4, m3)
                               end do
                            end do
                         end do
@@ -427,15 +412,15 @@ contains
                               m2_val = ms(l_index)%val(m2)
                               m3_val = ms(l_index)%val(m3)
                               m4_val = ms(l_index)%val(m4)
-                              num_j = num_j + Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6)* &
-                                      pbar(ispin, m1, m2)*pbar(ispin, m3, m4)
+                              num_j = num_j + Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6)* &
+                                      pbar(ispin, m2, m1)*pbar(ispin, m4, m3)
                            end do
                         end do
                      end do
                   end do
                end do
-               ubar = num_u/max(d1, eps_den)
-               jbar = num_j/max(d2, eps_den)
+               ubar = real(num_u, rp)/max(d1, eps_den)
+               jbar = real(num_j, rp)/max(d2, eps_den)
                ueff = ubar - jbar
                tr_n1mn = 0.0_rp
                do ispin = 1, 2
@@ -458,25 +443,15 @@ contains
                            f2 = f(na, l_index, 2)
                            f4 = f(na, l_index, 3)
                            f6 = f(na, l_index, 4)
-                           if (use_acbn0) then
-                              ! Real-harmonic Coulomb_mat on the spherical-basis ldm: basis mismatch (tests/KNOWN_ISSUES.md, Orbital basis audit)
-                              ! Preserve the legacy real-harmonic ACBN0 proxy; it is
-                              ! outside the fixed Liechtenstein implementation scope.
-                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                                   + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*real(ldm(na, l_index, 3 - ispin, m3, m4), rp) &
-                                   + (Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) &
-                                   -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*real(ldm(na, l_index, ispin, m3, m4), rp)
-                           else
-                              ! ldm stores the operator projector P_ab=psi_a psi*_b.
-                              ! The fixed-U potential gradient contracts P_dc for
-                              ! T_abcd=<a c|b d>, consistent with Tr(V delta P).
-                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                                   + Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
-                                     *ldm(na, l_index, 3 - ispin, m4, m3) &
-                                   + (Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
-                                   -  Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6)) &
-                                     *ldm(na, l_index, ispin, m4, m3)
-                           end if
+                           ! ldm stores the operator projector P_ab=psi_a psi*_b.
+                           ! The fixed-U potential gradient contracts P_dc for
+                           ! T_abcd=<a c|b d>, consistent with Tr(V delta P).
+                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                                + Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
+                                  *ldm(na, l_index, 3 - ispin, m4, m3) &
+                                + (Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
+                                -  Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6)) &
+                                  *ldm(na, l_index, ispin, m4, m3)
                         end do
                      end do
                      if (use_acbn0) then
@@ -489,7 +464,7 @@ contains
                               do m4 = 1, m_max
                                  m3_val = ms(l_index)%val(m3)
                                  m4_val = ms(l_index)%val(m4)
-                                 sum_u_aux = sum_u_aux + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*pbar(j, m3, m4)
+                                 sum_u_aux = sum_u_aux + Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6)*pbar(j, m4, m3)
                               end do
                            end do
                         end do
@@ -497,7 +472,7 @@ contains
                            do m4 = 1, m_max
                               m3_val = ms(l_index)%val(m3)
                               m4_val = ms(l_index)%val(m4)
-                              sum_j_aux = sum_j_aux + Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6)*pbar(ispin, m3, m4)
+                              sum_j_aux = sum_j_aux + Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6)*pbar(ispin, m4, m3)
                            end do
                         end do
 

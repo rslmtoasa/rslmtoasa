@@ -167,8 +167,6 @@ Known mismatches
 Details and measurements are in ``tests/KNOWN_ISSUES.md``, entry "Orbital basis
 audit".
 
-* ACBN0 and SC-U contract the real-harmonic ``Coulomb_mat`` with the
-  spherical-basis density matrix.
 * ``paoflow2rs`` takes its file in the spherical basis without a transform.
 * ``disp_matrix`` (``symbolic_atom.f90``) is in cubic or real m order and is
   multiplied with spherical-basis Green functions in ``calculate_jijk``; its

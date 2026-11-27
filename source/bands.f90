@@ -377,12 +377,12 @@ contains
                               m2_val = ms(l_index)%val(m2)
                               m3_val = ms(l_index)%val(m3)
                               m4_val = ms(l_index)%val(m4)
-                              ! Real-harmonic Coulomb_mat on the spherical-basis ldm: basis mismatch (tests/KNOWN_ISSUES.md, Orbital basis audit)
-                              uval = uval + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) * &
-                                 ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
+                              ! Spherical tensor <m1 m3|m2 m4> with the density matrix in the code basis, as in the fixed U path
+                              uval = uval + real(Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6), rp) * &
+                                 ldm_scr(itype, l_index, ispin, m2, m1) * ldm_scr(itype, l_index, ispin2, m4, m3)
                               if (ispin == ispin2 .and. m1 /= m2) then
-                                 jval = jval + Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6) * &
-                                    ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
+                                 jval = jval + real(Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6), rp) * &
+                                    ldm_scr(itype, l_index, ispin, m2, m1) * ldm_scr(itype, l_index, ispin2, m4, m3)
                               end if
                            end do
                         end do
