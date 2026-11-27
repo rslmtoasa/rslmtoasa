@@ -279,6 +279,12 @@ are not tracked here; see `docs/DECISIONS.md`.
   each time it was rerun alone and on each full rerun. The failure output was not kept.
 - **Suspected, not tested:** MPI rank oversubscription or a timeout when it runs alongside other tests.
 
+### Real-space Chebyshev SCF: Fermi level differs between serial and 2 ranks after one step — 2026-11-27
+- **Verified:** `tests/scf/cases/bulk/diamondSi` (2 types, `recur = 'chebyshev'`, `nstep = 1`, same input files) with `do_sigma = .true.`:
+  "Free Fermi energy" 0.018224 serial, 0.018233 with `mpirun -np 2`. With `fix_fermi = .true.` and the same potential, `gloc_sigma.dat`
+  agrees to 5e-16 between 1 and 2 ranks, so the difference is upstream of the self-energy step.
+- **Suspected, not tested:** last-bit differences in the DOS under MPI ending the Fermi-level search at a different point within its tolerance.
+
 ## Layered (`calctype = 'L'`) and surface findings
 
 ### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap
