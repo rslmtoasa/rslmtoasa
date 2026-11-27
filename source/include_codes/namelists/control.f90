@@ -10,7 +10,7 @@ character(len=sl) :: cpu_reconstruction_precision
 character(len=sl) :: cheb_kernel
 real(rp) :: cheb_kernel_lambda
 logical :: gpu_moment_download
-character(len=sl) :: linear_in, linear_out
+character(len=sl) :: linear_in, linear_out, response_projection
 character(len=sl) :: density_policy
 logical :: gbt_scf_diagnostics
 logical :: cheb_lp, nonlocal_dm
@@ -23,6 +23,6 @@ namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    svac, calctype, txc, blockrec, partype, do_cochg, asd_jij, terminator, conca, &
    concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, gpu_precision, gpu_moment_download, cheb_backend, intersite_mode, exchange_integration, scf_integration, multipole_route, transport_backend, &
    gpu_stochastic_block, cpu_reconstruction_precision, &
-   random_vec_num, cond_ll, cond_calctype, linear_in, linear_out, lmax, &
+   random_vec_num, cond_ll, cond_calctype, linear_in, linear_out, response_projection, lmax, &
    dipole_electrostatics, dipole_mix, density_policy, gbt_scf_diagnostics, fresh_start, &
    cheb_lp, cheb_lp_factor, cheb_kernel, cheb_kernel_lambda, nonlocal_dm, nonlocal_dm_order
