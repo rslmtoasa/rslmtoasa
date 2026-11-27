@@ -375,4 +375,33 @@ contains
       call finish()
    end subroutine test_bdg_o4
 
+   !> Internal plumbing check, not validation. Catches: wrong L->l map, transposed l/l', missing eV->Ry.
+   subroutine test_bdg_kmat()
+      integer, parameter :: norb = 9, ntype = 2
+      integer, parameter :: l_of(norb) = [0, 1, 1, 1, 2, 2, 2, 2, 2]
+      real(rp) :: lambda(3, 3, ntype), kmat(norb, norb, ntype), err, ref
+      integer :: i, j, t, l, lp
+
+      do t = 1, ntype
+         do lp = 0, 2
+            do l = 0, 2
+               lambda(l + 1, lp + 1, t) = 10.0_rp*l + lp + 100.0_rp*t
+            end do
+         end do
+      end do
+      call bdg_kmat_from_lambda(lambda, kmat)
+      err = 0.0_rp
+      do t = 1, ntype
+         do j = 1, norb
+            do i = 1, norb
+               ref = (10.0_rp*l_of(i) + l_of(j) + 100.0_rp*t)/13.605703976_rp
+               err = max(err, abs(kmat(i, j, t) - ref)/ref)
+            end do
+         end do
+      end do
+      write (*, '(a)') 'test | measured | tolerance'
+      write (*, '(a,es10.2,a)') 'kmat max relative error | ', err, ' | 1.00E-14'
+      if (err > 1.0e-14_rp) error stop 'kmat mismatch'
+   end subroutine test_bdg_kmat
+
 end module test_bdg_mod

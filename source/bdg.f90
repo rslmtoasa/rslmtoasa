@@ -15,11 +15,16 @@
 !------------------------------------------------------------------------------
 module bdg_mod
    use precision_mod, only: rp
-   use math_mod, only: hermitian_eigensystem
-   use reciprocal_mod, only: fermi_dirac_occupation
+   use math_mod, only: hermitian_eigensystem, ry2ev
+   use basis_mod, only: lmax_basis
+   use lattice_mod, only: lattice
+   use reciprocal_mod, only: reciprocal, fermi_dirac_occupation
+   use logger_mod, only: g_logger
+   use string_mod, only: int2str
    implicit none
    private
 
+   public :: bdg, bdg_kmat_from_lambda
    public :: bdg_hamiltonian_source, bdg_assemble, bdg_accumulate, bdg_gap, bdg_iterate
 
    !> @brief Supplies the normal-state Hamiltonian at k and -k for one k index.
@@ -27,6 +32,26 @@ module bdg_mod
    contains
       procedure(hk_interface), deferred :: hk
    end type bdg_hamiltonian_source
+
+   !> @brief &bdg input: pairing kernel K (Ry) and iteration, DOS and seed settings.
+   type :: bdg
+      class(reciprocal), pointer :: reciprocal => null()
+      class(lattice), pointer :: lattice => null()
+      !> K(L, L', type) in Ry.
+      real(rp), allocatable :: kmat(:, :, :)
+      !> Ry
+      real(rp) :: delta_seed, tol, dos_window, dos_sigma
+      character(len=256) :: delta_file
+      real(rp) :: mix
+      integer :: max_iter, n_dos
+   contains
+      procedure :: build_from_file
+      procedure :: restore_to_default
+   end type bdg
+
+   interface bdg
+      procedure :: constructor
+   end interface bdg
 
    abstract interface
       subroutine hk_interface(this, ik, hk, hmk)
@@ -38,6 +63,89 @@ module bdg_mod
    end interface
 
 contains
+
+   !> @brief K(L, L', t) = lambda(l(L)+1, l(L')+1, t)/ry2ev, with L in the order s, p (3), d (5), f (7).
+   subroutine bdg_kmat_from_lambda(lambda, kmat)
+      real(rp), intent(in) :: lambda(:, :, :)
+      real(rp), intent(out) :: kmat(:, :, :)
+      integer :: i, j, l_of(size(kmat, 1))
+
+      do i = 1, size(kmat, 1)
+         l_of(i) = int(sqrt(real(i - 1, rp)))
+      end do
+      do j = 1, size(kmat, 2)
+         do i = 1, size(kmat, 1)
+            kmat(i, j, :) = lambda(l_of(i) + 1, l_of(j) + 1, :)/ry2ev
+         end do
+      end do
+   end subroutine bdg_kmat_from_lambda
+
+   function constructor(reciprocal_obj) result(obj)
+      type(bdg) :: obj
+      type(reciprocal), target, intent(inout) :: reciprocal_obj
+
+      obj%reciprocal => reciprocal_obj
+      obj%lattice => reciprocal_obj%lattice
+      call obj%restore_to_default()
+      call obj%build_from_file()
+   end function constructor
+
+   subroutine restore_to_default(this)
+      class(bdg), intent(inout) :: this
+
+      this%delta_seed = 1.0e-3_rp/ry2ev
+      this%delta_file = ''
+      this%mix = 0.3_rp
+      this%tol = 1.0e-6_rp/ry2ev
+      this%max_iter = 50
+      this%dos_window = 0.01_rp/ry2ev
+      this%n_dos = 401
+      this%dos_sigma = 1.0e-4_rp/ry2ev
+   end subroutine restore_to_default
+
+   subroutine build_from_file(this)
+      class(bdg), intent(inout) :: this
+
+      integer :: iostatus, funit
+
+      include 'include_codes/namelists/bdg.f90'
+
+      allocate (lambda(lmax_basis + 1, lmax_basis + 1, this%lattice%ntype))
+      lambda = 0.0_rp
+      delta_seed = this%delta_seed*ry2ev
+      delta_file = this%delta_file
+      mix = this%mix
+      tol = this%tol*ry2ev
+      max_iter = this%max_iter
+      dos_window = this%dos_window*ry2ev
+      n_dos = this%n_dos
+      dos_sigma = this%dos_sigma*ry2ev
+
+      open (newunit=funit, file=this%lattice%control%fname, action='read', iostat=iostatus, status='old')
+      if (iostatus /= 0) then
+         call g_logger%fatal('file '//trim(this%lattice%control%fname)//' not found', __FILE__, __LINE__)
+      end if
+      read (funit, nml=bdg, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. is_iostat_end(iostatus)) then
+         call g_logger%fatal('error while reading namelist bdg, iostat = '//int2str(iostatus), __FILE__, __LINE__)
+      end if
+      close (funit)
+
+      if (mix <= 0.0_rp .or. tol <= 0.0_rp .or. max_iter < 0 .or. n_dos < 1 .or. dos_window <= 0.0_rp .or. dos_sigma <= 0.0_rp) then
+         call g_logger%fatal('bdg needs mix > 0, tol > 0, max_iter >= 0, n_dos >= 1, dos_window > 0 and dos_sigma > 0', &
+                             __FILE__, __LINE__)
+      end if
+      this%delta_seed = delta_seed/ry2ev
+      this%delta_file = delta_file
+      this%mix = mix
+      this%tol = tol/ry2ev
+      this%max_iter = max_iter
+      this%dos_window = dos_window/ry2ev
+      this%n_dos = n_dos
+      this%dos_sigma = dos_sigma/ry2ev
+      allocate (this%kmat((lmax_basis + 1)**2, (lmax_basis + 1)**2, size(lambda, 3)))
+      call bdg_kmat_from_lambda(lambda, this%kmat)
+   end subroutine build_from_file
 
    !> @brief Index of the spin-down partner of an up state with the same site and orbital.
    pure integer function partner(a, site_of, orb_of, spin_of)

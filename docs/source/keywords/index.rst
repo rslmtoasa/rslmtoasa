@@ -26,6 +26,7 @@ Quick Navigation
    frozen_magnon
    reciprocal
    spin_response
+   bdg
    lda_u
 
 Parameters by Namelist
@@ -62,6 +63,10 @@ k-space SCF, band structure, DOS, Fermi surface and k-space Green functions. See
 **&spin_response**
 
 Transverse spin susceptibility on the k-space route. See :ref:`keywords/spin_response`.
+
+**&bdg**
+
+On-site singlet pairing on the frozen k-space state. See :ref:`keywords/bdg`.
 
 **LDA+U** (``&hamiltonian`` Hubbard keys, ``&mix ldm_beta``, ``&par`` Hubbard data, ``&density_matrix``)
 

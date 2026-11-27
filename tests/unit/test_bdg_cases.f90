@@ -5,9 +5,9 @@ program test_bdg_cases
    use test_bdg_mod
    implicit none
 
-   character(len=4), parameter :: cases(6) = [character(len=4) :: 'o1', 'o1b', 'o2', 'o2x', 'o3', 'o4']
-   logical, parameter :: expect_fatal(6) = [.false., .false., .false., .false., .false., .false.]
-   character(len=1), parameter :: workdirs(6) = [character(len=1) :: '', '', '', '', '', '']
+   character(len=4), parameter :: cases(7) = [character(len=4) :: 'o1', 'o1b', 'o2', 'o2x', 'o3', 'o4', 'kmat']
+   logical, parameter :: expect_fatal(7) = [.false., .false., .false., .false., .false., .false., .false.]
+   character(len=1), parameter :: workdirs(7) = [character(len=1) :: '', '', '', '', '', '', '']
    character(len=64) :: which
    character(len=512) :: dir
 
@@ -30,6 +30,8 @@ program test_bdg_cases
          call test_bdg_o3(trim(dir))
       case ('o4')
          call test_bdg_o4(trim(dir))
+      case ('kmat')
+         call test_bdg_kmat()
       case default
          write (*, '(a,a)') 'unknown sub-case ', trim(which)
          error stop 2
