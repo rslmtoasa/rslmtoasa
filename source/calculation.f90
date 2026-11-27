@@ -169,6 +169,7 @@ module calculation_mod
       procedure, private :: post_processing_density_of_states
       procedure, private :: post_processing_fermi_surface
       procedure, private :: post_processing_spin_response
+      procedure, private :: post_processing_bdg
       procedure, private :: post_processing_kspace_green
       procedure, private :: post_processing_frozen_magnon
       procedure :: process
@@ -217,6 +218,10 @@ module calculation_mod
       module subroutine post_processing_spin_response(this)
          class(calculation), intent(in) :: this
       end subroutine post_processing_spin_response
+
+      module subroutine post_processing_bdg(this)
+         class(calculation), intent(in) :: this
+      end subroutine post_processing_bdg
 
       module subroutine post_processing_kspace_green(this)
          class(calculation), intent(in) :: this
@@ -425,6 +430,8 @@ contains
          call this%post_processing_fermi_surface()
       case ('spin_response')
          call this%post_processing_spin_response()
+      case ('bdg')
+         call this%post_processing_bdg()
       case ('kspace_green')
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
@@ -1845,7 +1852,7 @@ contains
       case ('none', 'paoflow2rs', 'exchange', 'exchange_import', 'exchange_p2rs', 'conductivity', &
             'conductivity_import', 'conductivity_effective', 'conductivity_p2rs', 'hamiltonian_export', &
             'dos_frozen', 'dos_import', 'dos_effective', 'orbital_modern', 'band_structure', 'bsf', &
-            'density_of_states', 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon')
+            'density_of_states', 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon', 'bdg')
          return
       case default
          call g_logger%fatal('Unknown calculation%post_processing: '//post_processing, __FILE__, __LINE__)

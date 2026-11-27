@@ -58,6 +58,7 @@ shared Fortran state.
 | `post_processing` | `'band_structure'` / `'density_of_states'` | `post_processing_band_structure` / `_density_of_states` | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
 | `post_processing` | `'fermi_surface'` | `post_processing_fermi_surface` | Writes the dense k-space eigensystem for Fermi-surface analysis (`reciprocal_export.f90`) on the `&reciprocal` `fs_nk1..3` mesh, always the full BZ. Its frozen-state setup (database potential → `hamiltonian` → `reciprocal`, `fermi_level` from `&energy`) is the template for new k-space post-processing routes. |
 | `post_processing` | `'spin_response'` | `post_processing_spin_response` → `spin_response%prepare/interaction/run/write_state` (`spin_response.f90`) | Transverse spin response chi0(q, omega), U and Dyson for Juelich-d amplitudes on the frozen k-space state, q list from `&spin_response` (`q_list` or `q_file`), several sites per cell. See "Transverse spin response (B11)" below. |
+| `post_processing` | `'bdg'` | `post_processing_bdg` → `bdg_iterate` (`bdg.f90`) | Stage 1 Kohn–Sham–BdG on the frozen k-space state: on-site singlet gap Δ_iL = Σ_L' K_LL' χ_iL' iterated at fixed μ (`&energy fermi`) on the full-BZ `&reciprocal` mesh; K from `&bdg lambda`. H(±k) from `build_hamiltonian_at_kpoint`. Stops on a GBT spiral, a generalized S(k) problem or an imported effective Hamiltonian. Writes `bdg_state.dat`, `bdg_delta.dat`. Kernels and oracle tests: `UnitBdg` (`tests/bdg/oracles/`). |
 | `post_processing` | `'bsf'` | `post_processing_bsf` → `reciprocal%calculate_bsf` (`reciprocal_bsf.f90`) | Bloch spectral function A(k,E) = −1/π Im Tr G(k,E+iη) along the canonical spglib k-path (milestone B3). Consumes the B2 engine's `dyson_kspace_inverse` per (k,E) (Σ=0 ⇒ backend E; Σ-ready for CPA/DMFT). η = `&reciprocal` green_eta, E grid = n_energy_points/dos_energy_min,max, path = `&kpath` nk_per_segment. Writes `bsf.dat` (total/up/down) + `bsf_bands.dat` overlay. Partial-trace convention in `bsf_kernel.f90` (`bsf_spectral_trace`). |
 | `post_processing` | `'kspace_green'` | `post_processing_kspace_green` | B2 validation driver: fills `green%gij` via recursion then via the k-space engine (`reciprocal%fill_green`, backend E + D≡E check) and cross-checks on-site DOS / m_z. Report-only. |
 | `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`q_coordinates='cartesian'` for `2*pi/alat` Cartesian components or `'direct'` for reciprocal-lattice coordinates), writing total energy, band energy, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point, reuses that potential for a single-iteration band-energy pass at every other q, and computes `omega` from band-energy differences; `mode='scf'` re-converges at every q and computes `omega` from total-energy differences. `branch_mode='auto'` builds multi-sublattice magnon branches in `frozen_magnon_branches.dat`/`frozen_magnon_modes.dat` via the direct GBT frozen-magnon method (second derivatives of the force-theorem band-energy surface w.r.t. sublattice cone angles; Essenberger PRB 84, 174425 Eq. 26). **Single-sublattice is validated; for the multi-sublattice acoustic branch see VAL-17 above, `tests/KNOWN_ISSUES.md`, and B1 in `docs/ROADMAP.md`.** See `docs/DECISIONS.md` for the archived campaign record. |
@@ -68,7 +69,7 @@ Routines live in `calculation.f90` except the `bravais`, `buildsurf`,
 `newclubulk` and `newclusurf` pre-processing routines
 (`calculation_preprocessing.f90`) and the k-space post-processing routines
 `band_structure`, `density_of_states`, `bsf`, `fermi_surface`,
-`kspace_green` and `spin_response` (`calculation_reciprocal.f90`).
+`kspace_green`, `spin_response` and `bdg` (`calculation_reciprocal.f90`).
 
 `exchange_p2rs`/`conductivity_p2rs`/`paoflow2rs` all funnel through the
 shared helper `prepare_post_processing_stack(this, use_paoflow, ...)` in
@@ -125,7 +126,7 @@ and does not alter the equations.
 
 ### k-space (reciprocal)
 ```text
-post_processing_{band_structure,density_of_states,bsf,fermi_surface,kspace_green,spin_response}
+post_processing_{band_structure,density_of_states,bsf,fermi_surface,kspace_green,spin_response,bdg}
   (calculation_reciprocal.f90)
   -> reciprocal_mod (reciprocal.f90 + submodules reciprocal_*.f90)
        -> reciprocal_fourier.f90: k-space H(k) built via Fourier transform of
@@ -265,6 +266,9 @@ See [Hamiltonian export and import](HAMILTONIAN_EXPORT.md) for input and file co
   reciprocal execution-backend interface, with the GPU tests
   `ReciprocalCuda{ArbitraryK,Lifecycle,Eigensolver,Lehmann}`. Not yet audited on
   `fable_v4b`, and not used by the spin response (B4).
+- **BdG kernels** (`bdg.f90`): plain-array `bdg_assemble`, `bdg_accumulate`, `bdg_gap` and the shared
+  iteration `bdg_iterate`, which takes H(k), H(−k) through `bdg_hamiltonian_source`; the oracle tests and
+  the route use the same iteration.
 - **Spin-response kernels** (`spin_response.f90`): plain-array procedures
   (amplitudes, `accumulate_chi0`, `u_juelich`, `solve_dyson`, ...) that the
   analytic tests call directly; see the B11 recipe below.

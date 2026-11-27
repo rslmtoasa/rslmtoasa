@@ -9,35 +9,57 @@
 !> Conventions (oracles: tests/bdg/oracles/README.md):
 !>
 !>   H_BdG(k) = [[H(k) - mu, D], [D^dag, -H(-k)^* + mu]],  D(iL up, iL dn) = +Delta_iL, D(iL dn, iL up) = -Delta_iL
-!>   chi_iL   = sum_k w_k sum_n u_{iL up,n} conj(v_{iL dn,n}) (1 - f(E_n)),  Delta_iL = sum_L' K_LL' chi_iL'
+!>   chi_iL   = sum_k w_k sum_n u_{iL up,n} conj(v_{iL dn,n}) (1 - f(E_n)),  Delta_iL = sum_Lp K_L,Lp chi_iLp
 !>
 !> Matrix index a runs over nmat states; site_of, orb_of and spin_of (1 = up, 2 = dn) map it to (i, L, sigma).
 !------------------------------------------------------------------------------
 module bdg_mod
    use precision_mod, only: rp
    use math_mod, only: hermitian_eigensystem, ry2ev
-   use basis_mod, only: lmax_basis
+   use basis_mod, only: lmax_basis, nb, norb, spin_off
+   use mpi_mod, only: rank, numprocs, ierr, g_parallel_context
    use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal, fermi_dirac_occupation
    use logger_mod, only: g_logger
    use string_mod, only: int2str
+#ifdef USE_MPI
+   use mpi
+#endif
    implicit none
    private
 
    public :: bdg, bdg_kmat_from_lambda
-   public :: bdg_hamiltonian_source, bdg_assemble, bdg_accumulate, bdg_gap, bdg_iterate
+   public :: bdg_reciprocal_source, bdg_hamiltonian_source, bdg_assemble, bdg_accumulate, bdg_gap, bdg_iterate
 
    !> @brief Supplies the normal-state Hamiltonian at k and -k for one k index.
+   !> @details reduce (sum chi and nel over ranks, after each k sweep) and report (once per iteration after
+   !>          mixing) do nothing unless overridden.
    type, abstract :: bdg_hamiltonian_source
    contains
       procedure(hk_interface), deferred :: hk
+      procedure :: reduce => reduce_none
+      procedure :: report => report_none
    end type bdg_hamiltonian_source
+
+   !> @brief Production source: H(k) and H(-k) from the reciprocal object on the share of this rank of its k mesh.
+   type, extends(bdg_hamiltonian_source) :: bdg_reciprocal_source
+      class(reciprocal), pointer :: reciprocal => null()
+      !> Fractional k points and weights owned by this rank.
+      real(rp), allocatable :: k_local(:, :), wk_local(:)
+      integer, allocatable :: type_of(:), site_of(:), orb_of(:), spin_of(:)
+      real(rp) :: n_normal = 0.0_rp
+   contains
+      procedure :: init => source_init
+      procedure :: hk => source_hk
+      procedure :: reduce => source_reduce
+      procedure :: report => source_report
+   end type bdg_reciprocal_source
 
    !> @brief &bdg input: pairing kernel K (Ry) and iteration, DOS and seed settings.
    type :: bdg
       class(reciprocal), pointer :: reciprocal => null()
       class(lattice), pointer :: lattice => null()
-      !> K(L, L', type) in Ry.
+      !> K(L, Lp, type) in Ry.
       real(rp), allocatable :: kmat(:, :, :)
       !> Ry
       real(rp) :: delta_seed, tol, dos_window, dos_sigma
@@ -64,7 +86,122 @@ module bdg_mod
 
 contains
 
-   !> @brief K(L, L', t) = lambda(l(L)+1, l(L')+1, t)/ry2ev, with L in the order s, p (3), d (5), f (7).
+   subroutine reduce_none(this, chi, nel)
+      class(bdg_hamiltonian_source), intent(in) :: this
+      complex(rp), intent(inout) :: chi(:, :)
+      real(rp), intent(inout) :: nel(2)
+   end subroutine reduce_none
+
+   subroutine report_none(this, iter, dmax, delta, chi, nel)
+      class(bdg_hamiltonian_source), intent(in) :: this
+      integer, intent(in) :: iter
+      real(rp), intent(in) :: dmax, nel(2)
+      complex(rp), intent(in) :: delta(:, :), chi(:, :)
+   end subroutine report_none
+
+   !> @brief Index maps a = (i-1)*nb + L + (sigma-1)*spin_off and the slice of this rank of the reciprocal k mesh.
+   subroutine source_init(this, recip)
+      class(bdg_reciprocal_source), intent(inout) :: this
+      class(reciprocal), target, intent(inout) :: recip
+      integer :: i, L, a, first, last, count
+
+      this%reciprocal => recip
+      allocate (this%site_of(nb*recip%lattice%nrec), this%orb_of(nb*recip%lattice%nrec), this%spin_of(nb*recip%lattice%nrec))
+      allocate (this%type_of(recip%lattice%nrec))
+      do i = 1, recip%lattice%nrec
+         this%type_of(i) = recip%lattice%ib(i)
+         do L = 1, norb
+            a = (i - 1)*nb + L
+            this%site_of(a) = i
+            this%orb_of(a) = L
+            this%spin_of(a) = 1
+            this%site_of(a + spin_off) = i
+            this%orb_of(a + spin_off) = L
+            this%spin_of(a + spin_off) = 2
+         end do
+      end do
+      call g_parallel_context%split_range(recip%k_workset%nk_global, first, last, count)
+      this%k_local = recip%k_workset%points(:, first:last)
+      this%wk_local = recip%k_workset%weights(first:last)
+   end subroutine source_init
+
+   subroutine source_hk(this, ik, hk, hmk)
+      class(bdg_reciprocal_source), intent(in) :: this
+      integer, intent(in) :: ik
+      complex(rp), intent(out) :: hk(:, :), hmk(:, :)
+
+      call this%reciprocal%build_hamiltonian_at_kpoint(this%k_local(:, ik), hk)
+      call this%reciprocal%build_hamiltonian_at_kpoint(-this%k_local(:, ik), hmk)
+   end subroutine source_hk
+
+   subroutine source_reduce(this, chi, nel)
+      class(bdg_reciprocal_source), intent(in) :: this
+      complex(rp), intent(inout) :: chi(:, :)
+      real(rp), intent(inout) :: nel(2)
+
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, chi, size(chi), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, nel, 2, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
+#endif
+   end subroutine source_reduce
+
+   !> @brief Rank 0 appends: iteration, max|dDelta|, N - N_normal, then |Delta_l| and |chi_l| per type and l (orbital and site average).
+   subroutine source_report(this, iter, dmax, delta, chi, nel)
+      class(bdg_reciprocal_source), intent(in) :: this
+      integer, intent(in) :: iter
+      real(rp), intent(in) :: dmax, nel(2)
+      complex(rp), intent(in) :: delta(:, :), chi(:, :)
+      integer :: funit, t, l, i, L1, nt, nl, count
+      real(rp) :: dsum, csum
+      character(len=32) :: tag
+      character(len=:), allocatable :: header
+
+      if (rank /= 0) return
+      nt = this%reciprocal%lattice%ntype
+      nl = lmax_basis + 1
+      if (iter == 1) then
+         header = '# iter max_dDelta[Ry] N-N_normal[e]'
+         do t = 1, nt
+            do l = 0, nl - 1
+               write (tag, '(a,i0,a,i0)') ' |Delta|[Ry]_t', t, '_l', l
+               header = header//trim(tag)
+               write (tag, '(a,i0,a,i0)') ' |chi|[Ry]_t', t, '_l', l
+               header = header//trim(tag)
+            end do
+         end do
+         open (newunit=funit, file='bdg_state.dat', action='write', status='replace')
+         write (funit, '(a)') header
+      else
+         open (newunit=funit, file='bdg_state.dat', action='write', status='old', position='append')
+      end if
+      write (funit, '(i6,2es24.16)', advance='no') iter, dmax, sum(nel) - this%n_normal
+      do t = 1, nt
+         do l = 0, nl - 1
+            dsum = 0.0_rp
+            csum = 0.0_rp
+            count = 0
+            do i = 1, size(this%type_of)
+               if (this%type_of(i) /= t) cycle
+               do L1 = l*l + 1, (l + 1)**2
+                  dsum = dsum + abs(delta(L1, i))
+                  csum = csum + abs(chi(L1, i))
+                  count = count + 1
+               end do
+            end do
+            if (count > 0) then
+               write (funit, '(2es24.16)', advance='no') dsum/count, csum/count
+            else
+               write (funit, '(2a24)', advance='no') 'n/a', 'n/a'
+            end if
+         end do
+      end do
+      write (funit, '(a)') ''
+      close (funit)
+   end subroutine source_report
+
+   !> @brief K(L, Lp, t) = lambda(l(L)+1, l(Lp)+1, t)/ry2ev, with L in the order s, p (3), d (5), f (7).
    subroutine bdg_kmat_from_lambda(lambda, kmat)
       real(rp), intent(in) :: lambda(:, :, :)
       real(rp), intent(out) :: kmat(:, :, :)
@@ -244,11 +381,13 @@ contains
             call hermitian_eigensystem(hbdg, evals)
             call bdg_accumulate(evals, hbdg, wk(ik), kT, site_of, orb_of, spin_of, chi, nel)
          end do
+         call src%reduce(chi, nel)
          if (max_iter == 0) exit
          call bdg_gap(kmat, type_of, chi, delta_new)
          dmax = maxval(abs(delta_new - delta))
          delta = delta + mix*(delta_new - delta)
          niter = niter + 1
+         call src%report(niter, dmax, delta, chi, nel)
          if (dmax < tol .or. niter >= max_iter) exit
       end do
    end subroutine bdg_iterate

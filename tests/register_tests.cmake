@@ -485,6 +485,12 @@ if(RUN_UNIT_TESTS)
     COMMAND "${PY}" "${TestDIR}/bdg/with_oracles.py" "${CMAKE_BINARY_DIR}/Testing/bdg/oracles" --
       $<TARGET_FILE:UnitBdg> all "{oracles}")
 
+  if(ENABLE_MPI)
+    rslmto_add_test(NAME BdgRoute TIER standard LABELS bdg mpi
+      COMMAND "${PY}" "${TestDIR}/bdg/route.py" "${TestBinary}" "${TestDIR}/postproc/cases/density_of_states/bccFe"
+        "${CMAKE_BINARY_DIR}/Testing/bdg/route" "${MPIEXEC_EXECUTABLE}")
+  endif()
+
   # --- spin response -----------------------------------------------------------------------
   # The oracle .nml files are regenerated at test time by tests/spin_response/oracles/make_references*.py
   # into a scratch copy of the oracle directory (tests/spin_response/with_oracles.py).

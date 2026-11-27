@@ -3,6 +3,7 @@ submodule(calculation_mod) calculation_reciprocal
    use alsda_radial_mod, only: alsda_kernel
    use gbt_kspace_mod, only: grand_potential
    use pair_list_mod, only: generate_exchange_pairs
+   use bdg_mod, only: bdg, bdg_reciprocal_source, bdg_iterate
 
 contains
 
@@ -444,6 +445,88 @@ contains
       call reciprocal_obj%generate_mp_mesh()
       call reciprocal_obj%write_kspace_eigenpairs()
    end subroutine post_processing_fermi_surface
+
+   !> @brief Self-consistent singlet pairing gap on the frozen normal state (BdG, on-site kernel).
+   !> @details Same frozen setup as post_processing_fermi_surface on the full-BZ mesh. N_normal is the electron
+   !>          count of the Delta = 0 pass. Writes bdg_state.dat (one line per iteration) and bdg_delta.dat.
+   !> @param[in] this Calculation object. fname selects the namelist input.
+   module subroutine post_processing_bdg(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(energy), target :: energy_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(reciprocal), target :: reciprocal_obj
+      type(bdg) :: bdg_input
+      type(bdg_reciprocal_source) :: src
+      complex(rp), allocatable :: delta(:, :), chi(:, :)
+      real(rp) :: nel(2), dmax, kT
+      integer :: i, L, niter, funit
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.true.)
+      call lattice_obj%atomlist()
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      energy_obj = energy(lattice_obj)
+      hamiltonian_obj = hamiltonian(charge_obj)
+      do i = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(i)%build_pot()
+      end do
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
+
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      if (reciprocal_obj%reciprocal_mode /= 'ham_only') call g_logger%fatal( &
+         "post_processing_bdg: reciprocal_mode must be 'ham_only' (generalized S(k) is not supported).", __FILE__, __LINE__)
+      if (reciprocal_obj%has_nonzero_q_gbt()) call g_logger%fatal( &
+         'post_processing_bdg: a GBT spiral (nonzero q) is not supported.', __FILE__, __LINE__)
+      if (hamiltonian_obj%imported_effective) call g_logger%fatal( &
+         'post_processing_bdg: an imported effective Hamiltonian is not supported.', __FILE__, __LINE__)
+      reciprocal_obj%fermi_level = energy_obj%fermi
+      reciprocal_obj%use_symmetry_reduction = .false.
+      call reciprocal_obj%generate_mp_mesh()
+
+      bdg_input = bdg(reciprocal_obj)
+      if (len_trim(bdg_input%delta_file) > 0) call g_logger%fatal('bdg: delta_file restart is not implemented yet', &
+                                                                  __FILE__, __LINE__)
+      call src%init(reciprocal_obj)
+      kT = reciprocal_obj%temperature*kB_Ry_per_K
+      allocate (delta(norb, lattice_obj%nrec), chi(norb, lattice_obj%nrec))
+
+      delta = (0.0_rp, 0.0_rp)
+      call bdg_iterate(src, src%wk_local, energy_obj%fermi, kT, bdg_input%kmat, src%type_of, src%site_of, src%orb_of, &
+                       src%spin_of, bdg_input%mix, bdg_input%tol, 0, delta, chi, nel, niter, dmax)
+      src%n_normal = sum(nel)
+      call g_logger%info('bdg: N_normal = '//real2str(src%n_normal, '(F16.10)')//' electrons', __FILE__, __LINE__)
+
+      do i = 1, lattice_obj%nrec
+         do L = 1, norb
+            if (any(bdg_input%kmat(L, :, src%type_of(i)) /= 0.0_rp)) delta(L, i) = cmplx(bdg_input%delta_seed, 0.0_rp, rp)
+         end do
+      end do
+      call bdg_iterate(src, src%wk_local, energy_obj%fermi, kT, bdg_input%kmat, src%type_of, src%site_of, src%orb_of, &
+                       src%spin_of, bdg_input%mix, bdg_input%tol, bdg_input%max_iter, delta, chi, nel, niter, dmax)
+      if (niter == bdg_input%max_iter .and. dmax >= bdg_input%tol) call g_logger%warning( &
+         'bdg: not converged after '//int2str(niter)//' iterations, max|dDelta| = '//real2str(dmax, '(ES12.4)')//' Ry', &
+         __FILE__, __LINE__)
+
+      if (rank == 0) then
+         open (newunit=funit, file='bdg_delta.dat', action='write', status='replace')
+         write (funit, '(a)') '# site orbital Re_Delta[Ry] Im_Delta[Ry] Re_chi[Ry] Im_chi[Ry]'
+         do i = 1, lattice_obj%nrec
+            do L = 1, norb
+               write (funit, '(2i6,4es24.16)') i, L, real(delta(L, i), rp), aimag(delta(L, i)), real(chi(L, i), rp), &
+                  aimag(chi(L, i))
+            end do
+         end do
+         close (funit)
+      end if
+   end subroutine post_processing_bdg
 
    !> @brief Spin-response post-processing: frozen ground state, d moments, U, and chi(q, omega) for the q list.
    !> @details Builds the same bulk stack as post_processing_fermi_surface, takes E_F from &energy
