@@ -45,7 +45,7 @@ module self_mod
    use spin_density_mod, only: sd_constrained_spiral, sd_relaxed_reference
    use mix_mod
    use reciprocal_mod
-   use electrostatics_multipole_mod, only: compute_dipole_moments
+   use electrostatics_multipole_mod, only: compute_dipole_moments, compute_multipoles
    use math_mod
    use precision_mod, only: rp
    use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
@@ -295,6 +295,13 @@ module self_mod
       !> exported from NEWRHO for the B6 multipole (l=1 dipole) radial matrix
       !> elements. Runs parallel to fun2 (which stores the |amplitude|^2 density).
       real(rp), dimension(:, :, :), allocatable :: phi_amp
+      !> Radial functions of the last NEWRHO call per local atom for multipole_route = 'general', (mesh, l+1, spin, 1:7, local atom):
+      !> phi, phidot, phiddot (large component), the same three (small component, JR = IR + NR), GFAC. Allocated in run_scf.
+      real(rp), dimension(:, :, :, :, :), allocatable :: rad_fun
+      !> Expansion energy EVAL of rad_fun, (l+1, spin, local atom).
+      real(rp), dimension(:, :, :), allocatable :: rad_enu
+      !> Local atom whose radial functions NEWRHO exports to rad_fun (0: none).
+      integer :: rad_slot = 0
 
       ! TODO
       real(rp), dimension(:), allocatable :: bxc
@@ -1188,6 +1195,7 @@ contains
       if (allocated(this%mixmag)) deallocate (this%mixmag)
       if (allocated(this%rb)) deallocate (this%rb)
 #endif
+      if (allocated(this%rad_fun)) deallocate (this%rad_fun, this%rad_enu)
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       if (allocated(this%gbt_scf_in_moment)) deallocate(this%gbt_scf_in_moment)
       if (allocated(this%reciprocal_scf_cache)) deallocate(this%reciprocal_scf_cache)
@@ -2724,8 +2732,12 @@ contains
       ! partial waves exported by NEWRHO in the previous SCF iteration
       ! (standard SCF lag; identical at convergence). Result -> potential%q10,
       ! consumed by charge%surfpot below. Bulk-limit / disabled => q10 = 0.
-      if (this%control%dipole_electrostatics) then
+      if (this%control%dipole_electrostatics .and. this%control%multipole_route == 'q10') then
          call compute_dipole_moments(this%bands, this%phi_amp, this%control%dipole_mix)
+      end if
+      if (this%control%multipole_route == 'general' .and. allocated(this%rad_fun)) then
+         call compute_multipoles(this%bands, this%rad_fun, this%rad_enu, this%control%dipole_electrostatics, &
+                                 this%control%dipole_mix)
       end if
 
       call g_timer%stop('calculation-of-DOS')
@@ -2745,10 +2757,18 @@ contains
       !=========================================================================
       !                       MAKE SFC ATOMIC SPHERE
       !=========================================================================
+      if (this%control%multipole_route == 'general' .and. .not. allocated(this%rad_fun) .and. end_atom >= start_atom) then
+         allocate (this%rad_fun(8001, max(3, this%control%lmax + 1), 2, 7, &
+                                end_atom - start_atom + 1), this%rad_enu(max(3, this%control%lmax + 1), 2, end_atom - start_atom + 1))
+         this%rad_fun(:, :, :, :, :) = 0.0_rp
+         this%rad_enu(:, :, :) = 0.0_rp
+      end if
       do ia = start_atom, end_atom
          this%fixed_u_trace_current_site = ia
+         if (allocated(this%rad_fun)) this%rad_slot = g2l_map(ia)
          qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia), ia) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
       end do
+      this%rad_slot = 0
       if (rank == 0) call g_logger%info('Atomic SFC done for all atoms', __FILE__, __LINE__)
 
       !=========================================================================
@@ -3664,6 +3684,10 @@ contains
       end if
       ! ------ LOOP OVER VALENCE STATES -------
       IVAL = 0
+      if (this%rad_slot > 0) then
+         this%rad_fun(:, :, :, :, this%rad_slot) = 0.0_rp
+         this%rad_enu(:, :, this%rad_slot) = 0.0_rp
+      end if
       do ISP = 1, NSP
          SUMEV(ISP) = 0.d0
          do LP1 = 1, LMAX + 1
@@ -3761,6 +3785,7 @@ contains
                   end do
                end if
                FLLP1 = L*(L + 1)
+               if (this%rad_slot > 0) this%rad_enu(LP1, ISP, this%rad_slot) = EVAL
                do IR = 2, NRE
                   JR = IR + NR
                   R = rofi(IR)
@@ -3781,6 +3806,11 @@ contains
                   !----phi_s, phi_p, phi_d coexist across LP1 for cross-l products. The
                   !----small component G(JR) is a relativistic correction not needed here.
                   this%phi_amp(IR, LP1, ISP) = G(IR)
+                  if (this%rad_slot > 0) then
+                     this%rad_fun(IR, LP1, ISP, 1:3, this%rad_slot) = [G(IR), GP(IR), GPP(IR)]
+                     this%rad_fun(IR, LP1, ISP, 4:6, this%rad_slot) = [G(JR), GP(JR), GPP(JR)]
+                     this%rad_fun(IR, LP1, ISP, 7, this%rad_slot) = GFAC
+                  end if
                end do
             end if
             !------------BEGIN-ORBITAL CONT. TO HYPERFINE FIELD------------

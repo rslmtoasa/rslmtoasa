@@ -203,6 +203,8 @@ module control_mod
       character(len=16) :: exchange_integration
       !> Energy integration of the SCF on-site integrals: 'dos' (real-mesh Simpson) or 'moments' (Chebyshev moment space, recur = 'chebyshev').
       character(len=16) :: scf_integration
+      !> Onsite multipole route: 'q10' (l=1 dipole from g0, B6) or 'general' (all Q_LM, L <= 2*lmax, from the energy moments; scf_integration = 'moments').
+      character(len=16) :: multipole_route
       !> Do the SCF Chebyshev recursion with the one-shot inter-site recursion and keep the neighbour moments (recur = 'chebyshev', scf_integration = 'moments').
       logical :: nonlocal_dm
       !> Highest raw energy moment E^p (p = 0..order) of the non-local density matrix that is computed and written (nonlocal_dm).
@@ -412,6 +414,7 @@ contains
       intersite_mode = this%intersite_mode
       exchange_integration = this%exchange_integration
       scf_integration = this%scf_integration
+      multipole_route = this%multipole_route
       nonlocal_dm = this%nonlocal_dm
       nonlocal_dm_order = this%nonlocal_dm_order
       transport_backend = this%transport_backend
@@ -480,6 +483,7 @@ contains
       this%intersite_mode = intersite_mode(:len(this%intersite_mode))
       this%exchange_integration = exchange_integration(:len(this%exchange_integration))
       this%scf_integration = scf_integration(:len(this%scf_integration))
+      this%multipole_route = multipole_route(:len(this%multipole_route))
       this%nonlocal_dm = nonlocal_dm
       this%nonlocal_dm_order = nonlocal_dm_order
       this%transport_backend = transport_backend(:len(this%transport_backend))
@@ -615,6 +619,7 @@ contains
       this%intersite_mode = 'pairs'
       this%exchange_integration = 'dos'
       this%scf_integration = 'dos'
+      this%multipole_route = 'q10'
       this%nonlocal_dm = .false.
       this%nonlocal_dm_order = 0
       this%transport_backend = 'legacy'
@@ -704,6 +709,7 @@ contains
       intersite_mode = this%intersite_mode
       exchange_integration = this%exchange_integration
       scf_integration = this%scf_integration
+      multipole_route = this%multipole_route
       nonlocal_dm = this%nonlocal_dm
       nonlocal_dm_order = this%nonlocal_dm_order
       transport_backend = this%transport_backend
@@ -777,6 +783,7 @@ contains
       call nml%add('intersite_mode', this%intersite_mode)
       call nml%add('exchange_integration', this%exchange_integration)
       call nml%add('scf_integration', this%scf_integration)
+      call nml%add('multipole_route', this%multipole_route)
       call nml%add('nonlocal_dm', this%nonlocal_dm)
       call nml%add('nonlocal_dm_order', this%nonlocal_dm_order)
       call nml%add('transport_backend', this%transport_backend)
@@ -862,6 +869,12 @@ contains
       end if
       if (this%scf_integration == 'moments' .and. this%recur /= 'chebyshev') then
          call g_logger%fatal('control%scf_integration = ''moments'' requires recur = ''chebyshev''.', __FILE__, __LINE__)
+      end if
+      if (this%multipole_route /= 'q10' .and. this%multipole_route /= 'general') then
+         call g_logger%fatal('control%multipole_route must be ''q10'' or ''general''.', __FILE__, __LINE__)
+      end if
+      if (this%multipole_route == 'general' .and. this%scf_integration /= 'moments') then
+         call g_logger%fatal('control%multipole_route = ''general'' requires scf_integration = ''moments''.', __FILE__, __LINE__)
       end if
       if (this%nonlocal_dm .and. (this%recur /= 'chebyshev' .or. this%scf_integration /= 'moments')) then
          call g_logger%fatal('control%nonlocal_dm requires recur = ''chebyshev'' and scf_integration = ''moments''.', __FILE__, __LINE__)

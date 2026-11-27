@@ -1,3 +1,5 @@
+.. _theory/orbital_basis:
+
 Orbital basis conventions
 =========================
 
@@ -119,6 +121,45 @@ Importers
 The native legacy export is in cubic order, so it is read back correctly by the
 ``legacy`` importer and not by ``paoflow2rs``. The basis of external PAOFLOW
 files is not documented here.
+
+On-site multipoles (``multipole_route = 'general'``)
+-----------------------------------------------------
+
+The on-site density matrix :math:`n_{ab}` is taken in the spherical basis above, with :math:`b_a = (-1)^m Y_{lm}`,
+and the sphere density is :math:`\rho(\mathbf r) = \sum_{ab} \psi_a\, n_{ab}\, \overline{\psi_b}`,
+:math:`\psi_a = (u_{l_a}(r)/r)\, b_a(\hat r)`. The multipoles are
+:math:`Q_{LM} = \int \rho\, r^L R_{LM}\, d^3r` (electrons bohr\ :sup:`L`), with real harmonics
+:math:`R_{L0} = Y_{L0}`, :math:`R_{LM} = \sqrt2 (-1)^M \mathrm{Re}\, Y_{LM}` (:math:`M>0`),
+:math:`R_{LM} = \sqrt2 (-1)^M \mathrm{Im}\, Y_{L|M|}` (:math:`M<0`), so that
+
+.. math::
+
+   Q_{LM} = \sum_{ab} n_{ab}\,\mathcal R_{l_a l_b L}\int b_a \overline{b_b} R_{LM}\, d\Omega .
+
+The radial functions are expanded to second order in :math:`E - E_l` about the energy :math:`E_l` of the partial wave
+of shell :math:`l` (``EVAL`` of ``NEWRHO``, shifted by ``vmad`` to the Hamiltonian energy scale),
+
+.. math::
+
+   \psi_l(E) = \phi + (E - E_l)\dot\phi + \tfrac12 (E - E_l)^2 \ddot\phi .
+
+With the raw energy moments :math:`M_p = \int f(E) E^p n\, dE` (:math:`p = 0,1,2`, about :math:`E = 0`) and
+:math:`n^{(ij)}_{ab} = \int (E - E_a)^i (E - E_b)^j n_{ab}\, dE` (:math:`E_a` of the shell of :math:`a`):
+:math:`n^{(00)} = M_0`, :math:`n^{(10)} = M_1 - E_a M_0`, :math:`n^{(01)} = M_1 - E_b M_0`,
+:math:`n^{(11)} = M_2 - (E_a + E_b) M_1 + E_a E_b M_0`, :math:`n^{(20)} = M_2 - 2E_a M_1 + E_a^2 M_0`,
+:math:`n^{(02)} = M_2 - 2E_b M_1 + E_b^2 M_0`. The radial pair function is
+
+.. math::
+
+   n^{(00)} \phi\phi' + n^{(10)} \dot\phi\phi' + n^{(01)} \phi\dot\phi' + n^{(11)} \dot\phi\dot\phi'
+   + \tfrac12\left(n^{(20)} \ddot\phi\phi' + n^{(02)} \phi\ddot\phi'\right),
+
+where each product of two functions is the large component weighted with :math:`\sqrt{\mathrm{GFAC}_a \mathrm{GFAC}_b}` plus the
+small component. For :math:`a, b` in the same shell it is :math:`Q_0\phi^2 + 2Q_1\phi\dot\phi + Q_2(\dot\phi^2 + \phi\ddot\phi)`,
+the spherical density of ``NEWRHO``. Approximations: second order in :math:`E - E_l` (third and higher orders neglected);
+the radial functions are spin-resolved (up and down blocks each with their own :math:`\phi`) and the spin off-diagonal blocks
+of :math:`n` do not contribute to the charge density; the cross-shell (:math:`l_a \ne l_b`) weight
+:math:`\sqrt{\mathrm{GFAC}_a \mathrm{GFAC}_b}` of the large component is a choice, not derived.
 
 Known mismatches
 ----------------

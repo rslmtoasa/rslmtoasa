@@ -256,6 +256,7 @@ if(RUN_UNIT_TESTS)
 
   # --- core units --------------------------------------------------------------------------
   add_fortran_unit_test(UnitBasisDimensions quick SOURCES ${TestDIR}/unit/test_basis_dimensions.f90)
+  add_fortran_unit_test(UnitMultipoleGaunt quick SOURCES ${TestDIR}/unit/test_multipole_gaunt.f90)
   add_fortran_unit_test(UnitIntersiteRequest quick SOURCES ${TestDIR}/unit/test_intersite_request.f90)
   add_fortran_unit_test(UnitNonlocalPairs quick SOURCES ${TestDIR}/unit/test_nonlocal_pairs.f90)
   add_fortran_unit_test(UnitPairList quick SOURCES ${TestDIR}/unit/test_pair_list.f90)
