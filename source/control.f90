@@ -828,7 +828,13 @@ contains
    subroutine check_all(this)
       implicit none
       class(control) :: this
+      if (this%linear_in == 'spin_torque_onsite') &
+         call g_logger%fatal('spin_torque_onsite is an output operator', __FILE__, __LINE__)
       if (this%response_projection == 'local' .or. this%linear_out == 'spin_torque_onsite') then
+         if (this%lmax > 2) &
+            call g_logger%fatal('Stage 1 orbital output supports sp and spd bases', __FILE__, __LINE__)
+         if (this%nsp < 1 .or. this%nsp > 4) &
+            call g_logger%fatal('Stage 1 requires nsp in 1:4', __FILE__, __LINE__)
          if (this%cond_calctype /= 'per_type' .or. this%linear_in /= 'charge') &
             call g_logger%fatal('Stage 1 requires per_type and charge input', __FILE__, __LINE__)
          select case (this%linear_out)

@@ -797,6 +797,7 @@ contains
            'oap_accumulation', 'octupole_accumulation')
          kind = 'local'
       case('spin_torque_onsite')
+         if (slot /= 'a') call g_logger%fatal('spin_torque_onsite is an output operator', __FILE__, __LINE__)
          kind = 'onsite_torque'
       case('spin_torque', 'orbital_torque')
          kind = trim(op_type)
@@ -956,6 +957,66 @@ contains
       end do
    end subroutine transport_moment_diagonal
 
+   ! Stage 1 takes adjoints of the physical Hamiltonian and input velocity.
+   ! Check the directed products before using those identities. Bond weights
+   ! are symmetric and setup_kubo_bonds supplies opposite displacements.
+   subroutine check_projection_hamiltonian(this)
+      class(recursion), intent(in) :: this
+      integer :: site, other, slot, reverse, k, t
+      complex(rp) :: forward(nb, nb), backward(nb, nb)
+      real(rp) :: max_residual
+      max_residual = 0.0_rp
+      do site = 1, this%lattice%kk
+         t = this%lattice%iz(site)
+         call check_pair(this%hamiltonian%lsham(:, :, t), this%hamiltonian%lsham(:, :, t), site, site)
+         if (this%hamiltonian%hoh) then
+            call check_pair(this%hamiltonian%obarm(:, :, t), this%hamiltonian%obarm(:, :, t), site, site)
+            call check_pair(this%hamiltonian%enim(:, :, t), this%hamiltonian%enim(:, :, t), site, site)
+         end if
+         do slot = 1, this%lattice%nn(site, 1)
+            other = site
+            if (slot > 1) other = this%lattice%nn(site, slot)
+            if (other == 0) cycle
+            ! The representation stores one directed block per neighbor.
+            if (slot > 1 .and. count(this%lattice%nn(site, 2:this%lattice%nn(site, 1)) == other) /= 1) &
+               call g_logger%fatal('Stage 1 requires unique directed neighbor slots', __FILE__, __LINE__)
+            reverse = 1
+            if (slot > 1) then
+               reverse = 0
+               do k = 2, this%lattice%nn(other, 1)
+                  if (this%lattice%nn(other, k) == site) reverse = k
+               end do
+            end if
+            call get_block(site, slot, forward)
+            backward = czero
+            if (reverse > 0) call get_block(other, reverse, backward)
+            call check_pair(forward, backward, site, other)
+         end do
+      end do
+      call g_logger%info('Stage 1 max directed block adjoint residual (Ry for h) = '// &
+                         fmt('es12.4',max_residual), __FILE__, __LINE__)
+   contains
+      subroutine get_block(i, m, block)
+         integer, intent(in) :: i, m
+         complex(rp), intent(out) :: block(nb, nb)
+         if (i <= this%lattice%nmax) then
+            block = this%hamiltonian%hall(:, :, m, i)
+         else
+            block = this%hamiltonian%ee(:, :, m, this%lattice%iz(i))
+         end if
+      end subroutine get_block
+      subroutine check_pair(x, y, i, j)
+         complex(rp), intent(in) :: x(:, :), y(:, :)
+         integer, intent(in) :: i, j
+         real(rp) :: residual
+         residual = maxval(abs(x - conjg(transpose(y))))
+         max_residual = max(max_residual, residual)
+         if (.not. (residual <= 1.e-11_rp*max(1.0_rp, maxval(abs(x)), maxval(abs(y))))) &
+            call g_logger%fatal('Stage 1 requires Hermitian transport: sites '//int2str(i)//', '//int2str(j)// &
+                                ', max block residual = '//fmt('es12.4',residual), __FILE__, __LINE__)
+      end subroutine check_pair
+   end subroutine check_projection_hamiltonian
+
    ! Extract one physical onsite block with the same unscaled action used by KPM.
    subroutine site_torque(this, site, seed, image, work, torque)
       class(recursion), intent(inout) :: this
@@ -963,6 +1024,7 @@ contains
       complex(rp), contiguous, intent(inout) :: seed(:, :, :), image(:, :, :), work(:, :, :, :)
       complex(rp), intent(out) :: torque(nb, nb)
       complex(rp) :: h(nb, nb)
+      real(rp) :: residual
       integer :: l
 
       seed = czero
@@ -973,8 +1035,10 @@ contains
       this%izero(site) = 1
       call this%kubo_ham_vec_matmul(seed, image, work, include_soc=.false.)
       h = image(:, :, site)
-      if (.not. (maxval(abs(h - conjg(transpose(h)))) <= 1.0e-11_rp*max(1.0_rp, maxval(abs(h))))) &
-         call g_logger%fatal('Non-Hermitian effective onsite block at site '//int2str(site), __FILE__, __LINE__)
+      residual = maxval(abs(h - conjg(transpose(h))))
+      if (.not. (residual <= 1.0e-11_rp*max(1.0_rp, maxval(abs(h))))) &
+         call g_logger%fatal('Non-Hermitian effective onsite block at site '//int2str(site)// &
+                             ', max residual = '//fmt('es12.4',residual), __FILE__, __LINE__)
       torque = -i_unit*(matmul(this%transport_q_a, h) - matmul(h, this%transport_q_a))
    end subroutine site_torque
 
@@ -1074,6 +1138,10 @@ contains
             call g_logger%fatal('Stage 1 supports the global periodic_nc spin frame', __FILE__, __LINE__)
          if (this%hamiltonian%imported_effective .or. this%hamiltonian%ccor_2c) &
             call g_logger%fatal('Stage 1 import and CCOR require independent operator validation', __FILE__, __LINE__)
+         call g_logger%info('Stage 1 observable='//trim(this%control%linear_out)//' projection='// &
+                            trim(this%control%response_projection)//' global spin frame, legacy FP64 moments', &
+                            __FILE__, __LINE__)
+         call check_projection_hamiltonian(this)
       end if
       if (allocated(this%torque_onsite)) deallocate(this%torque_onsite)
       if (this%transport_kind_a == 'onsite_torque' .and. this%control%response_projection == 'seed') then
