@@ -291,12 +291,9 @@ module self_mod
       ! TODO
       real(rp), dimension(:, :), allocatable :: vtn, vzt
       real(rp), dimension(:, :, :), allocatable :: fun2
-      !> Signed normalized radial partial-wave amplitude per (mesh, l+1, spin),
-      !> exported from NEWRHO for the B6 multipole (l=1 dipole) radial matrix
-      !> elements. Runs parallel to fun2 (which stores the |amplitude|^2 density).
-      real(rp), dimension(:, :, :), allocatable :: phi_amp
-      !> Radial functions of the last NEWRHO call per local atom for multipole_route = 'general', (mesh, l+1, spin, 1:7, local atom):
-      !> phi, phidot, phiddot (large component), the same three (small component, JR = IR + NR), GFAC. Allocated in run_scf.
+      !> Radial functions of the last NEWRHO call per local atom for multipole_route = 'general' and for 'q10' with
+      !> dipole_electrostatics, (mesh, l+1, spin, 1:7, local atom): phi, phidot, phiddot (large component), the same three
+      !> (small component, JR = IR + NR), GFAC. Allocated by alloc_rad_fun (run_scf; for 'q10' also run_dos).
       real(rp), dimension(:, :, :, :, :), allocatable :: rad_fun
       !> Expansion energy EVAL of rad_fun, (l+1, spin, local atom).
       real(rp), dimension(:, :, :), allocatable :: rad_enu
@@ -1189,7 +1186,6 @@ contains
       if (allocated(this%vtn)) call g_safe_alloc%deallocate('self.vtn', this%vtn)
       if (allocated(this%vzt)) call g_safe_alloc%deallocate('self.vzt', this%vzt)
       if (allocated(this%fun2)) call g_safe_alloc%deallocate('self.fun2', this%fun2)
-      if (allocated(this%phi_amp)) call g_safe_alloc%deallocate('self.phi_amp', this%phi_amp)
 #else
       if (allocated(this%ws)) deallocate (this%ws)
       if (allocated(this%mixmag)) deallocate (this%mixmag)
@@ -1858,15 +1854,12 @@ contains
       call g_safe_alloc%allocate('self.vtn', this%vtn, (/8001, 2/))
       call g_safe_alloc%allocate('self.vzt', this%vzt, (/8001, 2/))
       call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, nfun_l, 2/))
-      call g_safe_alloc%allocate('self.phi_amp', this%phi_amp, (/8001, nfun_l, 2/))
 #else
       nfun_l = max(3, this%control%lmax + 1)
       allocate (this%bxc(this%lattice%nrec))
       allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
-      allocate (this%phi_amp(8001, nfun_l, 2))
 #endif
       this%fun2(:, :, :) = 0.0_rp
-      this%phi_amp(:, :, :) = 0.0_rp
 
    end subroutine restore_to_default
 
@@ -2733,7 +2726,8 @@ contains
       ! (standard SCF lag; identical at convergence). Result -> potential%q10,
       ! consumed by charge%surfpot below. Bulk-limit / disabled => q10 = 0.
       if (this%control%dipole_electrostatics .and. this%control%multipole_route == 'q10') then
-         call compute_dipole_moments(this%bands, this%phi_amp, this%control%dipole_mix)
+         call alloc_rad_fun(this)
+         call compute_dipole_moments(this%bands, this%rad_fun(:, :, :, 1, :), this%control%dipole_mix)
       end if
       if (this%control%multipole_route == 'general' .and. allocated(this%rad_fun)) then
          call compute_multipoles(this%bands, this%rad_fun, this%rad_enu, this%control%dipole_electrostatics, &
@@ -2742,6 +2736,22 @@ contains
 
       call g_timer%stop('calculation-of-DOS')
    end subroutine run_dos
+
+   !> Allocate (zeroed) the per-local-atom radial functions that NEWRHO exports to rad_fun: for the 'general' multipole route
+   !> on ranks with atoms, and for the 'q10' route with dipole_electrostatics on every rank (the dipole reduction is collective).
+   subroutine alloc_rad_fun(this)
+      class(self), intent(inout) :: this
+      integer :: nloc
+
+      if (allocated(this%rad_fun)) return
+      nloc = end_atom - start_atom + 1
+      if (.not. (this%control%multipole_route == 'general' .and. nloc > 0) .and. &
+          .not. (this%control%multipole_route == 'q10' .and. this%control%dipole_electrostatics)) return
+      nloc = max(nloc, 0)
+      allocate (this%rad_fun(8001, max(3, this%control%lmax + 1), 2, 7, nloc), this%rad_enu(max(3, this%control%lmax + 1), 2, nloc))
+      this%rad_fun(:, :, :, :, :) = 0.0_rp
+      this%rad_enu(:, :, :) = 0.0_rp
+   end subroutine alloc_rad_fun
 
    !=========================================================================
    !                   RUN SELF-CONSISTENT FIELD UPDATE
@@ -2757,12 +2767,7 @@ contains
       !=========================================================================
       !                       MAKE SFC ATOMIC SPHERE
       !=========================================================================
-      if (this%control%multipole_route == 'general' .and. .not. allocated(this%rad_fun) .and. end_atom >= start_atom) then
-         allocate (this%rad_fun(8001, max(3, this%control%lmax + 1), 2, 7, &
-                                end_atom - start_atom + 1), this%rad_enu(max(3, this%control%lmax + 1), 2, end_atom - start_atom + 1))
-         this%rad_fun(:, :, :, :, :) = 0.0_rp
-         this%rad_enu(:, :, :) = 0.0_rp
-      end if
+      call alloc_rad_fun(this)
       do ia = start_atom, end_atom
          this%fixed_u_trace_current_site = ia
          if (allocated(this%rad_fun)) this%rad_slot = g2l_map(ia)
@@ -3181,7 +3186,6 @@ contains
       allocate (rho, mold=rho_in)
       allocate (rofi(size(rho_in(:, 1))))
       if (allocated(this%fun2)) this%fun2(:, :, :) = 0.0_rp
-      if (allocated(this%phi_amp)) this%phi_amp(:, :, :) = 0.0_rp
 
       nr = size(rofi)
       B_fsm = 0.0_rp
@@ -3801,11 +3805,6 @@ contains
                   !-------- FUN2 GIVES the probability density and NOT the charge density---
                   !----of valence orbital LP1(s, p or d) with spin ISP at point r=IR----
                   this%FUN2(IR, LP1, ISP) = (GFAC*G(IR)**2 + G(JR)**2)
-                  !-------- Signed large-component amplitude u_l(r) = r*phi_l(r) for the
-                  !----B6 (l=1 dipole) radial matrix elements. Stored parallel to FUN2 so
-                  !----phi_s, phi_p, phi_d coexist across LP1 for cross-l products. The
-                  !----small component G(JR) is a relativistic correction not needed here.
-                  this%phi_amp(IR, LP1, ISP) = G(IR)
                   if (this%rad_slot > 0) then
                      this%rad_fun(IR, LP1, ISP, 1:3, this%rad_slot) = [G(IR), GP(IR), GPP(IR)]
                      this%rad_fun(IR, LP1, ISP, 4:6, this%rad_slot) = [G(JR), GP(JR), GPP(JR)]

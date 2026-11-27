@@ -299,15 +299,6 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not tested:** `source/control.f90` pre-sized `constraints_mom_ref` (1,1), which made indexed input fail; that array was fixed.
   `constraints_bfield` has the same pattern. A zero field is valid there, so the trailing-column cut used for `constraints_mom_ref` does not apply.
 
-### `multipole_route = 'q10'` radial functions: one atom's `phi_amp` for all sites, stale tail, p-d m = +-1 omitted — 2026-11-27
-- **Verified (code reading, `self.f90` `atomsc`/`NEWRHO`, `electrostatics_multipole.f90`):** `phi_amp` is zeroed at the start of every `atomsc` and filled by
-  `NEWRHO` for the current atom, so `compute_dipole_moments` reads the radial functions of the last atom of the rank for every site, integrated on each
-  site's own mesh. Values beyond the final `NRE` of earlier `NEWRHO` iterations of the same `atomsc` call are not cleared. The dipole sums only the (s, pz) and (pz, dz2) elements; (p, m = +-1)-(d, m = +-1) also carry Q_10.
-- **Measured (surface deck `fccNi001_uhost_guard`, nsp 1, moments, 3 sites, iteration 2):** `r_sp` of site 1 is -1.7e-6 (sites 2 and 3: 0.77488); the q10
-  of the last site agrees with the `general` route restricted to the same two elements and spin-averaged large-component phi to 1.2e-17 (absolute).
-  Sites 1 and 2 differ (-1.3e-7 against 7.3e-2, 8.870e-2 against 8.806e-2).
-- **Proposal:** a per-site radial export for the q10 route (`rad_fun` of the general route) and the missing m = +-1 elements; about 40 lines.
-
 ## spin_response
 
 ### kB defined twice — 2026-10-05, updated 2026-11-15

@@ -484,7 +484,7 @@ multipole_route
 
 **Notes:**
 
-- ``'q10'``: today's route; the l = 1 dipole :math:`Q_{10}` for ``dipole_electrostatics`` from the on-site Green function (``compute_dipole_moments``). Bit-identical to a run without the keyword.
+- ``'q10'``: today's route; the l = 1 dipole :math:`Q_{10}` for ``dipole_electrostatics`` from the on-site Green function (``compute_dipole_moments``). Only :math:`n^{(00)}` and the spin-averaged large-component :math:`\phi` of each site enter, with the elements s-p(m = 0), p(m = 0)-d(m = 0) and p(m = +-1)-d(m = +-1); the radial functions are those of ``rad_fun`` of the site. Bit-identical to a run without the keyword.
 - ``'general'``: all :math:`Q_{LM}`, :math:`L = 0..2 l_{max}`, from the raw energy moments :math:`M_p = \int f(E) E^p n\,dE`, :math:`p = 0..2`, of the on-site density matrix and the radial functions of ``NEWRHO`` (second order in :math:`E - E_\nu`). Requires ``scf_integration = 'moments'`` (fatal otherwise). Runs every SCF step from the second one (the radial functions are those of the previous atomic step), also without ``dipole_electrostatics``.
 - Each SCF step writes ``multipoles.out`` (overwritten): one header line, then ``site L M Q_LM`` per line, :math:`Q_{LM}` in electrons*bohr\ :sup:`L` for the real harmonics :math:`R_{LM}` (M > 0 cos, M < 0 sin).
 - With ``dipole_electrostatics = .true.``, ``potential%q10`` takes :math:`\sqrt{4\pi/3}\,Q_{10}/S` (S the Wigner-Seitz radius), mixed with ``dipole_mix`` as in the ``'q10'`` route. See :ref:`theory/orbital_basis`.

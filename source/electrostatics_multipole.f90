@@ -13,7 +13,7 @@
 !>
 !> This is the *new* code that lives outside the legacy self.f90 fence
 !> (CLAUDE.md rule 5): it reads the on-site Green function (bands%green%g0)
-!> and the exported radial partial-wave amplitudes (self%phi_amp, passed in as
+!> and the exported radial partial-wave amplitudes (self%rad_fun(:, :, :, 1, :), passed in as
 !> an argument to avoid a self_mod <-> this-module use cycle), and writes only
 !> the derived scalar potential%q10.
 !>
@@ -44,10 +44,15 @@ module electrostatics_multipole_mod
    !>   (00)(11)(10)(1-1)(22)(21)(20)(2-1)(2-2)
    !> => 1=s, 2=p(m=+1), 3=p(m=0), 4=p(m=-1),
    !>    5=d(m=+2), 6=d(m=+1), 7=d(m=0), 8=d(m=-1), 9=d(m=-2).
-   !> The l=1,m=0 (z) dipole couples s(1)<->p(m=0)=3 and p(m=0)=3<->d(m=0)=7.
+   !> The z dipole (Y10) couples s(1)<->p(m=0)=3, p(m=0)=3<->d(m=0)=7 and, with the same m,
+   !> p(m=+1)=2<->d(m=+1)=6 and p(m=-1)=4<->d(m=-1)=8.
    integer, parameter :: idx_s   = 1
    integer, parameter :: idx_pz  = 3
    integer, parameter :: idx_dz2 = 7
+   integer, parameter :: idx_pp  = 2
+   integer, parameter :: idx_dp  = 6
+   integer, parameter :: idx_pm  = 4
+   integer, parameter :: idx_dm  = 8
 
    !> Angular factors for the physical z-dipole moment Q10 = int n(r) z d^3r,
    !> with z = r*sqrt(4pi/3)*Y10 and D_{L1,L2} symmetrized over both orderings:
@@ -58,6 +63,10 @@ module electrostatics_multipole_mod
    !> per-ordering coefficients used in the sum are:
    real(rp), parameter :: c_sp = 1.0_rp/sqrt(3.0_rp)
    real(rp), parameter :: c_pd = 2.0_rp/sqrt(15.0_rp)
+   !> p-d with m = +-1. The code basis is b_lm = (-1)^m Y_lm, so p and d of the same m carry the same
+   !> phase (-1)^(2m) = 1 and the element is sqrt(4pi/3) <Y_1m|Y_10|Y_2m> = <1m|cos(theta)|2m>
+   !> = sqrt((4 - m^2)/15): 2/sqrt(15) for m = 0 (c_pd), 1/sqrt(5) for m = +-1.
+   real(rp), parameter :: c_pd1 = 1.0_rp/sqrt(5.0_rp)
 
    public :: compute_dipole_moments, compute_multipoles, real_gaunt_table, add_multipole_block
 
@@ -71,17 +80,17 @@ contains
    !>
    !> For each rank-local atom:
    !>   1. Extract the spin-resolved on-site cross-l density-matrix elements
-   !>      D_{s,pz} and D_{pz,dz2} by integrating -Im G(L1,L2)/pi to the Fermi
+   !>      D_{s,pz}, D_{pz,dz2} and D_{p(m),d(m)}, m = +-1, by integrating -Im G(L1,L2)/pi to the Fermi
    !>      level (same simpson_m machinery as bands%calculate_moments).
    !>   2. Build the radial dipole matrix elements R_sp, R_pd from the exported
    !>      partial-wave amplitudes u_l(r) = phi_amp over the WS mesh.
-   !>   3. Assemble Q_{10} = sum_sigma [ C_sp D_{s,pz} R_sp + C_pd D_{pz,dz2} R_pd ].
+   !>   3. Assemble Q_{10} = sum_sigma [ C_sp D_{s,pz} R_sp + R_pd (C_pd D_{pz,dz2} + C_pd1 (D_{p+,d+} + D_{p-,d-})) ].
    !> The per-atom results are reduced across MPI ranks so rank 0 (which runs
    !> charge%surfpot) sees the full set.
    !>
    !> @param[inout] bnd    Bands object (Green function, energy mesh, atoms).
    !> @param[in]    phi_amp Exported signed large-component radial amplitudes
-   !>                       u_l(r)=r*phi_l(r), indexed (mesh, l+1, spin).
+   !>                       u_l(r)=r*phi_l(r), indexed (mesh, l+1, spin, local atom).
    !> @param[in]    mix    Linear mixing factor for the dipole moment across SCF
    !>                      steps: q10 <- mix*q10_new + (1-mix)*q10_old. The dipole
    !>                      feeds back into the potential, so an undamped update
@@ -89,10 +98,10 @@ contains
    !---------------------------------------------------------------------------
    subroutine compute_dipole_moments(bnd, phi_amp, mix)
       class(bands), intent(inout) :: bnd
-      real(rp), dimension(:, :, :), intent(in) :: phi_amp
+      real(rp), dimension(:, :, :, :), intent(in) :: phi_amp
       real(rp), intent(in) :: mix
       integer :: na_glob, na_loc, plusbulk, isp, soff, nrec
-      real(rp) :: d_spz, d_pzd, r_sp, r_pd, q10, q10_old
+      real(rp) :: d_spz, d_pzd, d_ppdp, d_pmdm, r_sp, r_pd, q10, q10_old
       real(rp), dimension(:), allocatable :: q10_all
       real(rp), dimension(size(bnd%en%ene)) :: y
 #ifdef USE_MPI
@@ -108,7 +117,7 @@ contains
          plusbulk = bnd%lattice%nbulk + na_glob
 
          ! Radial dipole matrix elements from the current SCF partial waves.
-         call radial_dipole_elements(bnd, plusbulk, phi_amp, r_sp, r_pd)
+         call radial_dipole_elements(bnd, plusbulk, phi_amp(:, :, :, na_loc), r_sp, r_pd)
 
          q10 = 0.0_rp
          do isp = 1, 2
@@ -124,7 +133,15 @@ contains
                           bnd%green%g0(idx_dz2 + soff, idx_pz + soff, 1:size(bnd%en%ene), na_loc))/pi
             d_pzd = bnd%integrate(y, 0)
 
-            q10 = q10 + c_sp*d_spz*r_sp + c_pd*d_pzd*r_pd
+            y(:) = -aimag(bnd%green%g0(idx_pp + soff, idx_dp + soff, 1:size(bnd%en%ene), na_loc) + &
+                          bnd%green%g0(idx_dp + soff, idx_pp + soff, 1:size(bnd%en%ene), na_loc))/pi
+            d_ppdp = bnd%integrate(y, 0)
+
+            y(:) = -aimag(bnd%green%g0(idx_pm + soff, idx_dm + soff, 1:size(bnd%en%ene), na_loc) + &
+                          bnd%green%g0(idx_dm + soff, idx_pm + soff, 1:size(bnd%en%ene), na_loc))/pi
+            d_pmdm = bnd%integrate(y, 0)
+
+            q10 = q10 + c_sp*d_spz*r_sp + (c_pd*d_pzd + c_pd1*(d_ppdp + d_pmdm))*r_pd
          end do
 
          q10_all(na_glob) = q10
