@@ -1516,7 +1516,7 @@ contains
             sc(l, j) = -sc(l, j)
          end do
       end do
-      ! ------ THIS PART CHANGES THE YLM ORDER AND MULTIPLIES BY -0.5 ----
+      ! ------ THIS PART MULTIPLIES BY -0.5 (the index map ip is the identity) ----
       do i = 1, 16
          do j = 1, 16
             s(ip(j), ip(i)) = -0.5d0*sc(j, i)

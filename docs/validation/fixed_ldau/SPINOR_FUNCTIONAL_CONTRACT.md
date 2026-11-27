@@ -112,7 +112,7 @@ evidence.
 ## SOC basis convention note
 
 The source basis uses spin-major up/down blocks separated by `spin_off=norb`;
-the complex spherical orbital order is `m=-l,...,+l`. In `build_lsham`, the
+the complex spherical orbital order is `m=+l,...,-l` within each shell, functions `(-1)^m Y_lm`. In `build_lsham`, the
 spin blocks have the standard `xi/2` pattern
 `H_up,up=Lz`, `H_up,down=Lx-iLy`, `H_down,up=Lx+iLy`,
 `H_down,down=-Lz`, assuming the usual angular-momentum ladder convention.

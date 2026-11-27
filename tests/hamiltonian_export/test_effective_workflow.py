@@ -205,7 +205,7 @@ def main(binary, fixture, root, mode):
         new_dos = numbers(imported / "Cu_dos.out")
         for old, new in zip(old_dos, new_dos):
             assert abs((old[0] - new[0]) - delta) < 1.1e-5, (old, new)
-        meta.write_text(original.replace("spin_then_l_then_m_increasing", "incompatible"))
+        meta.write_text(original.replace("spin_then_l_then_m_decreasing", "incompatible"))
         run(binary, imported, "Invalid or incomplete rs_tb.meta")
         meta.write_text(original)
         payload = imported / "rs_tb.tb"

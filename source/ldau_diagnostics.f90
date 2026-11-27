@@ -520,11 +520,10 @@ contains
       replay_atom = atom
       replay_state%control => this%control
       allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
-               replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
+               replay_state%fun2(nr, lmax + 1, 2))
       replay_state%vtn = 0.0_rp
       replay_state%vzt = 0.0_rp
       replay_state%fun2 = 0.0_rp
-      replay_state%phi_amp = 0.0_rp
       allocate(rho_replay(nr, 2), sumec_replay(2), sumev_replay(2), &
                ec_replay(max(ncore, 1)), ev_replay(max(nval, 1)))
       rho_replay = 0.0_rp
@@ -542,7 +541,7 @@ contains
       if (nval > 0) ev_error = maxval(abs(ev_replay(1:nval) - ev_actual(1:nval)))
       if (ncore > 0) ec_error = maxval(abs(ec_replay(1:ncore) - ec_actual(1:ncore)))
 
-      deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
+      deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2)
 
       open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
            action='write', iostat=ios)
@@ -1028,14 +1027,13 @@ contains
          allocate(rho_case(nr, 2), sumec_case(2), sumev_case(2), &
                   ec_case(max(ncore, 1)), ev_case(max(nval, 1)))
          allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
-                  replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
+                  replay_state%fun2(nr, lmax + 1, 2))
          replay_state%control => this%control
          replay_state%magnetic_seed_active = this%magnetic_seed_active
          replay_state%magnetic_seed_field = this%magnetic_seed_field
          replay_state%vtn = 0.0_rp
          replay_state%vzt = 0.0_rp
          replay_state%fun2 = 0.0_rp
-         replay_state%phi_amp = 0.0_rp
          rho_case = 0.0_rp
          sumec_case = 0.0_rp
          sumev_case = 0.0_rp
@@ -1283,7 +1281,7 @@ contains
             end do
             close(out_unit)
          end if
-         deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
+         deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2)
          deallocate(rho_case, sumec_case, sumev_case, ec_case, ev_case)
       end subroutine run_replay_case
 
@@ -1719,7 +1717,7 @@ contains
          end do
       end do
       end if
-      ! Basis ordering is site-major, then spin-major, then l,m; for the
+      ! Basis ordering is site-major, then spin-major, then l with m = +l..-l; for the
       ! supported scalar-collinear spd layout, d orbitals are local indices 5:9.
       if (capture_spectrum) then
          do i = 1, nsite
@@ -1728,7 +1726,7 @@ contains
                do ell = 0, int(sqrt(real(nper_spin, rp))) - 1
                   do m = 0, 2*ell
                      call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                        i - 1, this%lattice%iz(i), ell, spin - 1, -1, -1, base + ell*ell + m, m - ell, 0, &
+                        i - 1, this%lattice%iz(i), ell, spin - 1, -1, -1, base + ell*ell + m, ell - m, 0, &
                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
                   end do
                end do
@@ -1802,7 +1800,7 @@ contains
             orbital = mod(i, spin_off)
             spin = i/spin_off
             ell = int(sqrt(real(orbital, rp)))
-            m = orbital - ell*ell - ell
+            m = ell + ell*ell - orbital
             call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'RS_GREEN', ia - 1, &
                this%lattice%iz(ia), ell, spin, -1, -1, i, m, 0, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
          end do

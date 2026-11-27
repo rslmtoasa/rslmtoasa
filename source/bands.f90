@@ -377,11 +377,12 @@ contains
                               m2_val = ms(l_index)%val(m2)
                               m3_val = ms(l_index)%val(m3)
                               m4_val = ms(l_index)%val(m4)
-                              uval = uval + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) * &
-                                 ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
+                              ! Spherical tensor <m1 m3|m2 m4> with the density matrix in the code basis, as in the fixed U path
+                              uval = uval + real(Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6), rp) * &
+                                 ldm_scr(itype, l_index, ispin, m2, m1) * ldm_scr(itype, l_index, ispin2, m4, m3)
                               if (ispin == ispin2 .and. m1 /= m2) then
-                                 jval = jval + Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6) * &
-                                    ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
+                                 jval = jval + real(Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6), rp) * &
+                                    ldm_scr(itype, l_index, ispin, m2, m1) * ldm_scr(itype, l_index, ispin2, m4, m3)
                               end if
                            end do
                         end do
@@ -459,7 +460,8 @@ contains
       character(len=256) :: fname_total, fname_dos, fname_orb_dos, fname_magnetic
       logical :: moments
       integer :: nen
-      complex(rp), allocatable :: tmom(:)
+      complex(rp), allocatable :: tmom(:), cw(:, :)
+      integer :: imom
 
       moments = this%control%scf_integration == 'moments'
 
@@ -483,6 +485,22 @@ contains
          call this%green%chebyshev_scf_nodes(tmom, this%qqv, &
             .not. this%en%fix_fermi .and. (this%control%calctype == 'B' .or. this%control%calctype == 'L'))
          deallocate (tmom)
+         if (this%control%nonlocal_dm) then
+            allocate (cw(size(this%recursion%os_mu, 3), 0:this%control%nonlocal_dm_order))
+            select case (this%control%nonlocal_dm_order)
+            case (0)
+               call this%green%chebyshev_linear_weights(size(cw, 1), cw(:, 0))
+            case (1)
+               call this%green%chebyshev_linear_weights(size(cw, 1), cw(:, 0), cw(:, 1))
+            case (2)
+               call this%green%chebyshev_linear_weights(size(cw, 1), cw(:, 0), cw(:, 1), cw(:, 2))
+            end select
+            call this%recursion%nld%integrate(this%recursion%req, this%recursion%os_mu, cw)
+            do imom = 0, this%control%nonlocal_dm_order
+               call this%recursion%nld%write(this%lattice, imom)
+            end do
+            deallocate (cw)
+         end if
       end if
 
       nen = size(this%en%ene)

@@ -24,6 +24,7 @@ module recursion_mod
    use hamiltonian_mod
    use cheb_lp_mod, only: cheb_lp
    use intersite_request_mod, only: intersite_request
+   use nonlocal_density_mod, only: nonlocal_density
    use chebyshev_fast_mod, only: cheb_moments_fast, cheb_moments_fast_batched, &
       cheb_moments_fast_mkl_batch, &
       cheb_moments_fast_mkl_sparse, cheb_fast_reset_cache, &
@@ -72,6 +73,8 @@ module recursion_mod
       logical :: b2_b_is_sqrt = .false.
       !> One-shot inter-site route: seeds, targets and the local pair -> (seed, target) entry map
       type(intersite_request) :: req
+      !> Neighbour pairs of the SCF recursion sites (control%nonlocal_dm).
+      type(nonlocal_density) :: nld
       !> One-shot block Haydock: S_m(j) = P_j^H Q_m per entry, shape (nb,nb,lld-1,entries)
       complex(rp), dimension(:, :, :, :), allocatable :: os_s
       !> One-shot block Haydock: A_m and B_m^2 per seed, shape (nb,nb,lld,seeds)
@@ -134,6 +137,7 @@ module recursion_mod
       procedure :: resolve_chebyshev_window
       procedure :: chebyshev_recur_ij
       procedure :: chebyshev_recur_ij_oneshot
+      procedure :: chebyshev_oneshot_pairs
       procedure :: chebyshev_recur_ll
       procedure :: chebyshev_recur_ll_hoh
       procedure :: chebyshev_orbital_mod
@@ -781,6 +785,12 @@ module recursion_mod
    module subroutine chebyshev_recur_ij_oneshot(this)
       class(recursion), intent(inout) :: this
    end subroutine chebyshev_recur_ij_oneshot
+
+   !> @brief One-shot Chebyshev recursion for the pairs(first:last, 1:2); fills os_mu and req.
+   module subroutine chebyshev_oneshot_pairs(this, pairs, first, last)
+      class(recursion), intent(inout) :: this
+      integer, intent(in) :: pairs(:, :), first, last
+   end subroutine chebyshev_oneshot_pairs
 
    !> @brief Advance one no-HOH legacy Chebyshev recursion level.
    !> @details Applies the scaled Hamiltonian and the double-trick recurrence to

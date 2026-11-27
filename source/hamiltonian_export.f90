@@ -298,7 +298,7 @@ contains
       end if
       write(meta,'(a)',err=900) '# rs-tb-meta-v3', 'representation effective', 'scope '//trim(scope), &
          'energy_unit eV', 'length_unit Angstrom', 'basis native_spherical', 'spin_frame global', &
-         'orbital_order spin_then_l_then_m_increasing', 'flat_index spin_then_site_then_orbital', &
+         'orbital_order spin_then_l_then_m_decreasing', 'flat_index spin_then_site_then_orbital', &
          'energy_reference unscaled_unshifted', 'translation column_relative_to_row', &
          'fourier_phase positive_k_dot_column_minus_row', 'index_base 1', 'pruning_threshold_eV 0', &
          'source_commit '//RSLMTO_SOURCE_COMMIT, 'magnetic_representation '//trim(this%magnetic_representation), &

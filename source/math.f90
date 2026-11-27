@@ -1361,7 +1361,8 @@ contains
 
    end subroutine QSort
 
-   ! Transform the sp/spd/spdf matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
+   ! Transform the sp/spd/spdf matrix between the real cubic order (s | x y z | xy yz zx x2-y2 3z2-r2 | f in canso order)
+   ! and the spherical basis (-1)^m Y_lm, m = +l..-l per shell (docs/source/theory/orbital_basis.rst)
    subroutine hcpx(ham, transformation)
       ! Transform between cartesian and spherical-harmonic representations
       ! Input
@@ -1382,7 +1383,7 @@ contains
       vc = czero
 
       if (n == 4 .or. n == 9 .or. n == 16) then
-         !---base Y(lm) order (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)(3-3)...(33)---
+         !--- spherical basis (-1)^m Y_lm, m = +l..-l within each shell: (00)(11)(10)(1-1)(22)(21)(20)(2-1)(2-2)(33)...(3-3) ---
          ! s
          v(1, 1) = cone
          vc(1, 1) = cone
@@ -1827,11 +1828,11 @@ contains
 
    !> Linear moment-space weights c(m+1) = sum_q w(q) g0_m(e(q)) on cheb_energy_nodes(size(kernel), a, b, e_lo, e_f, kbt):
    !> int_{e_lo}^{inf} f(E) G(E) dE ~= sum_m c(m+1) mu_m for the damped series G = sum_m g0_m mu_m (cheb_green_point_weights).
-   !> Optional c1(m+1) = sum_q w(q) e(q) g0_m(e(q)): the same for int f(E) E G(E) dE.
-   subroutine cheb_linear_weights(kernel, a, b, e_lo, e_f, kbt, c, c1)
+   !> Optional c1(m+1) = sum_q w(q) e(q) g0_m(e(q)), c2(m+1) = sum_q w(q) e(q)^2 g0_m(e(q)): the same for int f(E) E^p G(E) dE.
+   subroutine cheb_linear_weights(kernel, a, b, e_lo, e_f, kbt, c, c1, c2)
       real(rp), intent(in) :: kernel(:), a, b, e_lo, e_f, kbt
       complex(rp), intent(out) :: c(:)
-      complex(rp), intent(out), optional :: c1(:)
+      complex(rp), intent(out), optional :: c1(:), c2(:)
       real(rp), allocatable :: e(:), w(:)
       complex(rp) :: g0(size(kernel)), g2(size(kernel))
       integer :: q
@@ -1839,10 +1840,12 @@ contains
       call cheb_energy_nodes(size(kernel), a, b, e_lo, e_f, kbt, e, w)
       c = (0.0_rp, 0.0_rp)
       if (present(c1)) c1 = (0.0_rp, 0.0_rp)
+      if (present(c2)) c2 = (0.0_rp, 0.0_rp)
       do q = 1, size(e)
          call cheb_green_point_weights(kernel, a, b, e(q), g0, g2)
          c = c + w(q)*g0
          if (present(c1)) c1 = c1 + w(q)*e(q)*g0
+         if (present(c2)) c2 = c2 + w(q)*e(q)**2*g0
       end do
    end subroutine cheb_linear_weights
 
@@ -2068,12 +2071,13 @@ contains
       SM(2, 2) = DSs(0.5_rp, -0.5_rp, -0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA - 0.5_rp*GAMA))
 
       ! Calculate MAT9 (orbital part) for J = 0, 1, ..., lmax_basis
+      ! The shell basis is (-1)^m Y_lm with m descending, so the block is conj(D^l) filled in ascending M
       do J = 0, lmax_basis
          S = J*J + 1 + J
          do M = -J, J
             do Mprime = -J, J
                MAT9(S + M, S + Mprime) = DSs(J*1.0d0, M*1.0d0, Mprime*1.0d0, BETA) &
-                                        *exp(-IM*(M*ALFA + Mprime*GAMA))
+                                        *exp(IM*(M*ALFA + Mprime*GAMA))
             end do
          end do
       end do
@@ -2293,43 +2297,12 @@ contains
       end if
    end function tabulated_slater_integrals
 
-   ! --------------------------------------------------------------------------------------
-   !> Calculates a_k(m,m’,m’’,m’’’) for LDA+U(+J) matrix elements.
-   ! --------------------------------------------------------------------------------------
-   function a_k(k, l, m1, m2, m3, m4) result(res)
-      implicit none
-      integer, intent(in) :: k, l, m1, m2, m3, m4
-      integer :: q
-      real(rp) :: res
-
-      res = 0.0_rp
-      do q = -k, k
-         res = res + (4.0_rp*pi/(2.0_rp*real(k, rp) + 1.0_rp))* &
-            real(realgaunt(l, k, l, m1, q, m2), rp)*real(realgaunt(l, k, l, m3, q, m4), rp)
-      end do
-   end function a_k
-
-   function Coulomb_mat(l, m1, m3, m2, m4, f0, f2, f4, f6) result(res)
-      implicit none
-      integer, intent(in) :: l, m1, m3, m2, m4
-      real(rp), intent(in) :: f0, f2, f4, f6
-      real(rp) :: res
-
-      res = 0.0_rp
-      res = res + a_k(0, l, m1, m2, m3, m4)*f0 &
-                + a_k(2, l, m1, m2, m3, m4)*f2 &
-                + a_k(4, l, m1, m2, m3, m4)*f4 &
-                + a_k(6, l, m1, m2, m3, m4)*f6
-   end function Coulomb_mat
-
    !> Coulomb tensor in the normalized complex spherical-harmonic basis.
    !> The pair-pair convention is
    !>   T(a,b,c,d) = integral Y_a^*(1)Y_b(1) r12^-1 Y_c^*(2)Y_d(2).
    !> Equivalently this is the two-electron matrix element <a c|b d>.
    !> Its selection rule is m_a + m_c = m_b + m_d. The conjugated second
    !> Gaunt factor therefore uses the reversed pair (d,c).
-   !> It is deliberately separate from Coulomb_mat: that legacy routine uses
-   !> real Gaunt coefficients and remains available to unrelated callers.
    function Coulomb_mat_spherical(l, m1, m2, m3, m4, f0, f2, f4, f6) result(res)
       integer, intent(in) :: l, m1, m2, m3, m4
       real(rp), intent(in) :: f0, f2, f4, f6

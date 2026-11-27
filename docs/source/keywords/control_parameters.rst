@@ -471,6 +471,64 @@ scf_integration
 
 **Related code:** ``source/bands.f90`` (``calculate_fermi``, ``integrate``), ``source/green_chebyshev.f90`` (``chebyshev_scf_nodes``)
 
+multipole_route
+---------------
+
+**Type:** Character string
+
+**Purpose:** How the on-site multipole moments of the sphere charge are obtained.
+
+**Allowed values:** ``'q10'``, ``'general'``
+
+**Default:** ``'q10'``
+
+**Notes:**
+
+- ``'q10'``: today's route; the l = 1 dipole :math:`Q_{10}` for ``dipole_electrostatics`` from the on-site Green function (``compute_dipole_moments``). Only :math:`n^{(00)}` and the spin-averaged large-component :math:`\phi` of each site enter, with the elements s-p(m = 0), p(m = 0)-d(m = 0) and p(m = +-1)-d(m = +-1); the radial functions are those of ``rad_fun`` of the site. Bit-identical to a run without the keyword.
+- ``'general'``: all :math:`Q_{LM}`, :math:`L = 0..2 l_{max}`, from the raw energy moments :math:`M_p = \int f(E) E^p n\,dE`, :math:`p = 0..2`, of the on-site density matrix and the radial functions of ``NEWRHO`` (second order in :math:`E - E_\nu`). Requires ``scf_integration = 'moments'`` (fatal otherwise). Runs every SCF step from the second one (the radial functions are those of the previous atomic step), also without ``dipole_electrostatics``.
+- Each SCF step writes ``multipoles.out`` (overwritten): one header line, then ``site L M Q_LM`` per line, :math:`Q_{LM}` in electrons*bohr\ :sup:`L` for the real harmonics :math:`R_{LM}` (M > 0 cos, M < 0 sin).
+- With ``dipole_electrostatics = .true.``, ``potential%q10`` takes :math:`\sqrt{4\pi/3}\,Q_{10}/S` (S the Wigner-Seitz radius), mixed with ``dipole_mix`` as in the ``'q10'`` route. See :ref:`theory/orbital_basis`.
+
+**Related code:** ``source/electrostatics_multipole.f90`` (``compute_multipoles``), ``source/green_chebyshev.f90`` (``chebyshev_onsite_energy_moments``)
+
+nonlocal_dm
+-----------
+
+**Type:** Logical
+
+**Purpose:** Run the Chebyshev recursion of the real-space SCF as the one-shot inter-site recursion, so that one recursion per recursion site gives the on-site moments the SCF needs and the inter-site moments :math:`P_j^\dagger T_m P_i` to every neighbour :math:`j` of the site.
+
+**Default:** ``.false.``
+
+**Notes:**
+
+- Requires ``recur = 'chebyshev'`` and ``scf_integration = 'moments'`` (fatal otherwise).
+- The on-site moments are computed in double precision with the Hamiltonian action of the one-shot route, whatever ``cheb_backend`` is, and cost about :math:`2\times` the product-identity recursion.
+- Off, the SCF is bit-identical to a run without the keyword.
+- Each SCF step, after :math:`E_F` is set, writes ``nonlocal_dm.out`` (overwritten): one header line, then for every recursion site ``i`` and each pair ``(i, j)`` (self pair first, then the structure-constant neighbours) a line ``site_i atom_j Rx Ry Rz`` (:math:`R` = ``cr(:,j) - cr(:,i)`` in units of ``alat``) followed by ``nb`` lines of ``nb`` (Re, Im) values of the density matrix block :math:`n_{ij}` (electrons).
+- :math:`n_{ij} = -\frac{1}{\pi}\sum_m \mathrm{Im}(c_m)\, M_{ji}(m)^\dagger`, with :math:`M_{ji}(m) = \langle j|T_m(\tilde H)|i\rangle` the one-shot moments and :math:`c_m = \int f(E)\, g_m(E)\, dE` the linear weights of the moment-space SCF (same window, kernel, :math:`E_F` and temperature).
+
+**Related code:** ``source/nonlocal_density.f90``, ``source/recursion_chebyshev.f90``, ``source/recursion_transport.f90``
+
+nonlocal_dm_order
+-----------------
+
+**Type:** Integer
+
+**Purpose:** Highest raw energy moment :math:`p` of the non-local density matrix that is computed and written: :math:`n_{ij}^{(p)} = \int f(E)\,E^p\,[\ldots]\,dE = -\frac{1}{\pi}\sum_m \mathrm{Im}(c^{(p)}_m)\, M_{ji}(m)^\dagger`, with :math:`c^{(p)}_m = \int f(E)\,E^p\, g_m(E)\, dE`.
+
+**Allowed values:** ``0``, ``1``, ``2``
+
+**Default:** ``0``
+
+**Notes:**
+
+- Fatal outside 0..2, and fatal if larger than 0 without ``nonlocal_dm = .true.``.
+- The moments are taken about :math:`E = 0` (not about :math:`E_\nu`), in electrons\*Ry\ :sup:`p`.
+- ``p = 0`` is ``nonlocal_dm.out`` (unchanged); ``p = 1`` and ``p = 2`` are written to ``nonlocal_dm_e1.out`` and ``nonlocal_dm_e2.out`` in the same format, with the moment named in the header line.
+
+**Related code:** ``source/nonlocal_density.f90``, ``source/bands.f90``
+
 cheb_backend
 ------------
 

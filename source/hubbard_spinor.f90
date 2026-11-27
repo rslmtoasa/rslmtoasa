@@ -1,7 +1,7 @@
 !> Full-spinor Liechtenstein + FLL functional for one d shell (10x10, not yet used by the SCF).
 !>
-!> Index: i = (sigma-1)*5 + (m+3), spin-major with m=-2..2. In the Hamiltonian this is
-!> row (sigma-1)*spin_off + l*l + (m+l+1) with l=2. Operator orientation as in the
+!> Index: i = (sigma-1)*5 + (3-m), spin-major, storage order m=+2..-2 (functions (-1)^m Y_2m). In the Hamiltonian this is
+!> row (sigma-1)*spin_off + l*l + (l+1-m) with l=2. Operator orientation as in the
 !> collinear code: P(a,b) = sum_n f_n psi_n(a) conj(psi_n(b)), V is inserted into H as is,
 !> and dE = Re Tr(V dP) for Hermitian dP. The tensor is T(a,b,c,d) = <a c|b d> from
 !> Coulomb_mat_spherical. The exchange term keeps all spin contractions.

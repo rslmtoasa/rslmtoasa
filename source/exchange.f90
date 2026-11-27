@@ -45,7 +45,7 @@ module exchange_mod
 
    private
    !> Linked from the exchange_dynamics submodule (calculate_pairwise)
-   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes, onsite_exchange_delta
+   public :: exchange_pair, exchange_twoindex_pair, exchange_finalize, exchange_twoindex_finalize, real_mesh_nodes, onsite_exchange_delta, spin_blocks_hcpx
    !> Energy nodes at which G is evaluated and the way an integrand sampled on them is integrated.
    type, public :: energy_nodes
       !> Complex energies z (Ry) at which G is evaluated
@@ -379,6 +379,7 @@ contains
       complex(rp), allocatable, dimension(:, :, :) :: pmatrix0_i, pmatrix0_j, pmatrix0_k ! P matrix (potential function) of atom k in the canonical representation
       complex(rp), allocatable, dimension(:, :, :) :: deltap_i, deltap_j ! P_up - P_dw matrices (half of the size, as it does not consider the spin index)
       complex(rp), allocatable, dimension(:, :, :) :: umatrix_k ! Full displacement matrix for atom k
+      complex(rp), allocatable, dimension(:, :, :) :: pcubic_k ! P matrix of atom k in the cubic basis of disp_matrix
       complex(rp), allocatable, dimension(:, :, :) :: temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10 ! Temporary matrices to store
       complex(rp), allocatable, dimension(:, :, :, :) :: int_all ! Result for all components on the Jijk tensor
       real(rp), allocatable, dimension(:, :) :: jijk_tot ! The value of Jijk for each energy point
@@ -463,6 +464,8 @@ contains
          lmaxi = this%symbolic_atom(this%lattice%iz(i))%potential%lmax ! l_max for atom i
          lmaxj = this%symbolic_atom(this%lattice%iz(j))%potential%lmax ! l_max for atom j
          lmaxk = this%symbolic_atom(this%lattice%iz(k))%potential%lmax ! l_max for atom k
+         if (lmaxk > 2) call g_logger%fatal('exchange%calculate_jijk: disp_matrix f-shell order differs from the structure-constant f order; not supported', &
+                                            __FILE__, __LINE__)
          ! Now allocate the necessary vectors and matrices
          allocate (screening_ort_i(0:lmaxi, 2))
          allocate (screening_ort_j(0:lmaxj, 2))
@@ -537,8 +540,12 @@ contains
          call this%symbolic_atom(this%lattice%iz(i))%transform_pmatrix(pmatrix_i, pmatrix0_i, screening_ort_i, screening_can)
          call this%symbolic_atom(this%lattice%iz(j))%transform_pmatrix(pmatrix_j, pmatrix0_j, screening_ort_j, screening_can)
          call this%symbolic_atom(this%lattice%iz(k))%transform_pmatrix(pmatrix_k, pmatrix0_k, screening_ort_k, screening_can)
+         ! disp_matrix is real and in cubic order (l <= 2) while P and the Green functions are spherical: build U in the cubic basis
          ! Calculate the displacement matrix U for atom k, with the canonical representation
-         call this%symbolic_atom(this%lattice%iz(k))%udisp_matrix(umatrix_k, pmatrix0_k, uni_disp, lmaxk, ws_radius, size(this%en%ene))
+         pcubic_k = pmatrix0_k
+         call spin_blocks_hcpx(pcubic_k, 'sph2cart')
+         call this%symbolic_atom(this%lattice%iz(k))%udisp_matrix(umatrix_k, pcubic_k, uni_disp, lmaxk, ws_radius, size(this%en%ene))
+         call spin_blocks_hcpx(umatrix_k, 'cart2sph')
          ! Now obtain the auxiliary Green´s function for atoms i, j and k (and vice-versa), in the orthogonal representation
          call this%green%auxiliary_gij(this%green%gij(:, :, :, 3*(njijk - 1) + 1), aux_gij, i, j)
          call this%green%auxiliary_gij(this%green%gji(:, :, :, 3*(njijk - 1) + 1), aux_gji, j, i)
@@ -615,6 +622,7 @@ contains
          deallocate (pmatrix0_i)
          deallocate (pmatrix0_j)
          deallocate (pmatrix0_k)
+         deallocate (pcubic_k)
          deallocate (umatrix_k)
          deallocate (deltap_i)
          deallocate (deltap_j)
@@ -633,6 +641,25 @@ contains
       end do
 
    end subroutine calculate_jijk
+
+   !> Applies hcpx to the four orbital blocks (spin up/down) of every matrix in mat(2n, 2n, :).
+   subroutine spin_blocks_hcpx(mat, transformation)
+      complex(rp), intent(inout) :: mat(:, :, :)
+      character(len=*), intent(in) :: transformation
+      complex(rp) :: blk(size(mat, 1)/2, size(mat, 1)/2)
+      integer :: n, ie, a, b
+
+      n = size(mat, 1)/2
+      do ie = 1, size(mat, 3)
+         do a = 0, 1
+            do b = 0, 1
+               blk = mat(a*n + 1:(a + 1)*n, b*n + 1:(b + 1)*n, ie)
+               call hcpx(blk, transformation)
+               mat(a*n + 1:(a + 1)*n, b*n + 1:(b + 1)*n, ie) = blk
+            end do
+         end do
+      end do
+   end subroutine spin_blocks_hcpx
 
    subroutine calculate_dij(this)
       class(exchange) :: this

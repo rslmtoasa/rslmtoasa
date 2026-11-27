@@ -176,14 +176,53 @@ contains
       call cheb_kernel_vector(this, nmom, kernel)
       if (present(lin)) then
          allocate (lin(nmom))
-         if (present(lin1)) then
-            allocate (lin1(nmom))
-            call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, lin, lin1)
-         else
-            call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, lin)
-         end if
+         if (present(lin1)) allocate (lin1(nmom))
+         call this%chebyshev_linear_weights(nmom, lin, lin1)
       end if
    end subroutine chebyshev_exchange_weights
+
+   !> Linear weights c(nmom) (and c1, c2 for E^1, E^2) of cheb_linear_weights at en%fermi, with the window map and the damping kernel
+   !> of chebyshev_exchange_weights.
+   module subroutine chebyshev_linear_weights(this, nmom, c, c1, c2)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: nmom
+      complex(rp), intent(out) :: c(nmom)
+      complex(rp), intent(out), optional :: c1(nmom), c2(nmom)
+      real(rp) :: a, b, emin_win, emax_win, kernel(nmom)
+
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      call cheb_kernel_vector(this, nmom, kernel)
+      call cheb_linear_weights(kernel, a, b, this%en%energy_min, this%en%fermi, kB_simpson_f*this%en%temperature, c, c1, c2)
+   end subroutine chebyshev_linear_weights
+
+   !> Raw energy moments mp(nb, nb, 0:2, n_local) = int f(E) E^p n_ii(E) dE (about E = 0, electrons*Ry^p) of the on-site density matrix of
+   !> every local recursion site (mu_n(:, :, :, 1:n_local)). With G = sum_m g_m mu_m, mu_m = <i|T_m|i> Hermitian, n = -(1/2 pi i)(G - G^H)
+   !> = -(1/pi) sum_m Im(g_m) mu_m, so mp(:, :, p, i) = -(1/pi) sum_m Im(c^(p)_m) mu_m with c^(p) of chebyshev_linear_weights.
+   !> herm is the largest |mp - mp^H| (zero if mu_m is Hermitian at every order); mp is returned as computed, not Hermitized.
+   module subroutine chebyshev_onsite_energy_moments(this, mp, herm)
+      class(green), intent(inout) :: this
+      complex(rp), allocatable, intent(out) :: mp(:, :, :, :)
+      real(rp), intent(out) :: herm
+      complex(rp), allocatable :: c(:, :)
+      integer :: nmom, n_local, n, p, m
+
+      nmom = size(this%recursion%mu_n, 3)
+      n_local = end_atom - start_atom + 1
+      allocate (c(nmom, 0:2), mp(size(this%recursion%mu_n, 1), size(this%recursion%mu_n, 2), 0:2, max(n_local, 0)))
+      call this%chebyshev_linear_weights(nmom, c(:, 0), c(:, 1), c(:, 2))
+      mp = (0.0_rp, 0.0_rp)
+      herm = 0.0_rp
+      do n = 1, n_local
+         do p = 0, 2
+            do m = 1, nmom
+               mp(:, :, p, n) = mp(:, :, p, n) - aimag(c(m, p))/pi*this%recursion%mu_n(:, :, m, n)
+            end do
+            herm = max(herm, maxval(abs(mp(:, :, p, n) - conjg(transpose(mp(:, :, p, n))))))
+         end do
+      end do
+   end subroutine chebyshev_onsite_energy_moments
 
    !> Raw moments mij, mji(nb, nb, nmom) of G_ij and G_ji of global pair ia_glob (one_shot, pairs or self-pair source).
    subroutine pair_moment_sources(this, ia_glob, mij, mji)
