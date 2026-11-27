@@ -73,7 +73,10 @@ Keys
      - character
      - ``''``
      - File with one q vector (three fractional coordinates) per line; when set it replaces
-       ``n_q`` and ``q_list``.
+       ``n_q`` and ``q_list``. ``'auto'``: the high-symmetry path of the band structure, built
+       from the space group (``&kpath``, ``nk_per_segment`` points per segment; see
+       :ref:`keywords/reciprocal`), and ``<prefix>_qpath.dat`` lists its points with path length
+       and labels. ``'auto'`` is not available on the real-space route (``do_chi0``).
    * - ``omega_min``, ``omega_max``
      - real (Ry)
      - 0.0, 0.05
@@ -103,6 +106,8 @@ Output files
   crossing frequencies (Ry).
 - ``<prefix>_adiabatic.dat`` — per q: adiabatic frequencies from the static
   :math:`\chi_0`, and the force-theorem frequencies from the same :math:`\chi_0`.
+- ``<prefix>_qpath.dat`` — with ``q_file = 'auto'``: each q of the path (fractional), its path
+  length (as in ``band_structure_kpath.dat``) and its label, for the axis of a q-omega map.
 - ``<prefix>_state.dat`` — the ground state the response used: method, Fermi level,
   electron count, k mesh, site moments and d occupations, and the kernel U per site.
 
