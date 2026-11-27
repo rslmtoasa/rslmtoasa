@@ -111,6 +111,7 @@ module recursion_mod
       type(rsrec_cuda_backend), pointer :: gpu_backend => null()
       !> Kubo response operators: kind and local operator of the output (a) and input (b) slots
       character(len=16) :: transport_kind_a, transport_kind_b
+      complex(rp), allocatable :: torque_onsite(:, :, :)
       complex(rp), allocatable :: transport_q_a(:, :), transport_q_b(:, :)
       !> Unit velocity directions of the output (a) and input (b) slots
       real(rp) :: transport_dir_a(3), transport_dir_b(3)

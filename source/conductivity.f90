@@ -856,7 +856,7 @@ contains
       case('charge')
          return
       case('spin','orbital','spin_accumulation','orbital_accumulation', &
-           'spin_torque','orbital_torque','spin_soc_torque','soc_spin_torque')
+           'spin_torque','spin_torque_onsite','orbital_torque','spin_soc_torque','soc_spin_torque')
          rank = 1
       case('quadrupole','oap','quadrupole_accumulation','oap_accumulation')
          rank = 2

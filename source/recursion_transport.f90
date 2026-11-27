@@ -68,6 +68,16 @@ contains
       hblocksize = size(psi, 1)
       nrhs = size(psi, 2)
       this%idum(:) = this%izero(:)
+      if (kind == 'onsite_torque') then
+         out = czero
+         !$omp parallel do default(shared) private(i)
+         do i = 1, size(psi, 3)
+            if (this%izero(i) == 0) cycle
+            out(:, :, i) = matmul(this%torque_onsite(:, :, i), psi(:, :, i))
+         end do
+         !$omp end parallel do
+         return
+      end if
       if (kind == 'charge') then
          if (this%hamiltonian%hoh) then
             call this%velo_hoh_vec_matmul(psi, out, work(:, :, :, 1:3), direction, weighted)
@@ -771,7 +781,7 @@ contains
       select case(trim(op_type))
       case('charge')
          kind = 'charge'
-      case('spin', 'spin_accumulation', 'spin_torque', 'spin_soc_torque', 'soc_spin_torque')
+      case('spin', 'spin_accumulation', 'spin_torque_onsite', 'spin_torque', 'spin_soc_torque', 'soc_spin_torque')
          call select_spin_operator(pol, q)
       case('orbital', 'orbital_accumulation', 'orbital_torque')
          call select_orbital_operator(pol, q)
@@ -786,6 +796,8 @@ contains
       case('spin_accumulation', 'orbital_accumulation', 'quadrupole_accumulation', &
            'oap_accumulation', 'octupole_accumulation')
          kind = 'local'
+      case('spin_torque_onsite')
+         kind = 'onsite_torque'
       case('spin_torque', 'orbital_torque')
          kind = trim(op_type)
       case('spin_soc_torque', 'soc_spin_torque')
@@ -857,6 +869,10 @@ contains
       character(len=64) :: reason
 
       reason = ' '
+      if (this%control%response_projection == 'local' .or. this%transport_kind_a == 'onsite_torque') then
+         reason = 'observable projection or onsite torque'
+         return
+      end if
       if (this%hamiltonian%ccor_2c) then
          reason = 'ccor_2c'
       else if (this%lattice%nmax /= 0) then
@@ -940,6 +956,28 @@ contains
       end do
    end subroutine transport_moment_diagonal
 
+   ! Extract one physical onsite block with the same unscaled action used by KPM.
+   subroutine site_torque(this, site, seed, image, work, torque)
+      class(recursion), intent(inout) :: this
+      integer, intent(in) :: site
+      complex(rp), contiguous, intent(inout) :: seed(:, :, :), image(:, :, :), work(:, :, :, :)
+      complex(rp), intent(out) :: torque(nb, nb)
+      complex(rp) :: h(nb, nb)
+      integer :: l
+
+      seed = czero
+      do l = 1, nb
+         seed(l, l, site) = cone
+      end do
+      this%izero = 0
+      this%izero(site) = 1
+      call this%kubo_ham_vec_matmul(seed, image, work, include_soc=.false.)
+      h = image(:, :, site)
+      if (.not. (maxval(abs(h - conjg(transpose(h)))) <= 1.0e-11_rp*max(1.0_rp, maxval(abs(h))))) &
+         call g_logger%fatal('Non-Hermitian effective onsite block at site '//int2str(site), __FILE__, __LINE__)
+      torque = -i_unit*(matmul(this%transport_q_a, h) - matmul(h, this%transport_q_a))
+   end subroutine site_torque
+
    !> @brief Compute two-index stochastic Chebyshev moments for transport.
    !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
    !>          spin, orbital, accumulation, and torque conductivity routes. The
@@ -956,7 +994,7 @@ contains
       integer, allocatable :: seed_values(:)
       integer(int64) :: matrix_dimension, nnz, host_moment_bytes
       complex(rp), dimension(nb, nb) :: dum
-      complex(rp) :: diagonal(nb)
+      complex(rp) :: diagonal(nb), vertex(nb, nb)
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
       complex(rp), dimension(:, :, :, :), allocatable :: left_vec, work
       complex(rp), dimension(:, :, :, :), allocatable :: kernel_v_a, kernel_v_b, kernel_vo_a, kernel_vo_b
@@ -1031,6 +1069,20 @@ contains
 
       call g_kpm_profile%start('P_operator_setup')
       call this%setup_kubo_operators(this%control%linear_out, this%control%linear_in)
+      if (this%control%response_projection == 'local' .or. this%transport_kind_a == 'onsite_torque') then
+         if (this%hamiltonian%local_axis .or. this%hamiltonian%magnetic_representation /= 'periodic_nc') &
+            call g_logger%fatal('Stage 1 supports the global periodic_nc spin frame', __FILE__, __LINE__)
+         if (this%hamiltonian%imported_effective .or. this%hamiltonian%ccor_2c) &
+            call g_logger%fatal('Stage 1 import and CCOR require independent operator validation', __FILE__, __LINE__)
+      end if
+      if (allocated(this%torque_onsite)) deallocate(this%torque_onsite)
+      if (this%transport_kind_a == 'onsite_torque' .and. this%control%response_projection == 'seed') then
+         allocate(this%torque_onsite(nb, nb, nat))
+         do k = 1, nat
+            call site_torque(this, k, psiref, w1, work, vertex)
+            this%torque_onsite(:, :, k) = vertex
+         end do
+      end if
       use_fast = .false.
       if (trim(this%control%transport_backend) == 'fast_sp') then
          obstacle = fast_kernel_obstacle(this)
@@ -1077,6 +1129,12 @@ contains
       do i = 1, loop_over
          call g_kpm_profile%start('P_trace_setup')
          if (.not. deterministic_random_seed) call random_seed()
+
+         if (this%control%response_projection == 'local') then
+            vertex = this%transport_q_a
+            if (this%transport_kind_a == 'onsite_torque') &
+               call site_torque(this, this%lattice%atlist(i), psiref, w1, work, vertex)
+         end if
 
          ! Initializing wave functions
          v0(:, :, :) = (0.0d0, 0.0d0)
