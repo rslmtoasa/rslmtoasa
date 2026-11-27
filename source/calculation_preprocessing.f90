@@ -330,7 +330,10 @@ contains
       call save_state(lattice_obj%symbolic_atoms)
       call dispatch_hamiltonian_export(hamiltonian_obj, energy_obj)
 
-      if (this%do_sigma) then
+      if (this%do_sigma .and. self_obj%use_kspace) then
+         if (rank == 0) call g_logger%warning( &
+            'Skipping do_sigma: the self-energy Green function is available on the real-space route only.', __FILE__, __LINE__)
+      else if (this%do_sigma) then
          sigma_obj = self_energy()
          sigma_obj%tol = this%sigma_tol
          call sigma_obj%read('sigma.dat')

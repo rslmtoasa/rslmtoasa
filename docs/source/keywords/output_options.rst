@@ -352,7 +352,7 @@ non-Hermitian self-energy :math:`\Sigma_t` per atom type :math:`t`, read from ``
 ``sigma.dat``: a free header line; ``nz ntype nb``; then for each :math:`z` a line ``x y`` (:math:`z = E_F + x + iy`, Ry)
 followed by ``ntype`` blocks of ``nb`` lines, each line holding the ``nb`` entries of one row of :math:`\Sigma_t` as
 ``re im`` pairs (Ry, same basis as the Hamiltonian). ``gloc_sigma.dat``: header line, ``nz nrec nb``, then per :math:`z` the
-line ``x y`` and one :math:`G_{ii}` block (1/Ry) per recursion atom in the same row layout; ``n/a`` lines mark a block that did not converge.
+line ``x y`` and one :math:`G_{ii}` block (1/Ry) per recursion atom in the same row layout; ``n/a`` lines mark a block that did not converge. Real-space route only; skipped with a warning in k-space mode.
 
 **Default:** ``.false.``
 
