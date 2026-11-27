@@ -22,12 +22,16 @@ program transport_driver
  character(32) :: keyword
  character(10) :: pol
  character(16) :: kinds(6)=[character(16)::'charge','local','current','spin_torque','orbital_torque','soc_torque']
- type(recursion) :: t
+ type(recursion), target :: t
  type(hamiltonian), target :: ham
  type(lattice), target :: lat
  complex(rp) :: work(b,d,n,6)
  call init_math_operators()
  call get_command_argument(1,mode)
+ if (trim(mode)=='projection') then
+  call projection_moments()
+  stop
+ end if
  if (trim(mode)=='degenerate') then
   call g_logger%init()
   lat%pbc=.true.; lat%b1=.true.; lat%b2=.false.; lat%b3=.false.
@@ -118,6 +122,90 @@ program transport_driver
  close(u)
  close(20)
 contains
+
+ ! Read an independently assembled lattice and write raw KPM blocks.
+ subroutine projection_moments()
+  use control_mod, only: control
+  use energy_mod, only: energy
+  use conductivity_mod, only: conductivity
+  type(control), target :: ctrl
+  type(energy), target :: en
+  type(conductivity) :: cond
+  integer :: sites, types, neighbors, degree, periodic, layout, unit
+  call g_logger%init()
+  call ctrl%restore_to_default()
+  open(newunit=unit,file='projection.bin',access='stream',form='unformatted',status='old')
+  read(unit) sites, types, neighbors, degree, periodic, layout, lat%nmax, ih
+  lat%kk=sites
+  lat%ntype=types
+  allocate(lat%nn(sites,neighbors), lat%iz(sites), lat%atlist(types), lat%cr(3,sites))
+  allocate(ham%ee(b,b,neighbors,types), ham%hall(b,b,neighbors,lat%nmax))
+  allocate(ham%obarm(b,b,types), ham%enim(b,b,types), ham%lsham(b,b,types))
+  read(unit) lat%nn, lat%iz, lat%atlist, lat%cr, lat%n1, lat%n2, lat%n3
+  read(unit) ham%ee, ham%hall, ham%obarm, ham%enim, ham%lsham
+  read(unit) ctrl%linear_out, ctrl%response_projection, ham%pol_alpha
+  close(unit)
+  ctrl%cond_ll=degree
+  ctrl%linear_in='charge'
+  ctrl%transport_backend='legacy'
+  ctrl%cheb_backend='legacy'
+  ctrl%cpu_reconstruction_precision='fp64'
+  if (layout==1) then
+   ctrl%cheb_backend='fast'
+   ctrl%cpu_reconstruction_precision='fp32'
+  end if
+  en%energy_min=-4.25_rp
+  en%energy_max=4.25_rp
+  lat%alat=1
+  lat%a=0
+  do k=1,3
+   lat%a(k,k)=1
+  end do
+  lat%pbc=periodic==1
+  lat%b1=lat%pbc
+  lat%b2=lat%pbc
+  lat%b3=.false.
+  ham%ccor_2c=.false.
+  ham%local_axis=.false.
+  ham%magnetic_representation='periodic_nc'
+  ham%hoh=ih==1
+  allocate(ham%velocity_scale(types))
+  ham%velocity_scale=1
+  ham%v_beta=[1,0,0]
+  ham%v_alpha=[0,1,0]
+  ham%pol_beta='x'
+  t%en=>en
+  t%control=>ctrl
+  t%lattice=>lat
+  t%hamiltonian=>ham
+  allocate(t%izero(sites),t%idum(sites))
+  call t%compute_moments_stochastic()
+  open(newunit=unit,file='moments.bin',access='stream',form='unformatted',status='replace')
+  if (layout==1) then
+   write(unit) t%mu_nm_stochastic
+  else
+   write(unit) t%mu_nm_diag
+  end if
+  close(unit)
+  if (layout==0) then
+   en%channels_ldos=31
+   en%fermi=0
+   allocate(en%ene(41),lat%symbolic_atoms(types))
+   do k=1,41
+    en%ene(k)=.2_rp*(k-21)
+   end do
+   do k=1,types
+    lat%symbolic_atoms(k)%element%symbol='M'
+   end do
+   cond%control=>ctrl
+   cond%en=>en
+   cond%recursion=>t
+   cond%lattice=>lat
+   cond%response_geometry='sheet'
+   call cond%calculate_gamma_nm()
+   call cond%calculate_conductivity_tensor()
+  end if
+ end subroutine projection_moments
 
  ! Compare sparse support with the all-site action for every operator kind,
  ! both slots, both Hamiltonians, impurity rows and zero neighbor placeholders.
