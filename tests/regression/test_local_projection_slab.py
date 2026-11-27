@@ -11,7 +11,7 @@ SX = np.array([[0, .5], [.5, 0]])
 ACTIVE = [0, 9]
 
 
-def slab(directory, exe, width, periodic, rep, order, hoh, layout, projection, observable="spin_torque_onsite", pol="x"):
+def slab(directory, exe, width, periodic, rep, order, hoh, layout, projection, observable="spin_torque_onsite", pol="x", impurity=False):
     sites = [(x, y, z) for x in range(width) for y in range(width) for z in range(2)]
     count = len(sites)
     types = 2
@@ -47,6 +47,13 @@ def slab(directory, exe, width, periodic, rep, order, hoh, layout, projection, o
             sj = slice(2*j,2*j+2)
             h[si,sj] = hij
             v[si,sj] = 1j*dx*hij
+    hall = blocks[:,:,:,:0].copy()
+    if impurity:
+        refs[0] = 0
+        hall = blocks[:,:,:,:1].copy()
+        field = np.array([[.14,.09j],[-.09j,-.14]])
+        hall[:,:,0,0][np.ix_(ACTIVE,ACTIVE)] += field
+        h[:2,:2] += field
     if hoh:
         overlap = np.diag(np.tile([.12,.22], count))
         v = v - v@overlap@h - h@overlap@v
@@ -72,13 +79,13 @@ def slab(directory, exe, width, periodic, rep, order, hoh, layout, projection, o
     with (directory/'projection.bin').open('wb') as f:
         def write(arr, dtype):
             np.asarray(arr, dtype=dtype).ravel(order='F').tofile(f)
-        write([count,types,7,order,int(periodic),layout,0,int(hoh)], 'i4')
+        write([count,types,7,order,int(periodic),layout,int(impurity),int(hoh)], 'i4')
         write(nn, 'i4')
         write([z+1 for _,_,z in sites], 'i4')
         write(np.array(refs)+1, 'i4')
         write(np.array(sites).T, 'f8')
         write([width,width,1], 'i4')
-        for arr in (blocks, o, 0*o, soc):
+        for arr in (blocks, hall, o, 0*o, soc):
             write(arr, 'c16')
         f.write(observable.encode().ljust(30)+projection.encode().ljust(16)+pol.encode().ljust(10))
     subprocess.run([str(exe), 'projection'], cwd=directory, check=True,
@@ -169,3 +176,25 @@ def test_slab_spectra(tmp_path, transport_executable, observable, pol):
     scale = max(abs(x).max() for x in profiles)
     assert abs(totals[0]-totals[1]).max() < 1e-11*scale
     assert abs(profiles[0]-profiles[1]).max() > 1e-5*scale
+
+
+def test_nonreciprocal_block_rejected(tmp_path, transport_executable):
+    slab(tmp_path, transport_executable, 3, True, 1, 3, True, 0, 'local')
+    path = tmp_path/'projection.bin'
+    record = bytearray(path.read_bytes())
+    sites, types, neighbors = np.frombuffer(record, dtype='i4', count=3)
+    # Skip the header, neighbor and type maps, coordinates and supercell counts.
+    offset = 4*(8 + sites*neighbors + sites + types + 3) + 8*3*sites
+    hopping = np.frombuffer(record, dtype='c16', offset=offset, count=18*18*neighbors*types)
+    hopping.reshape((18,18,neighbors,types), order='F')[0,0,1,0] += .001j
+    path.write_bytes(record)
+    run = subprocess.run([transport_executable,'projection'],cwd=tmp_path,capture_output=True,
+                         env={**os.environ,"OMP_NUM_THREADS":"1"},text=True)
+    assert run.returncode != 0
+    assert "requires Hermitian transport" in run.stdout+run.stderr
+
+@pytest.mark.parametrize("hoh", [False,True])
+def test_site_specific_field(tmp_path, transport_executable, hoh):
+    # Only one occurrence of type 1 has a transverse local field in hall.
+    for projection in ["seed","local"]:
+        slab(tmp_path, transport_executable, 3, True, 1, 7, hoh, 1, projection, impurity=True)

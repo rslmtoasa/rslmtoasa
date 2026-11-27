@@ -956,3 +956,13 @@ See Also
 - :ref:`theory/scf_cycle` - Understanding SCF convergence
 - :ref:`theory/recursion_method` - Understanding recursion cutoffs
 - :doc:`../user_guide/input_files` - Input file syntax
+
+response_projection
+-------------------
+
+The default 'seed' closes the response trace on the representative site's
+basis. Select 'local' to place an onsite output observable on that site.
+Local projection uses deterministic per_type, charge input and real-space
+recursion. It accepts spin, orbital, quadrupole (including OAP), and octupole
+accumulations and spin_torque_onsite. Use pol_alpha for the spin component
+and v_beta for the electric-field direction.

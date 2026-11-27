@@ -53,3 +53,25 @@ def test_local_moment_blocks(hoh):
     if not hoh:
         assert abs(local[0]).max() == 0
         assert abs(seed[0]).max() > .001
+
+
+@pytest.mark.parametrize("field", [-.31,.31])
+@pytest.mark.parametrize("orbitals", [4,9,16])
+def test_field_sign_and_intersite_commutator(field, orbitals):
+    pauli = [np.kron(s,np.eye(orbitals)) for s in
+             (np.array([[0,1],[1,0]]),np.array([[0,-1j],[1j,0]]),np.diag([1,-1]))]
+    hii = field*pauli[2]
+    ident = np.eye(2*orbitals)
+    def torque(s, h):
+        return -.5j*(s@h-h@s)
+    for s, expected in zip(pauli, [-field*pauli[1],field*pauli[0],0*hii]):
+        np.testing.assert_allclose(torque(s,hii),expected,atol=1e-15)
+        onsite = np.kron(np.diag([0.,1.]),hii)
+        scalar_hop = np.kron(np.array([[0,1],[1,0]]),ident)
+        magnetic_hop = np.kron(np.array([[0,1],[1,0]]), .12*pauli[2])
+        q = np.kron(np.eye(2),s)
+        np.testing.assert_allclose(torque(q,onsite+scalar_hop),torque(q,onsite))
+        delta = torque(q,onsite+scalar_hop+magnetic_hop)-torque(q,onsite)
+        np.testing.assert_allclose(delta,torque(q,magnetic_hop))
+        field_change = .09*pauli[0]+.05*pauli[1]
+        np.testing.assert_allclose(torque(s,hii+field_change)-torque(s,hii),torque(s,field_change))

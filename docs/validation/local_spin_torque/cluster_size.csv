@@ -1,0 +1,9 @@
+linear_out,pol_alpha,projection,size,sites,order,peak_real_raw,peak_imag_raw,max_real_seed_local_difference,max_imag_seed_local_difference
+spin_torque_onsite,z,seed,8,512,20,0.0,0.0,0.0,0.0
+spin_torque_onsite,z,local,8,512,20,0.0,0.0,0.0,0.0
+spin_torque_onsite,z,seed,12,1728,20,0.0,0.0,0.0,0.0
+spin_torque_onsite,z,local,12,1728,20,0.0,0.0,0.0,0.0
+spin_torque_onsite,x,seed,8,512,20,2.233325e-25,1.041081e-26,4.148749e-25,2.0872779999999998e-26
+spin_torque_onsite,x,local,8,512,20,2.023408e-25,1.046197e-26,4.148749e-25,2.0872779999999998e-26
+spin_torque_onsite,x,seed,12,1728,20,7.878258e-28,1.470234e-28,1.6041551e-27,3.2215070000000004e-28
+spin_torque_onsite,x,local,12,1728,20,8.164694e-28,1.759083e-28,1.6041551e-27,3.2215070000000004e-28
