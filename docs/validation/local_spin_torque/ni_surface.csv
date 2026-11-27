@@ -1,0 +1,9 @@
+rc,ct,r2,hoh,sites,exit_code,diagnostic
+16,2.8,8,False,II =    676,1,"Stage 1 requires Hermitian transport: sites 1, 99, max block residual =   9.1880E-11"
+16,2.8,8,True,II =    676,1,"Stage 1 requires Hermitian transport: sites 1, 99, max block residual =   9.1880E-11"
+32,4.0,16,False,II =   1832,1,"Stage 1 requires Hermitian transport: sites 1, 211, max block residual =   9.1735E-11"
+32,4.0,16,True,II =   1832,1,"Stage 1 requires Hermitian transport: sites 1, 211, max block residual =   9.1735E-11"
+60,4.0,16,False,II =   4462,1,"Stage 1 requires Hermitian transport: sites 1, 379, max block residual =   9.1735E-11"
+60,4.0,16,True,II =   4462,1,"Stage 1 requires Hermitian transport: sites 1, 379, max block residual =   9.1735E-11"
+100,4.0,16,False,II =   9318,1,"Stage 1 requires Hermitian transport: sites 1, 632, max block residual =   9.1735E-11"
+100,4.0,16,True,II =   9318,1,"Stage 1 requires Hermitian transport: sites 1, 632, max block residual =   9.1735E-11"

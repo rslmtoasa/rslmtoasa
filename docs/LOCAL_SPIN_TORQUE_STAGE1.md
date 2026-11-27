@@ -42,5 +42,5 @@ Hermitian onsite terms. Overlap and Eν are checked for HOH. A failed check
 reports the sites and residual. Legacy FP64 moment generation supports the
 feature. A fast_sp request uses the logged CPU fallback. Reciprocal moment
 generation, CCOR, imported effective matrices, local spin frames, textures
-and spdf formatted transport output are guarded. See the validation record
+SCF constraining-field restoration, and spdf formatted transport output are guarded. See the validation record
 for measured coverage and outstanding limitations.
