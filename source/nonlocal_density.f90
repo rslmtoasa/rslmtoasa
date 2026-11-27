@@ -131,10 +131,11 @@ contains
       end if
       open (newunit=u, file=fname, status='replace', action='write')
       if (moment == 0) then
-         write (u, '(a)') '# site_i atom_j Rx Ry Rz [alat]; then nb rows of nb (Re Im) of n_ij [electrons]'
+         write (u, '(a)') '# site_i atom_j Rx Ry Rz [alat]; then nb rows of nb (Re Im) of n_ij [electrons]; '// &
+            'orbitals: complex (-1)^m Y_lm, m = +l..-l per shell, spin up then down'
       else
          write (u, '(a,i0,a)') '# site_i atom_j Rx Ry Rz [alat]; then nb rows of nb (Re Im) of the raw E^', moment, &
-            ' moment of n_ij about E = 0 ['//trim(unit_str)//']'
+            ' moment of n_ij about E = 0 ['//trim(unit_str)//']; orbitals: complex (-1)^m Y_lm, m = +l..-l per shell, spin up then down'
       end if
       do p = 1, size(pg, 2)
          write (u, '(2i6,3es16.8)') pg(1, p), pg(2, p), lat%cr(:, pg(2, p)) - lat%cr(:, pg(1, p))
