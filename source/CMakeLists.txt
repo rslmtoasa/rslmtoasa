@@ -38,6 +38,7 @@ add_library(${PROJECT_NAME} STATIC
     gbt_kspace.f90
     lmto_magnetic_tangent.f90
     spin_density.f90
+    bdg.f90
     spin_response.f90
     spin_response_kernels.f90
     spin_response_rs.f90

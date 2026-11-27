@@ -478,8 +478,12 @@ if(RUN_UNIT_TESTS)
   # --- bdg ---------------------------------------------------------------------------------
   # The oracle files are regenerated at test time by tests/bdg/oracles/make_references.py
   # into a scratch copy of the oracle directory (tests/bdg/with_oracles.py).
+  add_executable(UnitBdg ${TestDIR}/unit/test_bdg_cases.f90 ${TestDIR}/unit/test_bdg.f90)
+  _rslmto_link_unit_target(UnitBdg)
+  target_link_libraries(UnitBdg SubcaseRunner)
   rslmto_add_test(NAME UnitBdg TIER quick LABELS unit bdg
-    COMMAND "${PY}" "${TestDIR}/bdg/with_oracles.py" "${CMAKE_BINARY_DIR}/Testing/bdg/oracles" -- ${CMAKE_COMMAND} -E true)
+    COMMAND "${PY}" "${TestDIR}/bdg/with_oracles.py" "${CMAKE_BINARY_DIR}/Testing/bdg/oracles" --
+      $<TARGET_FILE:UnitBdg> all "{oracles}")
 
   # --- spin response -----------------------------------------------------------------------
   # The oracle .nml files are regenerated at test time by tests/spin_response/oracles/make_references*.py
