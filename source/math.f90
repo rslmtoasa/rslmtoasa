@@ -43,6 +43,8 @@ module math_mod
 #endif
    use precision_mod, only: ip, rp, longint
    use basis_mod, only: norb, nb, spin_off, lmax_basis
+   use logger_mod, only: g_logger
+   use string_mod, only: int2str
    implicit none
 
    !> type for sorting routine
@@ -155,6 +157,7 @@ module math_mod
    public :: correct_d_shell_moments, correct_d_shell_moments_spinor
    public :: extract_hubbard_d_shell_potential, extract_hubbard_d_spinor_potential
    public :: fixed_impurity_atom_carries_uj
+   public :: hermitian_eigensystem
 
 contains
 
@@ -2397,5 +2400,36 @@ contains
          res = -1.0_rp
       end if
    end function angular_parity
+
+   !> @brief Diagonalize a Hermitian matrix.
+   !> @details The routine calls LAPACK zheev on mat. It returns the
+   !>          eigenvalues in eval, ascending order, and the eigenvectors in
+   !>          mat, in place. It raises a fatal error if mat is
+   !>          not square, if eval does not match its dimension, or if zheev
+   !>          reports a nonzero info.
+   !> @param[inout] mat Hermitian matrix on input; eigenvectors on output.
+   !> @param[out] eval Eigenvalues, ascending order.
+   subroutine hermitian_eigensystem(mat, eval)
+      complex(rp), intent(inout) :: mat(:, :)
+      real(rp), intent(out) :: eval(:)
+      complex(rp), allocatable :: work(:)
+      real(rp), allocatable :: rwork(:)
+      integer :: n, lwork, info
+      external :: zheev
+
+      n = size(mat, 1)
+      if (size(mat, 2) /= n .or. size(eval) /= n) then
+         call g_logger%fatal('[math.hermitian_eigensystem]: inconsistent matrix dimensions', &
+                             __FILE__, __LINE__)
+      end if
+      lwork = max(1, 2*n - 1)
+      allocate (work(lwork), rwork(max(1, 3*n - 2)))
+      call zheev('V', 'U', n, mat, n, eval, work, lwork, rwork, info)
+      if (info /= 0) then
+         call g_logger%fatal('[math.hermitian_eigensystem]: zheev failed with info='// &
+                             int2str(info), __FILE__, __LINE__)
+      end if
+      deallocate (work, rwork)
+   end subroutine hermitian_eigensystem
 
 end module math_mod

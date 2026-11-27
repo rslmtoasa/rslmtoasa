@@ -1656,7 +1656,7 @@ contains
          ! Magnon energies = eigenvalues of the real symmetric matrix (Goldstone exact at
          ! Gamma by construction; no ad-hoc sum-rule correction).
          eigvec(:, :) = omega_mat(:, :)
-         call diagonalize_frozen_magnon_matrix(eigvec, eval)
+         call hermitian_eigensystem(eigvec, eval)
          do branch = 1, nactive
             write (newunit_branch, '(3F12.6,1X,I6,1X,ES16.8E3,1X,I6)') q_ss_cart(:, iq), branch, eval(branch), nactive
             do iact = 1, nactive
@@ -1760,38 +1760,6 @@ contains
          e_band = bands_obj%eband
       end associate
    end function frozen_magnon_probe_energy
-
-   !> @brief Diagonalize the real symmetric magnon dynamical matrix.
-   !> @details The routine calls LAPACK zheev on mat. It returns the magnon
-   !>          branch energies in eval, ascending order, and the mode
-   !>          eigenvectors in mat, in place. It raises a fatal error if mat is
-   !>          not square, if eval does not match its dimension, or if zheev
-   !>          reports a nonzero info.
-   !> @param[inout] mat Magnon dynamical matrix on input; eigenvectors (mode
-   !>               amplitudes and phases) on output.
-   !> @param[out] eval Magnon branch energies, ascending order.
-   subroutine diagonalize_frozen_magnon_matrix(mat, eval)
-      complex(rp), intent(inout) :: mat(:, :)
-      real(rp), intent(out) :: eval(:)
-      complex(rp), allocatable :: work(:)
-      real(rp), allocatable :: rwork(:)
-      integer :: n, lwork, info
-      external :: zheev
-
-      n = size(mat, 1)
-      if (size(mat, 2) /= n .or. size(eval) /= n) then
-         call g_logger%fatal('[calculation.diagonalize_frozen_magnon_matrix]: inconsistent matrix dimensions', &
-                             __FILE__, __LINE__)
-      end if
-      lwork = max(1, 2*n - 1)
-      allocate (work(lwork), rwork(max(1, 3*n - 2)))
-      call zheev('V', 'U', n, mat, n, eval, work, lwork, rwork, info)
-      if (info /= 0) then
-         call g_logger%fatal('[calculation.diagonalize_frozen_magnon_matrix]: zheev failed with info='// &
-                             int2str(info), __FILE__, __LINE__)
-      end if
-      deallocate (work, rwork)
-   end subroutine diagonalize_frozen_magnon_matrix
 
    !> @brief Write the metadata header lines for the auto branch-mode output files.
    !> @details The routine writes the sweep configuration (q-file coordinates,
