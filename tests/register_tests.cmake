@@ -475,6 +475,12 @@ if(RUN_UNIT_TESTS)
         "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/ldau/${_rrow}")
   endforeach()
 
+  # --- bdg ---------------------------------------------------------------------------------
+  # The oracle files are regenerated at test time by tests/bdg/oracles/make_references.py
+  # into a scratch copy of the oracle directory (tests/bdg/with_oracles.py).
+  rslmto_add_test(NAME UnitBdg TIER quick LABELS unit bdg
+    COMMAND "${PY}" "${TestDIR}/bdg/with_oracles.py" "${CMAKE_BINARY_DIR}/Testing/bdg/oracles" -- ${CMAKE_COMMAND} -E true)
+
   # --- spin response -----------------------------------------------------------------------
   # The oracle .nml files are regenerated at test time by tests/spin_response/oracles/make_references*.py
   # into a scratch copy of the oracle directory (tests/spin_response/with_oracles.py).
