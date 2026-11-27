@@ -138,12 +138,14 @@ contains
                              __FILE__, __LINE__)
 
       seeds = lat%irec(1:lat%nrec)
-      r_cluster = sqrt(lat%r2)
+      ! Cluster radius: the largest distance of a cluster atom from atom 1 (r2 is the Hamiltonian cutoff, not the cluster)
+      r_cluster = maxval(norm2(lat%cr(:, 1:lat%kk) - spread(lat%cr(:, 1), 2, lat%kk), dim=1))
       do s = 1, size(seeds)
          if (norm2(lat%cr(:, seeds(s)) - lat%cr(:, 1)) + lat%pair_radius > r_cluster + pair_tol) &
             call g_logger%fatal('pair_radius = ' // trim(adjustl(real_str(lat%pair_radius))) // ' of seed atom ' // &
-                                trim(int2str(seeds(s))) // ' reaches the cluster edge (sqrt(r2) = ' // &
-                                trim(adjustl(real_str(r_cluster))) // '); increase r2.', __FILE__, __LINE__)
+                                trim(int2str(seeds(s))) // ' reaches the cluster edge (cluster radius ' // &
+                                trim(adjustl(real_str(r_cluster))) // ' from atom 1); increase rc or reduce pair_radius.', &
+                                __FILE__, __LINE__)
       end do
 
       ! Full list, seed by seed

@@ -330,15 +330,6 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
 
-### `pair_radius` is capped by the Hamiltonian cutoff `r2`, not by the cluster — 2026-11-27
-- **Read:** `source/pair_list.f90` stops when |r_seed - r_1| + pair_radius > sqrt(r2) and tells the user to increase `r2`. `r2` is the
-  hopping range of the Hamiltonian (`docs/source/keywords/lattice_geometry.rst`); the cluster size comes from `rc`.
-- **Measured (bcc Fe exchange deck, `rc = 080`, `r2 = 9`):** `pair_radius = 3.5` stops with "reaches the cluster edge (sqrt(r2) = 3.0)",
-  while the cluster (5984 atoms) reaches about 8.9a and hand-made pair lists out to 5a run (k-space comparison study).
-- **Consequence:** the generated list is limited to sqrt(r2); following the message changes the Hamiltonian. Workaround: hand lists
-  (`njij`/`ijpair`) beyond sqrt(r2). Proposal: compare with the cluster extent (largest |r_k - r_1| over the cluster atoms) instead of
-  sqrt(r2), and drop the advice to increase `r2` (a few lines).
-
 ### Real-space dynamic chi0: wrong-signed Im chi0 below the continuum and a negative tr L at the small-q pole — 2026-11-27
 - **Measured (bcc Fe, `do_chi0`, Chebyshev one-shot, energy mesh, lld = 241, pairs within 5a, dE = 0.8797 mRy):** Im tr chi0(q = 1/12 along
   Gamma-H, omega = 5.3 mRy) = +0.014 1/Ry, where the k-space route (k48, eta = 1e-3 Ry) gives a negative value; with the Goldstone U the RPA
