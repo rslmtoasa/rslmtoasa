@@ -60,7 +60,7 @@ contains
       open(newunit=u,file='rs_tb.kspace.tmp',action='write',status='replace',iostat=ios)
       if (ios /= 0) goto 900
       write(u,'(a)',err=900) '# rs-tb-kspace-v1', 'scope kspace', 'energy_unit Ry', 'overlap_unit dimensionless', &
-         'basis native_spherical', 'orbital_order site_then_spin_then_l_then_m_increasing', 'spin_frame '//trim(frame), &
+         'basis native_spherical', 'orbital_order site_then_spin_then_l_then_m_decreasing', 'spin_frame '//trim(frame), &
          'energy_reference unscaled_unshifted', 'source_commit '//RSLMTO_SOURCE_COMMIT, &
          'k_coordinates fractional_reciprocal', 'reciprocal_mode '//trim(this%reciprocal_mode), &
          'kspace_ham_order '//trim(this%kspace_ham_order), &

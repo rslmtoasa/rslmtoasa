@@ -312,7 +312,7 @@ contains
       write(u,'(a)',err=900) '# rs-tb-meta-v3', 'representation effective', 'scope cluster', &
          'basis native_spherical', 'energy_unit eV', 'length_unit Angstrom', &
          'energy_reference unscaled_unshifted', 'spin_frame global', 'translation column_relative_to_row', &
-         'orbital_order spin_then_l_then_m_increasing', 'flat_index spin_then_site_then_orbital', 'index_base 1', &
+         'orbital_order spin_then_l_then_m_decreasing', 'flat_index spin_then_site_then_orbital', 'index_base 1', &
          'fourier_phase positive_k_dot_column_minus_row', 'legacy_fnv1a32 '//checksum
       write(u,'(a,1x,i0)',err=900) 'n_atoms',meta%sites,'norb_scalar',meta%orbitals, &
          'block_size',meta%block_size,'nsp',meta%nsp
@@ -402,7 +402,8 @@ contains
             case ('energy_reference'); reference = value == 'unscaled_unshifted'
             case ('spin_frame'); frame = value == 'global'
             case ('translation'); convention = value == 'column_relative_to_row'
-            case ('orbital_order'); orbital_order = value == 'spin_then_l_then_m_increasing'
+            ! files written before the rename carry '..._increasing' for the same layout (m descending)
+            case ('orbital_order'); orbital_order = value == 'spin_then_l_then_m_decreasing' .or. value == 'spin_then_l_then_m_increasing'
             case ('flat_index'); flat_index = value == 'spin_then_site_then_orbital'
             case ('index_base'); index_base = value == '1'
             case ('fourier_phase'); fourier_phase = value == 'positive_k_dot_column_minus_row'

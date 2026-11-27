@@ -171,5 +171,7 @@ audit".
 * ``disp_matrix`` (``symbolic_atom.f90``) is in cubic order for l <= 2 and in
   real m order for f; ``calculate_jijk`` converts it for l <= 2 and stops with
   a fatal for an f shell.
-* The metadata strings ``..._l_then_m_increasing`` in the export files name the
-  opposite in-shell order; the files are in the order given above.
+* Export files written before the rename carry ``..._l_then_m_increasing`` in
+  the ``orbital_order`` metadata for the layout given above (m descending); the
+  effective importer accepts both strings, the writers emit
+  ``..._l_then_m_decreasing``.
