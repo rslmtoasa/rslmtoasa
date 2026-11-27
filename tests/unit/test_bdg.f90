@@ -15,9 +15,10 @@ module test_bdg_mod
    real(rp) :: delta_rel, delta_near_tc_rel, chi_rel, delta_imag_abs, nel_abs, moment_abs, normal_abs, spectrum_abs
    logical :: failed = .false.
 
-   !> Diagonal model: H(k_ik) = diag(eps(ik, :)), H(-k_ik) = diag(eps(nk+1-ik, :)).
+   !> Model: H(k_ik) = diag(eps(ik, :)) + h0, H(-k_ik) = diag(eps(nk+1-ik, :)) + h0 (h0 optional, k-independent).
    type, extends(bdg_hamiltonian_source) :: model_source
       real(rp), allocatable :: eps(:, :)
+      complex(rp), allocatable :: h0(:, :) !< optional k-independent matrix added to H(k) and H(-k)
    contains
       procedure :: hk => model_hk
    end type model_source
@@ -36,6 +37,10 @@ contains
          hk(a, a) = this%eps(ik, a)
          hmk(a, a) = this%eps(size(this%eps, 1) + 1 - ik, a)
       end do
+      if (allocated(this%h0)) then
+         hk = hk + this%h0
+         hmk = hmk + this%h0
+      end if
    end subroutine model_hk
 
    subroutine read_tolerances(dir)
@@ -75,8 +80,9 @@ contains
    end subroutine finish
 
    !> One site, norb orbitals; runs bdg_iterate on bands eps(nk, 2 norb). delta holds the seed on input.
-   subroutine solve(eps, norb, mu, kt, kmat, mix, tol, max_iter, delta, chi, nel, niter, dmax)
+   subroutine solve(eps, norb, mu, kt, kmat, mix, tol, max_iter, delta, chi, nel, niter, dmax, h0)
       real(rp), intent(in) :: eps(:, :), mu, kt, kmat(:, :), mix, tol
+      complex(rp), intent(in), optional :: h0(:, :)
       integer, intent(in) :: norb, max_iter
       complex(rp), intent(inout) :: delta(:, :)
       complex(rp), intent(out) :: chi(:, :)
@@ -87,6 +93,7 @@ contains
 
       nk = size(eps, 1)
       src%eps = eps
+      if (present(h0)) src%h0 = h0
       site_of = 1
       do a = 1, 2*norb
          orb_of(a) = mod(a - 1, norb) + 1
@@ -112,7 +119,7 @@ contains
    end subroutine read_o1_band
 
    !> Catches: overall sign of D, f in place of (1 - f) (dmax row), missing (1 - f), wrong k weights, wrong N formula.
-   !> Not caught: the sign of D(dn,up) alone (D = Delta x 1); with spin-diagonal H it only enters a block chi does not read.
+   !> Not caught here: the sign of D(dn,up) alone (D = Delta x 1), which spin-diagonal H hides; see test_bdg_o2x.
    subroutine test_bdg_o1(dir)
       character(len=*), intent(in) :: dir
       character(len=512) :: mesh_rule, basis_rule, band_rule
@@ -235,6 +242,54 @@ contains
       end do
       call finish()
    end subroutine test_bdg_o2
+
+   !> O2 with the field along x: H = eps(k) I - h sigma_x. On-site same-orbital pairing is a spin singlet, invariant under a
+   !> global spin rotation, so Delta, chi, N_up + N_dn equal the O2 (field along z) references and nel(1) = nel(2).
+   !> Catches: the sign of D(dn,up) (D = Delta x 1 instead of Delta x i sigma_y), invisible when H is spin-diagonal.
+   subroutine test_bdg_o2x(dir)
+      character(len=*), intent(in) :: dir
+      character(len=512) :: mesh_rule, basis_rule, band_rule
+      integer :: nk, norb, iu, niter, ic
+      real(rp) :: mu, g, nel(2), dmax, h(2), kt(2), dref(2), cref(2), nu(2), nd(2)
+      real(rp) :: kt_a, h_a, delta_a, chi_a, n_up_a, n_dn_a, kt_b, h_b, delta_b, chi_b, n_up_b, n_dn_b
+      real(rp), allocatable :: e1(:), eps2(:, :)
+      complex(rp) :: delta(1, 1), chi(1, 1), h0(2, 2)
+      character(len=1), parameter :: lab(2) = ['a', 'b']
+      namelist /o2_inputs/ nk, mu, mesh_rule, basis_rule, norb, g, band_rule
+      namelist /o2_reference/ kt_a, h_a, delta_a, chi_a, n_up_a, n_dn_a, kt_b, h_b, delta_b, chi_b, n_up_b, n_dn_b
+
+      call read_tolerances(dir)
+      call read_o1_band(dir, e1, mu, g)
+      open (newunit=iu, file=dir//'/o2_zeeman.nml', status='old', action='read')
+      read (iu, nml=o2_inputs)
+      read (iu, nml=o2_reference)
+      close (iu)
+      kt = [kt_a, kt_b]
+      h = [h_a, h_b]
+      dref = [delta_a, delta_b]
+      cref = [chi_a, chi_b]
+      nu = [n_up_a, n_up_b]
+      nd = [n_dn_a, n_dn_b]
+      allocate (eps2(nk, 2))
+      eps2(:, 1) = e1
+      eps2(:, 2) = e1
+      do ic = 1, 2
+         h0 = (0.0_rp, 0.0_rp)
+         h0(1, 2) = -h(ic)
+         h0(2, 1) = -h(ic)
+         delta = 0.003_rp
+         call solve(eps2, 1, mu, kt(ic), reshape([g], [1, 1]), 1.0_rp, 1.0e-15_rp, max_iter_budget, delta, chi, nel, niter, dmax, h0)
+         write (*, '(a,a,a,i0,a)') 'o2x', lab(ic), ' ', niter, ' iterations, tol = 1.0e-15 mix = 1.0'
+         call report_conv('O2x'//lab(ic), niter, dmax, 1.0e-15_rp)
+         call report('O2x'//lab(ic)//' delta', rel(real(delta(1, 1), rp), dref(ic)), delta_rel)
+         call report('O2x'//lab(ic)//' chi', rel(real(chi(1, 1), rp), cref(ic)), chi_rel)
+         call report('O2x'//lab(ic)//' N_up + N_dn', abs(nel(1) + nel(2) - nu(ic) - nd(ic)), nel_abs)
+         call report('O2x'//lab(ic)//' nel(1)', abs(nel(1) - 0.5_rp*(nu(ic) + nd(ic))), nel_abs)
+         call report('O2x'//lab(ic)//' nel(2)', abs(nel(2) - 0.5_rp*(nu(ic) + nd(ic))), nel_abs)
+         call report('O2x'//lab(ic)//' |Im delta|', abs(aimag(delta(1, 1))), delta_imag_abs)
+      end do
+      call finish()
+   end subroutine test_bdg_o2x
 
    !> Catches: hole block built from -H(k)* instead of -H(-k)* (spectra off by 4e-3 Ry, Delta collapses to 0).
    subroutine test_bdg_o3(dir)
