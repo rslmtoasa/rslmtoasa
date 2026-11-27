@@ -167,8 +167,6 @@ Known mismatches
 Details and measurements are in ``tests/KNOWN_ISSUES.md``, entry "Orbital basis
 audit".
 
-* ``ROTMAT`` (``local_axis``): the orbital block is the conjugate of the
-  rotation in the spherical basis for azimuth different from zero.
 * ACBN0 and SC-U contract the real-harmonic ``Coulomb_mat`` with the
   spherical-basis density matrix.
 * ``paoflow2rs`` takes its file in the spherical basis without a transform.

@@ -2071,13 +2071,13 @@ contains
       SM(2, 2) = DSs(0.5_rp, -0.5_rp, -0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA - 0.5_rp*GAMA))
 
       ! Calculate MAT9 (orbital part) for J = 0, 1, ..., lmax_basis
-      ! Basis mismatch for azimuth /= 0 (conj(D) in the spherical basis; tests/KNOWN_ISSUES.md, Orbital basis audit)
+      ! The shell basis is (-1)^m Y_lm with m descending, so the block is conj(D^l) filled in ascending M
       do J = 0, lmax_basis
          S = J*J + 1 + J
          do M = -J, J
             do Mprime = -J, J
                MAT9(S + M, S + Mprime) = DSs(J*1.0d0, M*1.0d0, Mprime*1.0d0, BETA) &
-                                        *exp(-IM*(M*ALFA + Mprime*GAMA))
+                                        *exp(IM*(M*ALFA + Mprime*GAMA))
             end do
          end do
       end do
