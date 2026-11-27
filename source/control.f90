@@ -226,6 +226,7 @@ module control_mod
       !>
       !> Allowed values: 'charge', 'spin' and 'orbital' (plus accumulation and torque variants for linear_out). Default: 'charge'
       character(len=30) :: linear_in, linear_out
+      real(rp) :: projection_bond_tol = 0.0_rp
       character(len=16) :: response_projection = 'seed'
 
       !> Calculation type of the conductivity tensor
@@ -387,6 +388,7 @@ contains
       dipole_mix = this%dipole_mix
       sym_term = this%sym_term
       llsp = this%llsp
+      projection_bond_tol = this%projection_bond_tol
       response_projection = this%response_projection
       lld = this%lld
       idos = this%idos
@@ -495,6 +497,9 @@ contains
       this%linear_in = linear_in(:len(this%linear_in))
       if (response_projection /= 'seed' .and. response_projection /= 'local') &
          call g_logger%fatal('response_projection must be seed or local', __FILE__, __LINE__)
+      if (.not. (projection_bond_tol >= 0.0_rp .and. projection_bond_tol <= huge(1.0_rp))) &
+         call g_logger%fatal('projection_bond_tol must be finite and nonnegative', __FILE__, __LINE__)
+      this%projection_bond_tol = projection_bond_tol
       this%response_projection = response_projection
       this%linear_out = linear_out(:len(this%linear_out))
       this%cond_calctype = cond_calctype(:len(this%cond_calctype))
@@ -635,6 +640,7 @@ contains
       this%random_vec_num = 1
       this%cond_ll = 200
       this%linear_in = 'charge'
+      this%projection_bond_tol = 0.0_rp
       this%response_projection = 'seed'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
@@ -672,6 +678,7 @@ contains
 
       include 'include_codes/namelists/control.f90'
 
+      projection_bond_tol = this%projection_bond_tol
       response_projection = this%response_projection
       lld = this%lld
       llsp = this%llsp
@@ -782,6 +789,7 @@ contains
       call nml%add('sym_term', this%sym_term)
       call nml%add('cpp_plugin', this%cpp_plugin)
       call nml%add('gpu_plugin', this%gpu_plugin)
+      call nml%add('projection_bond_tol', this%projection_bond_tol)
       call nml%add('response_projection', this%response_projection)
       call nml%add('gpu_backend', this%gpu_backend)
       call nml%add('gpu_precision', this%gpu_precision)

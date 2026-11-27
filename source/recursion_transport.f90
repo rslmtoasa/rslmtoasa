@@ -965,13 +965,15 @@ contains
       integer :: site, other, slot, reverse, k, t
       complex(rp) :: forward(nb, nb), backward(nb, nb)
       real(rp) :: max_residual
+      logical :: used_bond_tol
+      used_bond_tol = .false.
       max_residual = 0.0_rp
       do site = 1, this%lattice%kk
          t = this%lattice%iz(site)
-         call check_pair(this%hamiltonian%lsham(:, :, t), this%hamiltonian%lsham(:, :, t), site, site)
+         call check_pair(this%hamiltonian%lsham(:, :, t), this%hamiltonian%lsham(:, :, t), site, site, .false.)
          if (this%hamiltonian%hoh) then
-            call check_pair(this%hamiltonian%obarm(:, :, t), this%hamiltonian%obarm(:, :, t), site, site)
-            call check_pair(this%hamiltonian%enim(:, :, t), this%hamiltonian%enim(:, :, t), site, site)
+            call check_pair(this%hamiltonian%obarm(:, :, t), this%hamiltonian%obarm(:, :, t), site, site, .false.)
+            call check_pair(this%hamiltonian%enim(:, :, t), this%hamiltonian%enim(:, :, t), site, site, .false.)
          end if
          do slot = 1, this%lattice%nn(site, 1)
             other = site
@@ -990,9 +992,11 @@ contains
             call get_block(site, slot, forward)
             backward = czero
             if (reverse > 0) call get_block(other, reverse, backward)
-            call check_pair(forward, backward, site, other)
+            call check_pair(forward, backward, site, other, slot > 1 .and. reverse > 0)
          end do
       end do
+      if (used_bond_tol) call g_logger%warning('Stage 1 accepted offsite nonreciprocity with projection_bond_tol (Ry) = '// &
+         fmt('es12.4',this%control%projection_bond_tol), __FILE__, __LINE__)
       call g_logger%info('Stage 1 max directed block adjoint residual (Ry for h) = '// &
                          fmt('es12.4',max_residual), __FILE__, __LINE__)
    contains
@@ -1005,14 +1009,19 @@ contains
             block = this%hamiltonian%ee(:, :, m, this%lattice%iz(i))
          end if
       end subroutine get_block
-      subroutine check_pair(x, y, i, j)
+      subroutine check_pair(x, y, i, j, paired_bond)
          complex(rp), intent(in) :: x(:, :), y(:, :)
          integer, intent(in) :: i, j
+         logical, intent(in) :: paired_bond
          real(rp) :: residual
          residual = maxval(abs(x - conjg(transpose(y))))
          max_residual = max(max_residual, residual)
-         if (.not. (residual <= 1.e-11_rp*max(1.0_rp, maxval(abs(x)), maxval(abs(y))))) &
-            call g_logger%fatal('Stage 1 requires Hermitian transport: sites '//int2str(i)//', '//int2str(j)// &
+         if (residual <= 1.e-11_rp*max(1.0_rp, maxval(abs(x)), maxval(abs(y)))) return
+         if (paired_bond .and. i /= j .and. residual <= this%control%projection_bond_tol) then
+            used_bond_tol = .true.
+            return
+         end if
+         call g_logger%fatal('Stage 1 requires Hermitian transport: sites '//int2str(i)//', '//int2str(j)// &
                                 ', max block residual = '//fmt('es12.4',residual), __FILE__, __LINE__)
       end subroutine check_pair
    end subroutine check_projection_hamiltonian
