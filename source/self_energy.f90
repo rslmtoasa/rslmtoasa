@@ -105,20 +105,23 @@ contains
    end subroutine read_sigma
 
    !> G_ii(z = fermi + zoff) of every recursion atom; moments by the Chebyshev recurrence in Kt, log-scaled.
+   !> With gpu_plugin the moments of all z of one atom come from one batched device run.
    subroutine compute_gloc(this, rec, fermi)
       class(self_energy), intent(inout) :: this
       class(recursion), intent(inout) :: rec
       real(rp), intent(in) :: fermi
-      real(rp) :: emin, emax, a, rho_s, rho_z, r, tail, m, lscale, x
-      real(rp), allocatable :: logscale(:)
-      complex(rp) :: b, w, z
-      complex(rp), allocatable :: dmat(:, :, :), mu(:, :, :), prev(:, :, :), cur(:, :, :), nxt(:, :, :), tmp(:, :, :), &
-                                  work(:, :, :, :)
+      real(rp) :: emin, emax, rho_s, rho_z, tail, m, lscale, x
+      real(rp), allocatable :: logscale(:), az(:), rz(:), ag(:), bg(:), lsg(:, :)
+      complex(rp) :: b, z
+      complex(rp), allocatable :: bz(:), wz(:), dz(:, :, :, :), dg(:, :, :, :), mu(:, :, :), mug(:, :, :, :), &
+                                  prev(:, :, :), cur(:, :, :), nxt(:, :, :), tmp(:, :, :), work(:, :, :, :)
+      integer, allocatable :: nmz(:), idx(:)
+      logical :: on_gpu
 #ifdef USE_MPI
       integer, allocatable :: nconv(:, :)
       integer :: ierr
 #endif
-      integer :: i, j, iz, t, k, n, nmom, kk, lld, nrec
+      integer :: i, j, iz, t, k, n, g, kk, lld, nrec
 
       if (this%ntype /= rec%lattice%ntype) &
          call g_logger%fatal('sigma.dat has '//int2str(this%ntype)//' atom types but the run has '// &
@@ -131,35 +134,67 @@ contains
       allocate (this%gloc(nb, nb, nrec, this%nz), source=(0.0_rp, 0.0_rp))
       allocate (this%converged(nrec, this%nz), source=.false.)
       allocate (this%order(nrec, this%nz), source=0)
-      allocate (dmat(nb, nb, this%ntype), prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), tmp(nb, nb, kk), &
-                work(nb, nb, kk, 3), logscale(lld))
+      allocate (az(this%nz), rz(this%nz), bz(this%nz), wz(this%nz), nmz(this%nz), dz(nb, nb, this%ntype, this%nz))
+
+      on_gpu = rec%gpu_plugin_ready('self_energy%compute_gloc()', allow_hoh=.true.)
+      if (on_gpu) then
+         call rec%gpu_plugin_upload_hamiltonian()
+         call g_logger%info('self-energy on GPU: '//real2str(real(merge(7, 4, rec%hamiltonian%hoh)*merge(16, 8, &
+                            rec%gpu_precision_code() == 1), rp)*real(nb, rp)**2*real(kk, rp)/1.0e6_rp, '(f10.1)')// &
+                            ' MB device memory per energy', __FILE__, __LINE__)
+      else
+         allocate (prev(nb, nb, kk), cur(nb, nb, kk), nxt(nb, nb, kk), tmp(nb, nb, kk), work(nb, nb, kk, 3), logscale(lld))
+      end if
 
       do i = start_atom, end_atom
          j = rec%lattice%irec(i)
+         nmz(:) = 0
          do iz = 1, this%nz
             z = cmplx(fermi, 0.0_rp, rp) + this%zoff(iz)
-            call cheb_sigma_window(emin, emax, this%sig(:, :, :, iz), a, b, rho_s)
-            call cheb_sigma_w(z, a, b, w, rho_z)
-            r = rho_s/rho_z
-            if (r >= 1.0_rp) then
+            call cheb_sigma_window(emin, emax, this%sig(:, :, :, iz), az(iz), b, rho_s)
+            bz(iz) = b
+            call cheb_sigma_w(z, az(iz), b, wz(iz), rho_z)
+            rz(iz) = rho_s/rho_z
+            if (rz(iz) >= 1.0_rp) then
                call g_logger%warning('self-energy: z offset '//real2str(real(this%zoff(iz), rp), '(f9.4)')//' '// &
                                      real2str(aimag(this%zoff(iz)), '(f9.4)')//' Ry is inside the ellipse of H + Sigma (atom '// &
                                      int2str(j)//'); not computed', __FILE__, __LINE__)
                cycle
             end if
-            x = log(this%tol*(1.0_rp - r)/r)/log(r)
-            nmom = min(lld, max(2, ceiling(min(real(lld, rp), x)) + 1))
+            x = log(this%tol*(1.0_rp - rz(iz))/rz(iz))/log(rz(iz))
+            nmz(iz) = min(lld, max(2, ceiling(min(real(lld, rp), x)) + 1))
 
             ! On-site part of Kt: (Sigma_t - i Im b)/a; the Hamiltonian part is (H - Re b)/a.
             do t = 1, this%ntype
-               dmat(:, :, t) = this%sig(:, :, t, iz)
+               dz(:, :, t, iz) = this%sig(:, :, t, iz)
                do k = 1, nb
-                  dmat(k, k, t) = dmat(k, k, t) - cmplx(0.0_rp, aimag(b), rp)
+                  dz(k, k, t, iz) = dz(k, k, t, iz) - cmplx(0.0_rp, aimag(b), rp)
                end do
             end do
-            dmat = dmat/a
+            dz(:, :, :, iz) = dz(:, :, :, iz)/az(iz)
+         end do
 
-            allocate (mu(nb, nb, nmom))
+         if (on_gpu) then
+            idx = pack([(iz, iz=1, this%nz)], nmz > 0)
+            if (size(idx) == 0) cycle
+            ag = az(idx)
+            bg = real(bz(idx), rp)
+            dg = dz(:, :, :, idx)
+            allocate (mug(nb, nb, maxval(nmz), size(idx)), lsg(maxval(nmz), size(idx)))
+            call rec%gpu_backend%chebyshev_sigma_batch(j, ag, bg, dg, mug, lsg)
+            do g = 1, size(idx)
+               iz = idx(g)
+               call cheb_sigma_sum(mug(:, :, 1:nmz(iz), g), lsg(1:nmz(iz), g), wz(iz), az(iz), rz(iz), &
+                                   this%gloc(:, :, i, iz), tail)
+               call record(iz, tail)
+            end do
+            deallocate (mug, lsg)
+            cycle
+         end if
+
+         do iz = 1, this%nz
+            if (nmz(iz) == 0) cycle
+            allocate (mu(nb, nb, nmz(iz)))
             prev = (0.0_rp, 0.0_rp)
             do k = 1, nb
                prev(k, k, j) = (1.0_rp, 0.0_rp)
@@ -169,17 +204,13 @@ contains
             mu(:, :, 1) = prev(:, :, j)
             logscale(1) = 0.0_rp
             lscale = 0.0_rp
-            do n = 2, nmom
+            do n = 2, nmz(iz)
                call apply_kt(n == 2, prev, cur, nxt)
                mu(:, :, n) = cur(:, :, j)
                logscale(n) = lscale
             end do
-            call cheb_sigma_sum(mu, logscale(1:nmom), w, a, r, this%gloc(:, :, i, iz), tail)
-            this%order(i, iz) = nmom
-            this%converged(i, iz) = tail <= this%tol
-            call g_logger%info('self-energy atom '//int2str(j)//' z offset '//real2str(real(this%zoff(iz), rp), '(f9.4)')// &
-                               ' '//real2str(aimag(this%zoff(iz)), '(f9.4)')//' Ry: moments '//int2str(nmom)// &
-                               ', tail bound '//real2str(tail, '(es10.2)'), __FILE__, __LINE__)
+            call cheb_sigma_sum(mu, logscale(1:nmz(iz)), wz(iz), az(iz), rz(iz), this%gloc(:, :, i, iz), tail)
+            call record(iz, tail)
             deallocate (mu)
          end do
       end do
@@ -195,20 +226,31 @@ contains
 
    contains
 
+      !> Store order and convergence of (atom i, energy iz) and log them.
+      subroutine record(iz_, tail_)
+         integer, intent(in) :: iz_
+         real(rp), intent(in) :: tail_
+         this%order(i, iz_) = nmz(iz_)
+         this%converged(i, iz_) = tail_ <= this%tol
+         call g_logger%info('self-energy atom '//int2str(j)//' z offset '//real2str(real(this%zoff(iz_), rp), '(f9.4)')// &
+                            ' '//real2str(aimag(this%zoff(iz_)), '(f9.4)')//' Ry: moments '//int2str(nmz(iz_))// &
+                            ', tail bound '//real2str(tail_, '(es10.2)'), __FILE__, __LINE__)
+      end subroutine record
+
       !> nxt = Kt cur (first step: cur = Kt prev), later 2 Kt cur - prev, then shift prev <- cur, cur <- nxt.
       !> The common log scale of (prev, cur) grows when the new vector exceeds 1e50.
       subroutine apply_kt(first, p, c, xn)
          logical, intent(in) :: first
          complex(rp), intent(inout) :: p(:, :, :), c(:, :, :), xn(:, :, :)
          if (first) then
-            call rec%onsite_vec_matmul(dmat, p, tmp)
-            call rec%kubo_ham_vec_matmul(p, c, work, a=a, b=real(b, rp))
+            call rec%onsite_vec_matmul(dz(:, :, :, iz), p, tmp)
+            call rec%kubo_ham_vec_matmul(p, c, work, a=az(iz), b=real(bz(iz), rp))
             rec%izero(:) = rec%idum(:)
             c = c + tmp
             return
          end if
-         call rec%onsite_vec_matmul(dmat, c, tmp)
-         call rec%kubo_ham_vec_matmul(c, xn, work, a=a, b=real(b, rp))
+         call rec%onsite_vec_matmul(dz(:, :, :, iz), c, tmp)
+         call rec%kubo_ham_vec_matmul(c, xn, work, a=az(iz), b=real(bz(iz), rp))
          rec%izero(:) = rec%idum(:)
          xn = 2.0_rp*(xn + tmp) - p
          m = maxval(abs(xn))

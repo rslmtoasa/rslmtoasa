@@ -210,6 +210,17 @@ int rsrec_chebyshev_moments_targets(rsrec_ctx *ctx, const void *psi0,
                                     int ntarget, const int *targets, int nmom,
                                     double a, double b, void *mu_out);
 
+/* Batched Chebyshev moments of Kt = (H - b_re[z])/a[z] + D(:,:,:,z) from the
+ * identity block on the 1-based seed site, all nz energies in one run.
+ *   dmat         : (nb, nb, ntype, nz) complex128 on-site blocks
+ *   mu_out       : (nb, nb, nmom_max, nz) seed-block mantissas
+ *   logscale_out : (nmom_max, nz) log of the common scale of each order
+ * Every z runs nmom_max orders. Block-ELL path only (hoh included).         */
+int rsrec_chebyshev_sigma_batch(rsrec_ctx *ctx, int seed, int nz, int nmom_max,
+                                const double *a, const double *b_re,
+                                const void *dmat, void *mu_out,
+                                double *logscale_out);
+
 /* Block Lanczos (Haydock) recursion, mirrors crecal_b/hop_b.
  *   psi0   : (nb, nb, kk) starting block state
  *   lld    : recursion steps (control%lld)

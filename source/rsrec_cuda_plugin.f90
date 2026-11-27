@@ -43,6 +43,7 @@ module rsrec_cuda_plugin_mod
       procedure :: block_gf_eta
       procedure :: chebyshev_moments
       procedure :: chebyshev_moments_targets
+      procedure :: chebyshev_sigma_batch
       procedure :: orbital_moments
       procedure :: block_lanczos
       procedure :: block_lanczos_targets
@@ -122,6 +123,14 @@ module rsrec_cuda_plugin_mod
          real(c_double), value :: a, b
          integer(c_int) :: rsrec_cuda_chebyshev_moments_targets
       end function rsrec_cuda_chebyshev_moments_targets
+
+      function rsrec_cuda_chebyshev_sigma_batch(ctx, seed, nz, nmom_max, a, b_re, dmat, mu_out, logscale_out) &
+         bind(C, name='rsrec_cuda_chebyshev_sigma_batch')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, a, b_re, dmat, mu_out, logscale_out
+         integer(c_int), value :: seed, nz, nmom_max
+         integer(c_int) :: rsrec_cuda_chebyshev_sigma_batch
+      end function rsrec_cuda_chebyshev_sigma_batch
 
       function rsrec_cuda_block_lanczos_targets(ctx, psi0, lld, ntarget, targets, a_b, b2_b, slices, prec) &
          bind(C, name='rsrec_cuda_block_lanczos_targets')
@@ -573,6 +582,23 @@ contains
       call check_status(status, 'rsrec_cuda_chebyshev_moments_targets')
 #endif
    end subroutine chebyshev_moments_targets
+
+   !> Batched self-energy moments from the identity block on seed (1-based) for size(a) energies:
+   !> Kt = (H - b_re)/a + dmat per energy; mu_out (nb, nb, nmom_max, nz) mantissas, logscale (nmom_max, nz).
+   subroutine chebyshev_sigma_batch(this, seed, a, b_re, dmat, mu_out, logscale)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      integer, intent(in) :: seed
+      real(rp), target, contiguous, intent(in) :: a(:), b_re(:)
+      complex(rp), target, contiguous, intent(in) :: dmat(:, :, :, :)
+      complex(rp), target, contiguous, intent(out) :: mu_out(:, :, :, :)
+      real(rp), target, contiguous, intent(out) :: logscale(:, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_chebyshev_sigma_batch(this%ctx, int(seed, c_int), int(size(a), c_int), &
+         int(size(logscale, 1), c_int), c_loc(a), c_loc(b_re), c_loc(dmat), c_loc(mu_out), c_loc(logscale))
+      call check_status(status, 'rsrec_cuda_chebyshev_sigma_batch')
+#endif
+   end subroutine chebyshev_sigma_batch
 
    subroutine block_lanczos(this, psi0, lld, a_b, b2_b, prec)
       class(rsrec_cuda_backend), intent(inout) :: this
