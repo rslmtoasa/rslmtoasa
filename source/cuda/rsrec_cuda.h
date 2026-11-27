@@ -67,7 +67,8 @@ int rsrec_cuda_chebyshev_moments_targets(rsrec_cuda_ctx *ctx, const void *psi0,
                                          int nmom, double a, double b,
                                          void *mu_out);
 int rsrec_cuda_chebyshev_sigma_batch(rsrec_cuda_ctx *ctx, int seed, int nz,
-                                     int nmom_max, const double *a,
+                                     int nmom_max, const int *nmom,
+                                     const double *a,
                                      const double *b_re, const void *dmat,
                                      void *mu_out, double *logscale_out);
 int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0, int lld,

@@ -2135,7 +2135,7 @@ __global__ void k_seed_identity(int nb, size_t ld, int ncol, int seed, CT *v) {
 
 template <class CT, class RT>
 static int cheb_sigma_engine(rsrec_ctx *c, int seed, int nz, int nm,
-                             const double *a_h, const double *bre_h,
+                             const int *nmom_h, const double *a_h, const double *bre_h,
                              const cplx *d_h, cplx *mu_h, double *logs_h,
                              const CT *bt, const CT *bh,
                              const CT *h_bare = nullptr,
@@ -2183,7 +2183,7 @@ static int cheb_sigma_engine(rsrec_ctx *c, int seed, int nz, int nm,
     const int tpb = 256;
     const int gx = (int)std::min<size_t>((ng + tpb - 1) / tpb, 1024);
     const int cs = std::max(1, 1024 / nb);
-    int nzk = 0, ncol = 0;
+    int nact = 0, ncol = 0;                       /* active groups, columns */
 
     auto hop = [&](const CT *x1, const CT *x0, CT *y, RT al, RT be) -> int {
         if (do_hoh) {
@@ -2205,56 +2205,79 @@ static int cheb_sigma_engine(rsrec_ctx *c, int seed, int nz, int nm,
     /* order m: optional per-group rescale of (next, cur), then record */
     auto record = [&](CT *next, CT *cur, size_t m, bool check) -> int {
         if (check) {
-            k_group_absmax<CT><<<dim3(gx, nzk), tpb>>>(ng, next, dgmax);
-            k_group_rescale<CT><<<dim3(gx, nzk), tpb>>>(ng, dgmax, thr, next, cur);
+            k_group_absmax<CT><<<dim3(gx, nact), tpb>>>(ng, next, dgmax);
+            k_group_rescale<CT><<<dim3(gx, nact), tpb>>>(ng, dgmax, thr, next, cur);
         }
-        k_group_log<<<(nzk + tpb - 1) / tpb, tpb>>>(nzk, (size_t)nm, m,
+        k_group_log<<<(nact + tpb - 1) / tpb, tpb>>>(nact, (size_t)nm, m,
                                                      check ? thr : HUGE_VAL,
                                                      dgmax, dlsc, dlogs);
-        k_gather_seed<CT><<<(int)((bb * nzk + tpb - 1) / tpb), tpb>>>(
-            nb, ld, nzk, (size_t)nm, m, seed - 1, next, dmu);
+        k_gather_seed<CT><<<(int)((bb * nact + tpb - 1) / tpb), tpb>>>(
+            nb, ld, nact, (size_t)nm, m, seed - 1, next, dmu);
         CUCHK(cudaGetLastError());
         return 0;
     };
 
+    /* Groups sorted by decreasing order count: at order m the groups with
+     * nmom > m are a leading block of columns, and only those are updated.  */
+    std::vector<int> perm(nz);
+    for (int z = 0; z < nz; ++z) perm[z] = z;
+    std::stable_sort(perm.begin(), perm.end(),
+                     [&](int x, int y) { return nmom_h[x] > nmom_h[y]; });
     std::vector<CT> hbuf(bb * std::max(nt, nm) * nzc);
+    std::vector<double> hlogs((size_t)nm * nzc);
     std::vector<RT> hinva(nzc), hbre(nzc);
     int err = 0;
     for (int z0 = 0; z0 < nz && !err; z0 += nzc) {
-        nzk = std::min(nzc, nz - z0);
-        ncol = nb * nzk;
-        const cplx *dz = d_h + bb * nt * z0;
-        for (size_t i = 0; i < bb * nt * nzk; ++i) {
-            hbuf[i].x = (RT)dz[i].real();
-            hbuf[i].y = (RT)dz[i].imag();
-        }
+        const int nzk = std::min(nzc, nz - z0);
+        const int *pk = perm.data() + z0;
+        auto activate = [&](int m) {
+            while (nact > 0 && nmom_h[pk[nact - 1]] <= m) --nact;
+            ncol = nb * nact;
+        };
         for (int g = 0; g < nzk; ++g) {
-            hinva[g] = (RT)(1.0 / a_h[z0 + g]);
-            hbre[g] = (RT)bre_h[z0 + g];
+            const cplx *dz = d_h + bb * nt * pk[g];
+            for (size_t i = 0; i < bb * nt; ++i) {
+                hbuf[bb * nt * g + i].x = (RT)dz[i].real();
+                hbuf[bb * nt * g + i].y = (RT)dz[i].imag();
+            }
+            hinva[g] = (RT)(1.0 / a_h[pk[g]]);
+            hbre[g] = (RT)bre_h[pk[g]];
         }
         CUCHK(cudaMemcpy(dD, hbuf.data(), bb * nt * nzk * sizeof(CT), cudaMemcpyHostToDevice));
         CUCHK(cudaMemcpy(dinva, hinva.data(), nzk * sizeof(RT), cudaMemcpyHostToDevice));
         CUCHK(cudaMemcpy(dbre, hbre.data(), nzk * sizeof(RT), cudaMemcpyHostToDevice));
         CUCHK(cudaMemset(p0, 0, ng * nzk * sizeof(CT)));
+        CUCHK(cudaMemset(dmu, 0, bb * nm * nzk * sizeof(CT)));
+        CUCHK(cudaMemset(dlogs, 0, (size_t)nm * nzk * sizeof(double)));
         CUCHK(cudaMemset(dlsc, 0, nzk * sizeof(double)));
         CUCHK(cudaMemset(dgmax, 0, nzk * sizeof(unsigned long long)));
+        nact = nzk;
+        ncol = nb * nact;
         k_seed_identity<CT><<<(ncol + tpb - 1) / tpb, tpb>>>(nb, ld, ncol, seed - 1, p0);
         CUCHK(cudaGetLastError());
 
         err = record(p0, nullptr, 0, false);
-        if (!err && nm > 1) err = hop(p0, nullptr, p1, (RT)1, (RT)0);
-        if (!err && nm > 1) err = record(p1, nullptr, 1, false);
-        for (int m = 2; m < nm && !err; ++m) {
+        activate(1);
+        if (!err && nact > 0) err = hop(p0, nullptr, p1, (RT)1, (RT)0);
+        if (!err && nact > 0) err = record(p1, nullptr, 1, false);
+        for (int m = 2; !err; ++m) {
+            activate(m);
+            if (nact == 0) break;
             err = hop(p1, p0, p2, (RT)2, (RT)-1);
             if (!err) err = record(p2, p1, (size_t)m, true);
             CT *t = p0; p0 = p1; p1 = p2; p2 = t;
         }
         if (err) break;
         CUCHK(cudaMemcpy(hbuf.data(), dmu, bb * nm * nzk * sizeof(CT), cudaMemcpyDeviceToHost));
-        CUCHK(cudaMemcpy(logs_h + (size_t)nm * z0, dlogs, (size_t)nm * nzk * sizeof(double),
+        CUCHK(cudaMemcpy(hlogs.data(), dlogs, (size_t)nm * nzk * sizeof(double),
                          cudaMemcpyDeviceToHost));
-        cplx *mz = mu_h + bb * nm * z0;
-        for (size_t i = 0; i < bb * nm * nzk; ++i) mz[i] = cplx(hbuf[i].x, hbuf[i].y);
+        for (int g = 0; g < nzk; ++g) {
+            cplx *mz = mu_h + bb * nm * pk[g];
+            for (size_t i = 0; i < bb * nm; ++i)
+                mz[i] = cplx(hbuf[bb * nm * g + i].x, hbuf[bb * nm * g + i].y);
+            std::copy(hlogs.begin() + (size_t)nm * g, hlogs.begin() + (size_t)nm * (g + 1),
+                      logs_h + (size_t)nm * pk[g]);
+        }
     }
     cudaFree(p0); cudaFree(p1); cudaFree(p2); cudaFree(u);
     if (t_hoh) cudaFree(t_hoh);
@@ -2268,8 +2291,8 @@ static int cheb_sigma_engine(rsrec_ctx *c, int seed, int nz, int nm,
 /* Batched self-energy Chebyshev moments for one 1-based seed site; see
  * rsrec.h. Block-ELL path only (hoh included); precision from set_precision. */
 extern "C" int rsrec_chebyshev_sigma_batch(rsrec_ctx *c, int seed, int nz,
-                                           int nmom_max, const double *a,
-                                           const double *b_re,
+                                           int nmom_max, const int *nmom,
+                                           const double *a, const double *b_re,
                                            const void *dmat, void *mu_out,
                                            double *logscale_out) {
     if (!c->have_h) FAIL("chebyshev_sigma_batch: Hamiltonian not set");
@@ -2279,28 +2302,31 @@ extern "C" int rsrec_chebyshev_sigma_batch(rsrec_ctx *c, int seed, int nz,
         FAIL("chebyshev_sigma_batch: seed site out of range");
     if (c->use_struct && !c->have_hoh)
         FAIL("chebyshev_sigma_batch: structured backend not supported");
+    for (int z = 0; z < nz; ++z)
+        if (nmom[z] < 1 || nmom[z] > nmom_max)
+            FAIL("chebyshev_sigma_batch: nmom must lie in [1, nmom_max]");
     const cplx *d = (const cplx *)dmat;
     cplx *mu = (cplx *)mu_out;
     if (c->have_hoh) {
         if (c->cheb_prec == 0) {
             if (ensure_f32_hoh(c)) return 1;
             return cheb_sigma_engine<fc, float>(
-                c, seed, nz, nmom_max, a, b_re, d, mu, logscale_out,
+                c, seed, nz, nmom_max, nmom, a, b_re, d, mu, logscale_out,
                 c->f_ee_bare, c->f_hall_bare, c->f_ee_bare, c->f_hall_bare,
                 c->f_eeo, c->f_hallo, c->f_hons);
         }
         return cheb_sigma_engine<zc, double>(
-            c, seed, nz, nmom_max, a, b_re, d, mu, logscale_out, c->d_ee_bare,
+            c, seed, nz, nmom_max, nmom, a, b_re, d, mu, logscale_out, c->d_ee_bare,
             c->d_hall_bare, c->d_ee_bare, c->d_hall_bare, c->d_eeo,
             c->d_hallo, c->d_hons);
     }
     if (c->cheb_prec == 0) {
         if (ensure_f32_ham(c, 1.0, 0.0)) return 1;
-        return cheb_sigma_engine<fc, float>(c, seed, nz, nmom_max, a, b_re, d,
+        return cheb_sigma_engine<fc, float>(c, seed, nz, nmom_max, nmom, a, b_re, d,
                                             mu, logscale_out, c->f_ee,
                                             c->f_hall);
     }
-    return cheb_sigma_engine<zc, double>(c, seed, nz, nmom_max, a, b_re, d, mu,
+    return cheb_sigma_engine<zc, double>(c, seed, nz, nmom_max, nmom, a, b_re, d, mu,
                                          logscale_out, c->d_ee, c->d_hall);
 }
 

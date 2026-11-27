@@ -115,7 +115,7 @@ contains
       complex(rp) :: b, z
       complex(rp), allocatable :: bz(:), wz(:), dz(:, :, :, :), dg(:, :, :, :), mu(:, :, :), mug(:, :, :, :), &
                                   prev(:, :, :), cur(:, :, :), nxt(:, :, :), tmp(:, :, :), work(:, :, :, :)
-      integer, allocatable :: nmz(:), idx(:)
+      integer, allocatable :: nmz(:), idx(:), ng(:)
       logical :: on_gpu
 #ifdef USE_MPI
       integer, allocatable :: nconv(:, :)
@@ -180,8 +180,9 @@ contains
             ag = az(idx)
             bg = real(bz(idx), rp)
             dg = dz(:, :, :, idx)
+            ng = nmz(idx)
             allocate (mug(nb, nb, maxval(nmz), size(idx)), lsg(maxval(nmz), size(idx)))
-            call rec%gpu_backend%chebyshev_sigma_batch(j, ag, bg, dg, mug, lsg)
+            call rec%gpu_backend%chebyshev_sigma_batch(j, ng, ag, bg, dg, mug, lsg)
             do g = 1, size(idx)
                iz = idx(g)
                call cheb_sigma_sum(mug(:, :, 1:nmz(iz), g), lsg(1:nmz(iz), g), wz(iz), az(iz), rz(iz), &
