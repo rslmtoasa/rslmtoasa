@@ -1,0 +1,14 @@
+! Tolerances for the Stage 1 BdG kernel tests. Developer-owned; tests read them
+! from here and must not hard-code their own. Draft values: the developer sets the final ones.
+! Relative unless the name ends in _abs. Generator self-check value in brackets.
+! Tests compare SIGNED Delta and chi (real part; imaginary part against delta_imag_abs).
+&bdg_tolerances
+  delta_rel        = 1.0e-10   ! O1 t0/t05, O1b, O2, O3, O4 Delta vs reference [<1e-15]
+  delta_near_tc_rel = 1.0e-8   ! O1 t09 (0.9 Tc): slow fixed point, fixed-point rate 0.954
+  chi_rel          = 1.0e-10   ! chi_iL vs reference [<2e-16]
+  delta_imag_abs   = 1.0e-14   ! |Im Delta| (Ry): every model stays real with a real seed
+  nel_abs          = 1.0e-10   ! electron count per site, and n_up, n_dn (O2, O3) [<5e-16]
+  moment_abs       = 1.0e-12   ! O2a: n_up - n_dn = 0 exactly at kT = 0, h < Delta0 [1e-16]
+  normal_abs       = 1.0e-10   ! O1 t11 (1.1 Tc): |Delta| (Ry) after the iteration budget
+  spectrum_abs     = 1.0e-12   ! O3 sorted BdG eigenvalues at delta_fixed (Ry) [<6e-17]
+/
