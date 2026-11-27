@@ -2297,43 +2297,12 @@ contains
       end if
    end function tabulated_slater_integrals
 
-   ! --------------------------------------------------------------------------------------
-   !> Calculates a_k(m,m’,m’’,m’’’) for LDA+U(+J) matrix elements.
-   ! --------------------------------------------------------------------------------------
-   function a_k(k, l, m1, m2, m3, m4) result(res)
-      implicit none
-      integer, intent(in) :: k, l, m1, m2, m3, m4
-      integer :: q
-      real(rp) :: res
-
-      res = 0.0_rp
-      do q = -k, k
-         res = res + (4.0_rp*pi/(2.0_rp*real(k, rp) + 1.0_rp))* &
-            real(realgaunt(l, k, l, m1, q, m2), rp)*real(realgaunt(l, k, l, m3, q, m4), rp)
-      end do
-   end function a_k
-
-   function Coulomb_mat(l, m1, m3, m2, m4, f0, f2, f4, f6) result(res)
-      implicit none
-      integer, intent(in) :: l, m1, m3, m2, m4
-      real(rp), intent(in) :: f0, f2, f4, f6
-      real(rp) :: res
-
-      res = 0.0_rp
-      res = res + a_k(0, l, m1, m2, m3, m4)*f0 &
-                + a_k(2, l, m1, m2, m3, m4)*f2 &
-                + a_k(4, l, m1, m2, m3, m4)*f4 &
-                + a_k(6, l, m1, m2, m3, m4)*f6
-   end function Coulomb_mat
-
    !> Coulomb tensor in the normalized complex spherical-harmonic basis.
    !> The pair-pair convention is
    !>   T(a,b,c,d) = integral Y_a^*(1)Y_b(1) r12^-1 Y_c^*(2)Y_d(2).
    !> Equivalently this is the two-electron matrix element <a c|b d>.
    !> Its selection rule is m_a + m_c = m_b + m_d. The conjugated second
    !> Gaunt factor therefore uses the reversed pair (d,c).
-   !> It is deliberately separate from Coulomb_mat: that legacy routine uses
-   !> real Gaunt coefficients and remains available to unrelated callers.
    function Coulomb_mat_spherical(l, m1, m2, m3, m4, f0, f2, f4, f6) result(res)
       integer, intent(in) :: l, m1, m2, m3, m4
       real(rp), intent(in) :: f0, f2, f4, f6

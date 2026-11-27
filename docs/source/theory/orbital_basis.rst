@@ -95,7 +95,7 @@ Real m order
 
 Real harmonics in the order :math:`m = -l, \ldots, l` (l = 1: y z x) are used by
 ``strux_lib`` (mapped to cubic order by ``build_orbital_map``), by ``realgaunt``
-and ``Coulomb_mat`` (``math.f90``), and by ``disp_matrix`` for :math:`l \ge 3`
+(``math.f90``), and by ``disp_matrix`` for :math:`l \ge 3`
 (for :math:`l \le 2` it returns cubic order).
 ``Coulomb_mat_spherical`` is the complex-harmonic version.
 

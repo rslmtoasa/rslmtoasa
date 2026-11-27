@@ -423,8 +423,8 @@ Main entry points
   ``hubbard_u_pot`` and ``hubbard_v_pot`` into Hamiltonian blocks.
 - ``source/bands.f90``: ``calculate_hubbard_u_sc`` performs the self-consistent
   ``U_eff`` update loop for channels selected by mask.
-- ``source/math.f90``: ``Coulomb_mat`` and ``a_k`` provide Coulomb matrix
-  elements in real spherical-harmonic form.
+- ``source/math.f90``: ``Coulomb_mat_spherical`` provides Coulomb matrix
+  elements in the complex spherical-harmonic basis.
 - ``source/math.f90``: ``tabulated_slater_integrals`` provides tabulated radial
   integral values used by SC-U flow.
 
