@@ -12,7 +12,8 @@ real(rp), dimension(:), allocatable :: z, ct, screening_alpha, screening_sigma
 integer, dimension(:), allocatable :: reduced_acr, num, no, izpsurf, izsurf, nosurf, izpo, izp, iz, iu, irec, ib
 real(rp), dimension(:, :), allocatable :: primcell, inclu, crsurf, crd, cr, acr
 logical :: strux_want_sdot
-real(rp) :: strux_solve_scale
+real(rp) :: strux_solve_scale, pair_radius
+logical :: pair_unique
 
 namelist /lattice/ a, z, ct, primcell, inclu, crsurf, crd, cr, njij, njijk, &
    acr, zmin, zmax, zstep, wav, vol, rc, r2, celldm, alat, reduced_acr, &
@@ -20,4 +21,4 @@ namelist /lattice/ a, z, ct, primcell, inclu, crsurf, crd, cr, njij, njijk, &
    reduced_nbas, ntype, ntot, nrec, nmax, nlay, nlay_a, nlay_b, ndim, npe, nclu, &
    nbulk_bulk, nbulk, nbas, kk, dx, dy, dz, dw, crystal_sym, surftype, ijpair, ijktrio, &
    b1, b2, b3, pbc, morton_sfc, n1, n2, n3, strux_backend, screening, strux_want_sdot, &
-   strux_solve_scale, screening_alpha, screening_sigma, region_b_kind
+   strux_solve_scale, screening_alpha, screening_sigma, region_b_kind, pair_radius, pair_unique

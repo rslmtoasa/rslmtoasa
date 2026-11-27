@@ -435,8 +435,10 @@ contains
       complex(rp), intent(inout), optional :: chi0w(:, :)
       real(rp), intent(in), optional :: omega(:)
       logical :: written
-      integer :: nt, it, p, iq
-      integer, allocatable :: seed(:), npair(:)
+      integer :: nt, it, p, iq, np
+      integer, allocatable :: seed(:), npair(:), pairs(:, :), rep(:)
+      complex(rp), allocatable :: chi0f(:), chi0jf(:)
+      real(rp), allocatable :: mdf(:), mdjf(:)
       real(rp), allocatable :: m(:), chi0s(:, :), mj(:), chi0sj(:, :), c_up(:), c_dn(:), rdir(:, :), q(:, :), qcart(:, :), &
                                qabs(:)
       real(rp) :: cell_inverse(3, 3)
@@ -455,28 +457,43 @@ contains
       if (present(j0)) call MPI_ALLREDUCE(MPI_IN_PLACE, j0, size(j0), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
       if (rank /= 0) return
-      if (present(j0)) call write_j0_sum_rule('j0_sum_rule.dat', this%lattice%ijpair(1:size(j0), :), this%lattice%iz, j0, xc(1, :))
+      ! pair_unique: every sum below runs over the full stars, each member taking the value of its representative
+      np = size(chi0)
+      if (allocated(this%lattice%pair_rep)) then
+         pairs = this%lattice%pair_full
+         rep = this%lattice%pair_rep
+      else
+         pairs = this%lattice%ijpair(1:np, :)
+         rep = [(p, p=1, np)]
+      end if
+      chi0f = chi0(rep)
+      mdf = md(rep)
+      if (present(chi0j)) then
+         chi0jf = chi0j(rep)
+         mdjf = mdj(rep)
+      end if
+      if (present(j0)) call write_j0_sum_rule('j0_sum_rule.dat', pairs, this%lattice%iz, j0(rep), xc(1, rep))
       nt = this%lattice%ntype
       allocate (seed(nt), npair(nt), m(nt), chi0s(nt, nt), mj(nt), chi0sj(nt, nt), c_up(nt), c_dn(nt))
-      call type_sums(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, nt, chi0, md, seed, npair, m, chi0s)
+      call type_sums(pairs, this%lattice%iz, nt, chi0f, mdf, seed, npair, m, chi0s)
       do it = 1, nt
          c_up(it) = this%symbolic_atom(it)%potential%center_band(3, 1)
          c_dn(it) = this%symbolic_atom(it)%potential%center_band(3, 2)
       end do
       if (present(chi0j)) then
-         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0, chi0j)
-         call type_sums(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, nt, chi0j, mdj, seed, npair, mj, chi0sj)
+         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:np, :), this%lattice%iz, this%lattice%cr, chi0, chi0j)
+         call type_sums(pairs, this%lattice%iz, nt, chi0jf, mdjf, seed, npair, mj, chi0sj)
          call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn, mj, chi0sj)
       else
-         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, this%lattice%cr, chi0)
+         call write_chi0_pairs('chi0_ij.dat', this%lattice%ijpair(1:np, :), this%lattice%iz, this%lattice%cr, chi0)
          call write_chi0_types('chi0_types.dat', seed, npair, m, chi0s, c_up, c_dn)
       end if
 
       ! Adiabatic spectrum: r_j - r_i in direct coordinates, as site_offset in spin_response; q_cart = C^T q (2 pi/a)
       cell_inverse = merge(this%lattice%a_cart_inv, inverse_3x3(this%lattice%a), this%lattice%a_cart_inv_ready)
-      allocate (rdir(3, size(chi0)))
-      do p = 1, size(chi0)
-         rdir(:, p) = matmul(cell_inverse, this%lattice%cr(:, this%lattice%ijpair(p, 2)) - this%lattice%cr(:, this%lattice%ijpair(p, 1)))
+      allocate (rdir(3, size(pairs, 1)))
+      do p = 1, size(pairs, 1)
+         rdir(:, p) = matmul(cell_inverse, this%lattice%cr(:, pairs(p, 2)) - this%lattice%cr(:, pairs(p, 1)))
       end do
       call read_q_points(this%lattice%control%fname, q)
       qcart = matmul(transpose(cell_inverse), q)
@@ -486,24 +503,24 @@ contains
       end do
       if (present(chi0j)) then
          call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
-                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m, &
-                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0j, rdir, q), chi0sj, mj)
+                                   type_sums_q(pairs, this%lattice%iz, seed, chi0f, rdir, q), chi0s, m, &
+                                   type_sums_q(pairs, this%lattice%iz, seed, chi0jf, rdir, q), chi0sj, mj)
       else
          call write_chi0_adiabatic('chi0_adiabatic.dat', q, qcart, qabs, seed, &
-                                   type_sums_q(this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, chi0, rdir, q), chi0s, m)
+                                   type_sums_q(pairs, this%lattice%iz, seed, chi0f, rdir, q), chi0s, m)
       end if
 
       ! Cluster of the atoms with a self pair
-      call cluster_sites(this%lattice%ijpair(1:size(chi0), :), chi0, md, site, chi0c, mc)
+      call cluster_sites(pairs, chi0f, mdf, site, chi0c, mc)
       if (present(chi0j)) then
-         call cluster_sites(this%lattice%ijpair(1:size(chi0), :), chi0j, mdj, site, chi0cj, mcj)
+         call cluster_sites(pairs, chi0jf, mdjf, site, chi0cj, mcj)
          call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c, mcj, chi0cj)
       else
          call write_chi0_cluster('chi0_cluster.dat', site, this%lattice%iz, mc, chi0c)
       end if
       if (present(chi0w)) then
-         call write_chi0_dynamic('chi0_dynamic.dat', this%lattice%ijpair(1:size(chi0), :), omega, chi0w)
-         call write_chi_rs_q('chi_rs_q.dat', q, this%lattice%ijpair(1:size(chi0), :), this%lattice%iz, seed, rdir, omega, chi0w, &
+         call write_chi0_dynamic('chi0_dynamic.dat', pairs, omega, chi0w(rep, :))
+         call write_chi_rs_q('chi_rs_q.dat', q, pairs, this%lattice%iz, seed, rdir, omega, chi0w(rep, :), &
                              chi0s, m, written)
          if (.not. written) call g_logger%warning('do_chi0: chi_rs_q.dat not written (a type without a self pair or |m| < 1e-6)', &
                                                   __FILE__, __LINE__)

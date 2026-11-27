@@ -330,6 +330,14 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
 
+### Real-space dynamic chi0: wrong-signed Im chi0 below the continuum and a negative tr L at the small-q pole — 2026-11-27
+- **Measured (bcc Fe, `do_chi0`, Chebyshev one-shot, energy mesh, lld = 241, pairs within 5a, dE = 0.8797 mRy):** Im tr chi0(q = 1/12 along
+  Gamma-H, omega = 5.3 mRy) = +0.014 1/Ry, where the k-space route (k48, eta = 1e-3 Ry) gives a negative value; with the Goldstone U the RPA
+  tr L at q = 1/12 is -6.1e3 1/Ry at omega = 2.639 mRy (neighbouring grid points -62 and -102): the pole is narrower than the omega grid.
+- **Not diagnosed.** Suspects: the recursion broadening (Chebyshev kernel) giving Im G of the wrong sign in places, the truncated pair list
+  near the Goldstone pole, the omega rounding to the mesh step; the study decks are also suspects. `chi0_dynamic.dat`/`chi_rs_q.dat` at small
+  q are not usable for line shapes at these settings.
+
 ### `&self soc_scale` has no effect in the exchange post-processing — 2026-11-26
 - **Measured (bcc Fe exchange deck, nsp = 2, block):** the `xi_d` printed by `build_lsham` is the same for `soc_scale` = 1.0, 0.5 and 0.0.
 - **Suspected, from reading:** the scaling is applied in `self%build_from_file` (`source/self.f90`, the `soc_scale` lines), and the exchange

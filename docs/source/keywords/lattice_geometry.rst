@@ -363,6 +363,36 @@ rarely set by hand. Where the code documents no further meaning, the table says 
      - Wigner-Seitz radius (Å).
    * - ``njij``, ``ijpair``
      - Number of atom pairs and the pairs (i, j) for exchange interactions.
+   * - ``pair_radius``
+     - Real, in the units of the cluster coordinates (alat), default 0 (off). With a value above 0 the
+       exchange post-processing (``exchange``, ``exchange_import``, ``exchange_p2rs``) generates its pair list instead of reading ``njij`` and
+       ``ijpair`` (giving both is fatal). For every recursion atom ``irec(k)`` the list holds all cluster atoms
+       j with :math:`|r_j - r_i| \le` ``pair_radius`` (+ 1e-6), the self pair first, then by distance and atom
+       index. The sphere must lie inside the cluster, :math:`|r_i - r_1|` + ``pair_radius`` :math:`\le \sqrt{r2}`,
+       otherwise the run stops. A plain scalar: it may stand anywhere in ``&lattice`` (only ``njij`` and
+       ``ijpair`` must follow ``ntype``, ``ct`` and ``r2``).
+   * - ``pair_unique``
+     - Logical, default ``.false.``. With ``pair_radius``, keep one representative per symmetry star of the pairs of
+       each recursion atom: (i, j') is equivalent to (i, j) when an operation of the crystal that leaves the site i
+       invariant maps :math:`r_j - r_i` onto :math:`r_{j'} - r_i` and j, j' have the same type. The operations are the
+       ones of the symmetry-reduced k mesh (spglib, ``setup_magnetic_symmetry``): for ``nsp = 2`` and ``4`` the magnetic
+       group of the site moments as axial vectors, including the time-reversal-combined operations; for ``nsp = 1`` the crystal operations
+       that map every site onto a site with the same type and moment. The moment of a site is its constraint target, else
+       the unit ``potential%mom``. Needs spglib, ``calctype = 'B'`` and ``nsp`` 1, 2 or 4 (a stop otherwise).
+       ``ijpair`` and ``njij`` then hold the representatives, so ``jij.out``, ``dij.out``, ``aij.out`` and the other
+       exchange outputs list one pair per star; the full list is kept in ``lattice%pair_full``, the representative of
+       each member in ``lattice%pair_rep`` and the rotation from the representative to the member in ``lattice%pair_rot``;
+       the log prints the multiplicity of each star. The pair-loop route (``exchange``, ``exchange_import``) also writes
+       ``exchange_stars.out``, one row per member of every star with its own vector :math:`r_j - r_i`, J, D and A of the
+       representative carried over as follows. With R the Cartesian rotation (proper or improper) of the operation that maps the
+       representative (i, j) onto (i, j'), the spins rotate with the proper part
+       :math:`\tilde R = \det(R) R` (spin is an axial vector; a time reversal flips both spins of the bilinear pair energy and
+       changes nothing), so the pair tensor :math:`J + [D]_\times + A` of the member is :math:`\tilde R (\cdot) \tilde R^T`:
+       :math:`J' = J`, :math:`D' = \tilde R D`, :math:`A' = \tilde R A \tilde R^T`, for unitary and time-reversal-combined
+       operations alike. With spin-orbit coupling D and A depend on the direction of the moments, which is why the
+       operations are those of the moments and not of the lattice alone; the D vector and the anisotropic tensor of a
+       representative do not carry over by the lattice group in general. Without it (``nsp = 1``) the spins are decoupled from the lattice and J, D and A of the representative are copied unrotated.
+       With ``do_chi0`` the lattice sums, the type sums and the J0 sum run over the full stars (see ``do_chi0``).
    * - ``njijk``, ``ijktrio``
      - Number of atom trios and the trios (i, j, k) for spin-lattice interactions.
    * - ``nclu``, ``inclu``
