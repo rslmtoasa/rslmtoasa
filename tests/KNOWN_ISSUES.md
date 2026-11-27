@@ -271,6 +271,19 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Not verified:** nothing else was checked beyond the grep over `source/`.
 - **Proposal:** delete those two legacy routines in a separate task.
 
+### Self-energy moment count can leave the tail bound just above `sigma_tol` — 2026-11-27
+- **Verified (bcc Fe `tests/sigma` deck, `lld = 200`, Sigma = (0.02 - 0.05i) I, offsets i(2n+1)pi*0.01 Ry, n = 2..41):** at offset 2.1049i
+  `self_energy%compute_gloc` uses 13 moments and `cheb_sigma_sum` reports a tail bound of 1.02e-6 against `sigma_tol = 1e-6`, so the point is
+  written `n/a`. CPU, GPU fp64 and GPU fp32 give the same count and bound; the other 39 points pass.
+- **Suspected, not tested:** N = ceiling(log(tol(1-r)/r)/log r) + 1 assumes a unit-size last term relative to |G|, while the bound uses the actual
+  last term |c_(N-1) mu_(N-1)|/a relative to max|G|; the prefactor 2/|1 - w^2|/a and non-unit moments are not in the estimate.
+- **Proposal:** add one moment when the tail bound misses tol, or fold the prefactor into N; about 5 lines in `self_energy.f90`.
+
+### `Example_impurity_B2FeCo_block_hoh_mpi` fails intermittently under `ctest -j 8` — 2026-11-27
+- **Verified:** in 5 quick-tier runs with `-j 8` (CUDA build and CPU-only build, RTX A4000 workstation) it failed twice, once per build; it passed
+  each time it was rerun alone and on each full rerun. The failure output was not kept.
+- **Suspected, not tested:** MPI rank oversubscription or a timeout when it runs alongside other tests.
+
 ## Layered (`calctype = 'L'`) and surface findings
 
 ### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap
