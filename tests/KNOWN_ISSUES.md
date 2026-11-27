@@ -553,6 +553,15 @@ the archive tags.
 
 ## Input reading and output findings
 
+### `&reciprocal dos_energy_min`, `dos_energy_max` are read in single precision — 2026-11-27
+- **Verified:** `source/include_codes/namelists/reciprocal.f90:43` declares `real :: dos_energy_min, dos_energy_max` (default real,
+  not `real(rp)`); the values are copied into `reciprocal%dos_energy_range` (`real(rp)`) in `reciprocal_lifecycle.f90:376`. Measured
+  while building the BdG route test: a grid bound of -0.5772706722 Ry shifted the `dos_kspace.dat` grid by 1.46e-8 Ry, the float32
+  rounding of that value. The namelist comment calls the window relative to the Fermi level; the measured grid was absolute.
+- **Not checked:** other default-`real` keys in the same include, and whether any stored DOS reference depends on the rounding.
+  `tests/bdg/route.py` places its grid on a float32-exact value to avoid it.
+- **Proposal:** declare both keys `real(rp)` and correct the comment; 2 lines plus a re-check of the DOS example reference.
+
 ### `post_processing = 'density_of_states'` ignores `&energy fermi` with `auto_find_fermi = .false.` — 2026-11-27
 - **Verified:** on `tests/postproc/cases/density_of_states/bccFe` (`&energy fermi = -0.069170`, `auto_find_fermi = .false.`, mesh
   reduced to 6x6x6 full BZ) the log prints `Canonical k-space occupations: EF= 0.00000000E+00 Ry, N= 8.71568307` and the warning that
