@@ -81,6 +81,9 @@ module spin_response_mod
       real(rp) :: omega_min, omega_max, eta
       !> q points (direct coordinates, shape (3, nq)) and the omega grid (Ry).
       real(rp), allocatable :: q_direct(:, :), omega(:)
+      !> With q_file = 'auto': path length and label of each q point of the &kpath path (written to <prefix>_qpath.dat).
+      real(rp), allocatable :: q_distance(:)
+      character(len=10), allocatable :: q_label(:)
       real(rp) :: fermi_input, fermi_used, kt, electron_count
       !> Symmetry reduction or time reversal was requested in &reciprocal and overridden by prepare.
       logical :: reduction_overridden
@@ -318,7 +321,17 @@ contains
       this%eta = eta
       this%omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(max(n_omega - 1, 1), rp), i=1, n_omega)]
 
-      call q_points(n_q, q_list, q_file, this%q_direct)
+      if (trim(q_file) == 'auto') then
+         ! The high-symmetry path of the band structure (&kpath nk_per_segment), from the space group
+         call this%reciprocal%symmetry_analysis%generate_automatic_kpath(this%reciprocal%nk_per_segment)
+         if (.not. allocated(this%reciprocal%symmetry_analysis%k_path)) &
+            call g_logger%fatal('spin_response: q_file = ''auto'' could not build the &kpath path', __FILE__, __LINE__)
+         this%q_direct = this%reciprocal%symmetry_analysis%k_path
+         this%q_distance = this%reciprocal%symmetry_analysis%k_distances
+         this%q_label = this%reciprocal%symmetry_analysis%k_labels
+      else
+         call q_points(n_q, q_list, q_file, this%q_direct)
+      end if
    end subroutine build_from_file
 
    !> @brief q points (direct coordinates, shape (3, nq)) from q_file (one q per line) when it is set, else q_list(:, 1:n_q).
@@ -371,14 +384,17 @@ contains
          call g_logger%fatal('error while reading namelist spin_response, iostat = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+      if (trim(q_file) == 'auto') call g_logger%fatal('spin_response q_file = ''auto'' is available with post_processing = '// &
+                                                    '''spin_response'' only; give q_list or a q file', __FILE__, __LINE__)
       call q_points(n_q, q_list, q_file, q_direct)
    end subroutine read_q_points
 
    !> @brief omega grid (Ry) of the &spin_response namelist of file fname: n_omega points from omega_min to omega_max (defaults 0,
-   !>        0.05, 201).
-   subroutine read_omega_grid(fname, omega)
+   !>        0.05, 201), and optionally its broadening eta (Ry, default 0.002 as in spin_response).
+   subroutine read_omega_grid(fname, omega, eta_out)
       character(len=*), intent(in) :: fname
       real(rp), allocatable, intent(out) :: omega(:)
+      real(rp), intent(out), optional :: eta_out
 
       integer :: funit, iostatus, i
 
@@ -387,6 +403,7 @@ contains
       omega_min = 0.0_rp
       omega_max = 0.05_rp
       n_omega = 201
+      eta = 0.002_rp
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) call g_logger%fatal('file '//trim(fname)//' not found', __FILE__, __LINE__)
       read (funit, nml=spin_response, iostat=iostatus)
@@ -397,6 +414,8 @@ contains
       if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min)) then
          call g_logger%fatal('spin_response needs n_omega >= 1 and omega_max > omega_min for n_omega > 1', __FILE__, __LINE__)
       end if
+      if (eta < 0.0_rp) call g_logger%fatal('spin_response needs eta >= 0', __FILE__, __LINE__)
+      if (present(eta_out)) eta_out = eta
       omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(max(n_omega - 1, 1), rp), i=1, n_omega)]
    end subroutine read_omega_grid
 
@@ -747,6 +766,14 @@ contains
       open (newunit=fadia, file=trim(this%output_prefix)//'_adiabatic.dat', action='write', status='replace')
       write (fadia, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) omega_adiabatic(Ry, ascending, one per row of the response space) max_abs_imag(Ry) omega_force(Ry, ascending, N U (I + chi0 U) from the same static chi0)'
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
+      if (allocated(this%q_distance)) then
+         open (newunit=funit, file=trim(this%output_prefix)//'_qpath.dat', action='write', status='replace')
+         write (funit, '(a)') '# iq q_direct(3) path_length(as band_structure_kpath.dat) label'
+         do iq = 1, nq
+            write (funit, '(i6,4es16.8,1x,a)') iq, this%q_direct(:, iq), this%q_distance(iq), trim(this%q_label(iq))
+         end do
+         close (funit)
+      end if
       write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry) min_re_eig(I+chi0*U)_at_omega_1'
       do iq = 1, nq
          call solve_dyson(chi0(:, :, :, iq), this%kmat, chi)

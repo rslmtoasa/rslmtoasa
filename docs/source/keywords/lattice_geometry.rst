@@ -60,7 +60,7 @@ r2
 
 **Typical range:** 10-30 Å²
 
-**Default:** none (not set in ``lattice%restore_to_default``); give it, or ``ct``.
+**Default:** 0 (not given): with a built-in ``crystal_sym`` it becomes ``ct(1)**2``, where ``ct`` defaults to ``alat + 0.1``.
 
 **Meaning:**
 
@@ -368,8 +368,9 @@ rarely set by hand. Where the code documents no further meaning, the table says 
        exchange post-processing (``exchange``, ``exchange_import``, ``exchange_p2rs``) generates its pair list instead of reading ``njij`` and
        ``ijpair`` (giving both is fatal). For every recursion atom ``irec(k)`` the list holds all cluster atoms
        j with :math:`|r_j - r_i| \le` ``pair_radius`` (+ 1e-6), the self pair first, then by distance and atom
-       index. The sphere must lie inside the cluster, :math:`|r_i - r_1|` + ``pair_radius`` :math:`\le \sqrt{r2}`,
-       otherwise the run stops. A plain scalar: it may stand anywhere in ``&lattice`` (only ``njij`` and
+       index. The sphere must lie inside the cluster, :math:`|r_i - r_1|` + ``pair_radius`` :math:`\le` the
+       cluster radius (the largest distance of a cluster atom from atom 1, set by ``rc``), otherwise the run stops.
+       Pairs near the cluster edge see its open boundary; keep a margin. A plain scalar: it may stand anywhere in ``&lattice`` (only ``njij`` and
        ``ijpair`` must follow ``ntype``, ``ct`` and ``r2``).
    * - ``pair_unique``
      - Logical, default ``.false.``. With ``pair_radius``, keep one representative per symmetry star of the pairs of

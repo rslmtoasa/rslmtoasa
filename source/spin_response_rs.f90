@@ -83,6 +83,8 @@ module spin_response_rs_mod
    public :: j0_local_traces
    public :: write_j0_sum_rule
    public :: chi0_dynamic_traces
+   public :: lorentz_smooth
+   public :: dynamic_propagator
    public :: write_chi0_dynamic
    public :: write_chi_rs_q
 
@@ -603,9 +605,12 @@ contains
    !>          column 1: Tr_d[A^up_ji(E_n) G^dn_ij(E_(n+k))],  column 2: Tr_d[G^{up,A}_ji(E_(n-k)) A^dn_ij(E_n)].
    !>        chi0_ij(omega) = int f(E) (column 1 + column 2) dE. A term whose second energy lies outside 1..n is 0.
    !> @param[in] gij, gji  Spinor blocks G_ij(E_n), G_ji(E_n), shape (nb, nb, n); k the shift (any sign).
-   pure function chi0_dynamic_traces(gij, gji, k) result(t)
+   !> @param[in] gp  Optional: G_ij used as the propagator (the factor at the shifted energy), e.g. dynamic_propagator for a
+   !>                 broadening eta; absent: gij.
+   pure function chi0_dynamic_traces(gij, gji, k, gp) result(t)
       complex(rp), intent(in) :: gij(:, :, :), gji(:, :, :)
       integer, intent(in) :: k
+      complex(rp), intent(in), optional :: gp(:, :, :)
       complex(rp) :: t(size(gij, 3), 2)
 
       integer :: n, mm, u0, u1, d0, d1
@@ -620,16 +625,74 @@ contains
          mm = n + k
          if (mm >= 1 .and. mm <= size(gij, 3)) then
             a = (gji(u0:u1, u0:u1, n) - conjg(transpose(gij(u0:u1, u0:u1, n))))/(-2.0_rp*pi*i_unit)
-            t(n, 1) = sum(transpose(a)*gij(d0:d1, d0:d1, mm))
+            if (present(gp)) then
+               t(n, 1) = sum(transpose(a)*gp(d0:d1, d0:d1, mm))
+            else
+               t(n, 1) = sum(transpose(a)*gij(d0:d1, d0:d1, mm))
+            end if
          end if
          mm = n - k
          if (mm >= 1 .and. mm <= size(gij, 3)) then
             a = (gij(d0:d1, d0:d1, n) - conjg(transpose(gji(d0:d1, d0:d1, n))))/(-2.0_rp*pi*i_unit)
             ! Tr[X a] with X = G^{up,A}_ji = (G^up_ij)^H: sum(transpose(X)*a) = sum(conjg(G^up_ij)*a)
-            t(n, 2) = sum(conjg(gij(u0:u1, u0:u1, mm))*a)
+            if (present(gp)) then
+               t(n, 2) = sum(conjg(gp(u0:u1, u0:u1, mm))*a)
+            else
+               t(n, 2) = sum(conjg(gij(u0:u1, u0:u1, mm))*a)
+            end if
          end if
       end do
    end function chi0_dynamic_traces
+
+   !> @brief G(E + i eta) on a uniform mesh from the retarded G(E), analytic in the upper half plane: the Poisson (Lorentzian)
+   !>        average gs(n) = sum_j (eta/pi) dE/((j dE)^2 + eta^2) g(n + j) over |j| <= 100 eta/dE and inside the mesh. The
+   !>        dropped tails are not renormalized (a closed-form model gives a relative error of about 3e-4 with this window).
+   !>        eta <= 0 returns g.
+   !> @param[in] g  G on the mesh, shape (n1, n2, ne); de the mesh step and eta the broadening (Ry).
+   pure function lorentz_smooth(g, de, eta) result(gs)
+      complex(rp), intent(in) :: g(:, :, :)
+      real(rp), intent(in) :: de, eta
+      complex(rp) :: gs(size(g, 1), size(g, 2), size(g, 3))
+
+      integer :: n, j, jmax, ne
+      real(rp), allocatable :: w(:)
+
+      if (eta <= 0.0_rp) then
+         gs = g
+         return
+      end if
+      ne = size(g, 3)
+      jmax = min(ceiling(100.0_rp*eta/de), ne - 1)
+      allocate (w(-jmax:jmax))
+      do j = -jmax, jmax
+         w(j) = (eta/pi)*de/((j*de)**2 + eta**2)
+      end do
+      do n = 1, ne
+         gs(:, :, n) = (0.0_rp, 0.0_rp)
+         do j = max(-jmax, 1 - n), min(jmax, ne - n)
+            gs(:, :, n) = gs(:, :, n) + w(j)*g(:, :, n + j)
+         end do
+      end do
+   end function lorentz_smooth
+
+   !> @brief Propagator for chi0_dynamic_traces with a broadening eta: a copy of gij with the two d spin blocks replaced by
+   !>        lorentz_smooth, so chi0_ij(omega + i eta) = int f Tr_d[A^up_ji(E) G^dn_ij(E + omega + i eta)]
+   !>        + int f Tr_d[G^up_ji(E - omega - i eta) A^dn_ij(E)] (the spectral functions A are not broadened).
+   pure function dynamic_propagator(gij, de, eta) result(gp)
+      complex(rp), intent(in) :: gij(:, :, :)
+      real(rp), intent(in) :: de, eta
+      complex(rp) :: gp(size(gij, 1), size(gij, 2), size(gij, 3))
+
+      integer :: u0, u1, d0, d1
+
+      u0 = l_d**2 + 1
+      u1 = (l_d + 1)**2
+      d0 = u0 + spin_off
+      d1 = u1 + spin_off
+      gp = gij
+      gp(u0:u1, u0:u1, :) = lorentz_smooth(gij(u0:u1, u0:u1, :), de, eta)
+      gp(d0:d1, d0:d1, :) = lorentz_smooth(gij(d0:d1, d0:d1, :), de, eta)
+   end function dynamic_propagator
 
    !> @brief Write one row per pair and omega: i, j, omega (Ry), Re and Im chi0_ij(omega) (1/Ry).
    !> @param[in] omega  Frequencies (Ry), shape (nw); chi0w shape (npair, nw).

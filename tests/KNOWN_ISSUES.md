@@ -330,13 +330,18 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
 
-### Real-space dynamic chi0: wrong-signed Im chi0 below the continuum and a negative tr L at the small-q pole — 2026-11-27
-- **Measured (bcc Fe, `do_chi0`, Chebyshev one-shot, energy mesh, lld = 241, pairs within 5a, dE = 0.8797 mRy):** Im tr chi0(q = 1/12 along
-  Gamma-H, omega = 5.3 mRy) = +0.014 1/Ry, where the k-space route (k48, eta = 1e-3 Ry) gives a negative value; with the Goldstone U the RPA
-  tr L at q = 1/12 is -6.1e3 1/Ry at omega = 2.639 mRy (neighbouring grid points -62 and -102): the pole is narrower than the omega grid.
-- **Not diagnosed.** Suspects: the recursion broadening (Chebyshev kernel) giving Im G of the wrong sign in places, the truncated pair list
-  near the Goldstone pole, the omega rounding to the mesh step; the study decks are also suspects. `chi0_dynamic.dat`/`chi_rs_q.dat` at small
-  q are not usable for line shapes at these settings.
+### Real-space dynamic chi0: far shells need a cluster well beyond the pair radius — 2026-11-27
+- **Measured (bcc Fe, `do_chi0`, Chebyshev one-shot, energy mesh, lld = 241, `eta = 1e-3` Ry, dE = 0.8797 mRy, 5 q along Gamma-H):**
+  chi0_0j(omega = 0) changes by 3-20 % for pairs within 5a and by 34-73 % for pairs at 5-8a between `rc = 080` (cluster radius 8.94a)
+  and `rc = 160` (12.65a), i.e. the far shells of the smaller cluster are set by its open boundary. Wrong-sign Im tr chi0 points
+  (omega > 0, 4 q x 68 omega) / tr L peaks at 1/12, 1/6, 1/4, H (mRy): rc 80 pairs to 5a: 20 / 2.64, 6.16, 16.7, 34.3; rc 80 to 8a:
+  1 / 0.88, 4.40, 17.6, 26.4; rc 160 to 8a: 0 (min tr L +0.087) / 1.76, 6.16, 15.8, 36.1; k-space k48 at the same eta: 0 / 1.76, 6.16,
+  19.4, 33.4. With `eta = 0` (rc 80, 5a) there were 34 wrong-sign points and a negative tr L at the q = 1/12 pole.
+- **Tested and dropped:** a cosine taper of the outer shells (offline and as a code option): its results move with the taper start
+  (H peak 24.6-30.8 mRy, up to 18 wrong-sign points at 8a in the small cluster), i.e. it damps boundary-distorted shells rather than
+  regularizing a converged sum; a positive-definite sphere window halves the dispersion. Not committed.
+- **Open:** a cluster-size study (rc and lld together) to find where the q-dependent sums converge; the remaining 1/4 offset (15.8 vs
+  19.4 mRy) and the larger width at H are not diagnosed.
 
 ### `&self soc_scale` has no effect in the exchange post-processing — 2026-11-26
 - **Measured (bcc Fe exchange deck, nsp = 2, block):** the `xi_d` printed by `build_lsham` is the same for `soc_scale` = 1.0, 0.5 and 0.0.

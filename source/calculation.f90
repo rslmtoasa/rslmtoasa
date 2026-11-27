@@ -50,6 +50,7 @@ module calculation_mod
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init, norb, lmax_basis
    use spin_response_rs_mod, only: check_chi0_input
+   use spin_response_mod, only: read_q_points
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q
 #ifdef USE_MPI
    use mpi
@@ -800,7 +801,7 @@ contains
       type(reciprocal), target :: reciprocal_obj
       integer :: i
       logical :: stream, moments
-      real(rp), allocatable :: mom(:, :)
+      real(rp), allocatable :: mom(:, :), q_check(:, :)
 
       ! The recursion route reconstructs one pair at a time into a single slot of the intersite Green-function arrays
       stream = trim(this%gf_route) == 'recursion'
@@ -828,6 +829,8 @@ contains
             mom(:, i) = lattice_obj%symbolic_atoms(i)%potential%mom
          end do
          call check_chi0_input(control_obj%nsp, lmax_basis, mom)
+         ! The q points of &spin_response are needed only at the end: read them now so a bad q_file stops early
+         call read_q_points(this%fname, q_check)
       end if
 
       if (this%exchange_delta == 'onsite') then

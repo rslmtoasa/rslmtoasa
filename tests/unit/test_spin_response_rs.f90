@@ -30,7 +30,7 @@ program test_spin_response_rs
    use basis_mod, only: basis_init, nb, spin_off
    use spin_response_rs_mod, only: chi0_traces, chi0_from_traces, d_moment_trace, type_sums, juelich_vectors, &
                                    juelich_green, juelich_moments, type_sums_q, cluster_sites, cluster_frequencies, &
-                                   j0_local_traces, chi0_dynamic_traces
+                                   j0_local_traces, chi0_dynamic_traces, lorentz_smooth, dynamic_propagator
    implicit none
    complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), dm(:)
    complex(rp) :: t(2, 2), c
@@ -112,6 +112,7 @@ program test_spin_response_rs
    call check_cluster()
    call check_j0_local()
    call check_chi0_dynamic()
+   call check_lorentz_smooth()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -365,6 +366,38 @@ contains
       ref = chi0_from_traces(sum(tr(:, 1)), sum(tr(:, 2)))
       call require(abs(kern - ref) < 1.0e-11_rp*abs(ref), 'chi0_dynamic_traces at k = 0 = static (by construction)')
    end subroutine check_chi0_dynamic
+
+   !> lorentz_smooth: G(E) = 1/(E + i g) + 0.5/(E - 0.3 + i g) on a uniform mesh; the Poisson average with eta must give the
+   !> closed form G(E + i (g + eta)) away from the mesh ends (window error about 3e-4). Catches a wrong sign of eta, a missing
+   !> pi or dE factor, a window in the wrong units. eta = 0 returns the input; dynamic_propagator changes only the d spin blocks.
+   subroutine check_lorentz_smooth()
+      integer, parameter :: ne = 8001
+      real(rp), parameter :: g = 0.02_rp, eta = 0.01_rp, de = 0.0005_rp
+      complex(rp) :: gm(1, 1, ne), gs(1, 1, ne), ex(ne)
+      complex(rp), allocatable :: gfull(:, :, :), gp(:, :, :)
+      real(rp) :: e(ne), err
+      integer :: n
+
+      e = [(-2.0_rp + (n - 1)*de, n=1, ne)]
+      gm(1, 1, :) = 1.0_rp/cmplx(e, g, rp) + 0.5_rp/cmplx(e - 0.3_rp, g, rp)
+      ex = 1.0_rp/cmplx(e, g + eta, rp) + 0.5_rp/cmplx(e - 0.3_rp, g + eta, rp)
+      gs = lorentz_smooth(gm, de, eta)
+      err = maxval(abs(gs(1, 1, :) - ex), mask=abs(e) < 1.0_rp)/maxval(abs(ex), mask=abs(e) < 1.0_rp)
+      call require(err < 1.0e-3_rp, 'lorentz_smooth = G(E + i (gamma + eta)) within 1e-3')
+      gs = lorentz_smooth(gm, de, 0.0_rp)
+      call require(all(gs == gm), 'lorentz_smooth with eta = 0 returns the input')
+      allocate (gfull(nb, nb, 50))
+      gfull = (1.0_rp, -2.0_rp)
+      do n = 1, 50
+         gfull(:, :, n) = gfull(:, :, n)*n
+      end do
+      gp = dynamic_propagator(gfull, de, 4.0_rp*de)
+      call require(all(gp(1:4, :, :) == gfull(1:4, :, :)) .and. all(gp(10:20, :, :) == gfull(10:20, :, :)) .and. &
+                   all(gp(26:, :, :) == gfull(26:, :, :)) .and. all(gp(5:9, 1:4, :) == gfull(5:9, 1:4, :)), &
+                   'dynamic_propagator leaves everything but the d spin blocks unchanged')
+      call require(any(gp(5:9, 5:9, :) /= gfull(5:9, 5:9, :)) .and. any(gp(21:25, 21:25, :) /= gfull(21:25, 21:25, :)), &
+                   'dynamic_propagator smooths both d spin blocks')
+   end subroutine check_lorentz_smooth
 
    subroutine require(ok, label)
       logical, intent(in) :: ok

@@ -57,6 +57,7 @@ contains
       real(rp), allocatable :: md(:), mdj(:), j0(:), omega(:)
       integer, allocatable :: kshift(:)
       logical :: juelich, do_j0, dynamic
+      real(rp) :: eta_dyn
 
       damping = do_damping
       if (damping) damping = damping_ready(this)
@@ -85,7 +86,7 @@ contains
             call g_logger%info('do_chi0: chi0_dynamic.dat and chi_rs_q.dat need the energy-mesh route; not written with exchange_integration = moments', &
                                __FILE__, __LINE__)
          else
-            call chi0_dynamic_setup(this, nodes, kshift, omega, dynamic)
+            call chi0_dynamic_setup(this, nodes, kshift, omega, dynamic, eta_dyn)
             if (dynamic) allocate (chi0w(this%lattice%njij, size(omega)), source=(0.0_rp, 0.0_rp))
          end if
       end if
@@ -131,7 +132,7 @@ contains
                if (juelich) call juelich_pair_moments(this, h, kernel, lin, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
             else
                call chi0_pair_mesh(this, nodes, slot, i == j, chi0(njij_glob), md(njij_glob))
-               if (dynamic) call chi0_pair_dynamic(this, nodes, slot, kshift, chi0w(njij_glob, :))
+               if (dynamic) call chi0_pair_dynamic(this, nodes, slot, kshift, eta_dyn, chi0w(njij_glob, :))
                if (juelich) call juelich_pair_mesh(this, nodes, slot, njij_glob, i, j, chi0j(njij_glob), mdj(njij_glob))
             end if
          end if
@@ -367,14 +368,15 @@ contains
    end subroutine juelich_pair_moments
 
    !> Frequency grid of the dynamic chi0_ij(omega): the omega of &spin_response rounded to kshift*dE, dE the step of the
-   !> energy mesh, omega = kshift*dE. dynamic = .false. (and a warning) when the mesh is not uniform.
-   subroutine chi0_dynamic_setup(this, nodes, kshift, omega, dynamic)
+   !> energy mesh, omega = kshift*dE, and its broadening eta (Ry). dynamic = .false. (and a warning) when the mesh is not uniform.
+   subroutine chi0_dynamic_setup(this, nodes, kshift, omega, dynamic, eta)
       use spin_response_mod, only: read_omega_grid
       class(exchange) :: this
       type(energy_nodes), intent(in) :: nodes
       integer, allocatable, intent(out) :: kshift(:)
       real(rp), allocatable, intent(out) :: omega(:)
       logical, intent(out) :: dynamic
+      real(rp), intent(out) :: eta
       real(rp) :: de
       integer :: n
 
@@ -387,20 +389,23 @@ contains
                                __FILE__, __LINE__)
          return
       end if
-      call read_omega_grid(this%lattice%control%fname, omega)
+      eta = 0.0_rp
+      call read_omega_grid(this%lattice%control%fname, omega, eta)
       kshift = nint(omega/de)
       omega = kshift*de
    end subroutine chi0_dynamic_setup
 
-   !> chi0_ij(omega) of the pair in Green-function slot `slot` for the shifts kshift (chi0_dynamic_traces on the mesh,
-   !> Simpson with the Fermi function). The G blocks of the slot are copied once.
-   subroutine chi0_pair_dynamic(this, nodes, slot, kshift, chi0w)
-      use spin_response_rs_mod, only: chi0_dynamic_traces
+   !> chi0_ij(omega + i eta) of the pair in Green-function slot `slot` for the shifts kshift (chi0_dynamic_traces on the
+   !> mesh, Simpson with the Fermi function; for eta > 0 the propagator is dynamic_propagator). The G blocks of the slot
+   !> are copied once.
+   subroutine chi0_pair_dynamic(this, nodes, slot, kshift, eta, chi0w)
+      use spin_response_rs_mod, only: chi0_dynamic_traces, dynamic_propagator
       class(exchange) :: this
       type(energy_nodes), intent(in) :: nodes
       integer, intent(in) :: slot, kshift(:)
+      real(rp), intent(in) :: eta
       complex(rp), intent(out) :: chi0w(:)
-      complex(rp), allocatable :: gij(:, :, :), gji(:, :, :)
+      complex(rp), allocatable :: gij(:, :, :), gji(:, :, :), gp(:, :, :)
       complex(rp) :: t(size(nodes%z), 2)
       real(rp) :: re, im
       integer :: iw, n
@@ -408,8 +413,13 @@ contains
       n = size(nodes%z)
       gij = this%green%gij(:, :, 1:n, slot)
       gji = this%green%gji(:, :, 1:n, slot)
+      if (eta > 0.0_rp) gp = dynamic_propagator(gij, (real(nodes%z(n), rp) - real(nodes%z(1), rp))/real(n - 1, rp), eta)
       do iw = 1, size(kshift)
-         t = chi0_dynamic_traces(gij, gji, kshift(iw))
+         if (eta > 0.0_rp) then
+            t = chi0_dynamic_traces(gij, gji, kshift(iw), gp)
+         else
+            t = chi0_dynamic_traces(gij, gji, kshift(iw))
+         end if
          call nodes%integrate(real(t(:, 1) + t(:, 2), rp), re)
          call nodes%integrate(aimag(t(:, 1) + t(:, 2)), im)
          chi0w(iw) = cmplx(re, im, rp)
