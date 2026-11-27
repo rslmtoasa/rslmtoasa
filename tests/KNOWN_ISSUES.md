@@ -553,6 +553,17 @@ the archive tags.
 
 ## Input reading and output findings
 
+### `post_processing = 'density_of_states'` ignores `&energy fermi` with `auto_find_fermi = .false.` — 2026-11-27
+- **Verified:** on `tests/postproc/cases/density_of_states/bccFe` (`&energy fermi = -0.069170`, `auto_find_fermi = .false.`, mesh
+  reduced to 6x6x6 full BZ) the log prints `Canonical k-space occupations: EF= 0.00000000E+00 Ry, N= 8.71568307` and the warning that
+  the fixed EF does not match the electron count. `post_processing_density_of_states` (`calculation_reciprocal.f90`) builds no `energy`
+  object and never sets `reciprocal_obj%fermi_level`, so the reciprocal default 0 is used; `post_processing_fermi_surface` and
+  `post_processing_spin_response` set `fermi_level = energy%fermi`. The deck comment says `! Use Fermi level from &energy namelist`.
+- **Not checked:** whether `dos_kspace.dat` energies or `Example_density_of_states_bccFe` references depend on this value. Found while
+  building the BdG route test (`tests/bdg/route.py`), which solves EF with `auto_find_fermi = .true.` instead.
+- **Proposal:** set `fermi_level = energy%fermi` in the DOS route as the other k-space routes do; about 3 lines plus a re-check of the
+  DOS example reference.
+
 Found during the main_rc release-candidate review (2026-11-15), by reading the code; none of these was run.
 
 ### `control%print_state` writes uninitialised values — 2026-11-15
