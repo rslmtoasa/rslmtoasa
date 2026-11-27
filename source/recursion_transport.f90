@@ -1210,6 +1210,36 @@ contains
             left_vec(:, :, :, m) = w1(:, :, :)
          end do
 
+         if (this%control%response_projection == 'local') then
+            ! X_n = T_n Z_i. Mix the reference columns, after applying B over
+            ! the cluster. Cyclicity gives a_i X_n^dagger B X_m = C^dagger.
+            do n = 1, order
+               this%izero = 1
+               call this%apply_kubo_operator('b', left_vec(:, :, :, n), v1, work)
+               do k = 1, nat
+                  right_vec(:, :, k) = matmul(v1(:, :, k), vertex)
+               end do
+               !$omp parallel do default(shared) private(m, dum, k, diagonal) schedule(dynamic)
+               do m = 1, order
+                  if (compact) then
+                     call transport_moment_diagonal(left_vec(:, :, :, m), right_vec, diagonal)
+                     this%mu_nm_diag(n, m, :, i) = conjg(diagonal)
+                  else
+                     dum = czero
+                     do k = 1, nat
+                        call zgemm('c', 'n', nb, nb, nb, cone, left_vec(:, :, k, m), nb, &
+                                   right_vec(:, :, k), nb, cone, dum, nb)
+                     end do
+                     this%mu_nm_stochastic(:, :, n, m, i) = conjg(transpose(dum))
+                  end if
+               end do
+               !$omp end parallel do
+            end do
+            call g_kpm_profile%note_trace_batch(1)
+            call g_kpm_profile%stop('P_moments_total')
+            cycle
+         end if
+
          ! Redifining neighboring map for the right vector v_a*Tn(H)*v_b|r>
          select case(this%control%cond_calctype)
          case('per_type')
