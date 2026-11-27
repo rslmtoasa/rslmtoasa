@@ -448,7 +448,8 @@ contains
 
    !> @brief Self-consistent singlet pairing gap on the frozen normal state (BdG, on-site kernel).
    !> @details Same frozen setup as post_processing_fermi_surface on the full-BZ mesh. N_normal is the electron
-   !>          count of the Delta = 0 pass. Writes bdg_state.dat (one line per iteration) and bdg_delta.dat.
+   !>          count of the Delta = 0 pass. Writes bdg_state.dat (one line per iteration), bdg_delta.dat and bdg_dos.dat
+   !>          (one extra pass at the final Delta; delta_file restarts from a bdg_delta.dat).
    !> @param[in] this Calculation object. fname selects the namelist input.
    module subroutine post_processing_bdg(this)
       class(calculation), intent(in) :: this
@@ -462,7 +463,9 @@ contains
       type(bdg_reciprocal_source) :: src
       complex(rp), allocatable :: delta(:, :), chi(:, :)
       real(rp) :: nel(2), dmax, kT
-      integer :: i, L, niter, funit
+      integer :: i, L, niter, funit, ios, site, orb
+      real(rp) :: re_im(4)
+      character(len=512) :: line
 
       control_obj = control(this%fname)
       lattice_obj = lattice(control_obj)
@@ -492,8 +495,6 @@ contains
       call reciprocal_obj%generate_mp_mesh()
 
       bdg_input = bdg(reciprocal_obj)
-      if (len_trim(bdg_input%delta_file) > 0) call g_logger%fatal('bdg: delta_file restart is not implemented yet', &
-                                                                  __FILE__, __LINE__)
       call src%init(reciprocal_obj)
       kT = reciprocal_obj%temperature*kB_Ry_per_K
       allocate (delta(norb, lattice_obj%nrec), chi(norb, lattice_obj%nrec))
@@ -504,16 +505,50 @@ contains
       src%n_normal = sum(nel)
       call g_logger%info('bdg: N_normal = '//real2str(src%n_normal, '(F16.10)')//' electrons', __FILE__, __LINE__)
 
-      do i = 1, lattice_obj%nrec
-         do L = 1, norb
-            if (any(bdg_input%kmat(L, :, src%type_of(i)) /= 0.0_rp)) delta(L, i) = cmplx(bdg_input%delta_seed, 0.0_rp, rp)
+      if (len_trim(bdg_input%delta_file) > 0) then
+         open (newunit=funit, file=trim(bdg_input%delta_file), action='read', status='old', iostat=ios)
+         if (ios /= 0) call g_logger%fatal('bdg: cannot open delta_file '//trim(bdg_input%delta_file), __FILE__, __LINE__)
+         read (funit, '(a)', iostat=ios) line
+         do i = 1, lattice_obj%nrec
+            do L = 1, norb
+               read (funit, *, iostat=ios) site, orb, re_im
+               if (ios /= 0 .or. site /= i .or. orb /= L) call g_logger%fatal( &
+                  'bdg: delta_file needs nrec x norb rows (site, orbital, Re, Im, Re, Im)', __FILE__, __LINE__)
+               delta(L, i) = cmplx(re_im(1), re_im(2), rp)
+            end do
          end do
+         do
+            read (funit, '(a)', iostat=ios) line
+            if (ios /= 0) exit
+            if (len_trim(line) > 0) call g_logger%fatal('bdg: delta_file has more than nrec x norb rows', __FILE__, __LINE__)
+         end do
+         close (funit)
+      else
+         do i = 1, lattice_obj%nrec
+            do L = 1, norb
+               if (any(bdg_input%kmat(L, :, src%type_of(i)) /= 0.0_rp)) delta(L, i) = cmplx(bdg_input%delta_seed, 0.0_rp, rp)
+            end do
+         end do
+      end if
+      if (bdg_input%max_iter > 0) then
+         call bdg_iterate(src, src%wk_local, energy_obj%fermi, kT, bdg_input%kmat, src%type_of, src%site_of, src%orb_of, &
+                          src%spin_of, bdg_input%mix, bdg_input%tol, bdg_input%max_iter, delta, chi, nel, niter, dmax)
+         if (niter == bdg_input%max_iter .and. dmax >= bdg_input%tol) call g_logger%warning( &
+            'bdg: not converged after '//int2str(niter)//' iterations, max|dDelta| = '//real2str(dmax, '(ES12.4)')//' Ry', &
+            __FILE__, __LINE__)
+      end if
+
+      ! One pass at the final delta: DOS and the chi written below.
+      allocate (src%dos_energies(bdg_input%n_dos), src%dos(bdg_input%n_dos, lattice_obj%ntype))
+      do i = 1, bdg_input%n_dos
+         src%dos_energies(i) = -bdg_input%dos_window + 2.0_rp*bdg_input%dos_window*(i - 1)/max(bdg_input%n_dos - 1, 1)
       end do
+      src%dos = 0.0_rp
+      src%dos_sigma = bdg_input%dos_sigma
+      src%dos_on = .true.
       call bdg_iterate(src, src%wk_local, energy_obj%fermi, kT, bdg_input%kmat, src%type_of, src%site_of, src%orb_of, &
-                       src%spin_of, bdg_input%mix, bdg_input%tol, bdg_input%max_iter, delta, chi, nel, niter, dmax)
-      if (niter == bdg_input%max_iter .and. dmax >= bdg_input%tol) call g_logger%warning( &
-         'bdg: not converged after '//int2str(niter)//' iterations, max|dDelta| = '//real2str(dmax, '(ES12.4)')//' Ry', &
-         __FILE__, __LINE__)
+                       src%spin_of, bdg_input%mix, bdg_input%tol, 0, delta, chi, nel, niter, dmax)
+      call src%dos_reduce()
 
       if (rank == 0) then
          open (newunit=funit, file='bdg_delta.dat', action='write', status='replace')
@@ -523,6 +558,19 @@ contains
                write (funit, '(2i6,4es24.16)') i, L, real(delta(L, i), rp), aimag(delta(L, i)), real(chi(L, i), rp), &
                   aimag(chi(L, i))
             end do
+         end do
+         close (funit)
+
+         open (newunit=funit, file='bdg_dos.dat', action='write', status='replace')
+         write (funit, '(a,i0,a)') '# E-mu[eV] DOS_total[states/eV/cell] DOS_type1..DOS_type', lattice_obj%ntype, &
+            ' [states/eV/cell]'
+         do i = 1, bdg_input%n_dos
+            write (funit, '(es24.16)', advance='no') src%dos_energies(i)*ry2ev
+            write (funit, '(es24.16)', advance='no') sum(src%dos(i, :))/ry2ev
+            do L = 1, lattice_obj%ntype
+               write (funit, '(es24.16)', advance='no') src%dos(i, L)/ry2ev
+            end do
+            write (funit, '(a)') ''
          end do
          close (funit)
       end if

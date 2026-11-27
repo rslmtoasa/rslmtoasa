@@ -30,15 +30,17 @@ module bdg_mod
 
    public :: bdg, bdg_kmat_from_lambda
    public :: bdg_reciprocal_source, bdg_hamiltonian_source, bdg_assemble, bdg_accumulate, bdg_gap, bdg_iterate
+   public :: bdg_dos_accumulate
 
    !> @brief Supplies the normal-state Hamiltonian at k and -k for one k index.
    !> @details reduce (sum chi and nel over ranks, after each k sweep) and report (once per iteration after
-   !>          mixing) do nothing unless overridden.
+   !>          mixing) and eigenpairs (after the eigensolve of each k point) do nothing unless overridden.
    type, abstract :: bdg_hamiltonian_source
    contains
       procedure(hk_interface), deferred :: hk
       procedure :: reduce => reduce_none
       procedure :: report => report_none
+      procedure :: eigenpairs => eigenpairs_none
    end type bdg_hamiltonian_source
 
    !> @brief Production source: H(k) and H(-k) from the reciprocal object on the share of this rank of its k mesh.
@@ -48,11 +50,17 @@ module bdg_mod
       real(rp), allocatable :: k_local(:, :), wk_local(:)
       integer, allocatable :: type_of(:), site_of(:), orb_of(:), spin_of(:)
       real(rp) :: n_normal = 0.0_rp
+      !> DOS pass: when dos_on, eigenpairs adds to dos(n_e, ntype) on the grid dos_energies (Ry, from mu) with width dos_sigma.
+      logical :: dos_on = .false.
+      real(rp) :: dos_sigma = 0.0_rp
+      real(rp), allocatable :: dos_energies(:), dos(:, :)
    contains
       procedure :: init => source_init
       procedure :: hk => source_hk
       procedure :: reduce => source_reduce
       procedure :: report => source_report
+      procedure :: eigenpairs => source_eigenpairs
+      procedure :: dos_reduce => source_dos_reduce
    end type bdg_reciprocal_source
 
    !> @brief &bdg input: pairing kernel K (Ry) and iteration, DOS and seed settings.
@@ -98,6 +106,33 @@ contains
       real(rp), intent(in) :: dmax, nel(2)
       complex(rp), intent(in) :: delta(:, :), chi(:, :)
    end subroutine report_none
+
+   subroutine eigenpairs_none(this, ik, evals, evecs)
+      class(bdg_hamiltonian_source), intent(inout) :: this
+      integer, intent(in) :: ik
+      real(rp), intent(in) :: evals(:)
+      complex(rp), intent(in) :: evecs(:, :)
+   end subroutine eigenpairs_none
+
+   subroutine source_eigenpairs(this, ik, evals, evecs)
+      class(bdg_reciprocal_source), intent(inout) :: this
+      integer, intent(in) :: ik
+      real(rp), intent(in) :: evals(:)
+      complex(rp), intent(in) :: evecs(:, :)
+
+      if (this%dos_on) call bdg_dos_accumulate(evals, evecs, this%wk_local(ik), this%dos_energies, this%dos_sigma, &
+                                               this%site_of, this%type_of, this%dos)
+   end subroutine source_eigenpairs
+
+   !> @brief Sums the DOS over ranks.
+   subroutine source_dos_reduce(this)
+      class(bdg_reciprocal_source), intent(inout) :: this
+
+#ifdef USE_MPI
+      if (numprocs > 1) call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos, size(this%dos), MPI_DOUBLE_PRECISION, MPI_SUM, &
+                                           MPI_COMM_WORLD, ierr)
+#endif
+   end subroutine source_dos_reduce
 
    !> @brief Index maps a = (i-1)*nb + L + (sigma-1)*spin_off and the slice of this rank of the reciprocal k mesh.
    subroutine source_init(this, recip)
@@ -339,6 +374,31 @@ contains
       end do
    end subroutine bdg_accumulate
 
+   !> @brief Adds one k point (weight wk) to the DOS per type: dos(ie, t) += wk sum_n sum_{a in t} |u_{a,n}|^2 g(energies(ie) - E_n).
+   !> @details u = evecs(1:nmat, :) is the electron part, g the normalized Gaussian of width sigma. evals and energies
+   !>          are measured from mu, in the same units as sigma.
+   subroutine bdg_dos_accumulate(evals, evecs, wk, energies, sigma, site_of, type_of, dos)
+      real(rp), intent(in) :: evals(:), wk, energies(:), sigma
+      complex(rp), intent(in) :: evecs(:, :)
+      integer, intent(in) :: site_of(:), type_of(:)
+      real(rp), intent(inout) :: dos(:, :)
+      integer :: m, a, t
+      real(rp) :: wt(size(dos, 2)), g(size(energies))
+      real(rp), parameter :: sqrt_two_pi = 2.5066282746310002_rp
+
+      do m = 1, size(evals)
+         wt = 0.0_rp
+         do a = 1, size(site_of)
+            t = type_of(site_of(a))
+            wt(t) = wt(t) + abs(evecs(a, m))**2
+         end do
+         g = exp(-0.5_rp*((energies - evals(m))/sigma)**2)/(sigma*sqrt_two_pi)
+         do t = 1, size(dos, 2)
+            dos(:, t) = dos(:, t) + wk*wt(t)*g
+         end do
+      end do
+   end subroutine bdg_dos_accumulate
+
    !> @brief Gap equation: delta(:, i) = K(type_of(i)) chi(:, i), with kmat(norb, norb, ntype) in Ry.
    subroutine bdg_gap(kmat, type_of, chi, delta)
       real(rp), intent(in) :: kmat(:, :, :)
@@ -357,7 +417,7 @@ contains
    !>          the last pass; dmax is max|delta_new - delta_old| of the last iteration.
    subroutine bdg_iterate(src, wk, mu, kT, kmat, type_of, site_of, orb_of, spin_of, mix, tol, max_iter, &
                           delta, chi, nel, niter, dmax)
-      class(bdg_hamiltonian_source), intent(in) :: src
+      class(bdg_hamiltonian_source), intent(inout) :: src
       real(rp), intent(in) :: wk(:), mu, kT, kmat(:, :, :), mix, tol
       integer, intent(in) :: type_of(:), site_of(:), orb_of(:), spin_of(:), max_iter
       complex(rp), intent(inout) :: delta(:, :)
@@ -379,6 +439,7 @@ contains
             call src%hk(ik, hk, hmk)
             call bdg_assemble(hk, hmk, mu, delta, site_of, orb_of, spin_of, hbdg)
             call hermitian_eigensystem(hbdg, evals)
+            call src%eigenpairs(ik, evals, hbdg)
             call bdg_accumulate(evals, hbdg, wk(ik), kT, site_of, orb_of, spin_of, chi, nel)
          end do
          call src%reduce(chi, nel)

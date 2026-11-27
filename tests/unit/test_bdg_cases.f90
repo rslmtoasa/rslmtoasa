@@ -1,13 +1,13 @@
-! BdG kernel oracles O1, O1b, O2, O2x, O3, O4 (no driver run needed). Argument after the case: oracle directory.
+! BdG kernel oracles O1, O1b, O2, O2x, O3, O4 and the DOS kernel (no driver run needed). Argument after the case: oracle directory.
 ! Each sub-case runs in its own process (subcase_runner.f90); the test fails if any sub-case fails.
 program test_bdg_cases
    use subcase_runner_mod, only: subcase_case_name, run_all_subcases
    use test_bdg_mod
    implicit none
 
-   character(len=4), parameter :: cases(7) = [character(len=4) :: 'o1', 'o1b', 'o2', 'o2x', 'o3', 'o4', 'kmat']
-   logical, parameter :: expect_fatal(7) = [.false., .false., .false., .false., .false., .false., .false.]
-   character(len=1), parameter :: workdirs(7) = [character(len=1) :: '', '', '', '', '', '', '']
+   character(len=4), parameter :: cases(8) = [character(len=4) :: 'o1', 'o1b', 'o2', 'o2x', 'o3', 'o4', 'kmat', 'dos']
+   logical, parameter :: expect_fatal(8) = [.false., .false., .false., .false., .false., .false., .false., .false.]
+   character(len=1), parameter :: workdirs(8) = [character(len=1) :: '', '', '', '', '', '', '', '']
    character(len=64) :: which
    character(len=512) :: dir
 
@@ -32,6 +32,8 @@ program test_bdg_cases
          call test_bdg_o4(trim(dir))
       case ('kmat')
          call test_bdg_kmat()
+      case ('dos')
+         call test_bdg_dos(trim(dir))
       case default
          write (*, '(a,a)') 'unknown sub-case ', trim(which)
          error stop 2

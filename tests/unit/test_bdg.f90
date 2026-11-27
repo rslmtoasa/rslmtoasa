@@ -375,6 +375,53 @@ contains
       call finish()
    end subroutine test_bdg_o4
 
+   !> Closed form, independent of the kernel: per spin block the state at +E_k carries |u|^2 = (1 + xi/E)/2 and the state at
+   !> -E_k carries (1 - xi/E)/2, xi = eps_k - mu, E = sqrt(xi^2 + Delta^2); two blocks; Gaussian of width sigma.
+   !> The tolerance is nel_abs: DOS is a state count per cell (integrates to a number of electrons).
+   !> Catches: hole weights |v|^2 in place of |u|^2, missing factor 2 (spin blocks), wrong Gaussian normalization.
+   subroutine test_bdg_dos(dir)
+      character(len=*), intent(in) :: dir
+      integer, parameter :: ne = 50
+      integer :: nk, ik, ie
+      real(rp) :: mu, g, delta0, wk, xi, ee, emax, sigma, energies(ne), dos(ne, 1), ref(ne), ev(4), x
+      real(rp), allocatable :: e1(:)
+      complex(rp) :: hk(2, 2), hmk(2, 2), hbdg(4, 4)
+      type(model_source) :: src
+
+      call read_tolerances(dir)
+      call read_o1_band(dir, e1, mu, g)
+      nk = size(e1)
+      delta0 = 0.003_rp
+      wk = 1.0_rp/nk
+      allocate (src%eps(nk, 2))
+      src%eps(:, 1) = e1
+      src%eps(:, 2) = e1
+      emax = sqrt(maxval((e1 - mu)**2) + delta0**2)
+      sigma = 0.05_rp*emax
+      do ie = 1, ne
+         energies(ie) = -1.1_rp*emax + 2.2_rp*emax*(ie - 1)/(ne - 1)
+      end do
+      dos = 0.0_rp
+      ref = 0.0_rp
+      do ik = 1, nk
+         call src%hk(ik, hk, hmk)
+         call bdg_assemble(hk, hmk, mu, reshape([cmplx(delta0, 0.0_rp, rp)], [1, 1]), [1, 1], [1, 1], [1, 2], hbdg)
+         call hermitian_eigensystem(hbdg, ev)
+         call bdg_dos_accumulate(ev, hbdg, wk, energies, sigma, [1, 1], [1], dos)
+         xi = e1(ik) - mu
+         ee = sqrt(xi**2 + delta0**2)
+         do ie = 1, ne
+            x = energies(ie) - ee
+            ref(ie) = ref(ie) + 2.0_rp*wk*0.5_rp*(1.0_rp + xi/ee)*exp(-x**2/(2.0_rp*sigma**2))/(sigma*sqrt(2.0_rp*acos(-1.0_rp)))
+            x = energies(ie) + ee
+            ref(ie) = ref(ie) + 2.0_rp*wk*0.5_rp*(1.0_rp - xi/ee)*exp(-x**2/(2.0_rp*sigma**2))/(sigma*sqrt(2.0_rp*acos(-1.0_rp)))
+         end do
+      end do
+      write (*, '(a,es10.2)') 'max reference DOS (states/Ry) ', maxval(ref)
+      call report('dos max abs error', maxval(abs(dos(:, 1) - ref)), nel_abs)
+      call finish()
+   end subroutine test_bdg_dos
+
    !> Internal plumbing check, not validation. Catches: wrong L->l map, transposed l/l', missing eV->Ry.
    subroutine test_bdg_kmat()
       integer, parameter :: norb = 9, ntype = 2
