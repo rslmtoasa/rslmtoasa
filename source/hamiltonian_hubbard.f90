@@ -459,6 +459,7 @@ contains
                            f4 = f(na, l_index, 3)
                            f6 = f(na, l_index, 4)
                            if (use_acbn0) then
+                              ! Real-harmonic Coulomb_mat on the spherical-basis ldm: basis mismatch (tests/KNOWN_ISSUES.md, Orbital basis audit)
                               ! Preserve the legacy real-harmonic ACBN0 proxy; it is
                               ! outside the fixed Liechtenstein implementation scope.
                               hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &

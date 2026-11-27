@@ -537,6 +537,7 @@ contains
          call this%symbolic_atom(this%lattice%iz(i))%transform_pmatrix(pmatrix_i, pmatrix0_i, screening_ort_i, screening_can)
          call this%symbolic_atom(this%lattice%iz(j))%transform_pmatrix(pmatrix_j, pmatrix0_j, screening_ort_j, screening_can)
          call this%symbolic_atom(this%lattice%iz(k))%transform_pmatrix(pmatrix_k, pmatrix0_k, screening_ort_k, screening_can)
+         ! disp_matrix is in real cubic order (l <= 2) / real m order (l >= 3), the Green functions are spherical (tests/KNOWN_ISSUES.md, Orbital basis audit)
          ! Calculate the displacement matrix U for atom k, with the canonical representation
          call this%symbolic_atom(this%lattice%iz(k))%udisp_matrix(umatrix_k, pmatrix0_k, uni_disp, lmaxk, ws_radius, size(this%en%ene))
          ! Now obtain the auxiliary Green´s function for atoms i, j and k (and vice-versa), in the orthogonal representation

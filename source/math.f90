@@ -1361,7 +1361,8 @@ contains
 
    end subroutine QSort
 
-   ! Transform the sp/spd/spdf matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
+   ! Transform the sp/spd/spdf matrix between the real cubic order (s | x y z | xy yz zx x2-y2 3z2-r2 | f in canso order)
+   ! and the spherical basis (-1)^m Y_lm, m = +l..-l per shell (docs/source/theory/orbital_basis.rst)
    subroutine hcpx(ham, transformation)
       ! Transform between cartesian and spherical-harmonic representations
       ! Input
@@ -1382,7 +1383,7 @@ contains
       vc = czero
 
       if (n == 4 .or. n == 9 .or. n == 16) then
-         !---base Y(lm) order (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)(3-3)...(33)---
+         !--- spherical basis (-1)^m Y_lm, m = +l..-l within each shell: (00)(11)(10)(1-1)(22)(21)(20)(2-1)(2-2)(33)...(3-3) ---
          ! s
          v(1, 1) = cone
          vc(1, 1) = cone
@@ -2070,6 +2071,7 @@ contains
       SM(2, 2) = DSs(0.5_rp, -0.5_rp, -0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA - 0.5_rp*GAMA))
 
       ! Calculate MAT9 (orbital part) for J = 0, 1, ..., lmax_basis
+      ! Basis mismatch for azimuth /= 0 (conj(D) in the spherical basis; tests/KNOWN_ISSUES.md, Orbital basis audit)
       do J = 0, lmax_basis
          S = J*J + 1 + J
          do M = -J, J

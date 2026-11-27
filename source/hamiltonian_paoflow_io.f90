@@ -14,6 +14,7 @@ contains
    !> @note PAOFLOW import is used by paoflow2rs, exchange_p2rs, and conductivity_p2rs.
    module subroutine build_from_paoflow_opt(this)
       implicit none
+      ! The file is copied into ee unchanged, i.e. it must be in the spherical basis (tests/KNOWN_ISSUES.md, Orbital basis audit)
       type hamData
          integer :: idxi, idxj, idxk
          integer :: orbl, orbm

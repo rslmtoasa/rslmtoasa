@@ -272,7 +272,7 @@ where :math:`m` is the magnetic quantum number.
 .. code-block:: fortran
 
    do l = 1, 3  ! p, d, f orbitals
-      do m = -l, l
+      do m = -l, l   ! pseudo-code; storage runs m = +l..-l
          ! Orbital moment from L operator expectation value
          orbital_moment(na) += m * charge_lm(l, m, na)
       end do

@@ -377,6 +377,7 @@ contains
                               m2_val = ms(l_index)%val(m2)
                               m3_val = ms(l_index)%val(m3)
                               m4_val = ms(l_index)%val(m4)
+                              ! Real-harmonic Coulomb_mat on the spherical-basis ldm: basis mismatch (tests/KNOWN_ISSUES.md, Orbital basis audit)
                               uval = uval + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) * &
                                  ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
                               if (ispin == ispin2 .and. m1 /= m2) then

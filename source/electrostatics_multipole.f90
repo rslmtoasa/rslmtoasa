@@ -38,10 +38,10 @@ module electrostatics_multipole_mod
    !> Orbital indices in the SPHERICAL-harmonic basis that g0 lives in. The
    !> Hamiltonian is transformed cartesian -> spherical via hcpx(...,’cart2sph’)
    !> on every on-site block (hamiltonian_build.f90 build_obarm/build_enim/hhmag),
-   !> so g0 is ordered by m as (math.f90 hcpx, n=9):
-   !>   (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)
-   !> => 1=s, 2=p(m=-1), 3=p(m=0), 4=p(m=+1),
-   !>    5=d(m=-2), 6=d(m=-1), 7=d(m=0), 8=d(m=+1), 9=d(m=+2).
+   !> so g0 is ordered by m, descending within each shell, functions (-1)^m Y_lm (math.f90 hcpx, n=9):
+   !>   (00)(11)(10)(1-1)(22)(21)(20)(2-1)(2-2)
+   !> => 1=s, 2=p(m=+1), 3=p(m=0), 4=p(m=-1),
+   !>    5=d(m=+2), 6=d(m=+1), 7=d(m=0), 8=d(m=-1), 9=d(m=-2).
    !> The l=1,m=0 (z) dipole couples s(1)<->p(m=0)=3 and p(m=0)=3<->d(m=0)=7.
    integer, parameter :: idx_s   = 1
    integer, parameter :: idx_pz  = 3
