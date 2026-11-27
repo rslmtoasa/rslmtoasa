@@ -1719,7 +1719,7 @@ contains
          end do
       end do
       end if
-      ! Basis ordering is site-major, then spin-major, then l with m = +l..-l (the m column below is -m of the stored function); for the
+      ! Basis ordering is site-major, then spin-major, then l with m = +l..-l; for the
       ! supported scalar-collinear spd layout, d orbitals are local indices 5:9.
       if (capture_spectrum) then
          do i = 1, nsite
@@ -1728,7 +1728,7 @@ contains
                do ell = 0, int(sqrt(real(nper_spin, rp))) - 1
                   do m = 0, 2*ell
                      call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                        i - 1, this%lattice%iz(i), ell, spin - 1, -1, -1, base + ell*ell + m, m - ell, 0, &
+                        i - 1, this%lattice%iz(i), ell, spin - 1, -1, -1, base + ell*ell + m, ell - m, 0, &
                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
                   end do
                end do
