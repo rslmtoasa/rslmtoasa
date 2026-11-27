@@ -61,6 +61,7 @@ add_library(${PROJECT_NAME} STATIC
     hubbard_spinor.f90
     mix.f90
     mpi.f90
+    pair_list.f90
     namelist_generator.f90
     os.f90
     potential.f90
