@@ -89,7 +89,8 @@ Keys
    * - ``eta``
      - real (Ry)
      - 0.002
-     - Broadening :math:`\omega + i\eta`; must be :math:`\geq 0`.
+     - Broadening :math:`\omega + i\eta`; must be :math:`\geq 0`. Also used by the real-space dynamic
+       :math:`\chi^0` of ``do_chi0``.
    * - ``output_prefix``
      - character
      - ``'spin_response'``

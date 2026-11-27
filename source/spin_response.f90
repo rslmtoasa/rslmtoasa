@@ -390,10 +390,11 @@ contains
    end subroutine read_q_points
 
    !> @brief omega grid (Ry) of the &spin_response namelist of file fname: n_omega points from omega_min to omega_max (defaults 0,
-   !>        0.05, 201).
-   subroutine read_omega_grid(fname, omega)
+   !>        0.05, 201), and optionally its broadening eta (Ry, default 0.002 as in spin_response).
+   subroutine read_omega_grid(fname, omega, eta_out)
       character(len=*), intent(in) :: fname
       real(rp), allocatable, intent(out) :: omega(:)
+      real(rp), intent(out), optional :: eta_out
 
       integer :: funit, iostatus, i
 
@@ -402,6 +403,7 @@ contains
       omega_min = 0.0_rp
       omega_max = 0.05_rp
       n_omega = 201
+      eta = 0.002_rp
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) call g_logger%fatal('file '//trim(fname)//' not found', __FILE__, __LINE__)
       read (funit, nml=spin_response, iostat=iostatus)
@@ -412,6 +414,8 @@ contains
       if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min)) then
          call g_logger%fatal('spin_response needs n_omega >= 1 and omega_max > omega_min for n_omega > 1', __FILE__, __LINE__)
       end if
+      if (eta < 0.0_rp) call g_logger%fatal('spin_response needs eta >= 0', __FILE__, __LINE__)
+      if (present(eta_out)) eta_out = eta
       omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(max(n_omega - 1, 1), rp), i=1, n_omega)]
    end subroutine read_omega_grid
 

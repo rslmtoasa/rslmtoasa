@@ -330,13 +330,18 @@ are not tracked here; see `docs/DECISIONS.md`.
 - **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
   lines).
 
-### Real-space dynamic chi0: wrong-signed Im chi0 below the continuum and a negative tr L at the small-q pole — 2026-11-27
-- **Measured (bcc Fe, `do_chi0`, Chebyshev one-shot, energy mesh, lld = 241, pairs within 5a, dE = 0.8797 mRy):** Im tr chi0(q = 1/12 along
-  Gamma-H, omega = 5.3 mRy) = +0.014 1/Ry, where the k-space route (k48, eta = 1e-3 Ry) gives a negative value; with the Goldstone U the RPA
-  tr L at q = 1/12 is -6.1e3 1/Ry at omega = 2.639 mRy (neighbouring grid points -62 and -102): the pole is narrower than the omega grid.
-- **Not diagnosed.** Suspects: the recursion broadening (Chebyshev kernel) giving Im G of the wrong sign in places, the truncated pair list
-  near the Goldstone pole, the omega rounding to the mesh step; the study decks are also suspects. `chi0_dynamic.dat`/`chi_rs_q.dat` at small
-  q are not usable for line shapes at these settings.
+### Real-space dynamic chi0: wrong-signed Im chi0 below the continuum at small q — 2026-11-27, updated 2026-11-27
+- **Measured (bcc Fe, `do_chi0`, Chebyshev one-shot, energy mesh, lld = 241, all pairs within 5a, dE = 0.8797 mRy, 5 q along
+  Gamma-H, 68 omega > 0 per q):** with `eta = 0` there are 34 points with Im tr chi0 > 0 (max +0.022 1/Ry) and the RPA tr L at
+  q = 1/12 is -6.1e3 at 2.639 mRy (pole narrower than the grid). With `eta = 1e-3` Ry (propagator at E +- omega +- i eta, since
+  2026-11-27): 20 wrong-sign points (max +0.0096, at q = 1/12 between 6 and 14 mRy), the q = 1/12 pole resolved at 2.64 mRy
+  (k-space k48, eta = 1e-3: 1.76 mRy), minimum tr L -0.74. k-space at the same eta has no wrong-sign point.
+- **Measured offline (same eta = 1e-3 per-pair data):** the sign errors come from the sharp cut of the lattice sum. A cosine taper
+  of the outer shells removes all of them (taper 4a -> 5a: 0 points, min tr L +0.006) but lowers the zone-boundary mode (tr L peak
+  at H 30.8 mRy, against 34.3 untapered and 33.4 k-space); a positive-definite sphere window with R0 <= 2.5a also removes them but
+  halves the dispersion (H 15.8 mRy).
+- **Proposal, not done:** an optional taper of the outer shells of the lattice sum (a new key), used with a larger pair radius so
+  the taper sits beyond the shells that set the dispersion.
 
 ### `&self soc_scale` has no effect in the exchange post-processing — 2026-11-26
 - **Measured (bcc Fe exchange deck, nsp = 2, block):** the `xi_d` printed by `build_lsham` is the same for `soc_scale` = 1.0, 0.5 and 0.0.

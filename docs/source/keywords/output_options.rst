@@ -333,8 +333,12 @@ Same sign and units (1/Ry) as ``spin_response`` with ``method = 'mills'`` and
   (otherwise a warning and no dynamic output); each :math:`\omega` of the ``&spin_response`` grid (``omega_min``,
   ``omega_max``, ``n_omega``; defaults 0, 0.05 Ry, 201, negative values allowed) is rounded to the nearest multiple
   :math:`k\,\Delta E` of the mesh step and the rounded value is what is written, so the resolution is :math:`\Delta E`.
-  A term whose shifted energy :math:`E \pm \omega` lies outside the mesh is dropped. ``eta`` of ``&spin_response`` is not
-  used: the broadening is that of the recursion (its terminator or Chebyshev kernel). Not available in moment space
+  A term whose shifted energy :math:`E \pm \omega` lies outside the mesh is dropped. ``eta`` of ``&spin_response``
+  (default 0.002 Ry, as in ``spin_response``) gives :math:`\chi^0(\omega + i\eta)`: the propagator G (not the spectral
+  function A) is taken at :math:`E \pm \omega \pm i\eta`, i.e. the Lorentzian (Poisson) average of the retarded G over the
+  mesh within :math:`100\eta` (relative error about 3e-4 on a closed-form model). It adds to the broadening of the
+  recursion (its terminator or Chebyshev kernel); ``eta = 0`` uses the recursion broadening alone. Without it the
+  real-space Im :math:`\chi^0` below the continuum can take the wrong sign at small q (truncated lattice sum). Not available in moment space
   (``exchange_integration = 'moments'``: one info line, no dynamic files). Cost: one pass over the mesh per pair and
   :math:`\omega`. Writes ``chi0_dynamic.dat`` and ``chi_rs_q.dat``: for each q of ``&spin_response`` the
   :math:`\chi^0_{ab}(\mathbf q, \omega)` lattice sum at every :math:`\omega`, :math:`\chi = (I + \chi^0 K)^{-1}\chi^0` with
