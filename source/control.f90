@@ -831,6 +831,8 @@ contains
       if (this%linear_in == 'spin_torque_onsite') &
          call g_logger%fatal('spin_torque_onsite is an output operator', __FILE__, __LINE__)
       if (this%response_projection == 'local' .or. this%linear_out == 'spin_torque_onsite') then
+         if (this%recur /= 'chebyshev') &
+            call g_logger%fatal('Stage 1 requires Chebyshev recursion', __FILE__, __LINE__)
          if (this%lmax > 2) &
             call g_logger%fatal('Stage 1 orbital output supports sp and spd bases', __FILE__, __LINE__)
          if (this%nsp < 1 .or. this%nsp > 4) &
