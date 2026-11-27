@@ -112,7 +112,8 @@ class OctupoleTests(unittest.TestCase):
         self.assertIn('this%transport_dir_b, .true., psi, out, work)', apply)
         moments = subroutine(R, 'compute_moments_stochastic')
         self.assertEqual(moments.count('call this%kubo_ham_vec_matmul('), 4)
-        self.assertEqual(moments.count('call this%apply_kubo_operator('), 2)
+        seed = moments[moments.index('! Redifining neighboring map'):]
+        self.assertEqual(seed.count('call this%apply_kubo_operator('), 2)
         self.assertIn('Unknown linear-response operator type', dispatch)
         for name, filename in [('hamiltonian', 'hamiltonian_build'), ('control', 'control')]:
             source = (ROOT / ('source/'+filename+'.f90')).read_text()

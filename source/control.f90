@@ -226,6 +226,8 @@ module control_mod
       !>
       !> Allowed values: 'charge', 'spin' and 'orbital' (plus accumulation and torque variants for linear_out). Default: 'charge'
       character(len=30) :: linear_in, linear_out
+      real(rp) :: projection_bond_tol = 0.0_rp
+      character(len=16) :: response_projection = 'seed'
 
       !> Calculation type of the conductivity tensor
       !> 
@@ -386,6 +388,8 @@ contains
       dipole_mix = this%dipole_mix
       sym_term = this%sym_term
       llsp = this%llsp
+      projection_bond_tol = this%projection_bond_tol
+      response_projection = this%response_projection
       lld = this%lld
       idos = this%idos
       lrot = this%lrot
@@ -491,6 +495,12 @@ contains
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
       this%linear_in = linear_in(:len(this%linear_in))
+      if (response_projection /= 'seed' .and. response_projection /= 'local') &
+         call g_logger%fatal('response_projection must be seed or local', __FILE__, __LINE__)
+      if (.not. (projection_bond_tol >= 0.0_rp .and. projection_bond_tol <= huge(1.0_rp))) &
+         call g_logger%fatal('projection_bond_tol must be finite and nonnegative', __FILE__, __LINE__)
+      this%projection_bond_tol = projection_bond_tol
+      this%response_projection = response_projection
       this%linear_out = linear_out(:len(this%linear_out))
       this%cond_calctype = cond_calctype(:len(this%cond_calctype))
       this%density_policy = trim(adjustl(density_policy))
@@ -630,6 +640,8 @@ contains
       this%random_vec_num = 1
       this%cond_ll = 200
       this%linear_in = 'charge'
+      this%projection_bond_tol = 0.0_rp
+      this%response_projection = 'seed'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
       this%density_policy = 'relaxed_reference'
@@ -666,6 +678,8 @@ contains
 
       include 'include_codes/namelists/control.f90'
 
+      projection_bond_tol = this%projection_bond_tol
+      response_projection = this%response_projection
       lld = this%lld
       llsp = this%llsp
       nlim = this%nlim
@@ -775,6 +789,8 @@ contains
       call nml%add('sym_term', this%sym_term)
       call nml%add('cpp_plugin', this%cpp_plugin)
       call nml%add('gpu_plugin', this%gpu_plugin)
+      call nml%add('projection_bond_tol', this%projection_bond_tol)
+      call nml%add('response_projection', this%response_projection)
       call nml%add('gpu_backend', this%gpu_backend)
       call nml%add('gpu_precision', this%gpu_precision)
       call nml%add('gpu_moment_download', this%gpu_moment_download)
@@ -820,6 +836,25 @@ contains
    subroutine check_all(this)
       implicit none
       class(control) :: this
+      if (this%linear_in == 'spin_torque_onsite') &
+         call g_logger%fatal('spin_torque_onsite is an output operator', __FILE__, __LINE__)
+      if (this%response_projection == 'local' .or. this%linear_out == 'spin_torque_onsite') then
+         if (this%recur /= 'chebyshev') &
+            call g_logger%fatal('Stage 1 requires Chebyshev recursion', __FILE__, __LINE__)
+         if (this%lmax > 2) &
+            call g_logger%fatal('Stage 1 orbital output supports sp and spd bases', __FILE__, __LINE__)
+         if (this%nsp < 1 .or. this%nsp > 4) &
+            call g_logger%fatal('Stage 1 requires nsp in 1:4', __FILE__, __LINE__)
+         if (this%cond_calctype /= 'per_type' .or. this%linear_in /= 'charge') &
+            call g_logger%fatal('Stage 1 requires per_type and charge input', __FILE__, __LINE__)
+         select case (this%linear_out)
+         case ('spin_torque_onsite', 'spin_accumulation', 'orbital_accumulation', &
+               'quadrupole_accumulation', 'oap_accumulation', 'octupole_accumulation')
+            continue
+         case default
+            call g_logger%fatal('Local projection requires an onsite observable', __FILE__, __LINE__)
+         end select
+      end if
       if (this%calctype /= 'B' &
           .and. this%calctype /= 'S' &
           .and. this%calctype /= 'I' &

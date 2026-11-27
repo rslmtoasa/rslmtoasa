@@ -1,0 +1,4 @@
+observable,sites,order,peak_real_raw,peak_imag_raw,ratio,max_grid_difference_from_main
+charge,512,20,2.294755,3.83712e-16,1.6721262182673096e-16,0
+spin,512,20,0.02778654,5.078947e-16,1.827844344779883e-14,0
+orbital,512,20,0.3964256,8.182093e-14,2.0639668578416732e-13,0

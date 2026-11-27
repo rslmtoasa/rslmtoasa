@@ -68,6 +68,16 @@ contains
       hblocksize = size(psi, 1)
       nrhs = size(psi, 2)
       this%idum(:) = this%izero(:)
+      if (kind == 'onsite_torque') then
+         out = czero
+         !$omp parallel do default(shared) private(i)
+         do i = 1, size(psi, 3)
+            if (this%izero(i) == 0) cycle
+            out(:, :, i) = matmul(this%torque_onsite(:, :, i), psi(:, :, i))
+         end do
+         !$omp end parallel do
+         return
+      end if
       if (kind == 'charge') then
          if (this%hamiltonian%hoh) then
             call this%velo_hoh_vec_matmul(psi, out, work(:, :, :, 1:3), direction, weighted)
@@ -771,7 +781,7 @@ contains
       select case(trim(op_type))
       case('charge')
          kind = 'charge'
-      case('spin', 'spin_accumulation', 'spin_torque', 'spin_soc_torque', 'soc_spin_torque')
+      case('spin', 'spin_accumulation', 'spin_torque_onsite', 'spin_torque', 'spin_soc_torque', 'soc_spin_torque')
          call select_spin_operator(pol, q)
       case('orbital', 'orbital_accumulation', 'orbital_torque')
          call select_orbital_operator(pol, q)
@@ -786,6 +796,9 @@ contains
       case('spin_accumulation', 'orbital_accumulation', 'quadrupole_accumulation', &
            'oap_accumulation', 'octupole_accumulation')
          kind = 'local'
+      case('spin_torque_onsite')
+         if (slot /= 'a') call g_logger%fatal('spin_torque_onsite is an output operator', __FILE__, __LINE__)
+         kind = 'onsite_torque'
       case('spin_torque', 'orbital_torque')
          kind = trim(op_type)
       case('spin_soc_torque', 'soc_spin_torque')
@@ -857,6 +870,10 @@ contains
       character(len=64) :: reason
 
       reason = ' '
+      if (this%control%response_projection == 'local' .or. this%transport_kind_a == 'onsite_torque') then
+         reason = 'observable projection or onsite torque'
+         return
+      end if
       if (this%hamiltonian%ccor_2c) then
          reason = 'ccor_2c'
       else if (this%lattice%nmax /= 0) then
@@ -940,6 +957,100 @@ contains
       end do
    end subroutine transport_moment_diagonal
 
+   ! Stage 1 takes adjoints of the physical Hamiltonian and input velocity.
+   ! Check the directed products before using those identities. Bond weights
+   ! are symmetric and setup_kubo_bonds supplies opposite displacements.
+   subroutine check_projection_hamiltonian(this)
+      class(recursion), intent(in) :: this
+      integer :: site, other, slot, reverse, k, t
+      complex(rp) :: forward(nb, nb), backward(nb, nb)
+      real(rp) :: max_residual
+      logical :: used_bond_tol
+      used_bond_tol = .false.
+      max_residual = 0.0_rp
+      do site = 1, this%lattice%kk
+         t = this%lattice%iz(site)
+         call check_pair(this%hamiltonian%lsham(:, :, t), this%hamiltonian%lsham(:, :, t), site, site, .false.)
+         if (this%hamiltonian%hoh) then
+            call check_pair(this%hamiltonian%obarm(:, :, t), this%hamiltonian%obarm(:, :, t), site, site, .false.)
+            call check_pair(this%hamiltonian%enim(:, :, t), this%hamiltonian%enim(:, :, t), site, site, .false.)
+         end if
+         do slot = 1, this%lattice%nn(site, 1)
+            other = site
+            if (slot > 1) other = this%lattice%nn(site, slot)
+            if (other == 0) cycle
+            ! The representation stores one directed block per neighbor.
+            if (slot > 1 .and. count(this%lattice%nn(site, 2:this%lattice%nn(site, 1)) == other) /= 1) &
+               call g_logger%fatal('Stage 1 requires unique directed neighbor slots', __FILE__, __LINE__)
+            reverse = 1
+            if (slot > 1) then
+               reverse = 0
+               do k = 2, this%lattice%nn(other, 1)
+                  if (this%lattice%nn(other, k) == site) reverse = k
+               end do
+            end if
+            call get_block(site, slot, forward)
+            backward = czero
+            if (reverse > 0) call get_block(other, reverse, backward)
+            call check_pair(forward, backward, site, other, slot > 1 .and. reverse > 0)
+         end do
+      end do
+      if (used_bond_tol) call g_logger%warning('Stage 1 accepted offsite nonreciprocity with projection_bond_tol (Ry) = '// &
+         fmt('es12.4',this%control%projection_bond_tol), __FILE__, __LINE__)
+      call g_logger%info('Stage 1 max directed block adjoint residual (Ry for h) = '// &
+                         fmt('es12.4',max_residual), __FILE__, __LINE__)
+   contains
+      subroutine get_block(i, m, block)
+         integer, intent(in) :: i, m
+         complex(rp), intent(out) :: block(nb, nb)
+         if (i <= this%lattice%nmax) then
+            block = this%hamiltonian%hall(:, :, m, i)
+         else
+            block = this%hamiltonian%ee(:, :, m, this%lattice%iz(i))
+         end if
+      end subroutine get_block
+      subroutine check_pair(x, y, i, j, paired_bond)
+         complex(rp), intent(in) :: x(:, :), y(:, :)
+         integer, intent(in) :: i, j
+         logical, intent(in) :: paired_bond
+         real(rp) :: residual
+         residual = maxval(abs(x - conjg(transpose(y))))
+         max_residual = max(max_residual, residual)
+         if (residual <= 1.e-11_rp*max(1.0_rp, maxval(abs(x)), maxval(abs(y)))) return
+         if (paired_bond .and. i /= j .and. residual <= this%control%projection_bond_tol) then
+            used_bond_tol = .true.
+            return
+         end if
+         call g_logger%fatal('Stage 1 requires Hermitian transport: sites '//int2str(i)//', '//int2str(j)// &
+                                ', max block residual = '//fmt('es12.4',residual), __FILE__, __LINE__)
+      end subroutine check_pair
+   end subroutine check_projection_hamiltonian
+
+   ! Extract one physical onsite block with the same unscaled action used by KPM.
+   subroutine site_torque(this, site, seed, image, work, torque)
+      class(recursion), intent(inout) :: this
+      integer, intent(in) :: site
+      complex(rp), contiguous, intent(inout) :: seed(:, :, :), image(:, :, :), work(:, :, :, :)
+      complex(rp), intent(out) :: torque(nb, nb)
+      complex(rp) :: h(nb, nb)
+      real(rp) :: residual
+      integer :: l
+
+      seed = czero
+      do l = 1, nb
+         seed(l, l, site) = cone
+      end do
+      this%izero = 0
+      this%izero(site) = 1
+      call this%kubo_ham_vec_matmul(seed, image, work, include_soc=.false.)
+      h = image(:, :, site)
+      residual = maxval(abs(h - conjg(transpose(h))))
+      if (.not. (residual <= 1.0e-11_rp*max(1.0_rp, maxval(abs(h))))) &
+         call g_logger%fatal('Non-Hermitian effective onsite block at site '//int2str(site)// &
+                             ', max residual = '//fmt('es12.4',residual), __FILE__, __LINE__)
+      torque = -i_unit*(matmul(this%transport_q_a, h) - matmul(h, this%transport_q_a))
+   end subroutine site_torque
+
    !> @brief Compute two-index stochastic Chebyshev moments for transport.
    !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
    !>          spin, orbital, accumulation, and torque conductivity routes. The
@@ -956,7 +1067,7 @@ contains
       integer, allocatable :: seed_values(:)
       integer(int64) :: matrix_dimension, nnz, host_moment_bytes
       complex(rp), dimension(nb, nb) :: dum
-      complex(rp) :: diagonal(nb)
+      complex(rp) :: diagonal(nb), vertex(nb, nb)
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
       complex(rp), dimension(:, :, :, :), allocatable :: left_vec, work
       complex(rp), dimension(:, :, :, :), allocatable :: kernel_v_a, kernel_v_b, kernel_vo_a, kernel_vo_b
@@ -1031,6 +1142,24 @@ contains
 
       call g_kpm_profile%start('P_operator_setup')
       call this%setup_kubo_operators(this%control%linear_out, this%control%linear_in)
+      if (this%control%response_projection == 'local' .or. this%transport_kind_a == 'onsite_torque') then
+         if (this%hamiltonian%local_axis .or. this%hamiltonian%magnetic_representation /= 'periodic_nc') &
+            call g_logger%fatal('Stage 1 supports the global periodic_nc spin frame', __FILE__, __LINE__)
+         if (this%hamiltonian%imported_effective .or. this%hamiltonian%ccor_2c) &
+            call g_logger%fatal('Stage 1 import and CCOR require independent operator validation', __FILE__, __LINE__)
+         call g_logger%info('Stage 1 observable='//trim(this%control%linear_out)//' projection='// &
+                            trim(this%control%response_projection)//' global spin frame, legacy FP64 moments', &
+                            __FILE__, __LINE__)
+         call check_projection_hamiltonian(this)
+      end if
+      if (allocated(this%torque_onsite)) deallocate(this%torque_onsite)
+      if (this%transport_kind_a == 'onsite_torque' .and. this%control%response_projection == 'seed') then
+         allocate(this%torque_onsite(nb, nb, nat))
+         do k = 1, nat
+            call site_torque(this, k, psiref, w1, work, vertex)
+            this%torque_onsite(:, :, k) = vertex
+         end do
+      end if
       use_fast = .false.
       if (trim(this%control%transport_backend) == 'fast_sp') then
          obstacle = fast_kernel_obstacle(this)
@@ -1077,6 +1206,12 @@ contains
       do i = 1, loop_over
          call g_kpm_profile%start('P_trace_setup')
          if (.not. deterministic_random_seed) call random_seed()
+
+         if (this%control%response_projection == 'local') then
+            vertex = this%transport_q_a
+            if (this%transport_kind_a == 'onsite_torque') &
+               call site_torque(this, this%lattice%atlist(i), psiref, w1, work, vertex)
+         end if
 
          ! Initializing wave functions
          v0(:, :, :) = (0.0d0, 0.0d0)
@@ -1151,6 +1286,36 @@ contains
             end if
             left_vec(:, :, :, m) = w1(:, :, :)
          end do
+
+         if (this%control%response_projection == 'local') then
+            ! X_n = T_n Z_i. Mix the reference columns, after applying B over
+            ! the cluster. Cyclicity gives a_i X_n^dagger B X_m = C^dagger.
+            do n = 1, order
+               this%izero = 1
+               call this%apply_kubo_operator('b', left_vec(:, :, :, n), v1, work)
+               do k = 1, nat
+                  right_vec(:, :, k) = matmul(v1(:, :, k), vertex)
+               end do
+               !$omp parallel do default(shared) private(m, dum, k, diagonal) schedule(dynamic)
+               do m = 1, order
+                  if (compact) then
+                     call transport_moment_diagonal(left_vec(:, :, :, m), right_vec, diagonal)
+                     this%mu_nm_diag(n, m, :, i) = conjg(diagonal)
+                  else
+                     dum = czero
+                     do k = 1, nat
+                        call zgemm('c', 'n', nb, nb, nb, cone, left_vec(:, :, k, m), nb, &
+                                   right_vec(:, :, k), nb, cone, dum, nb)
+                     end do
+                     this%mu_nm_stochastic(:, :, n, m, i) = conjg(transpose(dum))
+                  end if
+               end do
+               !$omp end parallel do
+            end do
+            call g_kpm_profile%note_trace_batch(1)
+            call g_kpm_profile%stop('P_moments_total')
+            cycle
+         end if
 
          ! Redifining neighboring map for the right vector v_a*Tn(H)*v_b|r>
          select case(this%control%cond_calctype)
